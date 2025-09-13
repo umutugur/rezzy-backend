@@ -12,6 +12,7 @@ const UserSchema = new mongoose.Schema({
   phone:  { type: String, unique: true, sparse: true },
   password: { type: String, select: false }, // sosyal girişte boş olabilir
   role:   { type: String, enum: ["customer", "restaurant", "admin"], default: "customer" },
+  restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: "Restaurant", default: null },
   noShowCount: { type: Number, default: 0 },
   riskScore:   { type: Number, default: 0 },
   providers:   { type: [ProviderSchema], default: [] }

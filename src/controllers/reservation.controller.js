@@ -286,23 +286,130 @@ export const cancelReservation = async (req, res, next) => {
 /** POST /api/reservations/checkin */
 export const checkin = async (req,res,next)=>{
   try{
-    const { rid, mid, ts, sig } = req.body;
+    const { rid, mid, ts, sig, arrivedCount } = req.body;
+
     const ok = verifyQR({ rid, mid, ts, sig });
     if(!ok) throw { status:400, message:"Invalid QR" };
 
-    const r = await Reservation.findById(rid);
-    if(!r || r.restaurantId.toString() !== mid) throw { status:400, message:"QR mismatch" };
-    if (r.status === "arrived") return res.json({ ok:true, already:true });
+    const r = await Reservation.findById(rid).populate("restaurantId");
+    if(!r || r.restaurantId._id.toString() !== mid) throw { status:400, message:"QR mismatch" };
+
+    // yetki: restoran sahibi veya admin
+    if (req.user.role !== "admin" && String(r.restaurantId.owner) !== String(req.user.id))
+      throw { status:403, message:"Forbidden" };
 
     const rest = await Restaurant.findById(mid).lean();
     const grace = rest?.graceMinutes ?? 15;
+
     const start = dayjs(r.dateTimeUTC).subtract(grace,"minute");
-    const end = dayjs(r.dateTimeUTC).add(90,"minute");
-    if (!(dayjs().isAfter(start) && dayjs().isBefore(end))) throw { status:400, message:"Outside time window" };
+    const end   = dayjs(r.dateTimeUTC).add(90,"minute");
+
+    if (!(dayjs().isAfter(start) && dayjs().isBefore(end)))
+      throw { status:400, message:"Outside time window" };
+
+    const arrived = Math.max(0, Number(arrivedCount ?? r.partySize));
+    const late = Math.max(0, dayjs().diff(dayjs(r.dateTimeUTC), "minute"));
 
     r.status = "arrived";
+    r.arrivedCount = arrived;
+    r.lateMinutes = late;
     r.checkinAt = new Date();
     await r.save();
-    res.json({ ok:true });
+
+    res.json({ ok:true, arrivedCount: r.arrivedCount, lateMinutes: r.lateMinutes });
   }catch(e){ next(e); }
 };
+export const listReservationsByRestaurant = async (req, res, next) => {
+  try {
+    const { rid } = req.params;
+    const { status, limit = 30, cursor } = req.query;
+
+    const q = { restaurantId: rid };
+    if (status) q.status = status;
+
+    const lim = Math.min(100, Number(limit) || 30);
+
+    if (cursor) {
+      q._id = { $lt: new mongoose.Types.ObjectId(cursor) };
+    }
+
+    const items = await Reservation.find(q)
+      .sort({ _id: -1 })
+      .limit(lim + 1)
+      .lean();
+
+    let nextCursor;
+    if (items.length > lim) {
+      nextCursor = items[lim - 1]?._id?.toString();
+    }
+    const sliced = items.slice(0, lim);
+
+    res.json({
+      items: sliced.map(r => ({
+        _id: r._id,
+        restaurantId: r.restaurantId,
+        userId: r.userId,
+        dateTimeUTC: r.dateTimeUTC,
+        partySize: r.partySize,
+        totalPrice: r.totalPrice,
+        depositAmount: r.depositAmount,
+        receiptUrl: r.receiptUrl,
+        status: r.status,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      })),
+      nextCursor,
+    });
+  } catch (e) { next(e); }
+};
+
+export const reservationStatsByRestaurant = async (req, res, next) => {
+  try {
+    const { rid } = req.params;
+    const { start, end } = req.query;
+
+    const startDay = start ? new Date(start + "T00:00:00.000Z") : null;
+    const endDay   = end   ? new Date(end   + "T23:59:59.999Z") : null;
+
+    const dtMatch = {};
+    if (startDay) dtMatch.$gte = startDay;
+    if (endDay)   dtMatch.$lte = endDay;
+
+    const match = { restaurantId: new mongoose.Types.ObjectId(rid) };
+    if (startDay || endDay) match.dateTimeUTC = dtMatch;
+
+    const rows = await Reservation.aggregate([
+      { $match: match },
+      { $group: {
+          _id: "$status",
+          c: { $sum: 1 },
+          amount: { $sum: { $ifNull: ["$totalPrice", 0] } },
+        }
+      }
+    ]);
+
+    const by = new Map(rows.map(r => [r._id, r]));
+    const totalCount = rows.reduce((a, r) => a + r.c, 0);
+    const totalAmount = rows.reduce((a, r) => a + (r.amount || 0), 0);
+
+    const pendingCount   = by.get("pending")?.c   || 0;
+    const confirmedCount = by.get("confirmed")?.c || 0;
+    const cancelledCount = by.get("cancelled")?.c || 0;
+
+    res.json({
+      rangeLabel: formatRangeLabel(start, end),
+      totalCount,
+      totalAmount,
+      pendingCount,
+      confirmedCount,
+      rejectedCount: cancelledCount,
+    });
+  } catch (e) { next(e); }
+};
+
+function formatRangeLabel(start, end) {
+  if (!start && !end) return "Tüm zamanlar";
+  if (start && end) return `${start} - ${end}`;
+  if (start) return `${start} - ...`;
+  return `... - ${end}`;
+}

@@ -12,6 +12,7 @@ import restaurantRoutes from "./routes/restaurant.routes.js";
 import reservationRoutes from "./routes/reservation.routes.js";
 import reportRoutes from "./routes/report.routes.js";
 import { errorHandler } from "./middlewares/error.js";
+import panelRoutes from "./routes/restaurant.panel.routes.js";
 
 dotenv.config();
 const app = express();
@@ -35,6 +36,7 @@ app.use(express.urlencoded({ extended: true, limit:"2mb" }));
 app.use(cookieParser());
 app.use(morgan("dev"));
 
+
 // Rate limits
 const authLimiter = rateLimit({ windowMs: 10*60*1000, max: 100, standardHeaders: true, legacyHeaders: false });
 const checkinLimiter = rateLimit({ windowMs: 60*1000, max: 60 });
@@ -46,6 +48,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/restaurants", restaurantRoutes);
 app.use("/api/reservations", reservationRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/restaurants", panelRoutes); // panel alt path'leri
 
 // 404
 app.use((req,res)=> res.status(404).json({ message: "Not found" }));

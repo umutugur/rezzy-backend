@@ -2,9 +2,9 @@ import mongoose from "mongoose";
 
 const SelectionSchema = new mongoose.Schema(
   {
-    person: { type: Number, min: 1, required: true },                 // kişi sayısı
+    person: { type: Number, min: 1, required: true },
     menuId: { type: mongoose.Schema.Types.ObjectId, ref: "Menu", required: true },
-    price:  { type: Number, min: 0, required: true },                 // kişi başı fiyat (anlık kopya)
+    price:  { type: Number, min: 0, required: true },
   },
   { _id: false }
 );
@@ -30,15 +30,19 @@ const ReservationSchema = new mongoose.Schema(
       index: true,
     },
 
-    qrSig:      { type: String },
-    checkinAt:  { type: Date },
-    cancelledAt:{ type: Date },
-    noShowAt:   { type: Date },
+    // ✅ QR & check-in bilgileri
+    qrSig:        { type: String },
+    checkinAt:    { type: Date },
+    cancelledAt:  { type: Date },
+    noShowAt:     { type: Date },
+
+    // ✅ yeni alanlar
+    arrivedCount: { type: Number, min: 0, default: 0 },
+    lateMinutes:  { type: Number, min: 0, default: 0 },
   },
   { timestamps: true }
 );
 
-// Faydalı indexler
 ReservationSchema.index({ userId: 1, dateTimeUTC: -1 });
 ReservationSchema.index({ restaurantId: 1, dateTimeUTC: -1 });
 
