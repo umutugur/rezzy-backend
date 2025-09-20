@@ -1,8 +1,31 @@
 import dotenv from "dotenv";
-import { connectDB } from "./config/db.js";
-import app from "./app.js";
-import "./jobs/noshow.job.js"; // cron
-
 dotenv.config();
-await connectDB(process.env.MONGO_URI);
-app.listen(process.env.PORT, () => console.log(`🚀 Rezzy API: http://localhost:${process.env.PORT}`));
+
+import app from "./app.js";
+import { connectDB } from "./config/db.js";
+
+// Cron job'ların importu (varsa)
+try {
+  await import("./jobs/noshow.job.js");
+} catch (_) {
+  // opsiyonel
+}
+
+const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI;
+if (!MONGO_URI) {
+  console.error("❌ MONGO_URI/MONGODB_URI env eksik!");
+  process.exit(1);
+}
+await connectDB(MONGO_URI);
+
+const PORT = Number(process.env.PORT) || 4000;
+const HOST = "0.0.0.0";
+
+app.set("trust proxy", 1);
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 Rezzy API dinlemede: http://${HOST}:${PORT}`);
+});
+
+// graceful shutdown
+process.on("SIGTERM", () => process.exit(0));
+process.on("SIGINT", () => process.exit(0));
