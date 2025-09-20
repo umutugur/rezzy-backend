@@ -5,7 +5,15 @@ import { OAuth2Client } from "google-auth-library";
 import appleSignin from "apple-signin-auth";
 import { ensureRestaurantForOwner } from "../services/restaurantOwner.service.js";
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const GOOGLE_AUDIENCES = [
+  process.env.GOOGLE_CLIENT_ID,          // backward compat (eski tek alan)
+  process.env.GOOGLE_CLIENT_ID_ANDROID,
+  process.env.GOOGLE_CLIENT_ID_IOS,
+  process.env.GOOGLE_CLIENT_ID_WEB,
+].filter(Boolean);
+
+// Tek client yerine çoklu audience destekle
+const googleClient = new OAuth2Client();
 
 function signToken(u){
   return jwt.sign(
@@ -103,11 +111,20 @@ export const login = async (req, res, next) => {
 export const googleLogin = async (req, res, next) => {
   try {
     const { idToken } = req.body;
+    if (!idToken) return next({ status: 400, message: "idToken gerekli" });
+
+    if (!GOOGLE_AUDIENCES.length) {
+      return next({ status: 500, message: "Sunucuda Google client ID tanımlı değil" });
+    }
+
     const ticket = await googleClient.verifyIdToken({
       idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      audience: GOOGLE_AUDIENCES, // dizi desteklenir
     });
+
     const payload = ticket.getPayload(); // { sub, email, name, ... }
+    if (!payload?.sub) return next({ status: 400, message: "Google payload geçersiz" });
+
     const sub = payload.sub;
     const email = payload.email;
     const name = payload.name || (email ? email.split("@")[0] : "GoogleUser");
@@ -131,6 +148,10 @@ export const googleLogin = async (req, res, next) => {
     const token = signToken(user);
     res.json({ token, user: toClientUser(user) });
   } catch (e) {
+    // google-auth-library hatalarını daha okunur ver
+    if (e?.message?.includes("Wrong recipient") || e?.message?.includes("audience")) {
+      return next({ status: 400, message: "Google client ID eşleşmiyor (audience). Mobil client ID'lerini sunucuya ekleyin." });
+    }
     next(e);
   }
 };
@@ -139,6 +160,9 @@ export const googleLogin = async (req, res, next) => {
 export const appleLogin = async (req, res, next) => {
   try {
     const { identityToken } = req.body;
+    if (!identityToken) return next({ status: 400, message: "identityToken gerekli" });
+
+    // Not: RN native flow'da identityToken doğrulamak için audience = Service ID / Bundle ID
     const tokenData = await appleSignin.verifyIdToken(identityToken, {
       audience: process.env.APPLE_CLIENT_ID,
       ignoreExpiration: false,
