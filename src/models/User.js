@@ -15,7 +15,20 @@ const UserSchema = new mongoose.Schema({
   restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: "Restaurant", default: null },
   noShowCount: { type: Number, default: 0 },
   riskScore:   { type: Number, default: 0 },
-  providers:   { type: [ProviderSchema], default: [] }
+  providers:   { type: [ProviderSchema], default: [] },
+  // models/User.js (ilgili şemaya alan ekle)
+  banned:      { type: Boolean, default: false },
+  banReason:   { type: String },
+  bannedAt:    { type: Date },
+  bannedBy:    { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  bannedUntil: { type: Date },
+  avatarUrl: { type: String, default: null },
+  notificationPrefs: {
+    push:   { type: Boolean, default: true },
+    sms:    { type: Boolean, default: false },
+    email:  { type: Boolean, default: true },
+  },
+
 }, { timestamps: true });
 
 UserSchema.pre("save", async function(next){

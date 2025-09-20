@@ -1,6 +1,12 @@
 import Joi from "joi";
 import mongoose from "mongoose";
 
+/*
+ * Bu dosya restoranla ilgili tüm Joi doğrulama şemalarını içerir.
+ * Mevcut şemalara ek olarak panelde çalışma saatleri, masalar ve
+ * rezervasyon politikaları için yeni şemalar tanımlanmıştır.
+ */
+
 const objectId = (value, helpers) => {
   if (!mongoose.Types.ObjectId.isValid(value)) {
     return helpers.error("any.invalid");
@@ -20,18 +26,25 @@ const anyObject = Joi.object({}).unknown(true);
  */
 
 export const createRestaurantSchema = Joi.object({
-  params: anyObject, // bu uçta params yok
-  query:  anyObject, // bu uçta query yok
+  params: anyObject,
+  query: anyObject,
   body: Joi.object({
     name: Joi.string().required(),
     address: Joi.string().allow("", null),
     phone: Joi.string().allow("", null),
     city: Joi.string().allow("", null),
-    priceRange: Joi.string().valid("₺","₺₺","₺₺₺","₺₺₺₺").default("₺₺"),
+    priceRange: Joi.string().valid("₺", "₺₺", "₺₺₺", "₺₺₺₺").default("₺₺"),
     rating: Joi.number().min(0).max(5).default(0),
     iban: Joi.string().required(),
-    // openingHours: { "0": { open, close, isClosed }, ... }
-    openingHours: Joi.object().unknown(true),
+    // openingHours: dizi olarak kabul edilir
+    openingHours: Joi.array().items(
+      Joi.object({
+        day: Joi.number().integer().min(0).max(6).required(),
+        open: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
+        close: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
+        isClosed: Joi.boolean().default(false),
+      })
+    ).default([]),
     photos: Joi.array().items(Joi.string().uri()).default([]),
     description: Joi.string().allow("", null),
     social: Joi.array().items(Joi.string().allow("")).default([]),
@@ -44,15 +57,15 @@ export const createRestaurantSchema = Joi.object({
 
 export const listRestaurantsSchema = Joi.object({
   params: anyObject,
-  body:   anyObject,
+  body: anyObject,
   query: Joi.object({
     city: Joi.string().allow("", null),
   }),
 });
 
 export const getRestaurantSchema = Joi.object({
-  query:  anyObject,
-  body:   anyObject,
+  query: anyObject,
+  body: anyObject,
   params: Joi.object({
     id: Joi.string().custom(objectId).required(),
   }),
@@ -65,14 +78,16 @@ export const createMenuSchema = Joi.object({
   }),
   body: Joi.object({
     name: Joi.string().required(),
-    items: Joi.array().items(
-      Joi.object({
-        name: Joi.string().required(),
-        price: Joi.number().min(0).required(),
-        description: Joi.string().allow("", null),
-        isActive: Joi.boolean().default(true),
-      })
-    ).default([]),
+    items: Joi.array()
+      .items(
+        Joi.object({
+          name: Joi.string().required(),
+          price: Joi.number().min(0).required(),
+          description: Joi.string().allow("", null),
+          isActive: Joi.boolean().default(true),
+        })
+      )
+      .default([]),
     isActive: Joi.boolean().default(true),
   }),
 });
@@ -88,10 +103,17 @@ export const updateRestaurantSchema = Joi.object({
     address: Joi.string().allow("", null),
     phone: Joi.string().allow("", null),
     city: Joi.string().allow("", null),
-    priceRange: Joi.string().valid("₺","₺₺","₺₺₺","₺₺₺₺"),
+    priceRange: Joi.string().valid("₺", "₺₺", "₺₺₺", "₺₺₺₺"),
     rating: Joi.number().min(0).max(5),
     iban: Joi.string(),
-    openingHours: Joi.object().unknown(true),
+    openingHours: Joi.array().items(
+      Joi.object({
+        day: Joi.number().integer().min(0).max(6).required(),
+        open: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
+        close: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
+        isClosed: Joi.boolean().default(false),
+      })
+    ),
     photos: Joi.array().items(Joi.string().uri()),
     description: Joi.string().allow("", null),
     social: Joi.array().items(Joi.string().allow("")),
@@ -111,5 +133,132 @@ export const getAvailabilitySchema = Joi.object({
   query: Joi.object({
     date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
     partySize: Joi.number().integer().min(1).default(2),
+  }),
+});
+
+/* --- Yeni: Çalışma saatlerini güncelle --- */
+export const updateOpeningHoursSchema = Joi.object({
+  query: anyObject,
+  params: Joi.object({
+    id: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object({
+    openingHours: Joi.array()
+      .items(
+        Joi.object({
+          day: Joi.number().integer().min(0).max(6).required(),
+          open: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
+          close: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
+          isClosed: Joi.boolean().default(false),
+        })
+      )
+      .required(),
+  }),
+});
+
+/* --- Yeni: Masaları güncelle --- */
+export const updateTablesSchema = Joi.object({
+  query: anyObject,
+  params: Joi.object({
+    id: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object({
+    tables: Joi.array()
+      .items(
+        Joi.object({
+          name: Joi.string().required(),
+          capacity: Joi.number().integer().min(1).required(),
+          isActive: Joi.boolean().default(true),
+        })
+      )
+      .required(),
+  }),
+});
+
+/* --- Yeni: Rezervasyon politikalarını güncelle --- */
+export const updatePoliciesSchema = Joi.object({
+  query: anyObject,
+  params: Joi.object({
+    id: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object({
+    minPartySize: Joi.number().integer().min(1),
+    maxPartySize: Joi.number().integer().min(Joi.ref("minPartySize")),
+    slotMinutes: Joi.number().integer().min(30).max(240),
+    depositRequired: Joi.boolean(),
+    depositAmount: Joi.number().min(0),
+    blackoutDates: Joi.array().items(Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/)),
+  }).min(1),
+});
+
+/* --- Yeni: Menüler listesini güncelle --- */
+export const updateMenusSchema = Joi.object({
+  query: anyObject,
+  params: Joi.object({
+    id: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object({
+    menus: Joi.array()
+      .items(
+        Joi.object({
+          _id: Joi.string().custom(objectId).optional(),
+          title: Joi.string().required(),
+          description: Joi.string().allow("", null).optional(),
+          pricePerPerson: Joi.number().min(0).required(),
+          isActive: Joi.boolean().optional(),
+        })
+      )
+      .required(),
+  }),
+});
+
+/* --- Yeni: Fotoğraf ekle --- */
+export const addPhotoSchema = Joi.object({
+  query: anyObject,
+  params: Joi.object({
+    id: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object({
+    fileUrl: Joi.string().uri().required(),
+  }),
+});
+
+/* --- Yeni: Fotoğraf sil --- */
+export const removePhotoSchema = Joi.object({
+  query: anyObject,
+  params: Joi.object({
+    id: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object({
+    url: Joi.string().uri().required(),
+  }),
+});
+
+/* --- Yeni: Rezervasyon listesi (panel) --- */
+export const fetchReservationsByRestaurantSchema = Joi.object({
+  body: anyObject,
+  query: anyObject,
+  params: Joi.object({
+    id: Joi.string().custom(objectId).required(),
+  }),
+});
+
+/* --- Yeni: Rezervasyon durumu güncelle --- */
+export const updateReservationStatusSchema = Joi.object({
+  query: anyObject,
+  params: Joi.object({
+    id: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object({
+    status: Joi.string().valid("pending", "confirmed", "cancelled", "rejected").required(),
+  }),
+});
+
+/* --- Yeni: Rezervasyon QR kodu --- */
+export const getReservationQRSchema = Joi.object({
+  body: anyObject,
+  query: anyObject,
+  params: Joi.object({
+    id: Joi.string().custom(objectId).required(),
   }),
 });

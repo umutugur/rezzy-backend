@@ -322,15 +322,37 @@ export const checkin = async (req,res,next)=>{
 export const listReservationsByRestaurant = async (req, res, next) => {
   try {
     const { rid } = req.params;
-    const { status, limit = 30, cursor } = req.query;
+    const { status, limit = 30, cursor, debug } = req.query;
 
-    const q = { restaurantId: rid };
+    // 1) rid doğrulama + cast
+    const isObjId = mongoose.Types.ObjectId.isValid(rid);
+    const ridObj = isObjId ? new mongoose.Types.ObjectId(rid) : null;
+
+    // 2) Sorgu: restaurantId hem ObjectId hem string olabilir (şema farklarına karşı güvenli)
+    const q = {
+      $or: [
+        ...(ridObj ? [{ restaurantId: ridObj }] : []),
+        { restaurantId: rid } // stored-as-string olasılığı
+      ],
+    };
     if (status) q.status = status;
+    if (cursor && mongoose.Types.ObjectId.isValid(cursor)) {
+      q._id = { $lt: new mongoose.Types.ObjectId(cursor) };
+    }
 
     const lim = Math.min(100, Number(limit) || 30);
 
-    if (cursor) {
-      q._id = { $lt: new mongoose.Types.ObjectId(cursor) };
+    // 3) Debug logları
+    console.log("[RES-LIST] rid param:", rid, "isObjId?", isObjId);
+    if (debug) {
+      const anyOne = await Reservation.findOne(q).lean();
+      console.log("[RES-LIST][debug] query:", JSON.stringify(q));
+      console.log("[RES-LIST][debug] sample:", anyOne ? {
+        _id: anyOne._id,
+        restaurantId: anyOne.restaurantId,
+        status: anyOne.status,
+        dateTimeUTC: anyOne.dateTimeUTC
+      } : "none");
     }
 
     const items = await Reservation.find(q)
@@ -338,11 +360,10 @@ export const listReservationsByRestaurant = async (req, res, next) => {
       .limit(lim + 1)
       .lean();
 
-    let nextCursor;
-    if (items.length > lim) {
-      nextCursor = items[lim - 1]?._id?.toString();
-    }
+    const nextCursor = items.length > lim ? String(items[lim - 1]?._id) : undefined;
     const sliced = items.slice(0, lim);
+
+    console.log("[RES-LIST] matched:", items.length, "returned:", sliced.length);
 
     res.json({
       items: sliced.map(r => ({
@@ -360,7 +381,9 @@ export const listReservationsByRestaurant = async (req, res, next) => {
       })),
       nextCursor,
     });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 export const reservationStatsByRestaurant = async (req, res, next) => {

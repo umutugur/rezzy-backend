@@ -9,17 +9,16 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 function signToken(u){
   return jwt.sign(
-    { 
-      id: u._id.toString(), 
-      role: u.role, 
+    {
+      id: u._id.toString(),
+      role: u.role,
       name: u.name,
-       restaurantId: u.restaurantId ? u.restaurantId.toString() : null, // ← string
+      restaurantId: u.restaurantId ? u.restaurantId.toString() : null,
     },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES }
   );
 }
-
 
 function ensureProvider(user, providerName, sub) {
   const exists = user.providers?.some((p) => p.name === providerName && p.sub === sub);
@@ -31,12 +30,23 @@ function ensureProvider(user, providerName, sub) {
 
 function toClientUser(u) {
   return {
-    _id: u._id.toString(),
+    id: u._id.toString(),
     name: u.name,
     email: u.email,
     phone: u.phone,
     role: u.role,
-     restaurantId: u.restaurantId ? u.restaurantId.toString() : null, // ← string
+    restaurantId: u.restaurantId ? u.restaurantId.toString() : null,
+    avatarUrl: u.avatarUrl ?? null,
+    notificationPrefs: {
+      push:  u.notificationPrefs?.push ?? true,
+      sms:   u.notificationPrefs?.sms  ?? false,
+      email: u.notificationPrefs?.email ?? true,
+    },
+    providers: Array.isArray(u.providers) ? u.providers.map(p => p.name) : [],
+    noShowCount: u.noShowCount ?? 0,
+    riskScore:   u.riskScore ?? 0,
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt,
   };
 }
 
@@ -54,7 +64,6 @@ export const register = async (req, res, next) => {
       providers: [{ name: "password", sub: email || phone || "local" }],
     });
 
-    // restoran hesabı ise restoran kaydı & linki garanti et
     if (user.role === "restaurant") {
       await ensureRestaurantForOwner(user._id);
       await user.populate({ path: "restaurantId", select: "_id name" });
@@ -77,14 +86,12 @@ export const login = async (req, res, next) => {
 
     ensureProvider(user, "password", email || phone || "local");
 
-    // restoran hesabı ise restoran kaydı & linki garanti et
     if (user.role === "restaurant") {
       await ensureRestaurantForOwner(user._id);
       await user.populate({ path: "restaurantId", select: "_id name" });
     }
 
     await user.save();
-
     const token = signToken(user);
     res.json({ token, user: toClientUser(user) });
   } catch (e) {
@@ -167,9 +174,8 @@ export const appleLogin = async (req, res, next) => {
 /** GET /auth/me */
 export const me = async (req, res, next) => {
   try {
-    // auth() middleware JWT'den req.user.id/role/restaurantId set etmeli
-    const u = await User.findById(req.user.id).select("_id name email phone role restaurantId");
-
+    const u = await User.findById(req.user.id)
+      .select("_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore createdAt updatedAt");
     if (!u) return res.status(401).json({ message: "Unauthorized" });
 
     if (u.role === "restaurant" && !u.restaurantId) {
@@ -178,7 +184,55 @@ export const me = async (req, res, next) => {
     }
 
     res.json(toClientUser(u));
-  } catch (e) {
-    next(e);
-  }
+  } catch (e) { next(e); }
+};
+
+/** PATCH /auth/me */
+export const updateMe = async (req, res, next) => {
+  try {
+    const patch = {};
+    const { name, email, phone, notificationPrefs, avatarUrl } = req.body;
+
+    if (name != null)  patch.name  = String(name);
+    if (email != null) patch.email = String(email);
+    if (phone != null) patch.phone = String(phone);
+    if (avatarUrl != null) patch.avatarUrl = String(avatarUrl);
+
+    if (notificationPrefs && typeof notificationPrefs === "object") {
+      patch.notificationPrefs = {
+        push:  !!notificationPrefs.push,
+        sms:   !!notificationPrefs.sms,
+        email: !!notificationPrefs.email,
+      };
+    }
+
+    const u = await User.findByIdAndUpdate(req.user.id, { $set: patch }, { new: true }).lean();
+    if (!u) return res.status(404).json({ message: "User not found" });
+
+    res.json(toClientUser(u));
+  } catch (e) { next(e); }
+};
+
+/** POST /auth/change-password */
+export const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword)
+      return res.status(400).json({ message: "currentPassword ve newPassword zorunludur" });
+
+    const u = await User.findById(req.user.id).select("+password +providers").exec();
+    if (!u) return res.status(404).json({ message: "User not found" });
+
+    const providerNames = (u.providers || []).map(p => p?.name);
+    if (!providerNames.includes("password"))
+      return res.status(400).json({ message: "Hesap şifre sağlayıcısına bağlı değil" });
+
+    const ok = await u.compare(currentPassword);
+    if (!ok) return res.status(400).json({ message: "Mevcut şifre hatalı" });
+
+    u.password = newPassword; // pre('save') hash’ler
+    await u.save();
+
+    res.json({ ok: true });
+  } catch (e) { next(e); }
 };

@@ -1,4 +1,3 @@
-// models/Restaurant.js
 import mongoose from "mongoose";
 
 const RestaurantSchema = new mongoose.Schema(
@@ -39,6 +38,14 @@ const RestaurantSchema = new mongoose.Schema(
     iban: String,
     ibanName: String,
     bankName: String,
+
+    // ✅ Komisyon oranı (varsayılan %5)
+    commissionRate: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: 0.05,
+    },
   },
   { timestamps: true }
 );
