@@ -117,13 +117,23 @@ export const googleLogin = async (req, res, next) => {
       return next({ status: 500, message: "Sunucuda Google client ID tanımlı değil" });
     }
 
-    const ticket = await googleClient.verifyIdToken({
-      idToken,
-      audience: GOOGLE_AUDIENCES, // dizi desteklenir
-    });
+    // const ticket = await googleClient.verifyIdToken({
+    //   idToken,
+    //   audience: GOOGLE_AUDIENCES, // dizi desteklenir
+    // });
+     const audiences = [
+   process.env.GOOGLE_CLIENT_ID,       // Android
+   process.env.GOOGLE_CLIENT_ID_WEB,   // Web / Expo Go
+   process.env.GOOGLE_CLIENT_ID_IOS,   // (eklersen) iOS
+ ].filter(Boolean);
 
-    const payload = ticket.getPayload(); // { sub, email, name, ... }
-    if (!payload?.sub) return next({ status: 400, message: "Google payload geçersiz" });
+ const ticket = await googleClient.verifyIdToken({
+   idToken,
+   audience: audiences,   // 👈 birden fazla clientId destekler
+ });
+
+   const payload = ticket.getPayload();
+if (process.env.AUTH_DEBUG === "1") console.log("[google] azp:", payload.azp, "aud:", payload.aud);
 
     const sub = payload.sub;
     const email = payload.email;
