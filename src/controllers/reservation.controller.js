@@ -5,6 +5,7 @@ import Reservation from "../models/Reservation.js";
 import { dayjs } from "../utils/dates.js";
 import { generateQRDataURL, verifyQR } from "../utils/qr.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
+import { notifyUser, notifyRestaurantOwner } from "../services/notification.service.js";
 
 /** persons dizisi tam 1..N ve benzersiz ise INDEX, aksi halde COUNT */
 function detectModeStrict(selections = []) {
@@ -58,7 +59,6 @@ function computeDeposit(restaurant, totalPrice) {
   if (cfg.type === "flat") depositAmount = cfg.flatAmount;
   else depositAmount = Math.round(totalPrice * (Math.max(0, cfg.ratePercent) / 100));
 
-  // hiçbir alan yoksa makul fallback %20
   if (depositAmount === 0 && cfg.ratePercent === 0 && cfg.flatAmount === 0) {
     depositAmount = Math.round(totalPrice * 0.20);
   }
@@ -108,7 +108,7 @@ export const createReservation = async (req, res, next) => {
       selections: withPrices,
       totalPrice,
       depositAmount,
-      status: "pending",
+      status: "pending", // dekont yüklenecek → restoran onayı beklenir
     });
 
     res.json({
@@ -122,7 +122,10 @@ export const createReservation = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-/** POST /api/reservations/:rid/receipt */
+/** POST /api/reservations/:rid/receipt
+ * Sadece pending iken dekont yüklenebilir/değiştirilebilir.
+ * Sonrasında restoran onay/ret verecek.
+ */
 export const uploadReceipt = async (req, res, next) => {
   try {
     const f = req.file
@@ -134,8 +137,12 @@ export const uploadReceipt = async (req, res, next) => {
 
     const r = await Reservation.findById(req.params.rid);
     if (!r) throw { status: 404, message: "Reservation not found" };
-    if (r.userId.toString() !== req.user.id && req.user.role === "customer")
+
+    if (req.user.role === "customer" && String(r.userId) !== String(req.user.id))
       throw { status: 403, message: "Forbidden" };
+
+    if (r.status !== "pending")
+      return res.status(400).json({ message: "Bu durumda dekont yüklenemez", status: r.status });
 
     const result = await uploadBufferToCloudinary(req.file.buffer, {
       folder: process.env.CLOUDINARY_FOLDER,
@@ -143,8 +150,33 @@ export const uploadReceipt = async (req, res, next) => {
     });
 
     r.receiptUrl = result.secure_url;
+    r.receiptUploadedAt = new Date();
     await r.save();
-    res.json({ receiptUrl: r.receiptUrl, status: r.status, public_id: result.public_id });
+
+    // Bildirimler:
+    await notifyUser(r.userId, {
+      title: "Rezervasyon isteğin alındı",
+      body:  "Restoran onayı bekleniyor. Onaylanınca QR kodun açılacak.",
+      data:  { type: "reservation_pending", rid: String(r._id) },
+      key:   `cust:pending:${r._id}`,
+      type:  "reservation_pending"
+    });
+
+    await notifyRestaurantOwner(r.restaurantId, {
+      title: "Yeni rezervasyon isteği",
+      body:  "Dekont yüklendi. Kontrol edip onaylayın.",
+      data:  { type: "restaurant_new_request", rid: String(r._id), section: "verification" },
+      key:   `rest:new:${r._id}`,
+      type:  "restaurant_new_request"
+    });
+
+    res.json({
+      receiptUrl: r.receiptUrl,
+      status: r.status,
+      public_id: result.public_id,
+      receiptUploadedAt: r.receiptUploadedAt,
+      message: "Dekont yüklendi. Rezervasyon isteği restoran onayını bekliyor.",
+    });
   } catch (e) { next(e); }
 };
 
@@ -168,14 +200,12 @@ export const listMyReservations = async (req, res, next) => {
       partySize: r.partySize,
       totalPrice: r.totalPrice,
       depositAmount: r.depositAmount,
+      receiptUploadedAt: r.receiptUploadedAt || null,
     })));
   } catch (e) { next(e); }
 };
 
-/** GET /api/reservations/:rid
- * selections’a göre kesin kuralla yeniden hesapla ve normalize et.
- * Menü adlarını da ekle: menus: [{_id,name,pricePerPerson}]
- */
+/** GET /api/reservations/:rid */
 export const getReservation = async (req, res, next) => {
   try {
     const rDoc = await Reservation.findById(req.params.rid)
@@ -201,7 +231,6 @@ export const getReservation = async (req, res, next) => {
       console.log("NORMALIZE", rDoc._id.toString(), "mode:", mode, "patch:", patch);
     }
 
-    // menü isimleri
     const menuIds = (rDoc.selections || []).map(s => s.menuId).filter(Boolean);
     const menus = await Menu.find({ _id: { $in: menuIds } })
       .select("_id name title pricePerPerson")
@@ -233,6 +262,7 @@ export const getReservation = async (req, res, next) => {
       noShowAt: rDoc.noShowAt,
       createdAt: rDoc.createdAt,
       updatedAt: rDoc.updatedAt,
+      receiptUploadedAt: rDoc.receiptUploadedAt || null,
     });
   } catch (e) { next(e); }
 };
@@ -250,6 +280,15 @@ export const approveReservation = async (req, res, next) => {
     const qr = await generateQRDataURL({ rid: r._id.toString(), mid: r.restaurantId._id.toString(), ts });
     r.qrSig = "generated";
     await r.save();
+
+    await notifyUser(r.userId, {
+      title: "Rezervasyonun onaylandı",
+      body:  "Girişte QR kodunu okutmayı unutma.",
+      data:  { type: "reservation_confirmed", rid: String(r._id), section: "qrcode" },
+      key:   `cust:confirmed:${r._id}`,
+      type:  "reservation_confirmed"
+    });
+
     res.json({ ok: true, qrDataUrl: qr });
   } catch (e) { next(e); }
 };
@@ -265,6 +304,15 @@ export const rejectReservation = async (req, res, next) => {
     r.status = "cancelled";
     r.cancelledAt = new Date();
     await r.save();
+
+    await notifyUser(r.userId, {
+      title: "Rezervasyonun onaylanmadı",
+      body:  "Uygun başka bir saat seçebilirsin.",
+      data:  { type: "reservation_rejected", rid: String(r._id) },
+      key:   `cust:rejected:${r._id}`,
+      type:  "reservation_rejected"
+    });
+
     res.json({ ok: true });
   } catch (e) { next(e); }
 };
@@ -319,20 +367,19 @@ export const checkin = async (req,res,next)=>{
     res.json({ ok:true, arrivedCount: r.arrivedCount, lateMinutes: r.lateMinutes });
   }catch(e){ next(e); }
 };
+
 export const listReservationsByRestaurant = async (req, res, next) => {
   try {
     const { rid } = req.params;
     const { status, limit = 30, cursor, debug } = req.query;
 
-    // 1) rid doğrulama + cast
     const isObjId = mongoose.Types.ObjectId.isValid(rid);
     const ridObj = isObjId ? new mongoose.Types.ObjectId(rid) : null;
 
-    // 2) Sorgu: restaurantId hem ObjectId hem string olabilir (şema farklarına karşı güvenli)
     const q = {
       $or: [
         ...(ridObj ? [{ restaurantId: ridObj }] : []),
-        { restaurantId: rid } // stored-as-string olasılığı
+        { restaurantId: rid }
       ],
     };
     if (status) q.status = status;
@@ -342,11 +389,8 @@ export const listReservationsByRestaurant = async (req, res, next) => {
 
     const lim = Math.min(100, Number(limit) || 30);
 
-    // 3) Debug logları
-    console.log("[RES-LIST] rid param:", rid, "isObjId?", isObjId);
     if (debug) {
       const anyOne = await Reservation.findOne(q).lean();
-      console.log("[RES-LIST][debug] query:", JSON.stringify(q));
       console.log("[RES-LIST][debug] sample:", anyOne ? {
         _id: anyOne._id,
         restaurantId: anyOne.restaurantId,
@@ -362,8 +406,6 @@ export const listReservationsByRestaurant = async (req, res, next) => {
 
     const nextCursor = items.length > lim ? String(items[lim - 1]?._id) : undefined;
     const sliced = items.slice(0, lim);
-
-    console.log("[RES-LIST] matched:", items.length, "returned:", sliced.length);
 
     res.json({
       items: sliced.map(r => ({

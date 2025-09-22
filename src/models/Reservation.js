@@ -21,7 +21,9 @@ const ReservationSchema = new mongoose.Schema(
     totalPrice:    { type: Number, min: 0, default: 0 },
     depositAmount: { type: Number, min: 0, default: 0 },
 
-    receiptUrl: { type: String },
+    // Dekont
+    receiptUrl:        { type: String },
+    receiptUploadedAt: { type: Date },
 
     status: {
       type: String,
@@ -30,20 +32,26 @@ const ReservationSchema = new mongoose.Schema(
       index: true,
     },
 
-    // ✅ QR & check-in bilgileri
+    // QR & check-in
     qrSig:        { type: String },
     checkinAt:    { type: Date },
     cancelledAt:  { type: Date },
     noShowAt:     { type: Date },
 
-    // ✅ yeni alanlar
+    // Diğer
     arrivedCount: { type: Number, min: 0, default: 0 },
     lateMinutes:  { type: Number, min: 0, default: 0 },
+
+    // Bildirim flag’leri (idempotency için)
+    reminder24hSent:    { type: Boolean, default: false },
+    reminder3hSent:     { type: Boolean, default: false },
+    restPendingRemSent: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
 ReservationSchema.index({ userId: 1, dateTimeUTC: -1 });
 ReservationSchema.index({ restaurantId: 1, dateTimeUTC: -1 });
+ReservationSchema.index({ dateTimeUTC: 1, status: 1 });
 
 export default mongoose.model("Reservation", ReservationSchema);

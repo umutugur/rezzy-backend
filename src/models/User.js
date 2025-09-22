@@ -6,6 +6,12 @@ const ProviderSchema = new mongoose.Schema({
   sub:  { type: String, required: true }
 }, { _id: false });
 
+const PushTokenSchema = new mongoose.Schema({
+  token:     { type: String, required: true },
+  isActive:  { type: Boolean, default: true },
+  updatedAt: { type: Date, default: Date.now }
+}, { _id: false });
+
 const UserSchema = new mongoose.Schema({
   name:   { type: String, required: true },
   email:  { type: String, unique: true, sparse: true },
@@ -16,18 +22,22 @@ const UserSchema = new mongoose.Schema({
   noShowCount: { type: Number, default: 0 },
   riskScore:   { type: Number, default: 0 },
   providers:   { type: [ProviderSchema], default: [] },
-  // models/User.js (ilgili şemaya alan ekle)
+
   banned:      { type: Boolean, default: false },
   banReason:   { type: String },
   bannedAt:    { type: Date },
   bannedBy:    { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   bannedUntil: { type: Date },
   avatarUrl: { type: String, default: null },
+
   notificationPrefs: {
     push:   { type: Boolean, default: true },
     sms:    { type: Boolean, default: false },
     email:  { type: Boolean, default: true },
   },
+
+  // ✅ Expo push tokenları
+  pushTokens: { type: [PushTokenSchema], default: [] },
 
 }, { timestamps: true });
 

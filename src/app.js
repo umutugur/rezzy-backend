@@ -14,6 +14,9 @@ import reportRoutes from "./routes/report.routes.js";
 import { errorHandler } from "./middlewares/error.js";
 import panelRoutes from "./routes/restaurant.panel.routes.js";
 import adminRoutes from "./routes/admin.js";
+import userRoutes from "./routes/user.routes.js";
+import jobsRouter from "./routes/jobs.js";
+import notificationsRouter from "./routes/notifications.js";
 dotenv.config();
 const app = express();
 
@@ -50,7 +53,9 @@ app.use("/api/reservations", reservationRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/restaurants", panelRoutes); // panel alt path'leri
 app.use("/api/admin", adminRoutes);
-
+app.use("/api/users", userRoutes);
+app.use("/api/jobs", jobsRouter);
+app.use("/api/notifications", notificationsRouter);
 // 404
 app.use((req,res)=> res.status(404).json({ message: "Not found" }));
 
