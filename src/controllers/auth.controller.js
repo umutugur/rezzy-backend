@@ -6,10 +6,14 @@ import appleSignin from "apple-signin-auth";
 import { ensureRestaurantForOwner } from "../services/restaurantOwner.service.js";
 
 const GOOGLE_AUDIENCES = [
-  process.env.GOOGLE_CLIENT_ID,          // backward compat (eski tek alan)
-  process.env.GOOGLE_CLIENT_ID_ANDROID,
+  process.env.GOOGLE_CLIENT_ID_ANDROID,   // tercih edilen
   process.env.GOOGLE_CLIENT_ID_IOS,
   process.env.GOOGLE_CLIENT_ID_WEB,
+  process.env.GOOGLE_CLIENT_ID,           // backward compat
+  // olası alternatif adlar (yanlış yazılmış eski config’ler için)
+  process.env.GOOGLE_ANDROID_CLIENT_ID,
+  process.env.GOOGLE_IOS_CLIENT_ID,
+  process.env.GOOGLE_WEB_CLIENT_ID,
 ].filter(Boolean);
 
 // Tek client yerine çoklu audience destekle
@@ -117,23 +121,15 @@ export const googleLogin = async (req, res, next) => {
       return next({ status: 500, message: "Sunucuda Google client ID tanımlı değil" });
     }
 
-    // const ticket = await googleClient.verifyIdToken({
-    //   idToken,
-    //   audience: GOOGLE_AUDIENCES, // dizi desteklenir
-    // });
-     const audiences = [
-   process.env.GOOGLE_CLIENT_ID,       // Android
-   process.env.GOOGLE_CLIENT_ID_WEB,   // Web / Expo Go
-   process.env.GOOGLE_CLIENT_ID_IOS,   // (eklersen) iOS
- ].filter(Boolean);
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: GOOGLE_AUDIENCES,   // 👈 birden fazla client ID kabul
+    });
 
- const ticket = await googleClient.verifyIdToken({
-   idToken,
-   audience: audiences,   // 👈 birden fazla clientId destekler
- });
-
-   const payload = ticket.getPayload();
-if (process.env.AUTH_DEBUG === "1") console.log("[google] azp:", payload.azp, "aud:", payload.aud);
+    const payload = ticket.getPayload(); // sub, email, name, picture, aud, azp
+    if (process.env.AUTH_DEBUG === "1") {
+      console.log("[google] aud:", payload.aud, "azp:", payload.azp);
+    }
 
     const sub = payload.sub;
     const email = payload.email;
@@ -143,9 +139,16 @@ if (process.env.AUTH_DEBUG === "1") console.log("[google] azp:", payload.azp, "a
     if (!user && email) user = await User.findOne({ email });
 
     if (!user) {
-      user = await User.create({ name, email, role: "customer", providers: [{ name: "google", sub }] });
+      user = await User.create({
+        name, email, role: "customer",
+        providers: [{ name: "google", sub }]
+      });
     } else {
-      ensureProvider(user, "google", sub);
+      const exists = user.providers?.some(p => p.name === "google" && p.sub === sub);
+      if (!exists) {
+        user.providers = user.providers || [];
+        user.providers.push({ name: "google", sub });
+      }
       if (!user.email && email) user.email = email;
       await user.save();
     }
@@ -158,14 +161,15 @@ if (process.env.AUTH_DEBUG === "1") console.log("[google] azp:", payload.azp, "a
     const token = signToken(user);
     res.json({ token, user: toClientUser(user) });
   } catch (e) {
-    // google-auth-library hatalarını daha okunur ver
-    if (e?.message?.includes("Wrong recipient") || e?.message?.includes("audience")) {
-      return next({ status: 400, message: "Google client ID eşleşmiyor (audience). Mobil client ID'lerini sunucuya ekleyin." });
+    if (e?.message?.includes("audience") || e?.message?.includes("Wrong recipient")) {
+      return next({
+        status: 400,
+        message: "Google client ID eşleşmiyor (audience). Sunucu .env içine Android/Web/iOS client ID'lerini ekleyin."
+      });
     }
     next(e);
   }
 };
-
 /** POST /auth/apple */
 export const appleLogin = async (req, res, next) => {
   try {
