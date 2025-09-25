@@ -6,14 +6,13 @@ import appleSignin from "apple-signin-auth";
 import { ensureRestaurantForOwner } from "../services/restaurantOwner.service.js";
 
 const GOOGLE_AUDIENCES = [
-  process.env.GOOGLE_CLIENT_ID_ANDROID,   // tercih edilen
+  process.env.GOOGLE_CLIENT_ID_ANDROID,
+  process.env.GOOGLE_ANDROID_CLIENT_ID,   // eski ad
   process.env.GOOGLE_CLIENT_ID_IOS,
+  process.env.GOOGLE_IOS_CLIENT_ID,       // eski ad
   process.env.GOOGLE_CLIENT_ID_WEB,
-  process.env.GOOGLE_CLIENT_ID,           // backward compat
-  // olası alternatif adlar (yanlış yazılmış eski config’ler için)
-  process.env.GOOGLE_ANDROID_CLIENT_ID,
-  process.env.GOOGLE_IOS_CLIENT_ID,
-  process.env.GOOGLE_WEB_CLIENT_ID,
+  process.env.GOOGLE_WEB_CLIENT_ID,       // eski ad
+  process.env.GOOGLE_CLIENT_ID            // tek ID kullandığın eski kurulumlar için
 ].filter(Boolean);
 
 // Tek client yerine çoklu audience destekle
@@ -123,10 +122,10 @@ export const googleLogin = async (req, res, next) => {
 
     const ticket = await googleClient.verifyIdToken({
       idToken,
-      audience: GOOGLE_AUDIENCES,   // 👈 birden fazla client ID kabul
+      audience: GOOGLE_AUDIENCES, // 👈 birden fazla client ID kabul
     });
 
-    const payload = ticket.getPayload(); // sub, email, name, picture, aud, azp
+    const payload = ticket.getPayload();
     if (process.env.AUTH_DEBUG === "1") {
       console.log("[google] aud:", payload.aud, "azp:", payload.azp);
     }
