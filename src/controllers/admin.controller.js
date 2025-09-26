@@ -4,6 +4,8 @@ import Restaurant from "../models/Restaurant.js";
 import User from "../models/User.js";
 import Review from "../models/Review.js";
 import Complaint from "../models/Complaint.js";
+// admin.controller.js
+import { ensureRestaurantForOwner } from "../services/restaurantOwner.service.js";
 
 function toObjectId(id) {
   try { return new mongoose.Types.ObjectId(id); } catch { return null; }
@@ -299,9 +301,11 @@ export const listUsers = async (req,res,next)=>{
     if (banned === "false") q.banned = { $ne: true };
     if (cursor) q._id = { $lt: cursor };
 
-    const rows = await User.find(q).sort({_id:-1}).limit(limit+1)
-      .select("_id name email role banned banReason bannedUntil createdAt")
-      .lean();
+    const rows = await User.find(q)
+  .sort({ _id: -1 })
+  .limit(limit + 1)
+  .select("_id name email role restaurantId banned banReason bannedUntil createdAt")
+  .lean();
 
     res.json({
       items: cut(rows, limit),
@@ -315,8 +319,10 @@ export const getUserDetail = async (req,res,next)=>{
     const uid = toObjectId(req.params.uid);
     if (!uid) return res.status(400).json({message:"Invalid user id"});
 
-    const user = await User.findById(uid).select("_id name email role banned banReason bannedUntil createdAt").lean();
-    if (!user) return res.status(404).json({message:"User not found"});
+const user = await User.findById(uid)
+  .select("_id name email role restaurantId banned banReason bannedUntil createdAt")
+  .lean();    
+  if (!user) return res.status(404).json({message:"User not found"});
 
     // quick KPI
     const agg = await Reservation.aggregate([
@@ -383,20 +389,41 @@ export const unbanUser = async (req,res,next)=>{
 };
 
 // ✅ Rol güncelle
-export const updateUserRole = async (req,res,next)=>{
-  try{
+export const updateUserRole = async (req, res, next) => {
+  try {
     const uid = toObjectId(req.params.uid);
-    if (!uid) return res.status(400).json({message:"Invalid user id"});
-    const { role } = req.body || {};
-    const allowed = ["customer","restaurant","admin"];
-    if (!allowed.includes(role)) return res.status(400).json({message:"Invalid role"});
+    if (!uid) return res.status(400).json({ message: "Invalid user id" });
 
-    const u = await User.findByIdAndUpdate(uid, { $set: { role } }, { new: true })
-      .select("_id name email role").lean();
-    if (!u) return res.status(404).json({message:"User not found"});
-    res.json({ ok:true, user: u });
-  }catch(e){ next(e); }
+    const { role } = req.body || {};
+    const allowed = ["customer", "restaurant", "admin"];
+    if (!allowed.includes(role)) return res.status(400).json({ message: "Invalid role" });
+
+    // önce rolü set et
+    const u0 = await User.findByIdAndUpdate(uid, { $set: { role } }, { new: true });
+    if (!u0) return res.status(404).json({ message: "User not found" });
+
+    // 🔴 restaurant ise restoran kaydını garanti et
+    if (u0.role === "restaurant") {
+      await ensureRestaurantForOwner(u0._id);
+      await u0.populate({ path: "restaurantId", select: "_id name" });
+    }
+
+    // client’a dönerken restaurantId’yi de gösterelim
+    return res.json({
+      ok: true,
+      user: {
+        _id: u0._id,
+        name: u0.name,
+        email: u0.email,
+        role: u0.role,
+        restaurantId: u0.restaurantId ? u0.restaurantId.toString() : null,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
 };
+
 
 // ---------- Reservations (global read-only) ----------
 export const listReservationsAdmin = async (req,res,next)=>{
