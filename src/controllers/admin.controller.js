@@ -89,7 +89,44 @@ async function kpiSeries(match, groupBy="day") {
   };
 }
 
-// --- Komisyon yardımcıları ---
+// --- Komisyon yardımcıları (EXTRA RULE: underattendance) ---
+/**
+ * Commission base:
+ *  if underattended == true => minPrice(selections.price) * arrivedCount
+ *  else                      => totalPrice
+ * Then multiply by commissionRate (restaurant).
+ */
+function commissionBaseExpr() {
+  // _minPrice: min price from selections array
+  return {
+    $cond: [
+      { $eq: ["$underattended", true] },
+      { $multiply: [
+          { $ifNull: ["$arrivedCount", 0] },
+          {
+            $let: {
+              vars: {
+                prices: {
+                  $map: {
+                    input: { $ifNull: ["$selections", []] },
+                    as: "s",
+                    in: { $ifNull: ["$$s.price", 0] }
+                  }
+                }
+              },
+              in: { $cond: [
+                { $gt: [ { $size: "$$prices" }, 0 ] },
+                { $min: "$$prices" },
+                0
+              ] }
+            }
+          }
+        ] },
+      { $ifNull: ["$totalPrice", 0] }
+    ]
+  };
+}
+
 async function commissionTotals(match) {
   const rows = await Reservation.aggregate([
     { $match: match },
@@ -101,13 +138,13 @@ async function commissionTotals(match) {
     }},
     { $addFields: {
         _rate: { $ifNull: [ { $arrayElemAt: ["$rest.commissionRate", 0] }, 0.05 ] },
-        _price: { $ifNull: ["$totalPrice", 0] }
+        _base: commissionBaseExpr()
     }},
     { $group: {
         _id: null,
-        commission: { $sum: { $multiply: ["$_price", "$_rate"] } },
-        revenue: { $sum: "$_price" },
-        count: { $sum: 1 }
+        commission: { $sum: { $multiply: ["$_base", "$_rate"] } },
+        revenue:    { $sum: { $ifNull: ["$totalPrice", 0] } },
+        count:      { $sum: 1 }
     }}
   ]);
   const r = rows[0] || { commission: 0, revenue: 0, count: 0 };
@@ -126,14 +163,14 @@ async function commissionByRestaurant(match) {
     { $addFields: {
         _rate: { $ifNull: [ { $arrayElemAt: ["$rest.commissionRate", 0] }, 0.05 ] },
         _name: { $ifNull: [ { $arrayElemAt: ["$rest.name", 0] }, "(Restoran)" ] },
-        _price: { $ifNull: ["$totalPrice", 0] }
+        _base: commissionBaseExpr()
     }},
     { $group: {
         _id: "$restaurantId",
         name: { $first: "$_name" },
-        commission: { $sum: { $multiply: ["$_price", "$_rate"] } },
-        revenue: { $sum: "$_price" },
-        count: { $sum: 1 }
+        commission: { $sum: { $multiply: ["$_base", "$_rate"] } },
+        revenue:    { $sum: { $ifNull: ["$totalPrice", 0] } },
+        count:      { $sum: 1 }
     }},
     { $sort: { commission: -1 } }
   ]);
@@ -424,8 +461,7 @@ export const updateUserRole = async (req, res, next) => {
   }
 };
 
-
-// ---------- Reservations (global read-only) ----------
+// ---------- Reservations (global read-only)
 export const listReservationsAdmin = async (req,res,next)=>{
   try{
     const { status, restaurantId, userId, start, end } = req.query;

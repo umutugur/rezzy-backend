@@ -17,6 +17,7 @@ import adminRoutes from "./routes/admin.js";
 import userRoutes from "./routes/user.routes.js";
 import jobsRouter from "./routes/jobs.js";
 import notificationsRouter from "./routes/notifications.js";
+import favoritesRoutes from "./routes/favorites.routes.js";
 dotenv.config();
 const app = express();
 
@@ -56,6 +57,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/jobs", jobsRouter);
 app.use("/api/notifications", notificationsRouter);
+app.use("/api/me/favorites", favoritesRoutes);
 // 404
 app.use((req,res)=> res.status(404).json({ message: "Not found" }));
 

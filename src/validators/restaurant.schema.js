@@ -57,11 +57,13 @@ export const createRestaurantSchema = Joi.object({
 
 export const listRestaurantsSchema = Joi.object({
   params: anyObject,
-  body: anyObject,
-  query: Joi.object({
-    city: Joi.string().allow("", null),
+  body:   anyObject,
+  query:  Joi.object({
+    city:  Joi.string().allow("", null),
+    query: Joi.string().allow("", null),   // ✅ arama metni de opsiyonel
   }),
 });
+
 
 export const getRestaurantSchema = Joi.object({
   query: anyObject,

@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Restaurant from "../models/Restaurant.js";
 import Menu from "../models/Menu.js";
 import Reservation from "../models/Reservation.js";
@@ -56,11 +57,20 @@ export const createRestaurant = async (req, res, next) => {
 // Aktif restoranları listele
 export const listRestaurants = async (req, res, next) => {
   try {
+    const { city, query } = req.query || {};
+
     const q = { isActive: true };
-    if (req.query.city) q.city = req.query.city;
-    const data = await Restaurant.find(q).select(
-      "name city priceRange rating photos description"
-    );
+    if (city) q.city = String(city);
+
+    // isim araması (case-insensitive)
+    if (query && String(query).trim().length > 0) {
+      q.name = { $regex: String(query).trim(), $options: "i" };
+    }
+
+    const data = await Restaurant.find(q)
+      .select("name city priceRange rating photos description")
+      .sort({ rating: -1, name: 1 });
+
     res.json(data);
   } catch (e) {
     next(e);

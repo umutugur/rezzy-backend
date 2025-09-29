@@ -39,8 +39,9 @@ const ReservationSchema = new mongoose.Schema(
     noShowAt:     { type: Date },
 
     // Diğer
-    arrivedCount: { type: Number, min: 0, default: 0 },
-    lateMinutes:  { type: Number, min: 0, default: 0 },
+    arrivedCount:   { type: Number, min: 0, default: 0 },
+    lateMinutes:    { type: Number, min: 0, default: 0 },
+    underattended:  { type: Boolean, default: false }, // ✅ yeni: eksik katılım işareti
 
     // Bildirim flag’leri (idempotency için)
     reminder24hSent:    { type: Boolean, default: false },

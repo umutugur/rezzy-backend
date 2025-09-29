@@ -39,6 +39,9 @@ const UserSchema = new mongoose.Schema({
   // ✅ Expo push tokenları
   pushTokens: { type: [PushTokenSchema], default: [] },
 
+  // ✅ Favoriler (restaurant ObjectId listesi)
+  favorites: { type: [mongoose.Schema.Types.ObjectId], ref: "Restaurant", default: [] },
+
 }, { timestamps: true });
 
 UserSchema.pre("save", async function(next){
@@ -54,5 +57,7 @@ UserSchema.methods.compare = function(pw){
 };
 
 UserSchema.index({ "providers.name": 1, "providers.sub": 1 });
+// Favori aramalarını hızlandırmak için hafif bir index:
+UserSchema.index({ _id: 1, favorites: 1 });
 
 export default mongoose.model("User", UserSchema);

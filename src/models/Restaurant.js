@@ -30,24 +30,37 @@ const RestaurantSchema = new mongoose.Schema(
     minPartySize: Number,
     maxPartySize: Number,
     slotMinutes: Number,
+
+    // Depozito
     depositRequired: Boolean,
     depositAmount: Number,
+
     blackoutDates: [String],
 
-    // IBAN & banka bilgileri (panelde kullanıyoruz)
+    // IBAN & banka bilgileri
     iban: String,
     ibanName: String,
     bankName: String,
 
-    // ✅ Komisyon oranı (varsayılan %5)
+    // ✅ Komisyon oranı (0..1) (varsayılan %5)
     commissionRate: {
       type: Number,
       min: 0,
       max: 1,
       default: 0.05,
     },
+
+    // ✅ Check-in zaman penceresi
+    // Rezervasyon saatinden kaç dakika ÖNCE ve SONRAYA kadar check-in kabul edilecek
+    checkinWindowBeforeMinutes: { type: Number, min: 0, default: 15 },
+    checkinWindowAfterMinutes:  { type: Number, min: 0, default: 90 },
+
+    // ✅ Eksik katılım eşiği (%). 80 -> %80. 0..100
+    // arrivedCount < partySize * (threshold/100) ise "eksik katılım" sayılır
+    underattendanceThresholdPercent: { type: Number, min: 0, max: 100, default: 80 },
   },
   { timestamps: true }
 );
+RestaurantSchema.index({ name: "text" });
 
 export default mongoose.model("Restaurant", RestaurantSchema);

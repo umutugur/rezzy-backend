@@ -69,10 +69,7 @@ function computeDeposit(restaurant, totalPrice) {
   return depositAmount;
 }
 
-/** POST /api/reservations
- * body: { restaurantId, dateTimeISO, selections:[{ person, menuId }] }
- * NOT: FE’den partySize gelse bile YOK SAYILIR; tek kaynak selections.
- */
+/** POST /api/reservations */
 export const createReservation = async (req, res, next) => {
   try {
     const { restaurantId, dateTimeISO, selections = [] } = req.body;
@@ -108,7 +105,7 @@ export const createReservation = async (req, res, next) => {
       selections: withPrices,
       totalPrice,
       depositAmount,
-      status: "pending", // dekont yüklenecek → restoran onayı beklenir
+      status: "pending",
     });
 
     res.json({
@@ -122,10 +119,7 @@ export const createReservation = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-/** POST /api/reservations/:rid/receipt
- * Sadece pending iken dekont yüklenebilir/değiştirilebilir.
- * Sonrasında restoran onay/ret verecek.
- */
+/** POST /api/reservations/:rid/receipt */
 export const uploadReceipt = async (req, res, next) => {
   try {
     const f = req.file
@@ -153,7 +147,6 @@ export const uploadReceipt = async (req, res, next) => {
     r.receiptUploadedAt = new Date();
     await r.save();
 
-    // Bildirimler:
     await notifyUser(r.userId, {
       title: "Rezervasyon isteğin alındı",
       body:  "Restoran onayı bekleniyor. Onaylanınca QR kodun açılacak.",
@@ -201,6 +194,7 @@ export const listMyReservations = async (req, res, next) => {
       totalPrice: r.totalPrice,
       depositAmount: r.depositAmount,
       receiptUploadedAt: r.receiptUploadedAt || null,
+      underattended: !!r.underattended, // bilgi amaçlı
     })));
   } catch (e) { next(e); }
 };
@@ -263,6 +257,7 @@ export const getReservation = async (req, res, next) => {
       createdAt: rDoc.createdAt,
       updatedAt: rDoc.updatedAt,
       receiptUploadedAt: rDoc.receiptUploadedAt || null,
+      underattended: !!rDoc.underattended,
     });
   } catch (e) { next(e); }
 };
@@ -331,7 +326,7 @@ export const cancelReservation = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-/** POST /api/reservations/checkin */
+/** POST /api/reservations/checkin  (QR ile) */
 export const checkin = async (req,res,next)=>{
   try{
     const { rid, mid, ts, sig, arrivedCount } = req.body;
@@ -346,25 +341,76 @@ export const checkin = async (req,res,next)=>{
     if (req.user.role !== "admin" && String(r.restaurantId.owner) !== String(req.user.id))
       throw { status:403, message:"Forbidden" };
 
+    // ✅ iki yönlü zaman penceresi (Restaurant alan adları ile uyumlu)
     const rest = await Restaurant.findById(mid).lean();
-    const grace = rest?.graceMinutes ?? 15;
+    const before = Math.max(0, Number(rest?.checkinWindowBeforeMinutes ?? 15));
+    const after  = Math.max(0, Number(rest?.checkinWindowAfterMinutes  ?? 90));
 
-    const start = dayjs(r.dateTimeUTC).subtract(grace,"minute");
-    const end   = dayjs(r.dateTimeUTC).add(90,"minute");
+    const start = dayjs(r.dateTimeUTC).subtract(before,"minute");
+    const end   = dayjs(r.dateTimeUTC).add(after,"minute");
 
     if (!(dayjs().isAfter(start) && dayjs().isBefore(end)))
       throw { status:400, message:"Outside time window" };
 
-    const arrived = Math.max(0, Number(arrivedCount ?? r.partySize));
+    // ✅ arrivedCount zorunlu (0..partySize)
+    const arrived = Math.max(0, Math.min(Number(arrivedCount ?? -1), r.partySize));
+    if (!Number.isFinite(arrived) || arrived < 0) {
+      throw { status:400, message:"arrivedCount is required" };
+    }
+
     const late = Math.max(0, dayjs().diff(dayjs(r.dateTimeUTC), "minute"));
+
+    // ✅ Eksik katılım eşik kontrolü
+    const threshold = Math.max(0, Math.min(100, Number(rest?.underattendanceThresholdPercent ?? 80)));
+    const isUnder = arrived < (r.partySize * (threshold / 100));
 
     r.status = "arrived";
     r.arrivedCount = arrived;
     r.lateMinutes = late;
+    r.underattended = !!isUnder;
     r.checkinAt = new Date();
     await r.save();
 
-    res.json({ ok:true, arrivedCount: r.arrivedCount, lateMinutes: r.lateMinutes });
+    res.json({ ok:true, arrivedCount: r.arrivedCount, lateMinutes: r.lateMinutes, underattended: r.underattended });
+  }catch(e){ next(e); }
+};
+
+/** PATCH /api/reservations/:rid/arrived-count  (check-in sonrası düzeltme) */
+export const updateArrivedCount = async (req,res,next)=>{
+  try{
+    const { rid } = req.params;
+    const { arrivedCount } = req.body;
+
+    const r = await Reservation.findById(rid).populate("restaurantId");
+    if(!r) throw { status:404, message:"Reservation not found" };
+
+    // yetki
+    if (req.user.role !== "admin" && String(r.restaurantId.owner) !== String(req.user.id))
+      throw { status:403, message:"Forbidden" };
+
+    // pencere: aynı çift yönlü (Restaurant alanları)
+    const rest = await Restaurant.findById(r.restaurantId._id).lean();
+    const before = Math.max(0, Number(rest?.checkinWindowBeforeMinutes ?? 15));
+    const after  = Math.max(0, Number(rest?.checkinWindowAfterMinutes  ?? 90));
+    const start = dayjs(r.dateTimeUTC).subtract(before,"minute");
+    const end   = dayjs(r.dateTimeUTC).add(after,"minute");
+
+    if (!(dayjs().isAfter(start) && dayjs().isBefore(end)))
+      throw { status:400, message:"Outside time window" };
+
+    const arrived = Math.max(0, Math.min(Number(arrivedCount ?? 0), r.partySize));
+    if (!Number.isFinite(arrived)) throw { status:400, message:"Invalid arrivedCount" };
+
+    // ✅ eşiği yeniden değerlendir
+    const threshold = Math.max(0, Math.min(100, Number(rest?.underattendanceThresholdPercent ?? 80)));
+    const isUnder = arrived < (r.partySize * (threshold / 100));
+
+    r.arrivedCount = arrived;
+    if (r.status !== "arrived") r.status = "arrived";
+    r.underattended = !!isUnder;
+    await r.save();
+
+    res.json({ ok:true, arrivedCount: r.arrivedCount, underattended: r.underattended });
   }catch(e){ next(e); }
 };
 
@@ -420,6 +466,7 @@ export const listReservationsByRestaurant = async (req, res, next) => {
         status: r.status,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
+        underattended: !!r.underattended,
       })),
       nextCursor,
     });

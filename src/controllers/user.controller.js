@@ -70,8 +70,9 @@ export const uploadAvatar = async (req,res,next)=>{
 export const changePassword = async (req,res,next)=>{
   try{
     const { currentPassword, newPassword } = req.body || {};
-    if (!newPassword || String(newPassword).length < 6)
-      return res.status(400).json({ message: "Yeni şifre en az 6 karakter olmalı" });
+    if (!newPassword || String(newPassword).length < 8) {
+  return res.status(400).json({ message: "Yeni şifre en az 8 karakter olmalı" });
+}
 
     const u = await User.findById(req.user.id).select("+password providers");
     if(!u) return res.status(404).json({message:"User not found"});

@@ -40,7 +40,8 @@ export const checkinSchema = Joi.object({
     rid: oid().required(),
     mid: oid().required(),
     ts: Joi.string().isoDate().required(),
-    sig: Joi.string().length(64).required()
+    sig: Joi.string().length(64).required(),
+    arrivedCount: Joi.number().min(0).required() // ✅ eklendi
   }).required(),
   params: Joi.object().empty({}),
   query: Joi.object().empty({})
@@ -49,5 +50,14 @@ export const checkinSchema = Joi.object({
 export const cancelReservationSchema = Joi.object({
   body: Joi.object().empty({}),
   params: Joi.object({ rid: oid().required() }).required(),
+  query: Joi.object().empty({})
+});
+
+// ✅ yeni: arrivedCount düzeltme
+export const updateArrivedCountSchema = Joi.object({
+  params: Joi.object({ rid: oid().required() }).required(),
+  body: Joi.object({
+    arrivedCount: Joi.number().min(0).required()
+  }).required(),
   query: Joi.object().empty({})
 });
