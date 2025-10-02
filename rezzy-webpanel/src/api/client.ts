@@ -10,7 +10,7 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" }
 });
 
-// ---- Request interceptor: Auth + GET no-cache
+// ---- Request interceptor: Auth + GET cache-buster (headers YOK!)
 api.interceptors.request.use((config) => {
   const t = authStore.getToken();
   if (t) {
@@ -20,13 +20,8 @@ api.interceptors.request.use((config) => {
 
   const method = (config.method || "get").toLowerCase();
   if (method === "get") {
+    // Sadece query param ile cache kır; CORS preflight tetiklemez
     config.params = { ...(config.params || {}), _ts: Date.now() };
-    config.headers = {
-      ...(config.headers || {}),
-      "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
-      Pragma: "no-cache",
-      Expires: "0"
-    } as any;
   }
 
   return config;
@@ -185,4 +180,11 @@ export async function restaurantUpdateReservationStatus(
 ) {
   const { data } = await api.put(`/restaurants/reservations/${resId}/status`, { status });
   return data;
+}
+
+// Rezervasyon QR (JSON -> { qrUrl, payload? })
+export async function restaurantGetReservationQR(resId: string) {
+  const { data } = await api.get(`/restaurants/reservations/${resId}/qr`);
+  // data.qrUrl: data:image/png;base64,... şeklinde
+  return data as { qrUrl: string; payload?: string };
 }
