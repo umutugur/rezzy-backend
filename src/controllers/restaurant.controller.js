@@ -1,46 +1,16 @@
+// src/controllers/restaurant.controller.js
 import mongoose from "mongoose";
 import Restaurant from "../models/Restaurant.js";
 import Menu from "../models/Menu.js";
 import Reservation from "../models/Reservation.js";
-// ---------------------------------------------------------------
-// QR kodu üretimi için yardımcı fonksiyonlar. Orijinal projede utils/qr.js
-// içerisinde tanımlanan signQR ve generateQRDataURL fonksiyonları burada
-// yeniden tanımlandı. QR kodu JSON formatında { rid, mid, ts, sig }
-// payload'ını içeren bir Data URL döndürür.
-import crypto from "crypto";
-import QRCode from "qrcode";
 
-/**
- * QR verisini imzala. rid: rezervasyon ID'si, mid: restoran/işletme ID'si,
- * ts: zaman damgası. Ortaya çıkan sig alanı HMAC SHA-256 imzasıdır.
- */
-function signQR({ rid, mid, ts }) {
-  const payload = `${rid}.${mid}.${ts}`;
-  const secret = process.env.QR_HMAC_SECRET || "rezzy-secret";
-  const sig = crypto
-    .createHmac("sha256", secret)
-    .update(payload)
-    .digest("hex");
-  return { payload, sig };
-}
-
-/**
- * Verilen bilgilerle QR kodu oluşturup Data URL olarak döndürür. Bu
- * fonksiyon QRCode kütüphanesinin toDataURL metodunu kullanır.
- */
-async function generateQRDataURL({ rid, mid, ts }) {
-  const { sig } = signQR({ rid, mid, ts });
-  const json = JSON.stringify({ rid, mid, ts, sig });
-  // QRCode.toDataURL otomatik olarak data:image/png;base64,... döndürür.
-  return QRCode.toDataURL(json);
-}
+// Yalnızca utils/qr.js'teki tek doğru uygulamayı kullanacağız
+import { generateQRDataURL, signQR } from "../utils/qr.js";
 
 /*
  * Bu dosya restoranlar için tüm CRUD işlemlerini ve rezervasyon
- * müsaitlik hesaplamasını içerir. Orijinal depoda sadece temel
- * fonksiyonlar vardı. Aşağıdaki güncellemeler restoran panelinde
- * çalışma saatleri, masa listesi ve rezervasyon politikalarının
- * güncellenebilmesi için yeni uçlar eklenmiştir.
+ * müsaitlik hesaplamasını içerir. Panelde çalışma saatleri, masa listesi
+ * ve rezervasyon politikaları için ayrı uçlar da bulunur.
  */
 
 // Yeni restoran oluştur
@@ -242,9 +212,6 @@ export const getAvailability = async (req, res, next) => {
   }
 };
 
-
-
-
 /*
  * Çalışma saatlerini güncelle
  */
@@ -336,10 +303,7 @@ export const updatePolicies = async (req, res, next) => {
 };
 
 /*
- * Menüler listesini toplu olarak güncelle. Front-end panelinden gelen
- * menü dizisi üzerinden mevcut kayıtlar güncellenir, yeni olanlar
- * eklenir ve listede olmayan menüler pasifleştirilir. Menü nesnesi
- * aşağıdaki alanlara sahip olmalıdır: { _id?, title, description?, pricePerPerson, isActive? }.
+ * Menüler listesini toplu olarak güncelle.
  */
 export const updateMenus = async (req, res, next) => {
   try {
@@ -389,8 +353,7 @@ export const updateMenus = async (req, res, next) => {
 };
 
 /*
- * Fotoğraf ekle. fileUrl alanı, yüklenen görselin tam URL'sini veya
- * Base64 verisini içermelidir. Veritabanında photos alanına eklenir.
+ * Fotoğraf ekle.
  */
 export const addPhoto = async (req, res, next) => {
   try {
@@ -418,7 +381,7 @@ export const addPhoto = async (req, res, next) => {
 };
 
 /*
- * Fotoğraf sil. url alanı, silmek istediğiniz fotoğrafın URL'si olmalıdır.
+ * Fotoğraf sil.
  */
 export const removePhoto = async (req, res, next) => {
   try {
@@ -446,13 +409,13 @@ export const removePhoto = async (req, res, next) => {
 };
 
 /*
- * Panelde rezervasyon listesi görüntülemek için sahte bir uç. Gerçek
- * projede Reservation modelinden ilgili kayıtları çekmelisiniz. Burada
- * boş dizi döndürülür.
+ * Panelde rezervasyon listesi (esnek restaurantId eşleme ile).
+ * Not: Projede ayrıca restaurant.panel.controller.js içinde daha gelişmiş
+ * bir liste ucu bulunuyor; bu uç legacy kalabilir.
  */
 export const fetchReservationsByRestaurant = async (req, res, next) => {
   try {
-    const { id } = req.params;  // <-- route: /:id/reservations
+    const { id } = req.params;  // route: /:id/reservations
     const { status, limit = 30, cursor } = req.query;
 
     const mid = (() => {
@@ -478,8 +441,8 @@ export const fetchReservationsByRestaurant = async (req, res, next) => {
       .limit(lim)
       .lean();
 
-    // DEBUG (geçici): sunucu logunda ne geldiğini görün
-    console.log("[fetchReservationsByRestaurant] id=", id, "status=", status, "count=", items.length);
+    // DEBUG
+    // console.log("[fetchReservationsByRestaurant] id=", id, "status=", status, "count=", items.length);
 
     res.json({ items });
   } catch (e) {
@@ -488,9 +451,7 @@ export const fetchReservationsByRestaurant = async (req, res, next) => {
 };
 
 /*
- * Rezervasyon durumu güncelle. Statü "confirmed" olduğunda sahte
- * bir QR kodu üretip geri döndürür. Gerçek projede Reservation
- * dokümanını güncelleyip ilgili alanları değiştirmelisiniz.
+ * Rezervasyon durumu güncelle (QR üretimini bu uçtan kaldırdık).
  */
 export const updateReservationStatus = async (req, res, next) => {
   try {
@@ -521,17 +482,6 @@ export const updateReservationStatus = async (req, res, next) => {
       r.arrivedCount = r.arrivedCount || r.partySize;
     }
 
-    // Onay’da QR üret (panelden gösterim için)
-    if (rawStatus === "confirmed" && r.restaurantId?._id) {
-      const ts = r.dateTimeUTC?.toISOString?.() || new Date().toISOString();
-      await generateQRDataURL({
-        rid: r._id.toString(),
-        mid: r.restaurantId._id.toString(),
-        ts,
-      });
-      r.qrSig = "generated";
-    }
-
     await r.save();
 
     // FE’in rahatça state patchlemesi için yeterli alanları dönelim
@@ -552,16 +502,28 @@ export const updateReservationStatus = async (req, res, next) => {
 };
 
 /*
- * Bir rezervasyon için QR kodu döndürür. Reservation modeline
- * erişemediğimiz için sahte bir QR üretiyoruz.
+ * Bir rezervasyon için QR kodu döndürür (rid/mid/ts/sig düz metni QR içine basılır).
  */
 export const getReservationQR = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    // Rezerve edilen QR kodunu oluştur ve döndür
-    const ts = Date.now();
-    const url = await generateQRDataURL({ rid: id, mid: "", ts });
-    res.json({ qrUrl: url });
+    const { id: rid } = req.params;
+
+    // İlgili rezervasyonu bulup restoran id’sini al
+    const r = await Reservation.findById(rid).select("restaurantId");
+    if (!r) return next({ status: 404, message: "Reservation not found" });
+
+    // restaurantId bazen ObjectId ya da string olabilir; normalize et
+    const mid = (r.restaurantId?._id || r.restaurantId || "").toString();
+    if (!mid) return next({ status: 400, message: "Reservation has no restaurantId" });
+
+    // ts: saniye cinsinden
+    const ts = Math.floor(Date.now() / 1000);
+
+    // QR görseli (data:image/png;base64,...) ve ham payload (rid/mid/ts/sig)
+    const qrUrl = await generateQRDataURL({ rid, mid, ts });
+    const { payload } = signQR({ rid, mid, ts });
+
+    res.json({ qrUrl, payload });
   } catch (e) {
     next(e);
   }

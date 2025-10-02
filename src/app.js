@@ -49,10 +49,10 @@ app.use("/api/reservations/checkin", checkinLimiter);
 
 // Rotalar
 app.use("/api/auth", authRoutes);
+app.use("/api/restaurants", panelRoutes); // panel alt path'leri
 app.use("/api/restaurants", restaurantRoutes);
 app.use("/api/reservations", reservationRoutes);
 app.use("/api/reports", reportRoutes);
-app.use("/api/restaurants", panelRoutes); // panel alt path'leri
 app.use("/api/admin", adminRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/jobs", jobsRouter);

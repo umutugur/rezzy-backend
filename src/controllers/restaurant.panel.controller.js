@@ -3,13 +3,16 @@ import mongoose from "mongoose";
 import dayjs from "dayjs";
 import Reservation from "../models/Reservation.js";
 
-/** GET /api/restaurants/:rid/reservations
- *  Panel listesi (sayfalı, filtreli)
- */
+
+/** GET /api/restaurants/:rid/reservations */
 export const listReservationsForRestaurant = async (req, res, next) => {
   try {
     const { rid } = req.params;
     const { from, to, status, page = 1, limit = 50 } = req.query;
+
+    if (!mongoose.Types.ObjectId.isValid(rid)) {
+      return next({ status: 400, message: "Geçersiz restoran id" });
+    }
 
     const q = { restaurantId: new mongoose.Types.ObjectId(rid) };
     if (status) q.status = status;
@@ -22,27 +25,53 @@ export const listReservationsForRestaurant = async (req, res, next) => {
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    const [items, total] = await Promise.all([
+    const [docs, total] = await Promise.all([
       Reservation.find(q)
         .sort({ dateTimeUTC: -1 })
         .skip(skip)
         .limit(Number(limit))
-        .populate("userId", "name email")
+        .populate({ path: "userId", select: "name email" })
         .lean(),
       Reservation.countDocuments(q),
     ]);
 
+    const pickUser = (r) => {
+      if (r.userId) return { name: r.userId.name, email: r.userId.email };
+      if (r.user && (r.user.name || r.user.email)) return r.user;
+      if (r.customer && (r.customer.name || r.customer.email)) return r.customer;
+      if (r.customerName || r.guestName || r.contactName || r.name) {
+        return {
+          name:
+            r.customerName ||
+            r.guestName ||
+            r.contactName ||
+            r.name ||
+            null,
+          email:
+            r.customerEmail ||
+            r.guestEmail ||
+            r.contactEmail ||
+            r.email ||
+            null,
+        };
+      }
+      return null;
+    };
+
+    const items = docs.map((r) => ({
+      _id: r._id,
+      dateTimeUTC: r.dateTimeUTC,
+      partySize: r.partySize,
+      totalPrice: r.totalPrice,
+      depositAmount: r.depositAmount,
+      status: r.status,
+      receiptUrl: r.receiptUrl || null,
+      userId: r.userId?._id?.toString() ?? null,
+      user: pickUser(r) || undefined,
+    }));
+
     res.json({
-      items: items.map(r => ({
-        _id: r._id,
-        dateTimeUTC: r.dateTimeUTC,
-        partySize: r.partySize,
-        totalPrice: r.totalPrice,
-        depositAmount: r.depositAmount,
-        status: r.status,
-        receiptUrl: r.receiptUrl,
-        user: r.userId ? { name: r.userId.name, email: r.userId.email } : undefined,
-      })),
+      items,
       total: Number(total),
       page: Number(page),
       limit: Number(limit),

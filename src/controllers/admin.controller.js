@@ -275,30 +275,71 @@ export const getRestaurantDetail = async (req,res,next)=>{
   }catch(e){ next(e); }
 };
 
-export const listReservationsByRestaurantAdmin = async (req,res,next)=>{
-  try{
+export const listReservationsByRestaurantAdmin = async (req, res, next) => {
+  try {
     const { status, start, end } = req.query;
     const { limit, cursor } = pageParams(req.query);
     const rid = toObjectId(req.params.rid);
-    if (!rid) return res.status(400).json({message:"Invalid restaurant id"});
+    if (!rid) return res.status(400).json({ message: "Invalid restaurant id" });
 
     const { dt } = parseDateRange({ start, end });
+
     const q = { restaurantId: rid };
     if (status) q.status = status;
     if (cursor) q._id = { $lt: cursor };
     if (start || end) q.dateTimeUTC = dt;
 
     const rows = await Reservation.find(q)
-      .sort({_id:-1})
-      .limit(limit+1)
+      .sort({ _id: -1 })
+      .limit(limit + 1)
+      .populate({ path: "userId", select: "name email" })
       .lean();
 
+    const pickUser = (r) => {
+      if (r.userId) return { name: r.userId.name, email: r.userId.email };
+      if (r.user && (r.user.name || r.user.email)) return r.user;
+      if (r.customer && (r.customer.name || r.customer.email)) return r.customer;
+      if (r.customerName || r.guestName || r.contactName || r.name) {
+        return {
+          name:
+            r.customerName ||
+            r.guestName ||
+            r.contactName ||
+            r.name ||
+            null,
+          email:
+            r.customerEmail ||
+            r.guestEmail ||
+            r.contactEmail ||
+            r.email ||
+            null,
+        };
+      }
+      return null;
+    };
+
+    const sliced = cut(rows, limit);
+    const items = sliced.map((r) => ({
+      _id: r._id,
+      dateTimeUTC: r.dateTimeUTC,
+      partySize: r.partySize,
+      totalPrice: r.totalPrice,
+      depositAmount: r.depositAmount,
+      status: r.status,
+      receiptUrl: r.receiptUrl || null,
+      userId: r.userId?._id?.toString() ?? null,
+      user: pickUser(r) || undefined,
+    }));
+
     res.json({
-      items: cut(rows, limit),
+      items,
       nextCursor: nextCursor(rows, limit),
     });
-  }catch(e){ next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
+
 
 // ✅ Komisyon oranı güncelle
 export const updateRestaurantCommission = async (req,res,next)=>{
@@ -462,37 +503,83 @@ export const updateUserRole = async (req, res, next) => {
 };
 
 // ---------- Reservations (global read-only)
-export const listReservationsAdmin = async (req,res,next)=>{
-  try{
+export const listReservationsAdmin = async (req, res, next) => {
+  try {
     const { status, restaurantId, userId, start, end } = req.query;
     const { limit, cursor } = pageParams(req.query);
     const { dt } = parseDateRange({ start, end });
 
     const q = {};
     if (status) q.status = status;
+
     if (restaurantId) {
       const rid = toObjectId(restaurantId);
-      if (!rid) return res.status(400).json({message:"Invalid restaurantId"});
+      if (!rid) return res.status(400).json({ message: "Invalid restaurantId" });
       q.restaurantId = rid;
     }
     if (userId) {
       const uid = toObjectId(userId);
-      if (!uid) return res.status(400).json({message:"Invalid userId"});
+      if (!uid) return res.status(400).json({ message: "Invalid userId" });
       q.userId = uid;
     }
+
     if (cursor) q._id = { $lt: cursor };
     if (start || end) q.dateTimeUTC = dt;
 
     const rows = await Reservation.find(q)
-      .sort({_id:-1})
-      .limit(limit+1)
+      .sort({ _id: -1 })
+      .limit(limit + 1)
+      .populate({ path: "userId", select: "name email" })
+      .populate({ path: "restaurantId", select: "name" })
       .lean();
 
+    // Fallback kullanıcı üretici
+    const pickUser = (r) => {
+      if (r.userId) return { name: r.userId.name, email: r.userId.email };
+      if (r.user && (r.user.name || r.user.email)) return r.user;
+      if (r.customer && (r.customer.name || r.customer.email)) return r.customer;
+      if (r.customerName || r.guestName || r.contactName || r.name) {
+        return {
+          name:
+            r.customerName ||
+            r.guestName ||
+            r.contactName ||
+            r.name ||
+            null,
+          email:
+            r.customerEmail ||
+            r.guestEmail ||
+            r.contactEmail ||
+            r.email ||
+            null,
+        };
+      }
+      return null;
+    };
+
+    const sliced = cut(rows, limit);
+    const items = sliced.map((r) => ({
+      _id: r._id,
+      dateTimeUTC: r.dateTimeUTC,
+      partySize: r.partySize,
+      totalPrice: r.totalPrice,
+      depositAmount: r.depositAmount,
+      status: r.status,
+      receiptUrl: r.receiptUrl || null,
+      restaurant: r.restaurantId
+        ? { id: r.restaurantId._id?.toString?.() ?? null, name: r.restaurantId.name }
+        : null,
+      userId: r.userId?._id?.toString() ?? null,
+      user: pickUser(r) || undefined,
+    }));
+
     res.json({
-      items: cut(rows, limit),
+      items,
       nextCursor: nextCursor(rows, limit),
     });
-  }catch(e){ next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 // ---------- Reviews ----------
