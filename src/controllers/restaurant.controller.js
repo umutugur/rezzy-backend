@@ -453,12 +453,12 @@ export const fetchReservationsByRestaurant = async (req, res, next) => {
 /*
  * Rezervasyon durumu güncelle (QR üretimini bu uçtan kaldırdık).
  */
+// controllers/restaurant.controller.js  (varsa)
 export const updateReservationStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
     const rawStatus = String(req.body?.status || "").trim().toLowerCase();
 
-    // FE ile BE aynı dili konuşsun
     const allowed = new Set(["pending", "confirmed", "cancelled", "arrived", "no_show"]);
     if (!allowed.has(rawStatus)) {
       return next({ status: 400, message: `Invalid status: ${rawStatus}` });
@@ -472,10 +472,17 @@ export const updateReservationStatus = async (req, res, next) => {
       (req.user?.role === "restaurant" && String(r?.restaurantId?.owner) === String(req.user.id));
     if (!isOwner) return next({ status: 403, message: "Forbidden" });
 
-    // Durum güncelle
     r.status = rawStatus;
 
-    // Yardımcı timestamp alanları
+    if (rawStatus === "confirmed") {
+      // sabit ts'yi setle
+      if (!r.qrTs) {
+        r.qrTs =
+          r.dateTimeUTC ||
+          r.createdAt ||
+          new Date();
+      }
+    }
     if (rawStatus === "cancelled") r.cancelledAt = new Date();
     if (rawStatus === "arrived") {
       r.checkinAt = r.checkinAt || new Date();
@@ -484,7 +491,6 @@ export const updateReservationStatus = async (req, res, next) => {
 
     await r.save();
 
-    // FE’in rahatça state patchlemesi için yeterli alanları dönelim
     return res.json({
       _id: r._id.toString(),
       status: r.status,
@@ -501,6 +507,7 @@ export const updateReservationStatus = async (req, res, next) => {
   }
 };
 
+
 /*
  * Bir rezervasyon için QR kodu döndürür (rid/mid/ts/sig düz metni QR içine basılır).
  */
@@ -508,22 +515,31 @@ export const getReservationQR = async (req, res, next) => {
   try {
     const { id: rid } = req.params;
 
-    // İlgili rezervasyonu bulup restoran id’sini al
-    const r = await Reservation.findById(rid).select("restaurantId");
+    const r = await Reservation.findById(rid)
+      .select("restaurantId dateTimeUTC qrTs createdAt")
+      .lean();
     if (!r) return next({ status: 404, message: "Reservation not found" });
 
-    // restaurantId bazen ObjectId ya da string olabilir; normalize et
-    const mid = (r.restaurantId?._id || r.restaurantId || "").toString();
+    const mid =
+      (r.restaurantId && (r.restaurantId._id || r.restaurantId).toString?.()) ||
+      "";
     if (!mid) return next({ status: 400, message: "Reservation has no restaurantId" });
 
-    // ts: saniye cinsinden
-    const ts = Math.floor(Date.now() / 1000);
+    // DETERMINISTIK ts — aynı formül:
+    const ts = (
+      r.qrTs
+        ? new Date(r.qrTs)
+        : r.dateTimeUTC
+        ? new Date(r.dateTimeUTC)
+        : r.createdAt
+        ? new Date(r.createdAt)
+        : new Date()
+    ).toISOString();
 
-    // QR görseli (data:image/png;base64,...) ve ham payload (rid/mid/ts/sig)
     const qrUrl = await generateQRDataURL({ rid, mid, ts });
     const { payload } = signQR({ rid, mid, ts });
 
-    res.json({ qrUrl, payload });
+    res.json({ qrUrl, payload, rid, mid, ts });
   } catch (e) {
     next(e);
   }

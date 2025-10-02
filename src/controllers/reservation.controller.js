@@ -271,9 +271,24 @@ export const approveReservation = async (req, res, next) => {
       throw { status: 403, message: "Forbidden" };
 
     r.status = "confirmed";
-    const ts = r.dateTimeUTC.toISOString();
-    const qr = await generateQRDataURL({ rid: r._id.toString(), mid: r.restaurantId._id.toString(), ts });
-    r.qrSig = "generated";
+
+    // 1) Sabit ts: varsa mevcut qrTs, yoksa rezervasyon zamanı, o da yoksa oluşturulma zamanı
+    const ts =
+      r.qrTs?.toISOString?.() ||
+      r.dateTimeUTC?.toISOString?.() ||
+      r.createdAt?.toISOString?.() ||
+      new Date().toISOString();
+
+    // İlk defa onaylanıyorsa r.qrTs'yi setle (sonrasında hep aynı kalacak)
+    if (!r.qrTs) r.qrTs = new Date(ts);
+
+    // (İstersen burada QR görseli de üretebilirsin; mobil/panel aynı ts ile hep aynı QR'yi basacak)
+    const qrDataUrl = await generateQRDataURL({
+      rid: r._id.toString(),
+      mid: r.restaurantId._id.toString(),
+      ts,
+    });
+
     await r.save();
 
     await notifyUser(r.userId, {

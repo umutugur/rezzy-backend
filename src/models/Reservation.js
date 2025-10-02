@@ -34,6 +34,8 @@ const ReservationSchema = new mongoose.Schema(
 
     // QR & check-in
     qrSig:        { type: String },
+    // models/Reservation.js (şema tanımında uygun yere ekle)
+    qrTs: { type: Date }, // QR imzasında kullanılacak sabit timestamp
     checkinAt:    { type: Date },
     cancelledAt:  { type: Date },
     noShowAt:     { type: Date },
