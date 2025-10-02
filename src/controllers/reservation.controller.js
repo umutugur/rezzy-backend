@@ -326,42 +326,75 @@ export const cancelReservation = async (req, res, next) => {
 };
 
 /** POST /api/reservations/checkin  (QR ile) */
-export const checkin = async (req,res,next)=>{
-  try{
-    const { rid, mid, ts, sig, arrivedCount } = req.body;
+export const checkin = async (req, res, next) => {
+  try {
+    let { rid, mid, ts, sig, arrivedCount, qr } = req.body;
 
+    // 0) Bazı client'lar tek parça "qr" string gönderir: "rid/mid/ts/sig"
+    if ((!rid || !mid || !ts || !sig) && typeof qr === "string") {
+      try { qr = decodeURIComponent(qr); } catch {}
+      const parts = qr.split("/");
+      if (parts.length === 4) {
+        [rid, mid, ts, sig] = parts.map(s => s.trim());
+      }
+    }
+
+    // 1) Temel format kontrolleri (daha anlaşılır hata mesajları için)
+    if (!rid || !mid || !ts || !sig) {
+      throw { status: 400, message: "QR formatı hatalı: rid/mid/ts/sig bekleniyor" };
+    }
+    if (!/^[a-f0-9]{24}$/.test(String(rid))) {
+      throw { status: 400, message: "QR rid geçersiz" };
+    }
+    if (!/^[a-f0-9]{24}$/.test(String(mid))) {
+      throw { status: 400, message: "QR mid geçersiz" };
+    }
+    if (!/^[a-f0-9]{64}$/.test(String(sig))) {
+      throw { status: 400, message: "QR imza (sig) geçersiz" };
+    }
+
+    // 2) İmza doğrulaması
     const ok = verifyQR({ rid, mid, ts, sig });
-    if(!ok) throw { status:400, message:"Invalid QR" };
+    if (!ok) throw { status: 400, message: "QR imzası doğrulanamadı" };
 
+    // 3) Rezervasyon & restoran eşleşmesi
     const r = await Reservation.findById(rid).populate("restaurantId");
-    if(!r || r.restaurantId._id.toString() !== mid) throw { status:400, message:"QR mismatch" };
+    if (!r || r.restaurantId._id.toString() !== mid) {
+      throw { status: 400, message: "QR restoran/rezervasyon uyuşmuyor" };
+    }
 
-    // yetki: restoran sahibi veya admin
-    if (req.user.role !== "admin" && String(r.restaurantId.owner) !== String(req.user.id))
-      throw { status:403, message:"Forbidden" };
+    // 4) Yetki: restoran sahibi veya admin
+    if (
+      req.user.role !== "admin" &&
+      String(r.restaurantId.owner) !== String(req.user.id)
+    ) {
+      throw { status: 403, message: "Yetkisiz işlem" };
+    }
 
-    // ✅ iki yönlü zaman penceresi (Restaurant alan adları ile uyumlu)
+    // 5) Zaman penceresi
     const rest = await Restaurant.findById(mid).lean();
     const before = Math.max(0, Number(rest?.checkinWindowBeforeMinutes ?? 15));
     const after  = Math.max(0, Number(rest?.checkinWindowAfterMinutes  ?? 90));
+    const start = dayjs(r.dateTimeUTC).subtract(before, "minute");
+    const end   = dayjs(r.dateTimeUTC).add(after, "minute");
+    if (!(dayjs().isAfter(start) && dayjs().isBefore(end))) {
+      throw { status: 400, message: "Check-in zaman penceresi dışında" };
+    }
 
-    const start = dayjs(r.dateTimeUTC).subtract(before,"minute");
-    const end   = dayjs(r.dateTimeUTC).add(after,"minute");
-
-    if (!(dayjs().isAfter(start) && dayjs().isBefore(end)))
-      throw { status:400, message:"Outside time window" };
-
-    // ✅ arrivedCount zorunlu (0..partySize)
+    // 6) arrivedCount zorunlu (0..partySize)
     const arrived = Math.max(0, Math.min(Number(arrivedCount ?? -1), r.partySize));
     if (!Number.isFinite(arrived) || arrived < 0) {
-      throw { status:400, message:"arrivedCount is required" };
+      throw { status: 400, message: "arrivedCount zorunludur" };
     }
 
     const late = Math.max(0, dayjs().diff(dayjs(r.dateTimeUTC), "minute"));
 
-    // ✅ Eksik katılım eşik kontrolü
-    const threshold = Math.max(0, Math.min(100, Number(rest?.underattendanceThresholdPercent ?? 80)));
-    const isUnder = arrived < (r.partySize * (threshold / 100));
+    // 7) Eksik katılım eşiği
+    const threshold = Math.max(
+      0,
+      Math.min(100, Number(rest?.underattendanceThresholdPercent ?? 80))
+    );
+    const isUnder = arrived < r.partySize * (threshold / 100);
 
     r.status = "arrived";
     r.arrivedCount = arrived;
@@ -370,9 +403,17 @@ export const checkin = async (req,res,next)=>{
     r.checkinAt = new Date();
     await r.save();
 
-    res.json({ ok:true, arrivedCount: r.arrivedCount, lateMinutes: r.lateMinutes, underattended: r.underattended });
-  }catch(e){ next(e); }
+    res.json({
+      ok: true,
+      arrivedCount: r.arrivedCount,
+      lateMinutes: r.lateMinutes,
+      underattended: r.underattended,
+    });
+  } catch (e) {
+    next(e);
+  }
 };
+
 
 /** PATCH /api/reservations/:rid/arrived-count  (check-in sonrası düzeltme) */
 export const updateArrivedCount = async (req,res,next)=>{
