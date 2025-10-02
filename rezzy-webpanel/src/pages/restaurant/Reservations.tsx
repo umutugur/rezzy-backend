@@ -97,7 +97,7 @@ const openQR = async (id: string) => {
   try {
     // Backend JSON döndürüyor: { qrUrl: "data:image/png;base64,..." }
     const resp = await api.get(`/restaurants/reservations/${id}/qr`);
-    const url = resp?.data?.qrUrl;
+    const url = resp?.data?.qrDataUrl;
 
     if (typeof url === "string" && url.length > 0) {
       setQrUrl(url);          // data URL veya normal URL olabilir
