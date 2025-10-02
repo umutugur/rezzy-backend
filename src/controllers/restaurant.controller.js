@@ -453,16 +453,12 @@ export const fetchReservationsByRestaurant = async (req, res, next) => {
 /*
  * Rezervasyon durumu güncelle (QR üretimini bu uçtan kaldırdık).
  */
-// controllers/restaurant.controller.js  (varsa)
 export const updateReservationStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
     const rawStatus = String(req.body?.status || "").trim().toLowerCase();
-
     const allowed = new Set(["pending", "confirmed", "cancelled", "arrived", "no_show"]);
-    if (!allowed.has(rawStatus)) {
-      return next({ status: 400, message: `Invalid status: ${rawStatus}` });
-    }
+    if (!allowed.has(rawStatus)) return next({ status: 400, message: `Invalid status: ${rawStatus}` });
 
     const r = await Reservation.findById(id).populate("restaurantId", "_id owner");
     if (!r) return next({ status: 404, message: "Reservation not found" });
@@ -473,15 +469,8 @@ export const updateReservationStatus = async (req, res, next) => {
     if (!isOwner) return next({ status: 403, message: "Forbidden" });
 
     r.status = rawStatus;
-
-    if (rawStatus === "confirmed") {
-      // sabit ts'yi setle
-      if (!r.qrTs) {
-        r.qrTs =
-          r.dateTimeUTC ||
-          r.createdAt ||
-          new Date();
-      }
+    if (rawStatus === "confirmed" && !r.qrTs) {
+      r.qrTs = r.dateTimeUTC || r.createdAt || new Date(); // sadece ilk confirmed'de setle
     }
     if (rawStatus === "cancelled") r.cancelledAt = new Date();
     if (rawStatus === "arrived") {
@@ -502,9 +491,7 @@ export const updateReservationStatus = async (req, res, next) => {
       restaurantId: r.restaurantId?._id || r.restaurantId,
       updatedAt: r.updatedAt,
     });
-  } catch (e) {
-    next(e);
-  }
+  } catch (e) { next(e); }
 };
 
 
@@ -520,25 +507,17 @@ export const getReservationQR = async (req, res, next) => {
       .lean();
     if (!r) return next({ status: 404, message: "Reservation not found" });
 
-    const mid =
-      (r.restaurantId && (r.restaurantId._id || r.restaurantId).toString?.()) ||
-      "";
+    const mid = (r.restaurantId?._id || r.restaurantId || "").toString();
     if (!mid) return next({ status: 400, message: "Reservation has no restaurantId" });
 
-    // DETERMINISTIK ts — aynı formül:
-    const ts = (
-      r.qrTs
-        ? new Date(r.qrTs)
-        : r.dateTimeUTC
-        ? new Date(r.dateTimeUTC)
-        : r.createdAt
-        ? new Date(r.createdAt)
-        : new Date()
-    ).toISOString();
+    // deterministik tarih → unix saniye dönüştürme utils içinde yapılacak
+    const baseDate = r.qrTs || r.dateTimeUTC || r.createdAt || new Date();
+    const ts = baseDate;
 
     const qrUrl = await generateQRDataURL({ rid, mid, ts });
     const { payload } = signQR({ rid, mid, ts });
 
+    // Payload'ı döndürüyorum ki gözle kontrol edebilesin
     res.json({ qrUrl, payload, rid, mid, ts });
   } catch (e) {
     next(e);

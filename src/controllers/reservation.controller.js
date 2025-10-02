@@ -272,34 +272,18 @@ export const approveReservation = async (req, res, next) => {
 
     r.status = "confirmed";
 
-    // 1) Sabit ts: varsa mevcut qrTs, yoksa rezervasyon zamanı, o da yoksa oluşturulma zamanı
-    const ts =
-      r.qrTs?.toISOString?.() ||
-      r.dateTimeUTC?.toISOString?.() ||
-      r.createdAt?.toISOString?.() ||
-      new Date().toISOString();
+    // deterministik taban tarih
+    const baseDate = r.qrTs || r.dateTimeUTC || r.createdAt || new Date();
+    if (!r.qrTs) r.qrTs = baseDate; // sadece ilk onayda setle
 
-    // İlk defa onaylanıyorsa r.qrTs'yi setle (sonrasında hep aynı kalacak)
-    if (!r.qrTs) r.qrTs = new Date(ts);
+    const rid = r._id.toString();
+    const mid = r.restaurantId._id.toString();
+    const ts  = baseDate; // generateQRDataURL içinde unix saniyeye çevrilecek
 
-    // (İstersen burada QR görseli de üretebilirsin; mobil/panel aynı ts ile hep aynı QR'yi basacak)
-    const qrDataUrl = await generateQRDataURL({
-      rid: r._id.toString(),
-      mid: r.restaurantId._id.toString(),
-      ts,
-    });
-
+    const qrDataUrl = await generateQRDataURL({ rid, mid, ts });
     await r.save();
 
-    await notifyUser(r.userId, {
-      title: "Rezervasyonun onaylandı",
-      body:  "Girişte QR kodunu okutmayı unutma.",
-      data:  { type: "reservation_confirmed", rid: String(r._id), section: "qrcode" },
-      key:   `cust:confirmed:${r._id}`,
-      type:  "reservation_confirmed"
-    });
-
-    res.json({ ok: true, qrDataUrl: qr });
+    res.json({ ok: true, qrDataUrl });
   } catch (e) { next(e); }
 };
 

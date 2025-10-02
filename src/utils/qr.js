@@ -2,15 +2,21 @@
 import crypto from "crypto";
 import QRCode from "qrcode";
 
-/** rid/mid/ts gövdesi */
+// Her girdiyi 10 haneli UNIX saniyesine çevir
+const toUnixSeconds = (ts) => {
+  if (typeof ts === "number") return Math.floor(ts);
+  if (typeof ts === "string" && /^\d{10,}$/.test(ts)) return Math.floor(Number(ts));
+  const d = ts instanceof Date ? ts : new Date(ts);
+  return Math.floor(d.getTime() / 1000);
+};
+
+// rid/mid/ts gövdesi (ts: unix sec)
 function baseString({ rid, mid, ts }) {
-  return `${rid}/${mid}/${ts}`;
+  const sec = toUnixSeconds(ts);
+  return `${rid}/${mid}/${sec}`;
 }
 
-/**
- * HMAC-SHA256 (hex) imzayı üretir ve payload'u döner.
- * payload formatı: "rid/mid/ts/sig"
- */
+/** payload: rid/mid/ts/sig  (sig = HMAC-SHA256 hex) */
 export function signQR({ rid, mid, ts }) {
   const base = baseString({ rid, mid, ts });
   const sig = crypto
@@ -20,17 +26,13 @@ export function signQR({ rid, mid, ts }) {
   return { base, sig, payload: `${base}/${sig}` };
 }
 
-/** QR görselini (Data URL) üretir; QR'nin içine payload (metin) basılır */
+/** QR görseli (Data URL). QR içine payload metni basılır. */
 export async function generateQRDataURL({ rid, mid, ts }) {
   const { payload } = signQR({ rid, mid, ts });
-  return QRCode.toDataURL(payload, {
-    errorCorrectionLevel: "M",
-    margin: 1,
-    scale: 6,
-  });
+  return QRCode.toDataURL(payload, { errorCorrectionLevel: "M", margin: 1, scale: 6 });
 }
 
-/** Doğrulama (opsiyonel kullanılabilir) */
+/** opsiyonel doğrulama */
 export function verifyQR({ rid, mid, ts, sig }) {
   const { sig: expected } = signQR({ rid, mid, ts });
   try {
