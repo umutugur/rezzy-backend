@@ -16,7 +16,7 @@ import { showToast } from "../../ui/Toast";
 
 // === Tipler ===
 type OpeningHour = { day: number; open: string; close: string; isClosed?: boolean };
-type MenuItem = { name: string; price: number; isActive?: boolean };
+type MenuItem = { name: string; price: number; description?: string; isActive?: boolean };
 type TableItem = { name: string; capacity: number; isActive?: boolean };
 type Policies = {
   minPartySize: number;
@@ -166,13 +166,13 @@ setMenus(
     onError: (e: any) => showToast(e?.response?.data?.message || e?.message || "Silinemedi", "error"),
   });
 
-  const saveMenusMut = useMutation({
+ const saveMenusMut = useMutation({
   mutationFn: async () => {
     const payload = menus.map(m => ({
       title: m.name,
       pricePerPerson: m.price,
+      description: m.description || "", // 🆕 açıklama backend'e gönderiliyor
       isActive: m.isActive ?? true,
-      // description alanını UI'ya ekleyince buradan da göndeririz
     }));
     await api.put(`/restaurants/${rid}/menus`, { menus: payload });
   },
@@ -181,8 +181,12 @@ setMenus(
     qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
   },
   onError: (e: any) =>
-    showToast(e?.response?.data?.message || e?.message || "Menüler kaydedilemedi", "error"),
+    showToast(
+      e?.response?.data?.message || e?.message || "Menüler kaydedilemedi",
+      "error"
+    ),
 });
+
 
 
   const saveTablesMut = useMutation({
@@ -403,71 +407,116 @@ setMenus(
         )}
 
         {/* === MENÜLER === */}
-        {tab === "menus" && (
-          <Card title="Menüler">
-            <div className="space-y-3">
-              {menus.map((m, idx) => (
-                <div key={idx} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
-                  <input
-                    className="border rounded-lg px-3 py-2"
-                    placeholder="Ad"
-                    value={m.name}
-                    onChange={(e) =>
-                      setMenus((prev) => prev.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))
-                    }
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    className="border rounded-lg px-3 py-2"
-                    placeholder="Fiyat"
-                    value={String(m.price)}
-                    onChange={(e) =>
-                      setMenus((prev) =>
-                        prev.map((x, i) => (i === idx ? { ...x, price: Number(e.target.value) || 0 } : x))
-                      )
-                    }
-                  />
-                  <label className="flex items-center gap-2 text-sm">
-                    <span className="text-gray-600">Aktif</span>
-                    <input
-                      type="checkbox"
-                      checked={m.isActive ?? true}
-                      onChange={(e) =>
-                        setMenus((prev) =>
-                          prev.map((x, i) => (i === idx ? { ...x, isActive: e.target.checked } : x))
-                        )
-                      }
-                    />
-                  </label>
-                  <button
-                    className="rounded-lg bg-gray-100 hover:bg-gray-200 px-3 py-2"
-                    onClick={() => setMenus((prev) => prev.filter((_, i) => i !== idx))}
-                  >
-                    Sil
-                  </button>
-                </div>
-              ))}
-              {menus.length === 0 && <div className="text-sm text-gray-500">Kayıt yok</div>}
-              <button
-                className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
-                onClick={() => setMenus((prev) => [...prev, { name: "", price: 0, isActive: true }])}
-              >
-                Yeni Menü
-              </button>
-            </div>
+{tab === "menus" && (
+  <Card title="Menüler">
+    <div className="space-y-3">
+      {menus.map((m, idx) => (
+        <div
+          key={idx}
+          className="grid grid-cols-1 md:grid-cols-6 gap-3 items-center"
+        >
+          {/* Ad */}
+          <input
+            className="border rounded-lg px-3 py-2"
+            placeholder="Ad"
+            value={m.name}
+            onChange={(e) =>
+              setMenus((prev) =>
+                prev.map((x, i) =>
+                  i === idx ? { ...x, name: e.target.value } : x
+                )
+              )
+            }
+          />
 
-            <div className="mt-4">
-              <button
-                onClick={() => saveMenusMut.mutate()}
-                disabled={saveMenusMut.isPending}
-                className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
-              >
-                {saveMenusMut.isPending ? "Kaydediliyor…" : "Kaydet"}
-              </button>
-            </div>
-          </Card>
-        )}
+          {/* Fiyat */}
+          <input
+            type="number"
+            min={0}
+            className="border rounded-lg px-3 py-2"
+            placeholder="Fiyat"
+            value={String(m.price)}
+            onChange={(e) =>
+              setMenus((prev) =>
+                prev.map((x, i) =>
+                  i === idx
+                    ? { ...x, price: Number(e.target.value) || 0 }
+                    : x
+                )
+              )
+            }
+          />
+
+          {/* Açıklama */}
+          <input
+            className="border rounded-lg px-3 py-2"
+            placeholder="Açıklama"
+            value={m.description || ""}
+            onChange={(e) =>
+              setMenus((prev) =>
+                prev.map((x, i) =>
+                  i === idx ? { ...x, description: e.target.value } : x
+                )
+              )
+            }
+          />
+
+          {/* Aktif */}
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-gray-600">Aktif</span>
+            <input
+              type="checkbox"
+              checked={m.isActive ?? true}
+              onChange={(e) =>
+                setMenus((prev) =>
+                  prev.map((x, i) =>
+                    i === idx ? { ...x, isActive: e.target.checked } : x
+                  )
+                )
+              }
+            />
+          </label>
+
+          {/* Sil */}
+          <button
+            className="rounded-lg bg-gray-100 hover:bg-gray-200 px-3 py-2"
+            onClick={() =>
+              setMenus((prev) => prev.filter((_, i) => i !== idx))
+            }
+          >
+            Sil
+          </button>
+        </div>
+      ))}
+
+      {menus.length === 0 && (
+        <div className="text-sm text-gray-500">Kayıt yok</div>
+      )}
+
+      <button
+        className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
+        onClick={() =>
+          setMenus((prev) => [
+            ...prev,
+            { name: "", price: 0, description: "", isActive: true },
+          ])
+        }
+      >
+        Yeni Menü
+      </button>
+    </div>
+
+    <div className="mt-4">
+      <button
+        onClick={() => saveMenusMut.mutate()}
+        disabled={saveMenusMut.isPending}
+        className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
+      >
+        {saveMenusMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+      </button>
+    </div>
+  </Card>
+)}
 
         {/* === MASALAR === */}
         {tab === "tables" && (
