@@ -10,7 +10,7 @@ import {
   restaurantUpdateProfile,
   restaurantAddPhoto,
   restaurantRemovePhoto,
-  api, // generic put istekleri için kullanacağız
+  api,
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
 
@@ -36,16 +36,15 @@ type Restaurant = {
   description?: string;
   photos?: string[];
 
-  // ödeme bilgileri (mobil paritesi)
+  // ödeme bilgileri
   iban?: string;
   ibanName?: string;
   bankName?: string;
 
-  // aşağıdakiler restaurantGet ile geliyorsa direkt dolduracağız
-  menus?: MenuItem[];
+  // toplu alanlar
+  menus?: any[];
   tables?: TableItem[];
   openingHours?: OpeningHour[];
-  // politikalar backend dto’suna göre farklı bir dalda olabilir; yoksa defaultları kullanalım
   minPartySize?: number;
   maxPartySize?: number;
   slotMinutes?: number;
@@ -54,10 +53,8 @@ type Restaurant = {
   blackoutDates?: string[];
 };
 
-// gün isimleri
 const DAYS = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"] as const;
 
-// Default’lar (backend boş dönerse UI boş kalmasın)
 const DEFAULT_OPENING_HOURS: OpeningHour[] = Array.from({ length: 7 }, (_, i) => ({
   day: i,
   open: "10:00",
@@ -79,17 +76,14 @@ export default function RestaurantProfilePage() {
   const rid = asId(authStore.getUser()?.restaurantId) || "";
   const qc = useQueryClient();
 
-  // aktif sekme
   const [tab, setTab] = React.useState<TabKey>("general");
 
-  // === Veriyi çek ===
   const { data, isLoading, error } = useQuery<Restaurant>({
     queryKey: ["restaurant-detail", rid],
     queryFn: () => restaurantGet(rid),
     enabled: !!rid,
   });
 
-  // === Genel/Form state ===
   const [form, setForm] = React.useState<Partial<Restaurant>>({});
   const [menus, setMenus] = React.useState<MenuItem[]>([]);
   const [tables, setTables] = React.useState<TableItem[]>([]);
@@ -99,7 +93,7 @@ export default function RestaurantProfilePage() {
 
   React.useEffect(() => {
     if (!data) return;
-    // Genel
+
     setForm({
       name: data.name,
       email: data.email,
@@ -111,23 +105,25 @@ export default function RestaurantProfilePage() {
       ibanName: data.ibanName,
       bankName: data.bankName,
     });
-    // Menüler / Masalar / Saatler
-setMenus(
-  Array.isArray(data.menus)
-    ? data.menus.map((m: any) => ({
-        name: m.name ?? m.title ?? "",
-        price: Number(m.price ?? m.pricePerPerson ?? 0),
-        isActive: m.isActive ?? true,
-        // description backend'de varsa istersen ekrana da koyarız
-      }))
-    : []
-);    setTables(Array.isArray(data.tables) ? data.tables : []);
+
+    // 🆕 Menüler: description'ı da al
+    setMenus(
+      Array.isArray(data.menus)
+        ? data.menus.map((m: any) => ({
+            name: m.name ?? m.title ?? "",
+            price: Number(m.price ?? m.pricePerPerson ?? 0),
+            description: m.description ?? "", // <-- önemli
+            isActive: m.isActive ?? true,
+          }))
+        : []
+    );
+
+    setTables(Array.isArray(data.tables) ? data.tables : []);
     setHours(
       Array.isArray(data.openingHours) && data.openingHours.length === 7
         ? data.openingHours
         : DEFAULT_OPENING_HOURS
     );
-    // Politikalar
     setPolicies({
       minPartySize: data.minPartySize ?? DEFAULT_POLICIES.minPartySize,
       maxPartySize: data.maxPartySize ?? DEFAULT_POLICIES.maxPartySize,
@@ -138,7 +134,7 @@ setMenus(
     });
   }, [data]);
 
-  // === Mutations ===
+  // Mutations
   const saveGeneralMut = useMutation({
     mutationFn: () => restaurantUpdateProfile(rid, form),
     onSuccess: () => {
@@ -166,28 +162,23 @@ setMenus(
     onError: (e: any) => showToast(e?.response?.data?.message || e?.message || "Silinemedi", "error"),
   });
 
- const saveMenusMut = useMutation({
-  mutationFn: async () => {
-    const payload = menus.map(m => ({
-      title: m.name,
-      pricePerPerson: m.price,
-      description: m.description || "", // 🆕 açıklama backend'e gönderiliyor
-      isActive: m.isActive ?? true,
-    }));
-    await api.put(`/restaurants/${rid}/menus`, { menus: payload });
-  },
-  onSuccess: () => {
-    showToast("Menüler güncellendi", "success");
-    qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
-  },
-  onError: (e: any) =>
-    showToast(
-      e?.response?.data?.message || e?.message || "Menüler kaydedilemedi",
-      "error"
-    ),
-});
-
-
+  const saveMenusMut = useMutation({
+    mutationFn: async () => {
+      const payload = menus.map((m) => ({
+        title: m.name,
+        pricePerPerson: m.price,
+        description: m.description || "", // 🆕 backend'e gönder
+        isActive: m.isActive ?? true,
+      }));
+      await api.put(`/restaurants/${rid}/menus`, { menus: payload });
+    },
+    onSuccess: () => {
+      showToast("Menüler güncellendi", "success");
+      qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
+    },
+    onError: (e: any) =>
+      showToast(e?.response?.data?.message || e?.message || "Menüler kaydedilemedi", "error"),
+  });
 
   const saveTablesMut = useMutation({
     mutationFn: async () => {
@@ -232,14 +223,12 @@ setMenus(
       showToast(e?.response?.data?.message || e?.message || "Politikalar kaydedilemedi", "error"),
   });
 
-  // === Fotoğraf yükleme ===
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f) uploadMut.mutate(f);
     e.currentTarget.value = "";
   };
 
-  // === Sekme içerikleri ===
   const TabBar = (
     <div className="flex flex-wrap gap-2">
       {(
@@ -407,116 +396,120 @@ setMenus(
         )}
 
         {/* === MENÜLER === */}
-{tab === "menus" && (
-  <Card title="Menüler">
-    <div className="space-y-3">
-      {menus.map((m, idx) => (
-        <div
-          key={idx}
-          className="grid grid-cols-1 md:grid-cols-6 gap-3 items-center"
-        >
-          {/* Ad */}
-          <input
-            className="border rounded-lg px-3 py-2"
-            placeholder="Ad"
-            value={m.name}
-            onChange={(e) =>
-              setMenus((prev) =>
-                prev.map((x, i) =>
-                  i === idx ? { ...x, name: e.target.value } : x
-                )
-              )
-            }
-          />
+        {tab === "menus" && (
+          <Card title="Menüler">
+            <div className="space-y-3">
+              {menus.map((m, idx) => (
+                <div
+                  key={idx}
+                  className="grid grid-cols-1 md:grid-cols-6 gap-3"
+                >
+                  {/* Ad */}
+                  <input
+                    className="border rounded-lg px-3 py-2"
+                    placeholder="Ad"
+                    value={m.name}
+                    onChange={(e) =>
+                      setMenus((prev) =>
+                        prev.map((x, i) =>
+                          i === idx ? { ...x, name: e.target.value } : x
+                        )
+                      )
+                    }
+                  />
 
-          {/* Fiyat */}
-          <input
-            type="number"
-            min={0}
-            className="border rounded-lg px-3 py-2"
-            placeholder="Fiyat"
-            value={String(m.price)}
-            onChange={(e) =>
-              setMenus((prev) =>
-                prev.map((x, i) =>
-                  i === idx
-                    ? { ...x, price: Number(e.target.value) || 0 }
-                    : x
-                )
-              )
-            }
-          />
+                  {/* Fiyat */}
+                  <input
+                    type="number"
+                    min={0}
+                    className="border rounded-lg px-3 py-2"
+                    placeholder="Fiyat"
+                    value={String(m.price)}
+                    onChange={(e) =>
+                      setMenus((prev) =>
+                        prev.map((x, i) =>
+                          i === idx
+                            ? { ...x, price: Number(e.target.value) || 0 }
+                            : x
+                        )
+                      )
+                    }
+                  />
 
-          {/* Açıklama */}
-          <input
-            className="border rounded-lg px-3 py-2"
-            placeholder="Açıklama"
-            value={m.description || ""}
-            onChange={(e) =>
-              setMenus((prev) =>
-                prev.map((x, i) =>
-                  i === idx ? { ...x, description: e.target.value } : x
-                )
-              )
-            }
-          />
+                  {/* Açıklama — geniş ve yüksek */}
+                  <div className="md:col-span-3">
+                    <textarea
+                      className="w-full border rounded-lg px-3 py-2 h-24"
+                      placeholder="Açıklama"
+                      value={m.description || ""}
+                      onChange={(e) =>
+                        setMenus((prev) =>
+                          prev.map((x, i) =>
+                            i === idx ? { ...x, description: e.target.value } : x
+                          )
+                        )
+                      }
+                    />
+                  </div>
 
-          {/* Aktif */}
-          <label className="flex items-center gap-2 text-sm">
-            <span className="text-gray-600">Aktif</span>
-            <input
-              type="checkbox"
-              checked={m.isActive ?? true}
-              onChange={(e) =>
-                setMenus((prev) =>
-                  prev.map((x, i) =>
-                    i === idx ? { ...x, isActive: e.target.checked } : x
-                  )
-                )
-              }
-            />
-          </label>
+                  {/* Aktif */}
+                  <div className="flex items-center">
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-600">Aktif</span>
+                      <input
+                        type="checkbox"
+                        checked={m.isActive ?? true}
+                        onChange={(e) =>
+                          setMenus((prev) =>
+                            prev.map((x, i) =>
+                              i === idx ? { ...x, isActive: e.target.checked } : x
+                            )
+                          )
+                        }
+                      />
+                    </label>
+                  </div>
 
-          {/* Sil */}
-          <button
-            className="rounded-lg bg-gray-100 hover:bg-gray-200 px-3 py-2"
-            onClick={() =>
-              setMenus((prev) => prev.filter((_, i) => i !== idx))
-            }
-          >
-            Sil
-          </button>
-        </div>
-      ))}
+                  {/* Sil butonunu açıklama satırının altına taşımamak için ayrı satıra gerek kalmıyor */}
+                  <div className="md:col-span-6">
+                    <button
+                      className="rounded-lg bg-gray-100 hover:bg-gray-200 px-3 py-2"
+                      onClick={() =>
+                        setMenus((prev) => prev.filter((_, i) => i !== idx))
+                      }
+                    >
+                      Sil
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {menus.length === 0 && (
+                <div className="text-sm text-gray-500">Kayıt yok</div>
+              )}
+              <button
+                className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
+                onClick={() =>
+                  setMenus((prev) => [
+                    ...prev,
+                    { name: "", price: 0, description: "", isActive: true },
+                  ])
+                }
+              >
+                Yeni Menü
+              </button>
+            </div>
 
-      {menus.length === 0 && (
-        <div className="text-sm text-gray-500">Kayıt yok</div>
-      )}
-
-      <button
-        className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
-        onClick={() =>
-          setMenus((prev) => [
-            ...prev,
-            { name: "", price: 0, description: "", isActive: true },
-          ])
-        }
-      >
-        Yeni Menü
-      </button>
-    </div>
-
-    <div className="mt-4">
-      <button
-        onClick={() => saveMenusMut.mutate()}
-        disabled={saveMenusMut.isPending}
-        className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
-      >
-        {saveMenusMut.isPending ? "Kaydediliyor…" : "Kaydet"}
-      </button>
-    </div>
-  </Card>
-)}
+            <div className="mt-4">
+              <button
+                onClick={() => saveMenusMut.mutate()}
+                disabled={saveMenusMut.isPending}
+                className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
+              >
+                {saveMenusMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+              </button>
+            </div>
+          </Card>
+        )}
 
         {/* === MASALAR === */}
         {tab === "tables" && (
