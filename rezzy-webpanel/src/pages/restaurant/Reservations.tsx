@@ -16,7 +16,7 @@ type Row = {
   depositAmount?: number;
   status: "pending" | "confirmed" | "arrived" | "cancelled" | "no_show" | string;
   receiptUrl?: string;
-  user?: { name?: string; email?: string }; // Backend kullanıcıyı dönmüyorsa boş gelebilir
+  user?: { name?: string; email?: string };
 };
 type Resp = { items: Row[]; total: number; page: number; limit: number };
 
@@ -26,13 +26,12 @@ const trStatus: Record<string, string> = {
   confirmed: "Onaylı",
   arrived: "Geldi",
   no_show: "Gelmedi",
-  cancelled: "İptal"
+  cancelled: "İptal",
 };
 function fmtStatus(s: string) {
   return trStatus[s] ?? s;
 }
 function ymd(d: Date) {
-  // YYYY-MM-DD
   return d.toISOString().slice(0, 10);
 }
 
@@ -50,24 +49,20 @@ export default function RestaurantReservationsPage() {
 
   // ---- UI state
   const [tab, setTab] = React.useState<"pending" | "upcoming" | "past">("upcoming");
-  const [statusFilter, setStatusFilter] = React.useState<string>(""); // ekstra durum filtresi
+  const [statusFilter, setStatusFilter] = React.useState<string>("");
   const [page, setPage] = React.useState(1);
   const [limit, setLimit] = React.useState(20);
 
   const qc = useQueryClient();
 
-  // ---- Sorgu paramları (tab'a göre server-side filtre)
+  // ---- Sorgu paramları
   const params = React.useMemo(() => {
     const base: any = { page, limit };
     const today = new Date();
 
-    if (tab === "pending") {
-      base.status = "pending";
-    } else if (tab === "upcoming") {
-      base.from = ymd(today); // bugünden ileri
-    } else if (tab === "past") {
-      base.to = ymd(today); // bugüne kadar
-    }
+    if (tab === "pending") base.status = "pending";
+    else if (tab === "upcoming") base.from = ymd(today);
+    else if (tab === "past") base.to = ymd(today);
 
     if (statusFilter) base.status = statusFilter;
     return base as { from?: string; to?: string; status?: string; page: number; limit: number };
@@ -76,87 +71,47 @@ export default function RestaurantReservationsPage() {
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["restaurant-reservations", rid, params],
     queryFn: () => fetchReservations(rid, params),
-    enabled: !!rid
+    enabled: !!rid,
   });
 
-  const totalPages = data && data.limit > 0 ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
-
-  // ---- Durum güncelle (sadece pending için aktif)
-  const statusMut = useMutation({
-    mutationFn: (payload: { id: string; status: "confirmed" | "cancelled" }) =>
-      restaurantUpdateReservationStatus(payload.id, payload.status),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["restaurant-reservations", rid, params] });
-    }
-  });
+  const totalPages =
+    data && data.limit > 0 ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
 
   // ---- QR modal state
   const [qrOpen, setQrOpen] = React.useState(false);
   const [qrUrl, setQrUrl] = React.useState<string | null>(null);
-const openQR = async (id: string) => {
-  try {
-    // Backend JSON döndürüyor: { qrUrl: "data:image/png;base64,..." }
-    const resp = await api.get(`/restaurants/reservations/${id}/qr`);
-    const url = resp?.data?.qrDataUrl;
 
-    if (typeof url === "string" && url.length > 0) {
-      setQrUrl(url);          // data URL veya normal URL olabilir
-      setQrOpen(true);
-      return;
-    }
-
-    // Beklediğimiz alan yoksa fallback olarak eski yönteme deneyelim
-    const respBin = await api.get(`/restaurants/reservations/${id}/qr`, {
-      responseType: "arraybuffer",
-      headers: { Accept: "image/*" }
-    });
-    const ab = respBin.data as ArrayBuffer;
-    const u8 = new Uint8Array(ab);
-
-    // Küçük signature sniffing: PNG / JPEG / GIF / SVG
-    const sniffMime = (u8arr: Uint8Array): string => {
-      if (
-        u8arr.length >= 8 &&
-        u8arr[0] === 0x89 && u8arr[1] === 0x50 && u8arr[2] === 0x4e && u8arr[3] === 0x47 &&
-        u8arr[4] === 0x0d && u8arr[5] === 0x0a && u8arr[6] === 0x1a && u8arr[7] === 0x0a
-      ) return "image/png";
-      if (u8arr.length >= 3 && u8arr[0] === 0xff && u8arr[1] === 0xd8 && u8arr[2] === 0xff) return "image/jpeg";
-      if (u8arr.length >= 6) {
-        const sig = String.fromCharCode(...u8arr.slice(0, 6));
-        if (sig === "GIF89a" || sig === "GIF87a") return "image/gif";
+  // ---- Durum güncelle
+  const statusMut = useMutation({
+    mutationFn: (payload: { id: string; status: "confirmed" | "cancelled" }) =>
+      restaurantUpdateReservationStatus(payload.id, payload.status),
+    onSuccess: (res, vars) => {
+      qc.invalidateQueries({ queryKey: ["restaurant-reservations", rid, params] });
+      if (vars.status === "confirmed" && res?.qrDataUrl) {
+        setQrUrl(res.qrDataUrl);
+        setQrOpen(true);
       }
-      try {
-        const head = new TextDecoder().decode(u8arr.slice(0, 64)).trim().toLowerCase();
-        if (head.startsWith("<svg")) return "image/svg+xml";
-      } catch {}
-      return "image/png";
-    };
+    },
+  });
 
-    const ct = sniffMime(u8);
-    let bin = "";
-    for (let i = 0; i < u8.byteLength; i++) bin += String.fromCharCode(u8[i]);
-    const b64 = btoa(bin);
-    const dataUrl = `data:${ct};base64,${b64}`;
-
-    setQrUrl(dataUrl);
-    setQrOpen(true);
-  } catch (err: any) {
+  // ---- QR açma
+  const openQR = async (id: string) => {
     try {
-      const ab: ArrayBuffer | undefined = err?.response?.data;
-      if (ab && ab instanceof ArrayBuffer) {
-        const txt = new TextDecoder().decode(ab);
-        const j = JSON.parse(txt);
-        showToast(j?.message || "QR alınamadı", "error");
+      const resp = await api.get(`/reservations/${id}/qr`);
+      const url = resp?.data?.qrDataUrl || resp?.data?.qrUrl;
+
+      if (typeof url === "string" && url.length > 0) {
+        setQrUrl(url);
+        setQrOpen(true);
         return;
       }
-    } catch {}
-    showToast(err?.response?.data?.message || err?.message || "QR alınamadı", "error");
-  }
-};
-
+      showToast("QR bulunamadı", "error");
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || err?.message || "QR alınamadı", "error");
+    }
+  };
 
   const closeQR = () => {
-    if (qrUrl) URL.revokeObjectURL(qrUrl);
     setQrUrl(null);
     setQrOpen(false);
   };
@@ -167,30 +122,51 @@ const openQR = async (id: string) => {
         items={[
           { to: "/restaurant", label: "Dashboard" },
           { to: "/restaurant/reservations", label: "Rezervasyonlar" },
-          { to: "/restaurant/profile", label: "Profil & Ayarlar" }
+          { to: "/restaurant/profile", label: "Profil & Ayarlar" },
         ]}
       />
       <div className="flex-1 space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Rezervasyonlar</h2>
 
-          {/* Sekmeler: Bekleyen / Yaklaşan / Geçmiş */}
+          {/* Sekmeler */}
           <div className="flex gap-2">
             <button
-              onClick={() => { setTab("pending"); setPage(1); }}
-              className={`px-3 py-1.5 rounded-lg ${tab === "pending" ? "bg-brand-600 text-white" : "bg-gray-100 hover:bg-gray-200"}`}
+              onClick={() => {
+                setTab("pending");
+                setPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-lg ${
+                tab === "pending"
+                  ? "bg-brand-600 text-white"
+                  : "bg-gray-100 hover:bg-gray-200"
+              }`}
             >
               Bekleyen
             </button>
             <button
-              onClick={() => { setTab("upcoming"); setPage(1); }}
-              className={`px-3 py-1.5 rounded-lg ${tab === "upcoming" ? "bg-brand-600 text-white" : "bg-gray-100 hover:bg-gray-200"}`}
+              onClick={() => {
+                setTab("upcoming");
+                setPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-lg ${
+                tab === "upcoming"
+                  ? "bg-brand-600 text-white"
+                  : "bg-gray-100 hover:bg-gray-200"
+              }`}
             >
               Yaklaşan
             </button>
             <button
-              onClick={() => { setTab("past"); setPage(1); }}
-              className={`px-3 py-1.5 rounded-lg ${tab === "past" ? "bg-brand-600 text-white" : "bg-gray-100 hover:bg-gray-200"}`}
+              onClick={() => {
+                setTab("past");
+                setPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-lg ${
+                tab === "past"
+                  ? "bg-brand-600 text-white"
+                  : "bg-gray-100 hover:bg-gray-200"
+              }`}
             >
               Geçmiş
             </button>
@@ -204,7 +180,10 @@ const openQR = async (id: string) => {
               <label className="block text-sm text-gray-600 mb-1">Durum</label>
               <select
                 value={statusFilter}
-                onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setPage(1);
+                }}
                 className="border rounded-lg px-3 py-2"
               >
                 <option value="">Hepsi</option>
@@ -221,7 +200,9 @@ const openQR = async (id: string) => {
                 type="number"
                 min={1}
                 value={page}
-                onChange={(e) => setPage(Math.max(1, Number(e.target.value) || 1))}
+                onChange={(e) =>
+                  setPage(Math.max(1, Number(e.target.value) || 1))
+                }
                 className="w-24 border rounded-lg px-3 py-2"
               />
             </div>
@@ -231,7 +212,9 @@ const openQR = async (id: string) => {
                 type="number"
                 min={1}
                 value={limit}
-                onChange={(e) => setLimit(Math.max(1, Number(e.target.value) || 20))}
+                onChange={(e) =>
+                  setLimit(Math.max(1, Number(e.target.value) || 20))
+                }
                 className="w-24 border rounded-lg px-3 py-2"
               />
             </div>
@@ -268,33 +251,41 @@ const openQR = async (id: string) => {
                 const isPending = r.status === "pending";
                 return (
                   <tr key={r._id} className="border-t">
-                    <td className="py-2 px-4">{new Date(r.dateTimeUTC).toLocaleString()}</td>
-
-                    {/* Backend kullanıcıyı dönmüyorsa '-' gösterir */}
+                    <td className="py-2 px-4">
+                      {new Date(r.dateTimeUTC).toLocaleString()}
+                    </td>
                     <td className="py-2 px-4">
                       {r.user?.name || "-"}{" "}
-                      <span className="text-gray-500">{r.user?.email ? `(${r.user.email})` : ""}</span>
+                      <span className="text-gray-500">
+                        {r.user?.email ? `(${r.user.email})` : ""}
+                      </span>
                     </td>
-
                     <td className="py-2 px-4">{r.partySize}</td>
-                    <td className="py-2 px-4">{r.totalPrice?.toLocaleString("tr-TR")}</td>
-                    <td className="py-2 px-4">{r.depositAmount?.toLocaleString("tr-TR")}</td>
+                    <td className="py-2 px-4">
+                      {r.totalPrice?.toLocaleString("tr-TR")}
+                    </td>
+                    <td className="py-2 px-4">
+                      {r.depositAmount?.toLocaleString("tr-TR")}
+                    </td>
                     <td className="py-2 px-4">{fmtStatus(r.status)}</td>
 
-                    {/* Sadece PENDING için aksiyonlar aktif; 'Geldi' butonu kaldırıldı */}
                     <td className="py-2 px-4">
                       <div className="flex gap-2">
                         <button
                           className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-60"
                           disabled={!isPending || statusMut.isPending}
-                          onClick={() => statusMut.mutate({ id: r._id, status: "confirmed" })}
+                          onClick={() =>
+                            statusMut.mutate({ id: r._id, status: "confirmed" })
+                          }
                         >
                           Onayla
                         </button>
                         <button
                           className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
                           disabled={!isPending || statusMut.isPending}
-                          onClick={() => statusMut.mutate({ id: r._id, status: "cancelled" })}
+                          onClick={() =>
+                            statusMut.mutate({ id: r._id, status: "cancelled" })
+                          }
                         >
                           İptal
                         </button>
@@ -304,18 +295,25 @@ const openQR = async (id: string) => {
                     <td className="py-2 px-4">
                       <div className="flex items-center gap-3">
                         {r.receiptUrl ? (
-                          <a className="text-brand-700 underline" href={r.receiptUrl} target="_blank" rel="noreferrer">
+                          <a
+                            className="text-brand-700 underline"
+                            href={r.receiptUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
                             Dekont
                           </a>
                         ) : (
                           <span className="text-gray-400">—</span>
                         )}
-                        <button
-                          className="text-sm rounded-lg bg-gray-100 hover:bg-gray-200 px-2 py-1"
-                          onClick={() => openQR(r._id)}
-                        >
-                          QR
-                        </button>
+                        {r.status === "confirmed" && (
+                          <button
+                            className="text-sm rounded-lg bg-gray-100 hover:bg-gray-200 px-2 py-1"
+                            onClick={() => openQR(r._id)}
+                          >
+                            QR
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -323,7 +321,10 @@ const openQR = async (id: string) => {
               })}
               {(!data?.items || data.items.length === 0) && (
                 <tr>
-                  <td className="py-3 px-4 text-gray-500" colSpan={8}>
+                  <td
+                    className="py-3 px-4 text-gray-500"
+                    colSpan={8}
+                  >
                     Kayıt yok
                   </td>
                 </tr>
@@ -356,19 +357,17 @@ const openQR = async (id: string) => {
         )}
 
         {/* QR Modal */}
-      <Modal open={qrOpen} onClose={closeQR} title="Rezervasyon QR">
-  {qrUrl ? (
-    <img
-      src={qrUrl}
-      alt="QR"
-      className="max-h-[70vh] w-auto h-auto object-contain mx-auto"
-    />
-  ) : (
-    <div className="text-sm text-gray-600">Yükleniyor…</div>
-  )}
-</Modal>
-
-
+        <Modal open={qrOpen} onClose={closeQR} title="Rezervasyon QR">
+          {qrUrl ? (
+            <img
+              src={qrUrl}
+              alt="QR"
+              className="max-h-[70vh] w-auto h-auto object-contain mx-auto"
+            />
+          ) : (
+            <div className="text-sm text-gray-600">Yükleniyor…</div>
+          )}
+        </Modal>
       </div>
     </div>
   );

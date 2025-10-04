@@ -178,13 +178,20 @@ export async function restaurantUpdateReservationStatus(
   resId: string,
   status: "confirmed" | "cancelled"
 ) {
+  if (status === "confirmed") {
+    // Backend: approve -> { ok: true, qrDataUrl }
+    const { data } = await api.post(`/reservations/${resId}/approve`);
+    return data; // içinde qrDataUrl var
+  }
+  // iptal vb. için mevcut path kalsın
   const { data } = await api.put(`/restaurants/reservations/${resId}/status`, { status });
   return data;
 }
 
 // Rezervasyon QR (JSON -> { qrUrl, payload? })
 export async function restaurantGetReservationQR(resId: string) {
-  const { data } = await api.get(`/restaurants/reservations/${resId}/qr`);
+    // Backend’te QR gösteren endpoint: GET /reservations/:rid/qr
+  const { data } = await api.get(`/reservations/${resId}/qr`);
   // data.qrUrl: data:image/png;base64,... şeklinde
   return data as { qrUrl: string; payload?: string };
 }

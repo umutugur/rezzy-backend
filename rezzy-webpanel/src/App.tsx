@@ -18,6 +18,7 @@ import OpeningHoursPage from "./pages/restaurant/OpeningHours";
 import TablesPage from "./pages/restaurant/Tables";
 import MenusPage from "./pages/restaurant/Menus";
 import PhotosPage from "./pages/restaurant/Photos";
+import PoliciesPage from "./pages/restaurant/Policies";
 
 // ---- Basit UI parçaları ----
 function Shell({ children }: { children: React.ReactNode }) {
@@ -166,6 +167,9 @@ export default function App() {
         <Route path="/restaurant/opening-hours" element={<Shell><OpeningHoursPage /></Shell>} />
         <Route path="/restaurant/tables" element={<Shell><TablesPage /></Shell>} />
         <Route path="/restaurant/menus" element={<Shell><MenusPage /></Shell>} />
+        <Route path="/restaurant/photos" element={<Shell><PhotosPage /></Shell>} />
+        <Route path="/restaurant/profile" element={<Shell><RestaurantProfilePage /></Shell>} />
+        <Route path="/restaurant/policies" element={<Shell><PoliciesPage /></Shell>} />
         <Route path="/restaurant/photos" element={<Shell><PhotosPage /></Shell>} />
         <Route path="/restaurant/profile" element={<Shell><RestaurantProfilePage /></Shell>} />
       </Route>
