@@ -112,8 +112,16 @@ export default function RestaurantProfilePage() {
       bankName: data.bankName,
     });
     // Menüler / Masalar / Saatler
-    setMenus(Array.isArray(data.menus) ? data.menus : []);
-    setTables(Array.isArray(data.tables) ? data.tables : []);
+setMenus(
+  Array.isArray(data.menus)
+    ? data.menus.map((m: any) => ({
+        name: m.name ?? m.title ?? "",
+        price: Number(m.price ?? m.pricePerPerson ?? 0),
+        isActive: m.isActive ?? true,
+        // description backend'de varsa istersen ekrana da koyarız
+      }))
+    : []
+);    setTables(Array.isArray(data.tables) ? data.tables : []);
     setHours(
       Array.isArray(data.openingHours) && data.openingHours.length === 7
         ? data.openingHours
@@ -159,15 +167,23 @@ export default function RestaurantProfilePage() {
   });
 
   const saveMenusMut = useMutation({
-    mutationFn: async () => {
-      await api.put(`/restaurants/${rid}/menus`, { menus });
-    },
-    onSuccess: () => {
-      showToast("Menüler güncellendi", "success");
-      qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
-    },
-    onError: (e: any) => showToast(e?.response?.data?.message || e?.message || "Menüler kaydedilemedi", "error"),
-  });
+  mutationFn: async () => {
+    const payload = menus.map(m => ({
+      title: m.name,
+      pricePerPerson: m.price,
+      isActive: m.isActive ?? true,
+      // description alanını UI'ya ekleyince buradan da göndeririz
+    }));
+    await api.put(`/restaurants/${rid}/menus`, { menus: payload });
+  },
+  onSuccess: () => {
+    showToast("Menüler güncellendi", "success");
+    qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
+  },
+  onError: (e: any) =>
+    showToast(e?.response?.data?.message || e?.message || "Menüler kaydedilemedi", "error"),
+});
+
 
   const saveTablesMut = useMutation({
     mutationFn: async () => {
