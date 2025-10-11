@@ -89,3 +89,25 @@ export const changePassword = async (req,res,next)=>{
     res.json({ ok:true });
   }catch(e){ next(e); }
 };
+/** DELETE /users/me (Apple compliance: account deletion) */
+export const deleteMe = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: "Kimlik doğrulaması gerekli" });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+
+    // Eğer restoran sahibi ise ilişkili restoranı null’a çek veya ayrı işlem yap
+    if (user.role === "restaurant" && user.restaurantId) {
+      // örnek: restoran kaydı silme yerine "inactive" işaretleyebilirsin
+      // await Restaurant.findByIdAndUpdate(user.restaurantId, { isActive: false });
+    }
+
+    await User.findByIdAndDelete(userId);
+
+    res.json({ ok: true, message: "Hesap kalıcı olarak silindi" });
+  } catch (e) {
+    next(e);
+  }
+};

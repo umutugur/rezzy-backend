@@ -175,27 +175,55 @@ export const appleLogin = async (req, res, next) => {
     const { identityToken } = req.body;
     if (!identityToken) return next({ status: 400, message: "identityToken gerekli" });
 
-    // Not: RN native flow'da identityToken doğrulamak için audience = Service ID / Bundle ID
+    // 👇 Native iOS için audience = Bundle ID olmalı
+    const expectedAudience =
+      process.env.IOS_BUNDLE_ID ||           // Örn: com.rezzy.app (native iOS için doğru olan)
+      process.env.APPLE_CLIENT_ID;           // (Web flow / Service ID kullanan kurulumlar için yedek)
+
+    if (!expectedAudience) {
+      return next({
+        status: 500,
+        message: "Apple audience tanımlı değil. Render env’e IOS_BUNDLE_ID=com.rezzy.app ekleyin.",
+      });
+    }
+
+    // Token doğrulama (süre kontrolü açık)
     const tokenData = await appleSignin.verifyIdToken(identityToken, {
-      audience: process.env.APPLE_CLIENT_ID,
+      audience: expectedAudience,
       ignoreExpiration: false,
     });
 
-    const sub = tokenData.sub;
-    const email = tokenData.email;
-    const name = "AppleUser";
+    const sub   = tokenData?.sub;
+    const email = tokenData?.email || null;
 
+    if (!sub) {
+      return next({ status: 401, message: "Apple kimlik doğrulaması başarısız (sub yok)." });
+    }
+
+    // 1) Önce apple sub ile ara
     let user = await User.findOne({ providers: { $elemMatch: { name: "apple", sub } } });
-    if (!user && email) user = await User.findOne({ email });
 
+    // 2) Bulunamazsa email ile ara (ilk girişte email gelebilir; sonraki girişlerde genelde gelmez)
+    if (!user && email) {
+      user = await User.findOne({ email });
+    }
+
+    // 3) Yoksa oluştur
     if (!user) {
-      user = await User.create({ name, email, role: "customer", providers: [{ name: "apple", sub }] });
+      user = await User.create({
+        name: email ? (email.split("@")[0]) : "AppleUser",
+        email: email || undefined,         // email gelmeyebilir
+        role: "customer",
+        providers: [{ name: "apple", sub }],
+      });
     } else {
+      // 4) Provider’ı iliştir + email boşsa doldur
       ensureProvider(user, "apple", sub);
       if (!user.email && email) user.email = email;
       await user.save();
     }
 
+    // Restoran sahibi ise restoranını hazırla
     if (user.role === "restaurant") {
       await ensureRestaurantForOwner(user._id);
       await user.populate({ path: "restaurantId", select: "_id name" });
@@ -204,6 +232,14 @@ export const appleLogin = async (req, res, next) => {
     const token = signToken(user);
     res.json({ token, user: toClientUser(user) });
   } catch (e) {
+    // audience uyuşmazlığı için anlaşılır mesaj
+    if (e?.message?.toLowerCase?.().includes("audience")) {
+      return next({
+        status: 400,
+        message:
+          "Apple audience eşleşmedi. IOS_BUNDLE_ID env’inin bundleIdentifier ile birebir aynı olduğundan emin olun.",
+      });
+    }
     next(e);
   }
 };
