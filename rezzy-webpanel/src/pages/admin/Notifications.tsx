@@ -1,6 +1,10 @@
 import React from "react";
 import { useMutation } from "@tanstack/react-query";
-import { adminSendNotification, AdminSendTargets } from "../../api/client";
+import {
+  adminSendNotification,
+  AdminSendTargets,
+  AdminSendResponse
+} from "../../api/client";
 import { showToast } from "../../ui/Toast";
 
 export default function AdminNotificationsPage() {
@@ -10,12 +14,21 @@ export default function AdminNotificationsPage() {
   const [body, setBody] = React.useState("");
   const [dataRaw, setDataRaw] = React.useState<string>('{"route":"ReservationDetail","id":""}');
 
-  const m = useMutation({
-    mutationFn: adminSendNotification,
+  const m = useMutation<AdminSendResponse, any, {
+    targets: AdminSendTargets;
+    email?: string;
+    title: string;
+    body: string;
+    data?: Record<string, string>;
+  }>({
+    mutationFn: (vars) => adminSendNotification(vars),
     onSuccess: (res) => {
-      showToast(`Gönderildi • kullanıcı: ${res.targetedUsers}, token: ${res.targetedTokens}`, "success");
+      showToast(
+        `Gönderildi • kullanıcı: ${res.targetedUsers}, token: ${res.targetedTokens}`,
+        "success"
+      );
     },
-    onError: (e:any) => {
+    onError: (e: any) => {
       const msg = e?.response?.data?.error || e?.message || "Gönderim hatası";
       showToast(msg, "error");
     }
@@ -23,7 +36,7 @@ export default function AdminNotificationsPage() {
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    let data: Record<string,string> | undefined = undefined;
+    let data: Record<string, string> | undefined = undefined;
     if (dataRaw.trim()) {
       try { data = JSON.parse(dataRaw); }
       catch { return showToast("Data JSON geçersiz", "error"); }
@@ -34,7 +47,13 @@ export default function AdminNotificationsPage() {
     if (targets === "email" && !email.trim()) {
       return showToast("E-posta gerekli", "error");
     }
-    m.mutate({ targets, email: email.trim() || undefined, title: title.trim(), body: body.trim(), data });
+    m.mutate({
+      targets,
+      email: email.trim() || undefined,
+      title: title.trim(),
+      body: body.trim(),
+      data
+    });
   }
 
   return (
@@ -52,13 +71,20 @@ export default function AdminNotificationsPage() {
               { k: "restaurants", t: "Restoranlar" },
               { k: "email", t: "Tek E-posta" },
             ].map(opt => (
-              <label key={opt.k} className={`border rounded-lg px-3 py-2 cursor-pointer flex items-center gap-2 ${targets===opt.k ? "border-brand-600 bg-brand-50" : "border-gray-300"}`}>
+              <label
+                key={opt.k}
+                className={`border rounded-lg px-3 py-2 cursor-pointer flex items-center gap-2 ${
+                  targets === (opt.k as AdminSendTargets)
+                    ? "border-brand-600 bg-brand-50"
+                    : "border-gray-300"
+                }`}
+              >
                 <input
                   type="radio"
                   name="targets"
                   value={opt.k}
-                  checked={targets===opt.k}
-                  onChange={()=>setTargets(opt.k as AdminSendTargets)}
+                  checked={targets === (opt.k as AdminSendTargets)}
+                  onChange={() => setTargets(opt.k as AdminSendTargets)}
                 />
                 <span>{opt.t}</span>
               </label>
@@ -73,7 +99,7 @@ export default function AdminNotificationsPage() {
               type="email"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400"
               value={email}
-              onChange={(e)=>setEmail(e.target.value)}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="kullanici@ornek.com"
               required
             />
@@ -85,7 +111,7 @@ export default function AdminNotificationsPage() {
           <input
             className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400"
             value={title}
-            onChange={(e)=>setTitle(e.target.value)}
+            onChange={(e) => setTitle(e.target.value)}
             placeholder="Örn: Rezervasyonun Onaylandı!"
             required
           />
@@ -96,7 +122,7 @@ export default function AdminNotificationsPage() {
           <textarea
             className="w-full rounded-lg border border-gray-300 px-3 py-2 h-28 focus:outline-none focus:ring-2 focus:ring-brand-400"
             value={body}
-            onChange={(e)=>setBody(e.target.value)}
+            onChange={(e) => setBody(e.target.value)}
             placeholder="Örn: Bugünkü rezervasyonunuz saat 19:00’da. QR ile hızlı check-in yapabilirsiniz."
             required
           />
@@ -107,10 +133,12 @@ export default function AdminNotificationsPage() {
           <textarea
             className="w-full font-mono text-sm rounded-lg border border-gray-300 px-3 py-2 h-32 focus:outline-none focus:ring-2 focus:ring-brand-400"
             value={dataRaw}
-            onChange={(e)=>setDataRaw(e.target.value)}
+            onChange={(e) => setDataRaw(e.target.value)}
             placeholder='{"route":"ReservationDetail","id":"..."}'
           />
-          <p className="text-xs text-gray-500 mt-1">Bildirim tıklanınca yönlendirme için kullanılabilir (örn. <code>route</code>, <code>id</code>).</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Bildirim tıklanınca yönlendirme için kullanılabilir (örn. <code>route</code>, <code>id</code>).
+          </p>
         </div>
 
         <div className="flex items-center gap-3">

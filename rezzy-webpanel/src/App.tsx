@@ -11,6 +11,8 @@ import AdminUsersPage from "./pages/admin/Users";
 import AdminReservationsPage from "./pages/admin/Reservations";
 import AdminModerationPage from "./pages/admin/Moderation";
 import AdminUserDetailPage from "./pages/admin/UserDetail";
+import AdminNotificationsPage from "./pages/admin/Notifications";
+
 import RestaurantDashboardPage from "./pages/restaurant/Dashboard";
 import RestaurantReservationsPage from "./pages/restaurant/Reservations";
 import RestaurantProfilePage from "./pages/restaurant/Profile";
@@ -19,7 +21,6 @@ import TablesPage from "./pages/restaurant/Tables";
 import MenusPage from "./pages/restaurant/Menus";
 import PhotosPage from "./pages/restaurant/Photos";
 import PoliciesPage from "./pages/restaurant/Policies";
-import AdminNotificationsPage from "./pages/admin/Notifications";
 
 // ---- Basit UI parçaları ----
 function Shell({ children }: { children: React.ReactNode }) {
@@ -184,8 +185,6 @@ export default function App() {
         <Route path="/restaurant/photos" element={<Shell><PhotosPage /></Shell>} />
         <Route path="/restaurant/profile" element={<Shell><RestaurantProfilePage /></Shell>} />
         <Route path="/restaurant/policies" element={<Shell><PoliciesPage /></Shell>} />
-        <Route path="/restaurant/photos" element={<Shell><PhotosPage /></Shell>} />
-        <Route path="/restaurant/profile" element={<Shell><RestaurantProfilePage /></Shell>} />
       </Route>
 
       {/* Kök rota */}

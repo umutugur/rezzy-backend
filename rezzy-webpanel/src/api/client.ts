@@ -58,6 +58,27 @@ export async function fetchMe() {
 }
 
 // =========================
+// ADMIN — Notifications
+// =========================
+export type AdminSendTargets = "all" | "customers" | "restaurants" | "email";
+export interface AdminSendResponse {
+  ok: boolean;
+  targetedUsers: number;
+  targetedTokens: number;
+  sent: number;
+}
+export async function adminSendNotification(input: {
+  targets: AdminSendTargets;
+  email?: string;
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+}): Promise<AdminSendResponse> {
+  const { data } = await api.post("/notifications/admin/send", input);
+  return data as AdminSendResponse;
+}
+
+// =========================
 /** ADMIN — Restaurants (kullanıyorsan kalsın) */
 // =========================
 export async function adminGetRestaurant(rid: string) {
@@ -190,7 +211,7 @@ export async function restaurantUpdateReservationStatus(
 
 // Rezervasyon QR (JSON -> { qrUrl, payload? })
 export async function restaurantGetReservationQR(resId: string) {
-    // Backend’te QR gösteren endpoint: GET /reservations/:rid/qr
+  // Backend’te QR gösteren endpoint: GET /reservations/:rid/qr
   const { data } = await api.get(`/reservations/${resId}/qr`);
   // data.qrUrl: data:image/png;base64,... şeklinde
   return data as { qrUrl: string; payload?: string };
