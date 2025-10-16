@@ -2,20 +2,37 @@ import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
 import User from "../models/User.js";
 import NotificationLog from "../models/NotificationLog.js";
-// importların altı
+
+const r = Router();
+
+// ---- Boot log
 console.log("[boot] notifications router mounted");
 
+// ---- Basit request logger (yalnızca notifications altı)
+r.use((req, res, next) => {
+  const started = Date.now();
+  // Hassas veri sızdırmamak için body’den sadece anahtarları yazıyoruz
+  const bodyKeys = req.method === "GET" ? [] : Object.keys(req.body || {});
+  console.log(`[notifications] ${req.method} ${req.originalUrl} bodyKeys=${JSON.stringify(bodyKeys)}`);
+  res.on("finish", () => {
+    console.log(`[notifications] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${Date.now() - started}ms)`);
+  });
+  next();
+});
+
+// ---- Ping (router gerçekten mount oldu mu?)
+r.get("/admin/ping", (req, res) => res.json({ ok: true, where: "notifications/admin/ping" }));
 
 /** Basit rol kontrolü */
 function requireAdmin(req, res, next) {
   try {
     if (req.user?.role !== "admin") return res.status(403).json({ ok: false, error: "forbidden" });
     next();
-  } catch (e) { res.status(500).json({ ok: false, error: e?.message || String(e) }); }
+  } catch (e) {
+    console.error("[notifications][requireAdmin] error:", e);
+    res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
 }
-// dosyanın uygun yerine:
-r.get("/admin/ping", (req, res) => res.json({ ok: true, where: "notifications/admin/ping" }));
-const r = Router();
 
 /**
  * Cihaz push token kaydı
@@ -42,15 +59,21 @@ r.post("/register", auth(), async (req, res) => {
 
     res.json({ ok: true, token, inserted });
   } catch (e) {
+    console.error("[notifications][register] error:", e);
     res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
 });
 
 /** Kayıtlı token/pref'leri gör */
 r.get("/me", auth(), async (req, res) => {
-  const u = await User.findById(req.user.id).select("pushTokens notificationPrefs").lean();
-  if (!u) return res.status(404).json({ ok: false, error: "user not found" });
-  res.json({ ok: true, pushTokens: u.pushTokens || [], prefs: u.notificationPrefs || {} });
+  try {
+    const u = await User.findById(req.user.id).select("pushTokens notificationPrefs").lean();
+    if (!u) return res.status(404).json({ ok: false, error: "user not found" });
+    res.json({ ok: true, pushTokens: u.pushTokens || [], prefs: u.notificationPrefs || {} });
+  } catch (e) {
+    console.error("[notifications][me] error:", e);
+    res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
 });
 
 /** Bildirim listesi (son N kayıt) */
@@ -73,6 +96,7 @@ r.get("/list", auth(), async (req, res) => {
 
     res.json({ ok: true, items });
   } catch (e) {
+    console.error("[notifications][list] error:", e);
     res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
 });
@@ -86,6 +110,7 @@ r.get("/unread-count", auth(), async (req, res) => {
     });
     res.json({ ok: true, count });
   } catch (e) {
+    console.error("[notifications][unread-count] error:", e);
     res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
 });
@@ -103,6 +128,7 @@ r.post("/mark-read", auth(), async (req, res) => {
 
     res.json({ ok: true });
   } catch (e) {
+    console.error("[notifications][mark-read] error:", e);
     res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
 });
@@ -116,6 +142,7 @@ r.post("/mark-all-read", auth(), async (req, res) => {
     );
     res.json({ ok: true });
   } catch (e) {
+    console.error("[notifications][mark-all-read] error:", e);
     res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
 });
@@ -132,13 +159,18 @@ r.post("/mark-all-read", auth(), async (req, res) => {
  * }
  */
 r.post("/admin/send", auth(), requireAdmin, async (req, res) => {
+  const start = Date.now();
   try {
     const { targets, email, title, body, data } = req.body || {};
+    console.log(`[notifications][admin/send] targets=${targets} email=${email ?? "-"} titleLen=${(title||"").length} bodyLen=${(body||"").length}`);
+
     const validTargets = ["all", "customers", "restaurants", "email"];
     if (!validTargets.includes(targets)) {
+      console.warn("[notifications][admin/send] invalid targets:", targets);
       return res.status(400).json({ ok: false, error: "invalid targets" });
     }
     if (!title || !body) {
+      console.warn("[notifications][admin/send] missing title/body");
       return res.status(400).json({ ok: false, error: "title/body required" });
     }
 
@@ -151,20 +183,15 @@ r.post("/admin/send", auth(), requireAdmin, async (req, res) => {
       userQuery = { email: String(email).trim().toLowerCase() };
     }
 
-    const users = await User.find(userQuery)
-      .select("_id pushTokens")
-      .lean();
-
-    // Aktif Expo push tokenları
+    const users = await User.find(userQuery).select("_id pushTokens").lean();
     const tokenTuples = [];
     for (const u of users) {
       const tokens = (u.pushTokens || [])
         .filter(t => t?.isActive && t?.token)
         .map(t => t.token);
-      for (const token of tokens) {
-        tokenTuples.push({ userId: u._id, token });
-      }
+      for (const token of tokens) tokenTuples.push({ userId: u._id, token });
     }
+    console.log(`[notifications][admin/send] matchedUsers=${users.length} activeTokens=${tokenTuples.length}`);
 
     // Expo push (Node 18+ global fetch)
     async function sendBatch(messages) {
@@ -199,10 +226,13 @@ r.post("/admin/send", auth(), requireAdmin, async (req, res) => {
       }));
       if (logs.length) await NotificationLog.insertMany(logs);
       sent += ch.length;
+      console.log(`[notifications][admin/send] batch sent=${ch.length}`);
     }
 
+    console.log(`[notifications][admin/send] DONE sent=${sent} in ${Date.now() - start}ms`);
     return res.json({ ok: true, targetedUsers: users.length, targetedTokens: tokenTuples.length, sent });
   } catch (e) {
+    console.error("[notifications][admin/send] error:", e);
     return res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
 });
