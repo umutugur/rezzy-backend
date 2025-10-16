@@ -11,7 +11,6 @@ console.log("[boot] notifications router mounted");
 // ---- Basit request logger (yalnızca notifications altı)
 r.use((req, res, next) => {
   const started = Date.now();
-  // Hassas veri sızdırmamak için body’den sadece anahtarları yazıyoruz
   const bodyKeys = req.method === "GET" ? [] : Object.keys(req.body || {});
   console.log(`[notifications] ${req.method} ${req.originalUrl} bodyKeys=${JSON.stringify(bodyKeys)}`);
   res.on("finish", () => {
@@ -160,6 +159,9 @@ r.post("/mark-all-read", auth(), async (req, res) => {
  */
 r.post("/admin/send", auth(), requireAdmin, async (req, res) => {
   const start = Date.now();
+  // Her istek için benzersiz key prefix
+  const reqKey = `admin:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+
   try {
     const { targets, email, title, body, data } = req.body || {};
     console.log(`[notifications][admin/send] targets=${targets} email=${email ?? "-"} titleLen=${(title||"").length} bodyLen=${(body||"").length}`);
@@ -184,6 +186,8 @@ r.post("/admin/send", auth(), requireAdmin, async (req, res) => {
     }
 
     const users = await User.find(userQuery).select("_id pushTokens").lean();
+
+    // Aktif token’ları topla
     const tokenTuples = [];
     for (const u of users) {
       const tokens = (u.pushTokens || [])
@@ -217,14 +221,29 @@ r.post("/admin/send", auth(), requireAdmin, async (req, res) => {
     for (const ch of chunks) {
       const messages = ch.map(t => ({ to: t.token, sound: "default", ...payload }));
       const result = await sendBatch(messages);
-      // Logla (kullanıcı bazında)
-      const logs = ch.map(t => ({
-        userId: t.userId,
-        payload,
-        sentAt: new Date(),
-        providerResponse: result || {},
-      }));
-      if (logs.length) await NotificationLog.insertMany(logs);
+
+      // Log: type + key zorunlu
+      const logs = ch.map(t => {
+        const tokenKey = (t.token || "").slice(-12); // benzersizlik için token’ın son kısmı
+        return {
+          userId: t.userId,
+          type: "admin_manual",
+          key: `${reqKey}:${String(t.userId)}:${tokenKey}`,
+          payload,
+          sentAt: new Date(),
+          providerResponse: result || {},
+        };
+      });
+
+      if (logs.length) {
+        try {
+          await NotificationLog.insertMany(logs, { ordered: false });
+        } catch (e) {
+          // duplicate key vs. durumunda push’u bozmayalım
+          console.warn("[notifications][admin/send] log insert warn:", e?.message || e);
+        }
+      }
+
       sent += ch.length;
       console.log(`[notifications][admin/send] batch sent=${ch.length}`);
     }

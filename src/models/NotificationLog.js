@@ -8,8 +8,7 @@ const NotificationLogSchema = new mongoose.Schema({
   payload: { type: Object },
   sentAt: { type: Date, default: Date.now },
   readAt: { type: Date, default: null },
-readBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
-
+  readBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
 }, { timestamps: true });
 
 export default mongoose.model("NotificationLog", NotificationLogSchema);
