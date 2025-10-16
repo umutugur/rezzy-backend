@@ -19,15 +19,28 @@ import TablesPage from "./pages/restaurant/Tables";
 import MenusPage from "./pages/restaurant/Menus";
 import PhotosPage from "./pages/restaurant/Photos";
 import PoliciesPage from "./pages/restaurant/Policies";
+import AdminNotificationsPage from "./pages/admin/Notifications";
 
 // ---- Basit UI parçaları ----
 function Shell({ children }: { children: React.ReactNode }) {
+  const u = authStore.getUser();
+  const nav = useNavigate();
   return (
     <div className="min-h-full">
       <header className="bg-white shadow-sm">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
           <h1 className="text-lg font-semibold">Rezzy Web Panel</h1>
-          <UserBadge />
+          <div className="flex items-center gap-3">
+            {u?.role === "admin" && (
+              <button
+                onClick={() => nav("/admin/notifications")}
+                className="px-3 py-1.5 text-sm rounded-md bg-black text-white hover:opacity-90"
+              >
+                Bildirim Gönder
+              </button>
+            )}
+            <UserBadge />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
@@ -152,6 +165,7 @@ export default function App() {
       {/* Admin alanı */}
       <Route element={<PrivateRoute allow={["admin"]} />}>
         <Route path="/admin" element={<Shell><AdminDashboardPage /></Shell>} />
+        <Route path="/admin/notifications" element={<Shell><AdminNotificationsPage /></Shell>} />
         <Route path="/admin/restaurants" element={<Shell><AdminRestaurantsPage /></Shell>} />
         <Route path="/admin/restaurants/:rid" element={<Shell><AdminRestaurantDetailPage /></Shell>} />
         <Route path="/admin/users" element={<Shell><AdminUsersPage /></Shell>} />
