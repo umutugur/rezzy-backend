@@ -108,6 +108,8 @@ export const createReservation = async (req, res, next) => {
       status: "pending",
     });
 
+    // (İsteğe bağlı) burada da restorana “yeni talep” bildirimi atılabilir.
+
     res.json({
       reservationId: r._id.toString(),
       partySize: r.partySize,
@@ -147,17 +149,19 @@ export const uploadReceipt = async (req, res, next) => {
     r.receiptUploadedAt = new Date();
     await r.save();
 
+    // Müşteri — pending
     await notifyUser(r.userId, {
-      title: "Rezervasyon isteğin alındı",
-      body:  "Restoran onayı bekleniyor. Onaylanınca QR kodun açılacak.",
-      data:  { type: "reservation_pending", rid: String(r._id) },
+      title: "Talebin alındı ✅",
+      body:  `${dayjs(r.dateTimeUTC).format("DD.MM.YYYY HH:mm")} için talebin restorana iletildi. Onaylanınca QR kodun açılacak.`,
+      data:  { type: "reservation_pending", rid: String(r._id), section: "reservation" },
       key:   `cust:pending:${r._id}`,
       type:  "reservation_pending"
     });
 
+    // Restoran sahibi — yeni istek
     await notifyRestaurantOwner(r.restaurantId, {
-      title: "Yeni rezervasyon isteği",
-      body:  "Dekont yüklendi. Kontrol edip onaylayın.",
+      title: "Yeni rezervasyon talebi",
+      body:  `${dayjs(r.dateTimeUTC).format("DD.MM.YYYY HH:mm")} • ${r.partySize} kişilik rezervasyon bekliyor. Lütfen kontrol edin.`,
       data:  { type: "restaurant_new_request", rid: String(r._id), section: "verification" },
       key:   `rest:new:${r._id}`,
       type:  "restaurant_new_request"
@@ -194,7 +198,7 @@ export const listMyReservations = async (req, res, next) => {
       totalPrice: r.totalPrice,
       depositAmount: r.depositAmount,
       receiptUploadedAt: r.receiptUploadedAt || null,
-      underattended: !!r.underattended, // bilgi amaçlı
+      underattended: !!r.underattended,
     })));
   } catch (e) { next(e); }
 };
@@ -278,10 +282,23 @@ export const approveReservation = async (req, res, next) => {
 
     const rid = r._id.toString();
     const mid = r.restaurantId._id.toString();
-    const ts  = baseDate; // generateQRDataURL içinde unix saniyeye çevrilecek
+    const ts  = baseDate;
 
     const qrDataUrl = await generateQRDataURL({ rid, mid, ts });
     await r.save();
+
+    // Müşteri — onay
+    try {
+      await notifyUser(r.userId, {
+        title: "Rezervasyonun onaylandı 🎉",
+        body:  `${dayjs(r.dateTimeUTC).format("DD.MM.YYYY HH:mm")} • QR kodun hazır. Rezzy > Rezervasyonlarım üzerinden erişebilirsin.`,
+        data:  { type: "reservation_approved", rid: String(r._id), section: "qrcode" },
+        key:   `cust:approved:${r._id}`,
+        type:  "reservation_approved",
+      });
+    } catch (e) {
+      console.warn("[approveReservation] notifyUser warn:", e?.message || e);
+    }
 
     res.json({ ok: true, qrDataUrl });
   } catch (e) { next(e); }
@@ -299,10 +316,11 @@ export const rejectReservation = async (req, res, next) => {
     r.cancelledAt = new Date();
     await r.save();
 
+    // Müşteri — reddedildi
     await notifyUser(r.userId, {
-      title: "Rezervasyonun onaylanmadı",
-      body:  "Uygun başka bir saat seçebilirsin.",
-      data:  { type: "reservation_rejected", rid: String(r._id) },
+      title: "Üzgünüz, rezervasyon onaylanmadı",
+      body:  `Uygun başka bir saat deneyebilirsin. İstersen farklı bir restoran da seçebilirsin.`,
+      data:  { type: "reservation_rejected", rid: String(r._id), section: "reservation" },
       key:   `cust:rejected:${r._id}`,
       type:  "reservation_rejected"
     });
@@ -314,13 +332,28 @@ export const rejectReservation = async (req, res, next) => {
 /** POST /api/reservations/:rid/cancel */
 export const cancelReservation = async (req, res, next) => {
   try {
-    const r = await Reservation.findById(req.params.rid);
+    const r = await Reservation.findById(req.params.rid).populate("restaurantId");
     if (!r) throw { status: 404, message: "Reservation not found" };
     if (r.userId.toString() !== req.user.id && req.user.role === "customer")
       throw { status: 403, message: "Forbidden" };
+
     r.status = "cancelled";
     r.cancelledAt = new Date();
     await r.save();
+
+    // Restoran — müşteri iptali
+    try {
+      await notifyRestaurantOwner(r.restaurantId._id, {
+        title: "Rezervasyon iptal edildi",
+        body:  `${dayjs(r.dateTimeUTC).format("DD.MM.YYYY HH:mm")} tarihli rezervasyon, müşteri tarafından iptal edildi.`,
+        data:  { type: "reservation_cancelled", rid: String(r._id), section: "reservations" },
+        key:   `rest:cancelled:${r._id}`,
+        type:  "reservation_cancelled",
+      });
+    } catch (e) {
+      console.warn("[cancelReservation] notifyRestaurantOwner warn:", e?.message || e);
+    }
+
     res.json({ ok: true, status: r.status });
   } catch (e) { next(e); }
 };
@@ -330,7 +363,7 @@ export const checkin = async (req, res, next) => {
   try {
     let { rid, mid, ts, sig, arrivedCount, qr } = req.body;
 
-    // 0) Bazı client'lar tek parça "qr" string gönderir: "rid/mid/ts/sig"
+    // Bazı client'lar tek parça "qr" string gönderir: "rid/mid/ts/sig"
     if ((!rid || !mid || !ts || !sig) && typeof qr === "string") {
       try { qr = decodeURIComponent(qr); } catch {}
       const parts = qr.split("/");
@@ -339,39 +372,30 @@ export const checkin = async (req, res, next) => {
       }
     }
 
-    // 1) Temel format kontrolleri (daha anlaşılır hata mesajları için)
+    // Temel format kontrolleri
     if (!rid || !mid || !ts || !sig) {
       throw { status: 400, message: "QR formatı hatalı: rid/mid/ts/sig bekleniyor" };
     }
-    if (!/^[a-f0-9]{24}$/.test(String(rid))) {
-      throw { status: 400, message: "QR rid geçersiz" };
-    }
-    if (!/^[a-f0-9]{24}$/.test(String(mid))) {
-      throw { status: 400, message: "QR mid geçersiz" };
-    }
-    if (!/^[a-f0-9]{64}$/.test(String(sig))) {
-      throw { status: 400, message: "QR imza (sig) geçersiz" };
-    }
+    if (!/^[a-f0-9]{24}$/.test(String(rid))) throw { status: 400, message: "QR rid geçersiz" };
+    if (!/^[a-f0-9]{24}$/.test(String(mid))) throw { status: 400, message: "QR mid geçersiz" };
+    if (!/^[a-f0-9]{64}$/.test(String(sig))) throw { status: 400, message: "QR imza (sig) geçersiz" };
 
-    // 2) İmza doğrulaması
+    // İmza doğrulaması
     const ok = verifyQR({ rid, mid, ts, sig });
     if (!ok) throw { status: 400, message: "QR imzası doğrulanamadı" };
 
-    // 3) Rezervasyon & restoran eşleşmesi
+    // Rezervasyon & restoran eşleşmesi
     const r = await Reservation.findById(rid).populate("restaurantId");
     if (!r || r.restaurantId._id.toString() !== mid) {
       throw { status: 400, message: "QR restoran/rezervasyon uyuşmuyor" };
     }
 
-    // 4) Yetki: restoran sahibi veya admin
-    if (
-      req.user.role !== "admin" &&
-      String(r.restaurantId.owner) !== String(req.user.id)
-    ) {
+    // Yetki
+    if (req.user.role !== "admin" && String(r.restaurantId.owner) !== String(req.user.id)) {
       throw { status: 403, message: "Yetkisiz işlem" };
     }
 
-    // 5) Zaman penceresi
+    // Zaman penceresi
     const rest = await Restaurant.findById(mid).lean();
     const before = Math.max(0, Number(rest?.checkinWindowBeforeMinutes ?? 15));
     const after  = Math.max(0, Number(rest?.checkinWindowAfterMinutes  ?? 90));
@@ -381,7 +405,7 @@ export const checkin = async (req, res, next) => {
       throw { status: 400, message: "Check-in zaman penceresi dışında" };
     }
 
-    // 6) arrivedCount zorunlu (0..partySize)
+    // arrivedCount zorunlu
     const arrived = Math.max(0, Math.min(Number(arrivedCount ?? -1), r.partySize));
     if (!Number.isFinite(arrived) || arrived < 0) {
       throw { status: 400, message: "arrivedCount zorunludur" };
@@ -389,7 +413,7 @@ export const checkin = async (req, res, next) => {
 
     const late = Math.max(0, dayjs().diff(dayjs(r.dateTimeUTC), "minute"));
 
-    // 7) Eksik katılım eşiği
+    // Eksik katılım eşiği
     const threshold = Math.max(
       0,
       Math.min(100, Number(rest?.underattendanceThresholdPercent ?? 80))
@@ -403,6 +427,19 @@ export const checkin = async (req, res, next) => {
     r.checkinAt = new Date();
     await r.save();
 
+    // Müşteri — check-in
+    try {
+      await notifyUser(r.userId, {
+        title: "Check-in tamam ✅",
+        body:  `İyi eğlenceler! ${dayjs(r.dateTimeUTC).format("DD.MM.YYYY HH:mm")} rezervasyonun için girişin alındı.`,
+        data:  { type: "checkin", rid: String(r._id), section: "reservation" },
+        key:   `cust:checkin:${r._id}`,
+        type:  "checkin",
+      });
+    } catch (e) {
+      console.warn("[checkin] notifyUser warn:", e?.message || e);
+    }
+
     res.json({
       ok: true,
       arrivedCount: r.arrivedCount,
@@ -413,7 +450,6 @@ export const checkin = async (req, res, next) => {
     next(e);
   }
 };
-
 
 /** PATCH /api/reservations/:rid/arrived-count  (check-in sonrası düzeltme) */
 export const updateArrivedCount = async (req,res,next)=>{
@@ -428,7 +464,7 @@ export const updateArrivedCount = async (req,res,next)=>{
     if (req.user.role !== "admin" && String(r.restaurantId.owner) !== String(req.user.id))
       throw { status:403, message:"Forbidden" };
 
-    // pencere: aynı çift yönlü (Restaurant alanları)
+    // pencere
     const rest = await Restaurant.findById(r.restaurantId._id).lean();
     const before = Math.max(0, Number(rest?.checkinWindowBeforeMinutes ?? 15));
     const after  = Math.max(0, Number(rest?.checkinWindowAfterMinutes  ?? 90));
@@ -441,7 +477,7 @@ export const updateArrivedCount = async (req,res,next)=>{
     const arrived = Math.max(0, Math.min(Number(arrivedCount ?? 0), r.partySize));
     if (!Number.isFinite(arrived)) throw { status:400, message:"Invalid arrivedCount" };
 
-    // ✅ eşiği yeniden değerlendir
+    // eşik tekrar
     const threshold = Math.max(0, Math.min(100, Number(rest?.underattendanceThresholdPercent ?? 80)));
     const isUnder = arrived < (r.partySize * (threshold / 100));
 
