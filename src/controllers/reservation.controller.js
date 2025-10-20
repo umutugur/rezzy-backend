@@ -6,7 +6,7 @@ import { dayjs } from "../utils/dates.js";
 import { generateQRDataURL, verifyQR } from "../utils/qr.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import { notifyUser, notifyRestaurantOwner } from "../services/notification.service.js";
-import { string } from "joi";
+import joi from "joi";
 
 /** persons dizisi tam 1..N ve benzersiz ise INDEX, aksi halde COUNT */
 function detectModeStrict(selections = []) {
