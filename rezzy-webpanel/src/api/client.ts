@@ -79,7 +79,7 @@ export async function adminSendNotification(input: {
 }
 
 // =========================
-/** ADMIN — Restaurants (kullanıyorsan kalsın) */
+/** ADMIN — Restaurants */
 // =========================
 export async function adminGetRestaurant(rid: string) {
   const { data } = await api.get(`/admin/restaurants/${rid}`);
@@ -101,7 +101,7 @@ export async function adminListReservationsByRestaurant(
 }
 
 // =========================
-/** ADMIN — Users (UserDetail sayfası için) */
+/** ADMIN — Users */
 // =========================
 export async function adminGetUser(uid: string) {
   const { data } = await api.get(`/admin/users/${uid}`);
@@ -124,7 +124,7 @@ export async function adminUpdateUserRole(
 }
 
 // =========================
-/** ADMIN — Moderation (Moderation sayfası için) */
+/** ADMIN — Moderation */
 // =========================
 export async function adminListReviews(params?: { page?: number; limit?: number }) {
   const { data } = await api.get(`/admin/reviews`, { params });
@@ -200,7 +200,7 @@ export async function restaurantUpdateReservationStatus(
   status: "confirmed" | "cancelled"
 ) {
   if (status === "confirmed") {
-    // Backend: approve -> { ok: true, qrDataUrl }
+    // Backend: approve -> { ok: true, qrDataUrl } (payload burada olmayabilir)
     const { data } = await api.post(`/reservations/${resId}/approve`);
     return data; // içinde qrDataUrl var
   }
@@ -209,10 +209,18 @@ export async function restaurantUpdateReservationStatus(
   return data;
 }
 
-// Rezervasyon QR (JSON -> { qrUrl, payload? })
+// ✅ Rezervasyon QR (JSON -> { ok, rid, mid, ts, payload, qrDataUrl })
 export async function restaurantGetReservationQR(resId: string) {
-  // Backend’te QR gösteren endpoint: GET /reservations/:rid/qr
   const { data } = await api.get(`/reservations/${resId}/qr`);
-  // data.qrUrl: data:image/png;base64,... şeklinde
-  return data as { qrUrl: string; payload?: string };
+  // Beklenen alanlar: ok, rid, mid, ts (ISO), payload (rid/mid/UNIXsec/sig), qrDataUrl
+  return data as {
+    ok: boolean;
+    rid: string;
+    mid: string;
+    ts: string;          // ISO
+    payload?: string;    // ham metin: "rid/mid/tsUnix/sig"
+    qrDataUrl?: string;  // data:image/png;base64,...
+    // geriye dönük uyumluluk
+    qrUrl?: string;
+  };
 }

@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, restaurantUpdateReservationStatus } from "../../api/client";
+import { api, restaurantUpdateReservationStatus, restaurantGetReservationQR } from "../../api/client";
 import { authStore } from "../../store/auth";
 import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
@@ -80,28 +80,46 @@ export default function RestaurantReservationsPage() {
   // ---- QR modal state
   const [qrOpen, setQrOpen] = React.useState(false);
   const [qrUrl, setQrUrl] = React.useState<string | null>(null);
+  const [qrPayload, setQrPayload] = React.useState<string | null>(null);
+  const [qrMeta, setQrMeta] = React.useState<{ rid?: string; mid?: string; ts?: string } | null>(null);
 
   // ---- Durum güncelle
   const statusMut = useMutation({
     mutationFn: (payload: { id: string; status: "confirmed" | "cancelled" }) =>
       restaurantUpdateReservationStatus(payload.id, payload.status),
-    onSuccess: (res, vars) => {
+    onSuccess: async (res, vars) => {
       qc.invalidateQueries({ queryKey: ["restaurant-reservations", rid, params] });
-      if (vars.status === "confirmed" && res?.qrDataUrl) {
-        setQrUrl(res.qrDataUrl);
-        setQrOpen(true);
+      // Eğer approve sonucunda backend qrDataUrl döndürüyorsa, yine de payload'ı gösterebilmek için /qr endpoint’ini çağırıp payload’ı da çekelim.
+      if (vars.status === "confirmed") {
+        try {
+          const full = await restaurantGetReservationQR(vars.id);
+          if (full.qrDataUrl || full.qrUrl) setQrUrl(full.qrDataUrl || (full as any).qrUrl);
+          setQrPayload(full.payload ?? null);
+          setQrMeta({ rid: full.rid, mid: full.mid, ts: full.ts });
+          setQrOpen(true);
+        } catch {
+          // Fallback: eski davranış (sadece res.qrDataUrl varsa göster)
+          if (res?.qrDataUrl) {
+            setQrUrl(res.qrDataUrl);
+            setQrPayload(null);
+            setQrMeta(null);
+            setQrOpen(true);
+          }
+        }
       }
     },
   });
 
-  // ---- QR açma
+  // ---- QR açma (satırdaki QR butonu)
   const openQR = async (id: string) => {
     try {
-      const resp = await api.get(`/reservations/${id}/qr`);
-      const url = resp?.data?.qrDataUrl || resp?.data?.qrUrl;
+      const resp = await restaurantGetReservationQR(id);
+      const url = resp.qrDataUrl || (resp as any).qrUrl;
 
       if (typeof url === "string" && url.length > 0) {
         setQrUrl(url);
+        setQrPayload(resp.payload ?? null);         // ✅ ham payload metni
+        setQrMeta({ rid: resp.rid, mid: resp.mid, ts: resp.ts }); // ✅ meta bilgiler
         setQrOpen(true);
         return;
       }
@@ -113,7 +131,19 @@ export default function RestaurantReservationsPage() {
 
   const closeQR = () => {
     setQrUrl(null);
+    setQrPayload(null);
+    setQrMeta(null);
     setQrOpen(false);
+  };
+
+  const copy = async (text?: string | null) => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("Kopyalandı", "success");
+    } catch {
+      showToast("Kopyalanamadı", "error");
+    }
   };
 
   return (
@@ -359,11 +389,47 @@ export default function RestaurantReservationsPage() {
         {/* QR Modal */}
         <Modal open={qrOpen} onClose={closeQR} title="Rezervasyon QR">
           {qrUrl ? (
-            <img
-              src={qrUrl}
-              alt="QR"
-              className="max-h-[70vh] w-auto h-auto object-contain mx-auto"
-            />
+            <div className="space-y-4">
+              <img
+                src={qrUrl}
+                alt="QR"
+                className="max-h-[50vh] w-auto h-auto object-contain mx-auto border rounded-lg"
+              />
+
+              {/* ✅ Ham payload metni */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-gray-800">QR Payload</h4>
+                  <button
+                    className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                    onClick={() => copy(qrPayload)}
+                  >
+                    Kopyala
+                  </button>
+                </div>
+                <pre className="text-xs bg-gray-50 border rounded-lg p-2 overflow-x-auto">
+{qrPayload || "—"}
+                </pre>
+              </div>
+
+              {/* Meta bilgiler (opsiyonel görüntüleme) */}
+              {qrMeta && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-gray-700">
+                  <div className="bg-gray-50 p-2 border rounded">
+                    <div className="font-semibold text-gray-600">RID</div>
+                    <div className="truncate">{qrMeta.rid || "—"}</div>
+                  </div>
+                  <div className="bg-gray-50 p-2 border rounded">
+                    <div className="font-semibold text-gray-600">MID</div>
+                    <div className="truncate">{qrMeta.mid || "—"}</div>
+                  </div>
+                  <div className="bg-gray-50 p-2 border rounded">
+                    <div className="font-semibold text-gray-600">TS (ISO)</div>
+                    <div className="truncate">{qrMeta.ts || "—"}</div>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="text-sm text-gray-600">Yükleniyor…</div>
           )}

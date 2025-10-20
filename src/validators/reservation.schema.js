@@ -41,13 +41,20 @@ export const approveReservationSchema = Joi.object({
 
 export const rejectReservationSchema = approveReservationSchema;
 
+// 10 haneli (epoch seconds) veya 13 haneli (epoch millis)
+const epochRegex = /^(?:\d{10}|\d{13})$/;
+
 export const checkinSchema = Joi.object({
   body: Joi.object({
     rid: oid().required(),
     mid: oid().required(),
-    ts: Joi.string().isoDate().required(),
+    // ⬇️ ISO **veya** epoch (saniye/ms) kabul edilir
+    ts: Joi.alternatives().try(
+      Joi.string().isoDate(),
+      Joi.string().pattern(epochRegex).message("ts must be ISO date or epoch (10/13 digits)")
+    ).required(),
     sig: Joi.string().length(64).required(),
-    arrivedCount: Joi.number().min(0).optional(), // artık opsiyonel
+    arrivedCount: Joi.number().min(0).optional(),
   }).required(),
   params: Joi.object().empty({}),
   query: Joi.object().empty({}),
