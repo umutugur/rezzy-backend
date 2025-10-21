@@ -12,6 +12,7 @@ import AdminReservationsPage from "./pages/admin/Reservations";
 import AdminModerationPage from "./pages/admin/Moderation";
 import AdminUserDetailPage from "./pages/admin/UserDetail";
 import AdminNotificationsPage from "./pages/admin/Notifications";
+import AdminCommissionsPage from "./pages/admin/commissions";
 
 import RestaurantDashboardPage from "./pages/restaurant/Dashboard";
 import RestaurantReservationsPage from "./pages/restaurant/Reservations";
@@ -173,6 +174,8 @@ export default function App() {
         <Route path="/admin/users/:uid" element={<Shell><AdminUserDetailPage /></Shell>} />
         <Route path="/admin/reservations" element={<Shell><AdminReservationsPage /></Shell>} />
         <Route path="/admin/moderation" element={<Shell><AdminModerationPage /></Shell>} />
+        <Route path="/admin/commisions" element={<Shell><AdminCommissionsPage /></Shell>} />
+
       </Route>
 
       {/* Restoran alanı */}
