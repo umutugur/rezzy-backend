@@ -66,7 +66,7 @@ function UserBadge() {
         className="px-3 py-1.5 text-sm rounded-md bg-gray-100 hover:bg-gray-200"
         onClick={() => {
           authStore.logout();
-          nav("/login", { replace: true });
+          (nav as any)("/login", { replace: true });
         }}
       >
         Çıkış
@@ -120,7 +120,7 @@ function LoginPage() {
     fetchMe()
       .then((me) => {
         authStore.setUser(me);
-        nav(me.role === "admin" ? "/admin" : "/restaurant", { replace: true });
+        (nav as any)(me.role === "admin" ? "/admin" : "/restaurant", { replace: true });
       })
       .catch(() => authStore.logout());
   }, [nav]);
@@ -154,7 +154,7 @@ export default function App() {
     const onChange = () => {
       const t = authStore.getToken();
       const u = authStore.getUser();
-      if (!t || !u) nav("/login", { replace: true });
+      if (!t || !u) (nav as any)("/login", { replace: true });
     };
     window.addEventListener("auth:changed", onChange);
     return () => window.removeEventListener("auth:changed", onChange);
@@ -174,8 +174,8 @@ export default function App() {
         <Route path="/admin/users/:uid" element={<Shell><AdminUserDetailPage /></Shell>} />
         <Route path="/admin/reservations" element={<Shell><AdminReservationsPage /></Shell>} />
         <Route path="/admin/moderation" element={<Shell><AdminModerationPage /></Shell>} />
-        <Route path="/admin/commisions" element={<Shell><AdminCommissionsPage /></Shell>} />
-
+        {/* ✅ DOĞRU ROTA */}
+        <Route path="/admin/commissions" element={<Shell><AdminCommissionsPage /></Shell>} />
       </Route>
 
       {/* Restoran alanı */}
