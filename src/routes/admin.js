@@ -1,8 +1,10 @@
-// routes/admin.js
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
 import { allow } from "../middlewares/roles.js";
+
 import * as admin from "../controllers/admin.controller.js";
+// ✅ Senin dosyan ve fonksiyon isimlerin:
+import { commissionsPreview, commissionsExport } from "../controllers/commission.controller.js";
 
 const r = Router();
 
@@ -12,43 +14,39 @@ r.get("/kpi/restaurants/:rid",   auth(), allow("admin"), admin.kpiByRestaurant);
 r.get("/kpi/users/:uid",         auth(), allow("admin"), admin.kpiByUser);
 
 // ---- Restaurants ----
-r.get("/restaurants",            auth(), allow("admin"), admin.listRestaurants);
-r.get("/restaurants/:rid",       auth(), allow("admin"), admin.getRestaurantDetail);
-r.get("/restaurants/:rid/reservations", auth(), allow("admin"), admin.listReservationsByRestaurantAdmin);
+r.get("/restaurants",                        auth(), allow("admin"), admin.listRestaurants);
+r.get("/restaurants/:rid",                   auth(), allow("admin"), admin.getRestaurantDetail);
+r.get("/restaurants/:rid/reservations",      auth(), allow("admin"), admin.listReservationsByRestaurantAdmin);
 
 // ✅ Komisyon oranı güncelle
-r.patch("/restaurants/:rid/commission", auth(), allow("admin"), admin.updateRestaurantCommission);
+r.patch("/restaurants/:rid/commission",      auth(), allow("admin"), admin.updateRestaurantCommission);
 
 // ---- Users (list + detail + ban/unban + role) ----
-r.get("/users",                  auth(), allow("admin"), admin.listUsers);
-r.get("/users/:uid",             auth(), allow("admin"), admin.getUserDetail);
-r.post("/users/:uid/ban",        auth(), allow("admin"), admin.banUser);
-r.post("/users/:uid/unban",      auth(), allow("admin"), admin.unbanUser);
+r.get(   "/users",               auth(), allow("admin"), admin.listUsers);
+r.get(   "/users/:uid",          auth(), allow("admin"), admin.getUserDetail);
+r.post(  "/users/:uid/ban",      auth(), allow("admin"), admin.banUser);
+r.post(  "/users/:uid/unban",    auth(), allow("admin"), admin.unbanUser);
 
 // ✅ Rol güncelle
-r.post("/users/:uid/role",       auth(), allow("admin"), admin.updateUserRole);
+r.post(  "/users/:uid/role",     auth(), allow("admin"), admin.updateUserRole);
 
 // ---- Reservations (global, read-only) ----
 r.get("/reservations",           auth(), allow("admin"), admin.listReservationsAdmin);
 
 // ---- Reviews & Complaints (moderasyon) ----
-r.get("/reviews",                auth(), allow("admin"), admin.listReviews);
-r.post("/reviews/:id/hide",      auth(), allow("admin"), admin.hideReview);
-r.post("/reviews/:id/unhide",    auth(), allow("admin"), admin.unhideReview);
+r.get(   "/reviews",             auth(), allow("admin"), admin.listReviews);
+r.post(  "/reviews/:id/hide",    auth(), allow("admin"), admin.hideReview);
+r.post(  "/reviews/:id/unhide",  auth(), allow("admin"), admin.unhideReview);
 r.delete("/reviews/:id",         auth(), allow("admin"), admin.removeReview);
 
-r.get("/complaints",             auth(), allow("admin"), admin.listComplaints);
-r.post("/complaints/:id/resolve",auth(), allow("admin"), admin.resolveComplaint);
-r.post("/complaints/:id/dismiss",auth(), allow("admin"), admin.dismissComplaint);
+r.get(   "/complaints",              auth(), allow("admin"), admin.listComplaints);
+r.post(  "/complaints/:id/resolve",  auth(), allow("admin"), admin.resolveComplaint);
+r.post(  "/complaints/:id/dismiss",  auth(), allow("admin"), admin.dismissComplaint);
 
-// ===============================
-// ✅ Commissions (sadece ARRIVED)
-// ===============================
-// Örnek: GET /api/admin/commissions/preview?month=2025-10
-r.get("/commissions/preview",    auth(), allow("admin"), admin.commissionsPreview);
-
-// Örnek: GET /api/admin/commissions/export?month=2025-10
-// Excel (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet) döner
-r.get("/commissions/export",     auth(), allow("admin"), admin.commissionsExport);
+// ---- Commissions (Aylık rapor – sadece ARRIVED) ----
+// JSON önizleme (özet)
+r.get("/commissions/monthly",            auth(), allow("admin"), commissionsPreview);
+// Excel (xlsx) indirme
+r.get("/commissions/monthly/export",     auth(), allow("admin"), commissionsExport);
 
 export default r;

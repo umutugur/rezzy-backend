@@ -85,10 +85,10 @@ export async function adminGetRestaurant(rid: string) {
   const { data } = await api.get(`/admin/restaurants/${rid}`);
   return data;
 }
-export async function adminUpdateRestaurantCommission(rid: string, commissionPct: number) {
+export async function adminUpdateRestaurantCommission(rid: string, commissionRate: number) {
+  // İster 5 (yüzde) ister 0.05 (oran) verin; backend normalize ediyor
   const { data } = await api.patch(`/admin/restaurants/${rid}/commission`, {
-    commissionPct,
-    commission: commissionPct
+    commissionRate
   });
   return data;
 }
@@ -229,8 +229,10 @@ export async function restaurantGetReservationQR(resId: string) {
 // ADMIN — Commissions (ARRIVED only)
 // =========================
 export async function adminPreviewCommissions(month?: string) {
-  // month: "YYYY-MM" (opsiyonel; boşsa bu ay)
-  const { data } = await api.get("/admin/commissions/preview", { params: { month } });
+  // month: "YYYY-MM" (opsiyonel; boşsa backend içinde bulunduğun ayı alır)
+  const { data } = await api.get("/admin/commissions/monthly", {
+    params: month ? { month } : {}
+  });
   return data as {
     ok: boolean;
     month: string;
@@ -239,8 +241,8 @@ export async function adminPreviewCommissions(month?: string) {
       restaurantName: string;
       arrivedCount: number;
       revenueArrived: number;
-      commissionRate: number;
-      commissionAmount: number;
+      commissionRate: number;    // 0..1
+      commissionAmount: number;  // revenueArrived * commissionRate
       ownerName?: string | null;
       ownerEmail?: string | null;
     }>;
@@ -248,9 +250,9 @@ export async function adminPreviewCommissions(month?: string) {
 }
 
 export async function adminExportCommissions(month?: string): Promise<Blob> {
-  const resp = await api.get("/admin/commissions/export", {
-    params: { month },
+  const resp = await api.get("/admin/commissions/monthly/export", {
+    params: month ? { month } : {},
     responseType: "blob",
   });
-  return resp.data as Blob;
+  return resp.data as Blob; // xlsx blob
 }
