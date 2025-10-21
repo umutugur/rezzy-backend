@@ -1,62 +1,54 @@
-// src/routes/admin.routes.js
+// routes/admin.js
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
-import {
-  kpiGlobal, kpiByRestaurant, kpiByUser,
-  listRestaurants, getRestaurantDetail, listReservationsByRestaurantAdmin,
-  updateRestaurantCommission,
-  listUsers, getUserDetail, banUser, unbanUser,
-  listReservationsAdmin,
-  listReviews, hideReview, unhideReview, removeReview,
-  listComplaints, resolveComplaint, dismissComplaint,
-} from "../controllers/admin.controller.js";
-
-import {
-  commissionsPreview,
-  commissionsExport,
-} from "../controllers/commission.controller.js";
+import { allow } from "../middlewares/roles.js";
+import * as admin from "../controllers/admin.controller.js";
 
 const r = Router();
 
-// ---- admin guard
-function requireAdmin(req, res, next) {
-  if (req.user?.role !== "admin") return res.status(403).json({ ok:false, error:"forbidden" });
-  next();
-}
+// ---- KPI / Analytics ----
+r.get("/kpi/global",             auth(), allow("admin"), admin.kpiGlobal);
+r.get("/kpi/restaurants/:rid",   auth(), allow("admin"), admin.kpiByRestaurant);
+r.get("/kpi/users/:uid",         auth(), allow("admin"), admin.kpiByUser);
 
-// KPI
-r.get("/admin/kpi/global",              auth(), requireAdmin, kpiGlobal);
-r.get("/admin/kpi/restaurant/:rid",     auth(), requireAdmin, kpiByRestaurant);
-r.get("/admin/kpi/user/:uid",           auth(), requireAdmin, kpiByUser);
+// ---- Restaurants ----
+r.get("/restaurants",            auth(), allow("admin"), admin.listRestaurants);
+r.get("/restaurants/:rid",       auth(), allow("admin"), admin.getRestaurantDetail);
+r.get("/restaurants/:rid/reservations", auth(), allow("admin"), admin.listReservationsByRestaurantAdmin);
 
-// Commissions (✅ sadece ARRIVED üzerinden)
-r.get("/admin/commissions/preview",     auth(), requireAdmin, commissionsPreview);
-r.get("/admin/commissions/export",      auth(), requireAdmin, commissionsExport);
+// ✅ Komisyon oranı güncelle
+r.patch("/restaurants/:rid/commission", auth(), allow("admin"), admin.updateRestaurantCommission);
 
-// Restaurants
-r.get("/admin/restaurants",             auth(), requireAdmin, listRestaurants);
-r.get("/admin/restaurants/:rid",        auth(), requireAdmin, getRestaurantDetail);
-r.get("/admin/restaurants/:rid/reservations", auth(), requireAdmin, listReservationsByRestaurantAdmin);
-r.post("/admin/restaurants/:rid/commission",  auth(), requireAdmin, updateRestaurantCommission);
+// ---- Users (list + detail + ban/unban + role) ----
+r.get("/users",                  auth(), allow("admin"), admin.listUsers);
+r.get("/users/:uid",             auth(), allow("admin"), admin.getUserDetail);
+r.post("/users/:uid/ban",        auth(), allow("admin"), admin.banUser);
+r.post("/users/:uid/unban",      auth(), allow("admin"), admin.unbanUser);
 
-// Users
-r.get("/admin/users",                   auth(), requireAdmin, listUsers);
-r.get("/admin/users/:uid",              auth(), requireAdmin, getUserDetail);
-r.post("/admin/users/:uid/ban",         auth(), requireAdmin, banUser);
-r.post("/admin/users/:uid/unban",       auth(), requireAdmin, unbanUser);
+// ✅ Rol güncelle
+r.post("/users/:uid/role",       auth(), allow("admin"), admin.updateUserRole);
 
-// Reservations (global RO)
-r.get("/admin/reservations",            auth(), requireAdmin, listReservationsAdmin);
+// ---- Reservations (global, read-only) ----
+r.get("/reservations",           auth(), allow("admin"), admin.listReservationsAdmin);
 
-// Reviews
-r.get("/admin/reviews",                 auth(), requireAdmin, listReviews);
-r.post("/admin/reviews/:id/hide",       auth(), requireAdmin, hideReview);
-r.post("/admin/reviews/:id/unhide",     auth(), requireAdmin, unhideReview);
-r.delete("/admin/reviews/:id",          auth(), requireAdmin, removeReview);
+// ---- Reviews & Complaints (moderasyon) ----
+r.get("/reviews",                auth(), allow("admin"), admin.listReviews);
+r.post("/reviews/:id/hide",      auth(), allow("admin"), admin.hideReview);
+r.post("/reviews/:id/unhide",    auth(), allow("admin"), admin.unhideReview);
+r.delete("/reviews/:id",         auth(), allow("admin"), admin.removeReview);
 
-// Complaints
-r.get("/admin/complaints",              auth(), requireAdmin, listComplaints);
-r.post("/admin/complaints/:id/resolve", auth(), requireAdmin, resolveComplaint);
-r.post("/admin/complaints/:id/dismiss", auth(), requireAdmin, dismissComplaint);
+r.get("/complaints",             auth(), allow("admin"), admin.listComplaints);
+r.post("/complaints/:id/resolve",auth(), allow("admin"), admin.resolveComplaint);
+r.post("/complaints/:id/dismiss",auth(), allow("admin"), admin.dismissComplaint);
+
+// ===============================
+// ✅ Commissions (sadece ARRIVED)
+// ===============================
+// Örnek: GET /api/admin/commissions/preview?month=2025-10
+r.get("/commissions/preview",    auth(), allow("admin"), admin.commissionsPreview);
+
+// Örnek: GET /api/admin/commissions/export?month=2025-10
+// Excel (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet) döner
+r.get("/commissions/export",     auth(), allow("admin"), admin.commissionsExport);
 
 export default r;
