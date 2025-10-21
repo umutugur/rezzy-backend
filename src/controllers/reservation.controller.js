@@ -652,47 +652,82 @@ export const listReservationsByRestaurant = async (req, res, next) => {
   }
 };
 
+// controllers/reservation.controller.js
+
 export const reservationStatsByRestaurant = async (req, res, next) => {
   try {
     const { rid } = req.params;
     const { start, end } = req.query;
 
-    const startDay = start ? new Date(`${start}T00:00:00.000Z`) : null;
-    const endDay = end ? new Date(`${end}T23:59:59.999Z`) : null;
-
-    const dtMatch = {};
-    if (startDay) dtMatch.$gte = startDay;
-    if (endDay) dtMatch.$lte = endDay;
-
     const match = { restaurantId: new mongoose.Types.ObjectId(rid) };
-    if (startDay || endDay) match.dateTimeUTC = dtMatch;
+
+    // Opsiyonel tarih aralığı (UTC gün başı/sonu)
+    if (start || end) {
+      const startDay = start ? new Date(`${start}T00:00:00.000Z`) : null;
+      const endDay   = end   ? new Date(`${end}T23:59:59.999Z`) : null;
+      match.dateTimeUTC = {};
+      if (startDay) match.dateTimeUTC.$gte = startDay;
+      if (endDay)   match.dateTimeUTC.$lte = endDay;
+    }
 
     const rows = await Reservation.aggregate([
       { $match: match },
       {
         $group: {
           _id: "$status",
-          c: { $sum: 1 },
-          amount: { $sum: { $ifNull: ["$totalPrice", 0] } },
+          count: { $sum: 1 },
+          totalPriceSum:     { $sum: { $ifNull: ["$totalPrice", 0] } },
+          depositAmountSum:  { $sum: { $ifNull: ["$depositAmount", 0] } },
         },
       },
     ]);
 
-    const by = new Map(rows.map((r) => [r._id, r]));
-    const totalCount = rows.reduce((a, r) => a + r.c, 0);
-    const totalAmount = rows.reduce((a, r) => a + (r.amount || 0), 0);
+    // Map'e al
+    const by = new Map(rows.map(r => [r._id, r]));
 
-    const pendingCount = by.get("pending")?.c || 0;
-    const confirmedCount = by.get("confirmed")?.c || 0;
-    const cancelledCount = by.get("cancelled")?.c || 0;
+    // Sayaçlar
+    const pendingCount   = by.get("pending")?.count   || 0;
+    const confirmedCount = by.get("confirmed")?.count || 0;
+    const arrivedCount   = by.get("arrived")?.count   || 0;
+    const noShowCount    = by.get("no_show")?.count   || 0;
+    const cancelledCount = by.get("cancelled")?.count || 0;
+
+    // Yeni metrikler:
+    // - depositTotal: sadece confirmed + no_show
+    const depositTotal =
+      (by.get("confirmed")?.depositAmountSum || 0) +
+      (by.get("no_show")?.depositAmountSum   || 0);
+
+    // - revenueAmount:
+    //   arrived -> totalPrice
+    //   confirmed & no_show -> depositAmount
+    const arrivedRevenue   = by.get("arrived")?.totalPriceSum || 0;
+    const pendingRevenue   = 0; // gelir saymıyoruz
+    const cancelledRevenue = 0; // gelir saymıyoruz
+    const depositAsRevenue = depositTotal; // confirmed + no_show depozitoları
+    const revenueAmount = arrivedRevenue + depositAsRevenue + pendingRevenue + cancelledRevenue;
+
+    // Eski toplamlar (gerek kalmadıysa kullanmayabilirsin)
+    const totalCount  = [...by.values()].reduce((a, r) => a + r.count, 0);
 
     res.json({
+      // Range bilgisini düz yazı istersen:
       rangeLabel: formatRangeLabel(start, end),
+
+      // Kartlardaki sayaçlar
       totalCount,
-      totalAmount,
       pendingCount,
       confirmedCount,
-      rejectedCount: cancelledCount,
+      cancelledCount,
+      arrivedCount,
+      noShowCount,
+
+      // Dashboard tutarları (İSTENEN)
+      revenueAmount,   // → “Toplam Ciro (₺)” burada
+      depositTotal,    // → “Toplam Depozito (₺)” burada
+
+      // İstersen durum bazlı ham toplamlar da dursun
+      byStatus: rows,
     });
   } catch (e) {
     next(e);
