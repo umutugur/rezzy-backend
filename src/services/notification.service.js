@@ -1,3 +1,4 @@
+// services/notification.service.js
 // Global fetch (Node 18+). Ayrı paket gerekmez.
 import NotificationLog from "../models/NotificationLog.js";
 import User from "../models/User.js";
@@ -7,7 +8,7 @@ const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
 
 // Bazı bariz geçersiz tokenları ayıklamak için basit regex (SDK kullanmıyoruz)
-const isLikelyExpoToken = t => typeof t === "string" && /^ExponentPushToken\[/i.test(t);
+const isLikelyExpoToken = (t) => typeof t === "string" && /^ExponentPushToken\[/i.test(t);
 
 // ---- Token toplama ----
 async function getUserPushTokens(userId) {
@@ -18,8 +19,8 @@ async function getUserPushTokens(userId) {
   if (!u) return [];
   if (u.notificationPrefs?.push === false) return [];
   return (u.pushTokens || [])
-    .filter(t => t?.isActive && t?.token && isLikelyExpoToken(t.token))
-    .map(t => t.token);
+    .filter((t) => t?.isActive && t?.token && isLikelyExpoToken(t.token))
+    .map((t) => t.token);
 }
 
 async function getRestaurantOwnerTokens(restaurantId) {
@@ -52,26 +53,23 @@ async function logNotification({ key, type, userId, restaurantId, payload, meta 
 }
 
 // ---- Expo gönderim + receipt kontrol ----
-/**
- * Expo'ya gönderir, ticket'ları ve hataları döner.
- *  - 100'lük chunk'lar halinde gönderir
- *  - resp.ok ve body'yi kontrol eder
- *  - receipt'leri sorgular, "DeviceNotRegistered" vb. hatalarda tokenları döner
- */
+// INVALID TOKEN TEMİZLEME İÇİN GÜNCEL: invalidTokens (string[]) geri döner
 async function sendExpoPush(tokens, payload) {
   const valid = tokens.filter(isLikelyExpoToken);
-  const invalidImmediate = tokens.filter(t => !isLikelyExpoToken(t));
+  const invalidImmediate = tokens.filter((t) => !isLikelyExpoToken(t));
+
   if (valid.length === 0) {
-    return { ok: true, sent: 0, tickets: [], invalid: invalidImmediate };
+    return {
+      ok: true,
+      sent: 0,
+      tickets: [],
+      invalidTokens: [...invalidImmediate],
+      invalidCodes: [],
+    };
   }
 
-  // Tek tip payload defaultları
-  const base = {
-    sound: "default",
-    priority: "high",
-    channelId: "default", // Android kanalı
-  };
-  const messages = valid.map(to => ({ to, ...base, ...payload }));
+  const base = { sound: "default", priority: "high", channelId: "default" };
+  const messages = valid.map((to) => ({ to, ...base, ...payload }));
 
   // Expo 100 adede kadar tek post kabul ediyor; yine de büyük listeler için dilimleyelim
   const chunkSize = 100;
@@ -80,18 +78,21 @@ async function sendExpoPush(tokens, payload) {
     chunks.push(messages.slice(i, i + chunkSize));
   }
 
-  const tickets = [];
+  const allTickets = [];
+  const idToToken = new Map(); // receipt id -> token
+  const immediateInvalidTokens = []; // ticket.status === "error" anında yakalananlar
+  const invalidCodes = [];
+
   for (const chunk of chunks) {
     const resp = await fetch(EXPO_PUSH_URL, {
       method: "POST",
       headers: {
-        "Accept": "application/json",
+        Accept: "application/json",
         "Accept-Encoding": "gzip, deflate",
         "Content-Type": "application/json",
-        // "Authorization": `Bearer ${process.env.EXPO_ACCESS_TOKEN}` // genelde gerekmez
       },
       body: JSON.stringify(chunk),
-    }).catch(e => {
+    }).catch((e) => {
       console.error("expo push fetch error:", e);
       return null;
     });
@@ -99,8 +100,12 @@ async function sendExpoPush(tokens, payload) {
     if (!resp) continue;
 
     let json = null;
-    try { json = await resp.json(); } catch (_) {
-      console.error("expo push non-json response:", await resp.text().catch(()=>"(no body)"));
+    try {
+      json = await resp.json();
+    } catch (_) {
+      try {
+        console.error("expo push non-json response:", await resp.text());
+      } catch {}
     }
 
     if (!resp.ok) {
@@ -108,99 +113,119 @@ async function sendExpoPush(tokens, payload) {
       continue;
     }
 
-    // Başarılı cevap: { data: [{ status, id?, message?, details? }, ...] }
-    const arr = Array.isArray(json?.data) ? json.data : [];
-    tickets.push(...arr);
+    const tickets = Array.isArray(json?.data) ? json.data : [];
+
+    // ticket.status === "error" olanları hemen token bazında işaretle
+    tickets.forEach((t, idx) => {
+      const token = chunk[idx]?.to;
+      if (t?.status === "error") {
+        if (token) immediateInvalidTokens.push(token);
+        if (t?.details?.error) invalidCodes.push(t.details.error);
+      }
+      if (t?.id && token) idToToken.set(t.id, token);
+    });
+
+    allTickets.push(...tickets);
   }
 
-  // Receipt ID'lerini topla
-  const receiptIds = tickets.map(t => t?.id).filter(Boolean);
+  // Receipt ID’lerinden token’a geri git
+  const receiptIds = allTickets.map((t) => t?.id).filter(Boolean);
   const invalidFromReceipts = [];
 
   if (receiptIds.length) {
-    // 100'lük parça parça receipt sor
     for (let i = 0; i < receiptIds.length; i += 100) {
       const ids = receiptIds.slice(i, i + 100);
       const resp = await fetch(EXPO_RECEIPTS_URL, {
         method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json",
-        },
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify({ ids }),
-      }).catch(e => {
+      }).catch((e) => {
         console.error("expo receipt fetch error:", e);
         return null;
       });
 
       if (!resp) continue;
-      let json = null;
-      try { json = await resp.json(); } catch (_) {}
-      const receipts = json?.data || {};
 
-      // receipt formatı: { "<id>": { status: "ok"|"error", message?, details? } }
-      Object.values(receipts).forEach(r => {
+      let json = null;
+      try {
+        json = await resp.json();
+      } catch {}
+
+      const receipts = json?.data || {};
+      Object.entries(receipts).forEach(([rid, r]) => {
         if (r && r.status === "error") {
-          const err = r.details?.error || "";
-          if (err === "DeviceNotRegistered") invalidFromReceipts.push("DeviceNotRegistered");
-          // Diğer hatalar: "MessageTooBig", "MessageRateExceeded", "InvalidCredentials", ...
-          console.warn("push receipt error:", r.message, r.details);
+          const code = r.details?.error || "";
+          if (code) invalidCodes.push(code);
+          if (code === "DeviceNotRegistered") {
+            const tok = idToToken.get(rid);
+            if (tok) invalidFromReceipts.push(tok);
+          }
         }
       });
     }
   }
 
-  // Ticket tarafında anında görülen hatalı to/formatlar
-  const invalidFromTickets = tickets
-    .filter(t => t?.status === "error")
-    .map(t => (t?.details?.error || "error"));
+  // Token string’lerini birleştirip benzersizleştir
+  const invalidTokens = [...new Set([...invalidImmediate, ...immediateInvalidTokens, ...invalidFromReceipts])];
 
   return {
     ok: true,
     sent: valid.length,
-    tickets,
-    invalid: [...invalidImmediate, ...invalidFromTickets, ...invalidFromReceipts],
+    tickets: allTickets,
+    invalidTokens, // <-- SADECE BU LİSTE DB'DEN SİLİNİR
+    invalidCodes: [...new Set(invalidCodes)],
   };
 }
 
 // ---- Public API ----
 export async function notifyUser(userId, { title, body, data, key, type }) {
-  if (key && await alreadySent(key)) return { ok: true, dup: true };
+  if (key && (await alreadySent(key))) return { ok: true, dup: true };
 
   const tokens = await getUserPushTokens(userId);
   const payload = { title, body, data };
   const r = await sendExpoPush(tokens, payload);
 
-  // Hatalı/expired token'ları temizle (isteğe bağlı ama önerilir)
-  if (r.invalid?.length) {
+  // ❗️Sadece gerçekten geçersiz olan token’ları temizle
+  if (r.invalidTokens?.length) {
     await User.updateOne(
       { _id: userId },
-      { $pull: { pushTokens: { token: { $in: tokens } } } } // basit: hatalı olanları toptan temizle
-    ).catch(()=>{});
+      { $pull: { pushTokens: { token: { $in: r.invalidTokens } } } }
+    ).catch(() => {});
   }
 
-  await logNotification({ key, type, userId, payload, meta: { sent: r.sent, invalid: r.invalid } });
+  await logNotification({
+    key,
+    type,
+    userId,
+    payload,
+    meta: { sent: r.sent, invalidTokens: r.invalidTokens, invalidCodes: r.invalidCodes },
+  });
   return r;
 }
 
 export async function notifyRestaurantOwner(restaurantId, { title, body, data, key, type }) {
-  if (key && await alreadySent(key)) return { ok: true, dup: true };
+  if (key && (await alreadySent(key))) return { ok: true, dup: true };
 
   const tokens = await getRestaurantOwnerTokens(restaurantId);
   const payload = { title, body, data };
   const r = await sendExpoPush(tokens, payload);
 
-  if (r.invalid?.length) {
-    // Restoran sahibini bulup oradan temizlemek isterseniz:
-    const rest = await Restaurant.findById(restaurantId).select("owner").lean().catch(()=>null);
+  if (r.invalidTokens?.length) {
+    const rest = await Restaurant.findById(restaurantId).select("owner").lean().catch(() => null);
     if (rest?.owner) {
       await User.updateOne(
         { _id: rest.owner },
-        { $pull: { pushTokens: { token: { $in: tokens } } } }
-      ).catch(()=>{});
+        { $pull: { pushTokens: { token: { $in: r.invalidTokens } } } }
+      ).catch(() => {});
     }
   }
 
-  await logNotification({ key, type, restaurantId, payload, meta: { sent: r.sent, invalid: r.invalid } });
+  await logNotification({
+    key,
+    type,
+    restaurantId,
+    payload,
+    meta: { sent: r.sent, invalidTokens: r.invalidTokens, invalidCodes: r.invalidCodes },
+  });
   return r;
 }

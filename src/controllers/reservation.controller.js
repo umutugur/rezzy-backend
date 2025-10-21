@@ -535,7 +535,7 @@ export const checkin = async (req, res, next) => {
 
     res.json({
       ok: true,
-      rid: string(r.id),
+      rid: String(r._id),
       arrivedCount: r.arrivedCount,
       lateMinutes: r.lateMinutes,
       underattended: r.underattended,
