@@ -4,7 +4,6 @@ import Restaurant from "../models/Restaurant.js";
 import User from "../models/User.js";
 import Review from "../models/Review.js";
 import Complaint from "../models/Complaint.js";
-// admin.controller.js
 import { ensureRestaurantForOwner } from "../services/restaurantOwner.service.js";
 
 function toObjectId(id) {
@@ -28,40 +27,82 @@ function nextCursor(items, limit) {
 }
 function cut(items, limit) { return items.slice(0, limit); }
 
+/* =========================
+   KPI (GÜNCEL KURAL)
+   ========================= */
 async function kpiAggregate(match) {
   const rows = await Reservation.aggregate([
     { $match: match },
-    { $group: {
-        _id: "$status",
-        c: { $sum: 1 },
-        revenue: { $sum: { $ifNull: ["$totalPrice", 0] } },
-        deposits:{ $sum: { $ifNull: ["$depositAmount", 0] } },
+    {
+      $group: {
+        _id: null,
+
+        // counts
+        total:     { $sum: 1 },
+        pending:   { $sum: { $cond: [{ $eq: ["$status", "pending"]   }, 1, 0] } },
+        confirmed: { $sum: { $cond: [{ $eq: ["$status", "confirmed"] }, 1, 0] } },
+        arrived:   { $sum: { $cond: [{ $eq: ["$status", "arrived"]   }, 1, 0] } },
+        cancelled: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] } },
+        no_show:   { $sum: { $cond: [{ $eq: ["$status", "no_show"]   }, 1, 0] } },
+
+        // ham toplamlar
+        revenue:  { $sum: { $ifNull: ["$totalPrice", 0] } },
+        deposits: { $sum: { $ifNull: ["$depositAmount", 0] } },
+
+        // kırılımlar
+        grossArrived: {
+          $sum: {
+            $cond: [
+              { $eq: ["$status", "arrived"] },
+              { $ifNull: ["$totalPrice", 0] },
+              0
+            ]
+          }
+        },
+        depositConfirmedNoShow: {
+          $sum: {
+            $cond: [
+              { $in: ["$status", ["confirmed", "no_show"]] },
+              { $ifNull: ["$depositAmount", 0] },
+              0
+            ]
+          }
+        }
       }
     }
   ]);
-  const by = new Map(rows.map(r => [r._id, r]));
-  const total = rows.reduce((a,r)=>a + (r.c||0), 0);
-  const revenue = rows.reduce((a,r)=>a + (r.revenue||0), 0);
-  const deposits= rows.reduce((a,r)=>a + (r.deposits||0), 0);
-  const confirmed = by.get("confirmed")?.c || 0;
-  const arrived   = by.get("arrived")?.c || 0;
-  const cancelled = by.get("cancelled")?.c || 0;
+
+  const r = rows[0] || {};
+
+  const reservations = {
+    total: r.total || 0,
+    pending: r.pending || 0,
+    confirmed: r.confirmed || 0,
+    arrived: r.arrived || 0,
+    cancelled: r.cancelled || 0,
+    no_show: r.no_show || 0,
+  };
+
+  const confirm = reservations.total ? +((reservations.confirmed / reservations.total).toFixed(3)) : 0;
+  const checkin = reservations.confirmed ? +((reservations.arrived / reservations.confirmed).toFixed(3)) : 0;
+  const cancel  = reservations.total ? +((reservations.cancelled / reservations.total).toFixed(3)) : 0;
+
+  const grossArrived = Number(r.grossArrived || 0);
+  const depositConfirmedNoShow = Number(r.depositConfirmedNoShow || 0);
+
   return {
-    reservations: {
-      total,
-      pending:  by.get("pending")?.c   || 0,
-      confirmed,
-      arrived,
-      cancelled,
-      no_show:  by.get("no_show")?.c   || 0,
+    reservations,
+    revenue: Number(r.revenue || 0),
+    deposits: Number(r.deposits || 0),
+    display: {
+      gross: grossArrived + depositConfirmedNoShow,   // ✅ istediğin ciro
+      deposit: depositConfirmedNoShow,                // ✅ sadece confirmed+no_show depozito
+      components: {
+        grossArrived,
+        depositConfirmedNoShow,
+      }
     },
-    revenue,
-    deposits,
-    rates: {
-      confirm: total ? Number((confirmed / total).toFixed(3)) : 0,
-      checkin: confirmed ? Number((arrived / confirmed).toFixed(3)) : 0,
-      cancel:  total ? Number((cancelled / total).toFixed(3)) : 0,
-    }
+    rates: { confirm, checkin, cancel }
   };
 }
 
@@ -89,15 +130,10 @@ async function kpiSeries(match, groupBy="day") {
   };
 }
 
-// --- Komisyon yardımcıları (EXTRA RULE: underattendance) ---
-/**
- * Commission base:
- *  if underattended == true => minPrice(selections.price) * arrivedCount
- *  else                      => totalPrice
- * Then multiply by commissionRate (restaurant).
- */
+/* =========================
+   Komisyon (underattendance kuralı dâhil)
+   ========================= */
 function commissionBaseExpr() {
-  // _minPrice: min price from selections array
   return {
     $cond: [
       { $eq: ["$underattended", true] },
@@ -183,17 +219,20 @@ async function commissionByRestaurant(match) {
   }));
 }
 
-// ---------- KPI ----------
+/* =========================
+   KPI Endpoints
+   ========================= */
 export const kpiGlobal = async (req,res,next)=>{
   try{
     const { start, end, dt } = parseDateRange(req.query);
     const groupBy = req.query.groupBy || "day";
     const match = {};
     if (start || end) match.dateTimeUTC = dt;
+
     const totals = await kpiAggregate(match);
     const series = await kpiSeries(match, groupBy);
 
-    // ✅ komisyonlar
+    // (İstersen komisyonları göster)
     const commissionsTotal = await commissionTotals(match);
     const commissionsBreakdown = await commissionByRestaurant(match);
 
@@ -217,6 +256,7 @@ export const kpiByRestaurant = async (req,res,next)=>{
     const groupBy = req.query.groupBy || "day";
     const match = { restaurantId: rid };
     if (start || end) match.dateTimeUTC = dt;
+
     const totals = await kpiAggregate(match);
     const series = await kpiSeries(match, groupBy);
     const commissionsTotal = await commissionTotals(match);
@@ -238,13 +278,17 @@ export const kpiByUser = async (req,res,next)=>{
     const groupBy = req.query.groupBy || "day";
     const match = { userId: uid };
     if (start || end) match.dateTimeUTC = dt;
+
     const totals = await kpiAggregate(match);
     const series = await kpiSeries(match, groupBy);
+
     res.json({ range:{start:req.query.start||null,end:req.query.end||null,groupBy}, totals, series });
   }catch(e){ next(e); }
 };
 
-// ---------- Restaurants ----------
+/* =========================
+   Restaurants
+   ========================= */
 export const listRestaurants = async (req,res,next)=>{
   try{
     const { query, city } = req.query;
@@ -340,8 +384,9 @@ export const listReservationsByRestaurantAdmin = async (req, res, next) => {
   }
 };
 
-
-// ✅ Komisyon oranı güncelle
+/* =========================
+   Commission update
+   ========================= */
 export const updateRestaurantCommission = async (req,res,next)=>{
   try{
     const rid = toObjectId(req.params.rid);
@@ -349,7 +394,6 @@ export const updateRestaurantCommission = async (req,res,next)=>{
     let { commissionRate } = req.body || {};
     if (commissionRate == null) return res.status(400).json({message:"commissionRate is required"});
 
-    // Yüzde veya oran kabul et: 5 -> 0.05 ; 0.05 -> 0.05
     commissionRate = Number(commissionRate);
     if (Number.isNaN(commissionRate)) return res.status(400).json({message:"Invalid commissionRate"});
     if (commissionRate > 1) commissionRate = commissionRate / 100;
@@ -362,7 +406,9 @@ export const updateRestaurantCommission = async (req,res,next)=>{
   }catch(e){ next(e); }
 };
 
-// ---------- Users ----------
+/* =========================
+   Users
+   ========================= */
 export const listUsers = async (req,res,next)=>{
   try{
     const { query, role, banned } = req.query;
@@ -380,10 +426,10 @@ export const listUsers = async (req,res,next)=>{
     if (cursor) q._id = { $lt: cursor };
 
     const rows = await User.find(q)
-  .sort({ _id: -1 })
-  .limit(limit + 1)
-  .select("_id name email role restaurantId banned banReason bannedUntil createdAt")
-  .lean();
+      .sort({ _id: -1 })
+      .limit(limit + 1)
+      .select("_id name email role restaurantId banned banReason bannedUntil createdAt")
+      .lean();
 
     res.json({
       items: cut(rows, limit),
@@ -397,12 +443,11 @@ export const getUserDetail = async (req,res,next)=>{
     const uid = toObjectId(req.params.uid);
     if (!uid) return res.status(400).json({message:"Invalid user id"});
 
-const user = await User.findById(uid)
-  .select("_id name email role restaurantId banned banReason bannedUntil createdAt")
-  .lean();    
-  if (!user) return res.status(404).json({message:"User not found"});
+    const user = await User.findById(uid)
+      .select("_id name email role restaurantId banned banReason bannedUntil createdAt")
+      .lean();
+    if (!user) return res.status(404).json({message:"User not found"});
 
-    // quick KPI
     const agg = await Reservation.aggregate([
       { $match: { userId: uid } },
       { $group: {
@@ -466,7 +511,6 @@ export const unbanUser = async (req,res,next)=>{
   }catch(e){ next(e); }
 };
 
-// ✅ Rol güncelle
 export const updateUserRole = async (req, res, next) => {
   try {
     const uid = toObjectId(req.params.uid);
@@ -476,17 +520,14 @@ export const updateUserRole = async (req, res, next) => {
     const allowed = ["customer", "restaurant", "admin"];
     if (!allowed.includes(role)) return res.status(400).json({ message: "Invalid role" });
 
-    // önce rolü set et
     const u0 = await User.findByIdAndUpdate(uid, { $set: { role } }, { new: true });
     if (!u0) return res.status(404).json({ message: "User not found" });
 
-    // 🔴 restaurant ise restoran kaydını garanti et
     if (u0.role === "restaurant") {
       await ensureRestaurantForOwner(u0._id);
       await u0.populate({ path: "restaurantId", select: "_id name" });
     }
 
-    // client’a dönerken restaurantId’yi de gösterelim
     return res.json({
       ok: true,
       user: {
@@ -502,7 +543,9 @@ export const updateUserRole = async (req, res, next) => {
   }
 };
 
-// ---------- Reservations (global read-only)
+/* =========================
+   Reservations (global read-only)
+   ========================= */
 export const listReservationsAdmin = async (req, res, next) => {
   try {
     const { status, restaurantId, userId, start, end } = req.query;
@@ -533,7 +576,6 @@ export const listReservationsAdmin = async (req, res, next) => {
       .populate({ path: "restaurantId", select: "name" })
       .lean();
 
-    // Fallback kullanıcı üretici
     const pickUser = (r) => {
       if (r.userId) return { name: r.userId.name, email: r.userId.email };
       if (r.user && (r.user.name || r.user.email)) return r.user;
@@ -582,7 +624,9 @@ export const listReservationsAdmin = async (req, res, next) => {
   }
 };
 
-// ---------- Reviews ----------
+/* =========================
+   Reviews
+   ========================= */
 export const listReviews = async (req,res,next)=>{
   try{
     const { restaurantId, userId, status } = req.query;
@@ -619,7 +663,9 @@ export const removeReview = async (req,res,next)=>{
   }catch(e){ next(e); }
 };
 
-// ---------- Complaints ----------
+/* =========================
+   Complaints
+   ========================= */
 export const listComplaints = async (req,res,next)=>{
   try{
     const { restaurantId, userId, status } = req.query;

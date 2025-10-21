@@ -4,21 +4,27 @@ import { api } from "../../api/client";
 import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
 
-/** ---- API response tipleri (admin.controller.kpiGlobal ile uyumlu) ---- */
 type ReservationsCounts = Partial<
   Record<"total" | "pending" | "confirmed" | "arrived" | "cancelled" | "no_show", number>
 >;
+type DisplayTotals = {
+  gross: number;
+  deposit: number;
+  components?: {
+    grossArrived?: number;
+    depositConfirmedNoShow?: number;
+  };
+};
 type KpiTotalsFromApi = {
   reservations: ReservationsCounts;
-  revenue: number;   // tüm statülerde totalPrice toplamı
-  deposits: number;  // tüm statülerde depositAmount toplamı (breakdown yok)
+  revenue: number;
+  deposits: number;
+  display?: DisplayTotals; // ✅ yeni
   rates?: { confirm?: number; checkin?: number; cancel?: number };
-  commission?: number;
 };
 type KpiResp = {
   range?: { start?: string | null; end?: string | null; groupBy?: string };
   totals?: KpiTotalsFromApi;
-  // series, commissions vs. geliyor ama bu sayfada kullanılmıyor
 };
 
 function rangeParams(sel: "month" | "30" | "90" | "all"): { start?: string; end?: string } {
@@ -27,15 +33,11 @@ function rangeParams(sel: "month" | "30" | "90" | "all"): { start?: string; end?
   const daysAgo = (n: number) => new Date(Date.now() - n * 86400000);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   switch (sel) {
-    case "month":
-      return { start: fmt(startOfMonth), end: fmt(today) };
-    case "30":
-      return { start: fmt(daysAgo(30)), end: fmt(today) };
-    case "90":
-      return { start: fmt(daysAgo(90)), end: fmt(today) };
+    case "month": return { start: fmt(startOfMonth), end: fmt(today) };
+    case "30":    return { start: fmt(daysAgo(30)), end: fmt(today) };
+    case "90":    return { start: fmt(daysAgo(90)), end: fmt(today) };
     case "all":
-    default:
-      return {};
+    default:      return {};
   }
 }
 
@@ -56,7 +58,6 @@ export default function AdminDashboardPage() {
   const totals = data?.totals || ({} as KpiTotalsFromApi);
   const counts = totals.reservations || {};
 
-  // Toplam rezervasyon sayısı (total yoksa statülerin toplamı)
   const totalCount =
     counts.total ??
     ((counts.pending ?? 0) +
@@ -65,17 +66,16 @@ export default function AdminDashboardPage() {
       (counts.cancelled ?? 0) +
       (counts.no_show ?? 0));
 
-  // --- Finans kartları ---
-  // Backend global "deposits" breakdown vermiyor; restoran dashboard ile aynı görünümü
-  // yakalamak için "arrivedBrüt + (confirmed+no_show depozitosu)" formülünü yaklaşık gösteriyoruz:
-  //   arrivedBrüt ≈ revenue - deposits
-  //   displayDeposit ≈ deposits
-  const revenue = Number(totals.revenue || 0);
-  const deposits = Number(totals.deposits || 0);
+  // ✅ Yeni alanları kullan; yoksa geriye dönük uyum (eski davranış)
+  const displayGross =
+    totals.display?.gross ??
+    // fallback (eski): revenue’u göster
+    Number(totals.revenue || 0);
 
-  const arrivedGrossApprox = Math.max(0, revenue - deposits);
-  const displayDeposit = deposits; // breakdown yoksa, mevcut depozitonun tamamını göster
-  const displayGross = arrivedGrossApprox + displayDeposit;
+  const displayDeposit =
+    totals.display?.deposit ??
+    // fallback (eski): tüm depozito
+    Number(totals.deposits || 0);
 
   return (
     <div className="flex gap-6">
@@ -107,7 +107,6 @@ export default function AdminDashboardPage() {
         {isLoading && <div>Yükleniyor…</div>}
         {error && <div className="text-red-600 text-sm">Veri alınamadı</div>}
 
-        {/* Sayaçlar */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card title="Toplam Rezervasyon">
             <div className="text-2xl font-semibold">{totalCount}</div>
@@ -120,7 +119,6 @@ export default function AdminDashboardPage() {
           </Card>
         </div>
 
-        {/* Finansal özet */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card title="Toplam Ciro (₺)">
             <div className="text-2xl font-semibold">
@@ -136,7 +134,7 @@ export default function AdminDashboardPage() {
               {Number(displayDeposit).toLocaleString("tr-TR")}
             </div>
             <div className="mt-1 text-xs text-gray-500">
-              (Sadece Onaylı ve Gelmedi rezervasyonların depozitoları — breakdown yoksa toplam depozito gösterilir)
+              (Sadece Onaylı ve Gelmedi rezervasyonların depozitoları)
             </div>
           </Card>
         </div>
