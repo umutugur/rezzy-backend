@@ -224,3 +224,33 @@ export async function restaurantGetReservationQR(resId: string) {
     qrUrl?: string;
   };
 }
+
+// =========================
+// ADMIN — Commissions (ARRIVED only)
+// =========================
+export async function adminPreviewCommissions(month?: string) {
+  // month: "YYYY-MM" (opsiyonel; boşsa bu ay)
+  const { data } = await api.get("/admin/commissions/preview", { params: { month } });
+  return data as {
+    ok: boolean;
+    month: string;
+    restaurants: Array<{
+      _id: string;
+      restaurantName: string;
+      arrivedCount: number;
+      revenueArrived: number;
+      commissionRate: number;
+      commissionAmount: number;
+      ownerName?: string | null;
+      ownerEmail?: string | null;
+    }>;
+  };
+}
+
+export async function adminExportCommissions(month?: string): Promise<Blob> {
+  const resp = await api.get("/admin/commissions/export", {
+    params: { month },
+    responseType: "blob",
+  });
+  return resp.data as Blob;
+}
