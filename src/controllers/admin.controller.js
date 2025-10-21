@@ -1,3 +1,4 @@
+// controllers/admin.controller.js
 import mongoose from "mongoose";
 import Reservation from "../models/Reservation.js";
 import Restaurant from "../models/Restaurant.js";
@@ -27,82 +28,40 @@ function nextCursor(items, limit) {
 }
 function cut(items, limit) { return items.slice(0, limit); }
 
-/* =========================
-   KPI (GÜNCEL KURAL)
-   ========================= */
 async function kpiAggregate(match) {
   const rows = await Reservation.aggregate([
     { $match: match },
-    {
-      $group: {
-        _id: null,
-
-        // counts
-        total:     { $sum: 1 },
-        pending:   { $sum: { $cond: [{ $eq: ["$status", "pending"]   }, 1, 0] } },
-        confirmed: { $sum: { $cond: [{ $eq: ["$status", "confirmed"] }, 1, 0] } },
-        arrived:   { $sum: { $cond: [{ $eq: ["$status", "arrived"]   }, 1, 0] } },
-        cancelled: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] } },
-        no_show:   { $sum: { $cond: [{ $eq: ["$status", "no_show"]   }, 1, 0] } },
-
-        // ham toplamlar
-        revenue:  { $sum: { $ifNull: ["$totalPrice", 0] } },
-        deposits: { $sum: { $ifNull: ["$depositAmount", 0] } },
-
-        // kırılımlar
-        grossArrived: {
-          $sum: {
-            $cond: [
-              { $eq: ["$status", "arrived"] },
-              { $ifNull: ["$totalPrice", 0] },
-              0
-            ]
-          }
-        },
-        depositConfirmedNoShow: {
-          $sum: {
-            $cond: [
-              { $in: ["$status", ["confirmed", "no_show"]] },
-              { $ifNull: ["$depositAmount", 0] },
-              0
-            ]
-          }
-        }
+    { $group: {
+        _id: "$status",
+        c: { $sum: 1 },
+        revenue: { $sum: { $ifNull: ["$totalPrice", 0] } },
+        deposits:{ $sum: { $ifNull: ["$depositAmount", 0] } },
       }
     }
   ]);
-
-  const r = rows[0] || {};
-
-  const reservations = {
-    total: r.total || 0,
-    pending: r.pending || 0,
-    confirmed: r.confirmed || 0,
-    arrived: r.arrived || 0,
-    cancelled: r.cancelled || 0,
-    no_show: r.no_show || 0,
-  };
-
-  const confirm = reservations.total ? +((reservations.confirmed / reservations.total).toFixed(3)) : 0;
-  const checkin = reservations.confirmed ? +((reservations.arrived / reservations.confirmed).toFixed(3)) : 0;
-  const cancel  = reservations.total ? +((reservations.cancelled / reservations.total).toFixed(3)) : 0;
-
-  const grossArrived = Number(r.grossArrived || 0);
-  const depositConfirmedNoShow = Number(r.depositConfirmedNoShow || 0);
-
+  const by = new Map(rows.map(r => [r._id, r]));
+  const total = rows.reduce((a,r)=>a + (r.c||0), 0);
+  const revenue = rows.reduce((a,r)=>a + (r.revenue||0), 0);
+  const deposits= rows.reduce((a,r)=>a + (r.deposits||0), 0);
+  const confirmed = by.get("confirmed")?.c || 0;
+  const arrived   = by.get("arrived")?.c || 0;
+  const cancelled = by.get("cancelled")?.c || 0;
   return {
-    reservations,
-    revenue: Number(r.revenue || 0),
-    deposits: Number(r.deposits || 0),
-    display: {
-      gross: grossArrived + depositConfirmedNoShow,   // ✅ istediğin ciro
-      deposit: depositConfirmedNoShow,                // ✅ sadece confirmed+no_show depozito
-      components: {
-        grossArrived,
-        depositConfirmedNoShow,
-      }
+    reservations: {
+      total,
+      pending:  by.get("pending")?.c   || 0,
+      confirmed,
+      arrived,
+      cancelled,
+      no_show:  by.get("no_show")?.c   || 0,
     },
-    rates: { confirm, checkin, cancel }
+    revenue,
+    deposits,
+    rates: {
+      confirm: total ? Number((confirmed / total).toFixed(3)) : 0,
+      checkin: confirmed ? Number((arrived / confirmed).toFixed(3)) : 0,
+      cancel:  total ? Number((cancelled / total).toFixed(3)) : 0,
+    }
   };
 }
 
@@ -130,9 +89,13 @@ async function kpiSeries(match, groupBy="day") {
   };
 }
 
-/* =========================
-   Komisyon (underattendance kuralı dâhil)
-   ========================= */
+// --- Komisyon yardımcıları (EXTRA RULE: underattendance) ---
+/**
+ * Commission base:
+ *  if underattended == true => minPrice(selections.price) * arrivedCount
+ *  else                      => totalPrice
+ * Then multiply by commissionRate (restaurant).
+ */
 function commissionBaseExpr() {
   return {
     $cond: [
@@ -219,20 +182,17 @@ async function commissionByRestaurant(match) {
   }));
 }
 
-/* =========================
-   KPI Endpoints
-   ========================= */
+// ---------- KPI ----------
 export const kpiGlobal = async (req,res,next)=>{
   try{
     const { start, end, dt } = parseDateRange(req.query);
     const groupBy = req.query.groupBy || "day";
     const match = {};
     if (start || end) match.dateTimeUTC = dt;
-
     const totals = await kpiAggregate(match);
     const series = await kpiSeries(match, groupBy);
 
-    // (İstersen komisyonları göster)
+    // ✅ komisyonlar
     const commissionsTotal = await commissionTotals(match);
     const commissionsBreakdown = await commissionByRestaurant(match);
 
@@ -256,7 +216,6 @@ export const kpiByRestaurant = async (req,res,next)=>{
     const groupBy = req.query.groupBy || "day";
     const match = { restaurantId: rid };
     if (start || end) match.dateTimeUTC = dt;
-
     const totals = await kpiAggregate(match);
     const series = await kpiSeries(match, groupBy);
     const commissionsTotal = await commissionTotals(match);
@@ -278,17 +237,13 @@ export const kpiByUser = async (req,res,next)=>{
     const groupBy = req.query.groupBy || "day";
     const match = { userId: uid };
     if (start || end) match.dateTimeUTC = dt;
-
     const totals = await kpiAggregate(match);
     const series = await kpiSeries(match, groupBy);
-
     res.json({ range:{start:req.query.start||null,end:req.query.end||null,groupBy}, totals, series });
   }catch(e){ next(e); }
 };
 
-/* =========================
-   Restaurants
-   ========================= */
+// ---------- Restaurants ----------
 export const listRestaurants = async (req,res,next)=>{
   try{
     const { query, city } = req.query;
@@ -384,9 +339,8 @@ export const listReservationsByRestaurantAdmin = async (req, res, next) => {
   }
 };
 
-/* =========================
-   Commission update
-   ========================= */
+
+// ✅ Komisyon oranı güncelle
 export const updateRestaurantCommission = async (req,res,next)=>{
   try{
     const rid = toObjectId(req.params.rid);
@@ -394,6 +348,7 @@ export const updateRestaurantCommission = async (req,res,next)=>{
     let { commissionRate } = req.body || {};
     if (commissionRate == null) return res.status(400).json({message:"commissionRate is required"});
 
+    // Yüzde veya oran kabul et: 5 -> 0.05 ; 0.05 -> 0.05
     commissionRate = Number(commissionRate);
     if (Number.isNaN(commissionRate)) return res.status(400).json({message:"Invalid commissionRate"});
     if (commissionRate > 1) commissionRate = commissionRate / 100;
@@ -406,9 +361,7 @@ export const updateRestaurantCommission = async (req,res,next)=>{
   }catch(e){ next(e); }
 };
 
-/* =========================
-   Users
-   ========================= */
+// ---------- Users ----------
 export const listUsers = async (req,res,next)=>{
   try{
     const { query, role, banned } = req.query;
@@ -426,10 +379,10 @@ export const listUsers = async (req,res,next)=>{
     if (cursor) q._id = { $lt: cursor };
 
     const rows = await User.find(q)
-      .sort({ _id: -1 })
-      .limit(limit + 1)
-      .select("_id name email role restaurantId banned banReason bannedUntil createdAt")
-      .lean();
+  .sort({ _id: -1 })
+  .limit(limit + 1)
+  .select("_id name email role restaurantId banned banReason bannedUntil createdAt")
+  .lean();
 
     res.json({
       items: cut(rows, limit),
@@ -443,11 +396,12 @@ export const getUserDetail = async (req,res,next)=>{
     const uid = toObjectId(req.params.uid);
     if (!uid) return res.status(400).json({message:"Invalid user id"});
 
-    const user = await User.findById(uid)
-      .select("_id name email role restaurantId banned banReason bannedUntil createdAt")
-      .lean();
-    if (!user) return res.status(404).json({message:"User not found"});
+const user = await User.findById(uid)
+  .select("_id name email role restaurantId banned banReason bannedUntil createdAt")
+  .lean();    
+  if (!user) return res.status(404).json({message:"User not found"});
 
+    // quick KPI
     const agg = await Reservation.aggregate([
       { $match: { userId: uid } },
       { $group: {
@@ -511,6 +465,7 @@ export const unbanUser = async (req,res,next)=>{
   }catch(e){ next(e); }
 };
 
+// ✅ Rol güncelle
 export const updateUserRole = async (req, res, next) => {
   try {
     const uid = toObjectId(req.params.uid);
@@ -520,14 +475,17 @@ export const updateUserRole = async (req, res, next) => {
     const allowed = ["customer", "restaurant", "admin"];
     if (!allowed.includes(role)) return res.status(400).json({ message: "Invalid role" });
 
+    // önce rolü set et
     const u0 = await User.findByIdAndUpdate(uid, { $set: { role } }, { new: true });
     if (!u0) return res.status(404).json({ message: "User not found" });
 
+    // 🔴 restaurant ise restoran kaydını garanti et
     if (u0.role === "restaurant") {
       await ensureRestaurantForOwner(u0._id);
       await u0.populate({ path: "restaurantId", select: "_id name" });
     }
 
+    // client’a dönerken restaurantId’yi de gösterelim
     return res.json({
       ok: true,
       user: {
@@ -543,9 +501,7 @@ export const updateUserRole = async (req, res, next) => {
   }
 };
 
-/* =========================
-   Reservations (global read-only)
-   ========================= */
+// ---------- Reservations (global read-only)
 export const listReservationsAdmin = async (req, res, next) => {
   try {
     const { status, restaurantId, userId, start, end } = req.query;
@@ -576,6 +532,7 @@ export const listReservationsAdmin = async (req, res, next) => {
       .populate({ path: "restaurantId", select: "name" })
       .lean();
 
+    // Fallback kullanıcı üretici
     const pickUser = (r) => {
       if (r.userId) return { name: r.userId.name, email: r.userId.email };
       if (r.user && (r.user.name || r.user.email)) return r.user;
@@ -624,9 +581,7 @@ export const listReservationsAdmin = async (req, res, next) => {
   }
 };
 
-/* =========================
-   Reviews
-   ========================= */
+// ---------- Reviews ----------
 export const listReviews = async (req,res,next)=>{
   try{
     const { restaurantId, userId, status } = req.query;
@@ -663,9 +618,7 @@ export const removeReview = async (req,res,next)=>{
   }catch(e){ next(e); }
 };
 
-/* =========================
-   Complaints
-   ========================= */
+// ---------- Complaints ----------
 export const listComplaints = async (req,res,next)=>{
   try{
     const { restaurantId, userId, status } = req.query;
@@ -693,4 +646,170 @@ export const dismissComplaint = async (req,res,next)=>{
     if (!c) return res.status(404).json({message:"Complaint not found"});
     res.json({ ok:true, status:c.status });
   }catch(e){ next(e); }
+};
+
+// ======================================================
+// ✅ NEW: Commissions (ARRIVED only) — preview + export
+// ======================================================
+
+// Ay parametresi (YYYY-MM) varsa onu, yoksa start/end’i kullan
+function resolveRange(q) {
+  if (q.month) {
+    const [y,m] = String(q.month).split("-").map(Number);
+    if (y >= 1970 && m >= 1 && m <= 12) {
+      const start = new Date(Date.UTC(y, m-1, 1, 0, 0, 0, 0));
+      const end   = new Date(Date.UTC(y, m,   0, 23, 59, 59, 999)); // ayın son günü
+      return { start, end, dt: { $gte: start, $lte: end } };
+    }
+  }
+  return parseDateRange(q);
+}
+
+/**
+ * GET /api/admin/commissions/preview?month=YYYY-MM
+ * YALNIZCA status="arrived" rezervasyonlar:
+ *  - base: underattended ise min(price)*arrivedCount, değilse totalPrice
+ *  - commission = base * restaurant.commissionRate (varsayılan 0.05)
+ * Dönen: restoran bazlı özet + grand totals
+ */
+export const commissionsPreview = async (req, res, next) => {
+  try {
+    const { start, end, dt } = resolveRange(req.query);
+    const match = { status: "arrived" };
+    if (start || end) match.dateTimeUTC = dt;
+
+    const rows = await Reservation.aggregate([
+      { $match: match },
+      { $lookup: {
+          from: "restaurants",
+          localField: "restaurantId",
+          foreignField: "_id",
+          as: "rest"
+      }},
+      { $addFields: {
+          _rate: { $ifNull: [ { $arrayElemAt: ["$rest.commissionRate", 0] }, 0.05 ] },
+          _name: { $ifNull: [ { $arrayElemAt: ["$rest.name", 0] }, "(Restoran)" ] },
+          _base: commissionBaseExpr()
+      }},
+      { $group: {
+          _id: "$restaurantId",
+          name: { $first: "$_name" },
+          rate: { $first: "$_rate" },
+          count: { $sum: 1 },
+          revenue: { $sum: { $ifNull: ["$totalPrice", 0] } },
+          base: { $sum: "$_base" },
+          commission: { $sum: { $multiply: ["$_base", "$_rate"] } }
+      }},
+      { $sort: { commission: -1 } }
+    ]);
+
+    const totals = rows.reduce((a,r)=>({
+      count: a.count + (r.count||0),
+      revenue: a.revenue + (r.revenue||0),
+      base: a.base + (r.base||0),
+      commission: a.commission + (r.commission||0),
+    }), { count:0, revenue:0, base:0, commission:0 });
+
+    res.json({
+      range: {
+        start: start ? start.toISOString().slice(0,10) : null,
+        end: end ? end.toISOString().slice(0,10) : null,
+        month: req.query.month || null
+      },
+      items: rows.map(r=>({
+        restaurantId: r._id,
+        name: r.name,
+        rate: r.rate,
+        arrivedCount: r.count,
+        revenue: r.revenue,
+        base: r.base,
+        commission: r.commission
+      })),
+      totals
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * GET /api/admin/commissions/export?month=YYYY-MM
+ * CSV (attachment) — her rezervasyon satırı:
+ * restaurantId,restaurantName,rate,reservationId,dateTimeUTC,partySize,arrivedCount,underattended,totalPrice,base,commission
+ */
+export const commissionsExport = async (req, res, next) => {
+  try {
+    const { start, end, dt } = resolveRange(req.query);
+    const match = { status: "arrived" };
+    if (start || end) match.dateTimeUTC = dt;
+
+    const rows = await Reservation.aggregate([
+      { $match: match },
+      { $lookup: {
+          from: "restaurants",
+          localField: "restaurantId",
+          foreignField: "_id",
+          as: "rest"
+      }},
+      { $addFields: {
+          _rate: { $ifNull: [ { $arrayElemAt: ["$rest.commissionRate", 0] }, 0.05 ] },
+          _name: { $ifNull: [ { $arrayElemAt: ["$rest.name", 0] }, "(Restoran)" ] },
+          _base: commissionBaseExpr()
+      }},
+      { $project: {
+          _id: 1,
+          restaurantId: 1,
+          dateTimeUTC: 1,
+          partySize: 1,
+          arrivedCount: 1,
+          underattended: 1,
+          totalPrice: { $ifNull: ["$totalPrice", 0] },
+          rate: "$_rate",
+          name: "$_name",
+          base: "$_base",
+          commission: { $multiply: ["$_base", "$_rate"] }
+      }},
+      { $sort: { restaurantId: 1, dateTimeUTC: 1 } }
+    ]);
+
+    // CSV oluştur
+    const esc = (v) => {
+      if (v == null) return "";
+      const s = String(v);
+      if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+    const header = [
+      "restaurantId","restaurantName","rate",
+      "reservationId","dateTimeUTC","partySize","arrivedCount","underattended",
+      "totalPrice","base","commission"
+    ];
+    const lines = [header.join(",")];
+    for (const r of rows) {
+      lines.push([
+        esc(r.restaurantId),
+        esc(r.name),
+        esc(r.rate),
+        esc(r._id),
+        esc(r.dateTimeUTC?.toISOString?.() || r.dateTimeUTC),
+        esc(r.partySize ?? ""),
+        esc(r.arrivedCount ?? ""),
+        esc(r.underattended ? 1 : 0),
+        esc(r.totalPrice ?? 0),
+        esc(r.base ?? 0),
+        esc(r.commission ?? 0),
+      ].join(","));
+    }
+    const csv = lines.join("\n");
+
+    const monthPart = req.query.month || (start && end
+      ? `${start.toISOString().slice(0,10)}_${end.toISOString().slice(0,10)}`
+      : "all-time");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="commissions-${monthPart}.csv"`);
+    res.send(csv);
+  } catch (e) {
+    next(e);
+  }
 };
