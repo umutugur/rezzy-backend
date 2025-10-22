@@ -77,6 +77,7 @@ function computeDeposit(restaurant, totalPrice) {
 }
 
 /** POST /api/reservations */
+/** POST /api/reservations */
 export const createReservation = async (req, res, next) => {
   try {
     const { restaurantId, dateTimeISO, selections = [] } = req.body;
@@ -86,6 +87,33 @@ export const createReservation = async (req, res, next) => {
     if (!Array.isArray(selections) || selections.length === 0)
       throw { status: 400, message: "At least one selection is required" };
 
+    // ⬇️ ZAMAN KONTROLÜ (past slotları kapat)
+    const dt = new Date(dateTimeISO);
+    if (Number.isNaN(dt.getTime())) {
+      throw { status: 400, message: "Invalid dateTimeISO" };
+    }
+
+    // Restoran ayarlarında minimum önden rezervasyon süresi (dk) varsa kullan
+    const minLeadMin =
+      Number(
+        restaurant?.settings?.minAdvanceMinutes ??
+        restaurant?.minAdvanceMinutes ??
+        0
+      ) || 0;
+
+    const now = new Date();
+    const earliestAllowed = new Date(now.getTime() + minLeadMin * 60 * 1000);
+
+    if (dt.getTime() <= earliestAllowed.getTime()) {
+      const baseMsg =
+        minLeadMin > 0
+          ? `Rezervasyon en erken ${minLeadMin} dakika sonrasına alınabilir`
+          : "Geçmiş saate rezervasyon yapılamaz";
+      throw { status: 400, message: baseMsg };
+    }
+    // ⬆️ ZAMAN KONTROLÜ BİTİŞ
+
+    // Menü/ücret hesapları (mevcut mantığın aynısı)
     const ids = selections.map((s) => s.menuId).filter(Boolean);
     const menus = await Menu.find({ _id: { $in: ids }, isActive: true }).lean();
     const priceMap = new Map(menus.map((m) => [String(m._id), Number(m.pricePerPerson || 0)]));
@@ -109,15 +137,13 @@ export const createReservation = async (req, res, next) => {
     const r = await Reservation.create({
       restaurantId,
       userId: req.user.id,
-      dateTimeUTC: new Date(dateTimeISO),
+      dateTimeUTC: dt, // doğrulanmış tarih
       partySize,
       selections: withPrices,
       totalPrice,
       depositAmount,
       status: "pending",
     });
-
-    // (İsteğe bağlı) burada da restorana “yeni talep” bildirimi atılabilir.
 
     res.json({
       reservationId: r._id.toString(),
