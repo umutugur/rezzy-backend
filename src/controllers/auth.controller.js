@@ -25,9 +25,18 @@ const REFRESH_SECRET  = process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRE
 
 /** Sadece access için */
 function signAccessToken(uOrPayload){
-  const p = typeof uOrPayload === "object" && uOrPayload._id
-    ? { id: uOrPayload._id.toString(), role: uOrPayload.role, name: uOrPayload.name,
-        restaurantId: uOrPayload.restaurantId ? uOrPayload.restaurantId.toString() : null }
+    const p = typeof uOrPayload === "object" && uOrPayload._id
+    ? {
+        id: uOrPayload._id.toString(),
+        role: uOrPayload.role,
+        name: uOrPayload.name,
+        // Hem ObjectId hem populate edilmiş obje için güvenli dönüşüm
+        restaurantId: uOrPayload.restaurantId
+          ? (uOrPayload.restaurantId._id
+              ? uOrPayload.restaurantId._id.toString()
+              : (uOrPayload.restaurantId.toString?.() || null))
+          : null,
+      }
     : uOrPayload;
   return jwt.sign(p, ACCESS_SECRET, { expiresIn: ACCESS_EXPIRES });
 }

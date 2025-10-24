@@ -8,6 +8,8 @@ import {
   updateMe,
   changePassword,
   guestLogin,   // ✅ eklendi
+  refresh,
+  logout
 } from "../controllers/auth.controller.js";
 import { validate } from "../middlewares/validate.js";
 import {
@@ -25,7 +27,9 @@ r.post("/register", validate(registerSchema), register);
 r.post("/login",    validate(loginSchema),    login);
 r.post("/google",   validate(googleSchema),   googleLogin);
 r.post("/apple",    validate(appleSchema),    appleLogin);
-
+// 🔁 Token yenile / çıkış
+r.post("/refresh", refresh);      // <— BUNU EKLE
+r.post("/logout",  logout);       // <— İstersen
 // ✅ Misafir (guest) — validasyon gerektirmez
 r.post("/guest",    guestLogin);
 
