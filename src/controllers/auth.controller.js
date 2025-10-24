@@ -6,42 +6,42 @@ import { ensureRestaurantForOwner } from "../services/restaurantOwner.service.js
 
 const GOOGLE_AUDIENCES = [
   process.env.GOOGLE_CLIENT_ID_ANDROID,
-  process.env.GOOGLE_ANDROID_CLIENT_ID,   // eski ad
+  process.env.GOOGLE_ANDROID_CLIENT_ID,
   process.env.GOOGLE_CLIENT_ID_IOS,
-  process.env.GOOGLE_IOS_CLIENT_ID,       // eski ad
+  process.env.GOOGLE_IOS_CLIENT_ID,
   process.env.GOOGLE_CLIENT_ID_WEB,
-  process.env.GOOGLE_WEB_CLIENT_ID,       // eski ad
-  process.env.GOOGLE_CLIENT_ID            // tek ID kullandığın eski kurulumlar için
+  process.env.GOOGLE_WEB_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_ID
 ].filter(Boolean);
 
-// Tek client yerine çoklu audience destekle
 const googleClient = new OAuth2Client();
 
-/** JWT imzalama — serbest payload */
-function signTokenRaw(payload){
-  return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES
-  });
+/* ========== TOKENS ========== */
+// .env ÖNERİ: ACCESS_EXPIRES=2h, REFRESH_EXPIRES=30d
+const ACCESS_EXPIRES  = process.env.JWT_EXPIRES || "2h";
+const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES || "30d";
+const ACCESS_SECRET   = process.env.JWT_SECRET;
+const REFRESH_SECRET  = process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRET + ".refresh");
+
+/** Sadece access için */
+function signAccessToken(uOrPayload){
+  const p = typeof uOrPayload === "object" && uOrPayload._id
+    ? { id: uOrPayload._id.toString(), role: uOrPayload.role, name: uOrPayload.name,
+        restaurantId: uOrPayload.restaurantId ? uOrPayload.restaurantId.toString() : null }
+    : uOrPayload;
+  return jwt.sign(p, ACCESS_SECRET, { expiresIn: ACCESS_EXPIRES });
 }
 
-/** User dokümanından JWT üret */
-function signToken(u){
-  return signTokenRaw({
-    id: u._id.toString(),
-    role: u.role,
-    name: u.name,
-    restaurantId: u.restaurantId ? u.restaurantId.toString() : null,
-  });
+/** Refresh için (payload minimal tut) */
+function signRefreshToken(user){
+  return jwt.sign(
+    { id: user._id.toString(), v: 1 }, // v: ileride versiyonlamak istersen
+    REFRESH_SECRET,
+    { expiresIn: REFRESH_EXPIRES }
+  );
 }
 
-function ensureProvider(user, providerName, sub) {
-  const exists = user.providers?.some((p) => p.name === providerName && p.sub === sub);
-  if (!exists) {
-    user.providers = user.providers || [];
-    user.providers.push({ name: providerName, sub });
-  }
-}
-
+/** Client’a dönecek user şekli */
 function toClientUser(u) {
   return {
     id: u._id?.toString?.() ?? null,
@@ -64,21 +64,27 @@ function toClientUser(u) {
   };
 }
 
-/** --------- GUEST (Misafir) --------- */
-/** POST /auth/guest  => kayıt gerektirmeyen geçici token */
+function ensureProvider(user, providerName, sub) {
+  const exists = user.providers?.some((p) => p.name === providerName && p.sub === sub);
+  if (!exists) {
+    user.providers = user.providers || [];
+    user.providers.push({ name: providerName, sub });
+  }
+}
+
+/* ========== GUEST ========== */
 export const guestLogin = async (req, res, next) => {
   try {
-    // DB kaydı oluşturmuyoruz; salt token
     const guestId = `guest:${Math.random().toString(36).slice(2, 10)}`;
-    const token = signTokenRaw({
-      id: guestId,
-      role: "guest",
-      name: "Misafir",
-      restaurantId: null,
-    });
-    // Me tarafında guest için sentetik kullanıcı döndüreceğiz
+    // guest için access (kısa ömür) + refresh döndürmüyoruz (misafir kalıcı olmasın)
+    const accessToken = jwt.sign(
+      { id: guestId, role: "guest", name: "Misafir", restaurantId: null },
+      ACCESS_SECRET,
+      { expiresIn: ACCESS_EXPIRES }
+    );
     return res.json({
-      token,
+      token: accessToken,
+      refreshToken: null,
       user: {
         id: guestId,
         name: "Misafir",
@@ -98,7 +104,7 @@ export const guestLogin = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-/** POST /auth/register */
+/* ========== REGISTER ========== */
 export const register = async (req, res, next) => {
   try {
     const { name, email, phone, password, role } = req.body;
@@ -117,14 +123,16 @@ export const register = async (req, res, next) => {
       await user.populate({ path: "restaurantId", select: "_id name" });
     }
 
-    const token = signToken(user);
-    res.json({ token, user: toClientUser(user) });
+    const token = signAccessToken(user);
+    const refreshToken = signRefreshToken(user);
+
+    res.json({ token, refreshToken, user: toClientUser(user) });
   } catch (e) {
     next(e);
   }
 };
 
-/** POST /auth/login */
+/* ========== LOGIN (Password) ========== */
 export const login = async (req, res, next) => {
   try {
     const { email, phone, password } = req.body;
@@ -140,32 +148,23 @@ export const login = async (req, res, next) => {
     }
 
     await user.save();
-    const token = signToken(user);
-    res.json({ token, user: toClientUser(user) });
+    const token = signAccessToken(user);
+    const refreshToken = signRefreshToken(user);
+    res.json({ token, refreshToken, user: toClientUser(user) });
   } catch (e) {
     next(e);
   }
 };
 
-/** POST /auth/google */
+/* ========== LOGIN (Google) ========== */
 export const googleLogin = async (req, res, next) => {
   try {
     const { idToken } = req.body;
     if (!idToken) return next({ status: 400, message: "idToken gerekli" });
+    if (!GOOGLE_AUDIENCES.length) return next({ status: 500, message: "Sunucuda Google client ID tanımlı değil" });
 
-    if (!GOOGLE_AUDIENCES.length) {
-      return next({ status: 500, message: "Sunucuda Google client ID tanımlı değil" });
-    }
-
-    const ticket = await googleClient.verifyIdToken({
-      idToken,
-      audience: GOOGLE_AUDIENCES, // 👈 birden fazla client ID kabul
-    });
-
+    const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_AUDIENCES });
     const payload = ticket.getPayload();
-    if (process.env.AUTH_DEBUG === "1") {
-      console.log("[google] aud:", payload.aud, "azp:", payload.azp);
-    }
 
     const sub = payload.sub;
     const email = payload.email;
@@ -175,16 +174,9 @@ export const googleLogin = async (req, res, next) => {
     if (!user && email) user = await User.findOne({ email });
 
     if (!user) {
-      user = await User.create({
-        name, email, role: "customer",
-        providers: [{ name: "google", sub }]
-      });
+      user = await User.create({ name, email, role: "customer", providers: [{ name: "google", sub }] });
     } else {
-      const exists = user.providers?.some(p => p.name === "google" && p.sub === sub);
-      if (!exists) {
-        user.providers = user.providers || [];
-        user.providers.push({ name: "google", sub });
-      }
+      ensureProvider(user, "google", sub);
       if (!user.email && email) user.email = email;
       await user.save();
     }
@@ -194,33 +186,26 @@ export const googleLogin = async (req, res, next) => {
       await user.populate({ path: "restaurantId", select: "_id name" });
     }
 
-    const token = signToken(user);
-    res.json({ token, user: toClientUser(user) });
+    const token = signAccessToken(user);
+    const refreshToken = signRefreshToken(user);
+    res.json({ token, refreshToken, user: toClientUser(user) });
   } catch (e) {
     if (e?.message?.includes("audience") || e?.message?.includes("Wrong recipient")) {
-      return next({
-        status: 400,
-        message: "Google client ID eşleşmiyor (audience). Sunucu .env içine Android/Web/iOS client ID'lerini ekleyin."
-      });
+      return next({ status: 400, message: "Google client ID eşleşmiyor (audience). Sunucu .env içine Android/Web/iOS client ID'lerini ekleyin." });
     }
     next(e);
   }
 };
 
-/** POST /auth/apple */
+/* ========== LOGIN (Apple) ========== */
 export const appleLogin = async (req, res, next) => {
   try {
     const { identityToken } = req.body;
     if (!identityToken) return next({ status: 400, message: "identityToken gerekli" });
 
-    const expectedAudience =
-      process.env.IOS_BUNDLE_ID || process.env.APPLE_CLIENT_ID;
-
+    const expectedAudience = process.env.IOS_BUNDLE_ID || process.env.APPLE_CLIENT_ID;
     if (!expectedAudience) {
-      return next({
-        status: 500,
-        message: "Apple audience tanımlı değil. Render env’e IOS_BUNDLE_ID=com.rezzy.app ekleyin.",
-      });
+      return next({ status: 500, message: "Apple audience tanımlı değil. Render env’e IOS_BUNDLE_ID=com.rezzy.app ekleyin." });
     }
 
     const tokenData = await appleSignin.verifyIdToken(identityToken, {
@@ -253,39 +238,26 @@ export const appleLogin = async (req, res, next) => {
       await user.populate({ path: "restaurantId", select: "_id name" });
     }
 
-    const token = signToken(user);
-    res.json({ token, user: toClientUser(user) });
+    const token = signAccessToken(user);
+    const refreshToken = signRefreshToken(user);
+    res.json({ token, refreshToken, user: toClientUser(user) });
   } catch (e) {
     if (e?.message?.toLowerCase?.().includes("audience")) {
-      return next({
-        status: 400,
-        message:
-          "Apple audience eşleşmedi. IOS_BUNDLE_ID env’inin bundleIdentifier ile birebir aynı olduğundan emin olun.",
-      });
+      return next({ status: 400, message: "Apple audience eşleşmedi. IOS_BUNDLE_ID env’inin bundleIdentifier ile birebir aynı olduğundan emin olun." });
     }
     next(e);
   }
 };
 
-/** GET /auth/me */
+/* ========== ME / UPDATE / PASSWORD ========== */
 export const me = async (req, res, next) => {
   try {
-    // Misafir için sentetik profil döndür
     if (req.user?.role === "guest") {
       return res.json({
-        id: req.user.id,           // guest:xxxx
-        name: "Misafir",
-        email: null,
-        phone: null,
-        role: "guest",
-        restaurantId: null,
-        avatarUrl: null,
+        id: req.user.id, name: "Misafir", email: null, phone: null,
+        role: "guest", restaurantId: null, avatarUrl: null,
         notificationPrefs: { push: true, sms: false, email: true },
-        providers: ["guest"],
-        noShowCount: 0,
-        riskScore: 0,
-        createdAt: null,
-        updatedAt: null,
+        providers: ["guest"], noShowCount: 0, riskScore: 0, createdAt: null, updatedAt: null,
       });
     }
 
@@ -297,12 +269,10 @@ export const me = async (req, res, next) => {
       await ensureRestaurantForOwner(u._id);
       await u.populate({ path: "restaurantId", select: "_id name" });
     }
-
     res.json(toClientUser(u));
   } catch (e) { next(e); }
 };
 
-/** PATCH /auth/me */
 export const updateMe = async (req, res, next) => {
   try {
     if (req.user?.role === "guest") {
@@ -311,12 +281,10 @@ export const updateMe = async (req, res, next) => {
 
     const patch = {};
     const { name, email, phone, notificationPrefs, avatarUrl } = req.body;
-
     if (name != null)  patch.name  = String(name);
     if (email != null) patch.email = String(email);
     if (phone != null) patch.phone = String(phone);
     if (avatarUrl != null) patch.avatarUrl = String(avatarUrl);
-
     if (notificationPrefs && typeof notificationPrefs === "object") {
       patch.notificationPrefs = {
         push:  !!notificationPrefs.push,
@@ -327,12 +295,10 @@ export const updateMe = async (req, res, next) => {
 
     const u = await User.findByIdAndUpdate(req.user.id, { $set: patch }, { new: true }).lean();
     if (!u) return res.status(404).json({ message: "User not found" });
-
     res.json(toClientUser(u));
   } catch (e) { next(e); }
 };
 
-/** POST /auth/change-password */
 export const changePassword = async (req, res, next) => {
   try {
     if (req.user?.role === "guest") {
@@ -353,9 +319,37 @@ export const changePassword = async (req, res, next) => {
     const ok = await u.compare(currentPassword);
     if (!ok) return res.status(400).json({ message: "Mevcut şifre hatalı" });
 
-    u.password = newPassword; // pre('save') hash’ler
+    u.password = newPassword;
     await u.save();
-
     res.json({ ok: true });
   } catch (e) { next(e); }
+};
+
+/* ========== REFRESH / LOGOUT ========== */
+/** POST /auth/refresh  { refreshToken } */
+export const refresh = async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body || {};
+    if (!refreshToken) return res.status(400).json({ message: "refreshToken gerekli" });
+
+    const payload = jwt.verify(refreshToken, REFRESH_SECRET); // { id, v, iat, exp }
+    // kullanıcı silinmiş olabilir
+    const u = await User.findById(payload.id).select("_id role name restaurantId");
+    if (!u) return res.status(401).json({ message: "Unauthorized" });
+
+    // yeni access üret
+    const token = signAccessToken(u);
+    // istersen rotation yap (yeni refresh üret):
+    const newRefresh = signRefreshToken(u);
+
+    res.json({ token, refreshToken: newRefresh });
+  } catch (e) {
+    // invalid/expired refresh => 401
+    return next({ status: 401, message: "Invalid refresh token" });
+  }
+};
+
+/** POST /auth/logout  — client refresh’ini silecek, server tarafı stateless */
+export const logout = async (req, res) => {
+  res.json({ ok: true });
 };
