@@ -7,6 +7,7 @@ import {
   me,
   updateMe,
   changePassword,
+  guestLogin,   // ✅ eklendi
 } from "../controllers/auth.controller.js";
 import { validate } from "../middlewares/validate.js";
 import {
@@ -24,6 +25,9 @@ r.post("/register", validate(registerSchema), register);
 r.post("/login",    validate(loginSchema),    login);
 r.post("/google",   validate(googleSchema),   googleLogin);
 r.post("/apple",    validate(appleSchema),    appleLogin);
+
+// ✅ Misafir (guest) — validasyon gerektirmez
+r.post("/guest",    guestLogin);
 
 // Profil (✔️ hepsi /auth altında)
 r.get("/me",    auth(true), me);

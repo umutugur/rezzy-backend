@@ -1,4 +1,3 @@
-// controllers/auth.controller.js
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { OAuth2Client } from "google-auth-library";
@@ -18,17 +17,21 @@ const GOOGLE_AUDIENCES = [
 // Tek client yerine çoklu audience destekle
 const googleClient = new OAuth2Client();
 
+/** JWT imzalama — serbest payload */
+function signTokenRaw(payload){
+  return jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES
+  });
+}
+
+/** User dokümanından JWT üret */
 function signToken(u){
-  return jwt.sign(
-    {
-      id: u._id.toString(),
-      role: u.role,
-      name: u.name,
-      restaurantId: u.restaurantId ? u.restaurantId.toString() : null,
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES }
-  );
+  return signTokenRaw({
+    id: u._id.toString(),
+    role: u.role,
+    name: u.name,
+    restaurantId: u.restaurantId ? u.restaurantId.toString() : null,
+  });
 }
 
 function ensureProvider(user, providerName, sub) {
@@ -41,10 +44,10 @@ function ensureProvider(user, providerName, sub) {
 
 function toClientUser(u) {
   return {
-    id: u._id.toString(),
+    id: u._id?.toString?.() ?? null,
     name: u.name,
-    email: u.email,
-    phone: u.phone,
+    email: u.email ?? null,
+    phone: u.phone ?? null,
     role: u.role,
     restaurantId: u.restaurantId ? u.restaurantId.toString() : null,
     avatarUrl: u.avatarUrl ?? null,
@@ -56,10 +59,44 @@ function toClientUser(u) {
     providers: Array.isArray(u.providers) ? u.providers.map(p => p.name) : [],
     noShowCount: u.noShowCount ?? 0,
     riskScore:   u.riskScore ?? 0,
-    createdAt: u.createdAt,
-    updatedAt: u.updatedAt,
+    createdAt: u.createdAt ?? null,
+    updatedAt: u.updatedAt ?? null,
   };
 }
+
+/** --------- GUEST (Misafir) --------- */
+/** POST /auth/guest  => kayıt gerektirmeyen geçici token */
+export const guestLogin = async (req, res, next) => {
+  try {
+    // DB kaydı oluşturmuyoruz; salt token
+    const guestId = `guest:${Math.random().toString(36).slice(2, 10)}`;
+    const token = signTokenRaw({
+      id: guestId,
+      role: "guest",
+      name: "Misafir",
+      restaurantId: null,
+    });
+    // Me tarafında guest için sentetik kullanıcı döndüreceğiz
+    return res.json({
+      token,
+      user: {
+        id: guestId,
+        name: "Misafir",
+        email: null,
+        phone: null,
+        role: "guest",
+        restaurantId: null,
+        avatarUrl: null,
+        notificationPrefs: { push: true, sms: false, email: true },
+        providers: ["guest"],
+        noShowCount: 0,
+        riskScore: 0,
+        createdAt: null,
+        updatedAt: null,
+      }
+    });
+  } catch (e) { next(e); }
+};
 
 /** POST /auth/register */
 export const register = async (req, res, next) => {
@@ -169,7 +206,7 @@ export const googleLogin = async (req, res, next) => {
     next(e);
   }
 };
-/** POST /auth/apple */
+
 /** POST /auth/apple */
 export const appleLogin = async (req, res, next) => {
   try {
@@ -229,9 +266,29 @@ export const appleLogin = async (req, res, next) => {
     next(e);
   }
 };
+
 /** GET /auth/me */
 export const me = async (req, res, next) => {
   try {
+    // Misafir için sentetik profil döndür
+    if (req.user?.role === "guest") {
+      return res.json({
+        id: req.user.id,           // guest:xxxx
+        name: "Misafir",
+        email: null,
+        phone: null,
+        role: "guest",
+        restaurantId: null,
+        avatarUrl: null,
+        notificationPrefs: { push: true, sms: false, email: true },
+        providers: ["guest"],
+        noShowCount: 0,
+        riskScore: 0,
+        createdAt: null,
+        updatedAt: null,
+      });
+    }
+
     const u = await User.findById(req.user.id)
       .select("_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore createdAt updatedAt");
     if (!u) return res.status(401).json({ message: "Unauthorized" });
@@ -248,6 +305,10 @@ export const me = async (req, res, next) => {
 /** PATCH /auth/me */
 export const updateMe = async (req, res, next) => {
   try {
+    if (req.user?.role === "guest") {
+      return res.status(403).json({ message: "Misafir profili güncellenemez. Lütfen giriş yapın veya kayıt olun." });
+    }
+
     const patch = {};
     const { name, email, phone, notificationPrefs, avatarUrl } = req.body;
 
@@ -274,6 +335,10 @@ export const updateMe = async (req, res, next) => {
 /** POST /auth/change-password */
 export const changePassword = async (req, res, next) => {
   try {
+    if (req.user?.role === "guest") {
+      return res.status(403).json({ message: "Misafir hesaplarında şifre değiştirilemez" });
+    }
+
     const { currentPassword, newPassword } = req.body || {};
     if (!currentPassword || !newPassword)
       return res.status(400).json({ message: "currentPassword ve newPassword zorunludur" });

@@ -3,12 +3,13 @@
 import NotificationLog from "../models/NotificationLog.js";
 import User from "../models/User.js";
 import Restaurant from "../models/Restaurant.js";
-
+import device from "../models/Device.js";
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
 
 // Bazı bariz geçersiz tokenları ayıklamak için basit regex (SDK kullanmıyoruz)
-const isLikelyExpoToken = (t) => typeof t === "string" && /^ExponentPushToken\[/i.test(t);
+const isLikelyExpoToken = (t) =>
+  typeof t === "string" && /^ExponentPushToken\[/i.test(t);
 
 // ---- Token toplama ----
 async function getUserPushTokens(userId) {
@@ -38,7 +39,14 @@ async function alreadySent(key) {
   return !!(await NotificationLog.exists({ key }));
 }
 
-async function logNotification({ key, type, userId, restaurantId, payload, meta }) {
+async function logNotification({
+  key,
+  type,
+  userId,
+  restaurantId,
+  payload,
+  meta,
+}) {
   try {
     await NotificationLog.create({
       key,
@@ -49,7 +57,9 @@ async function logNotification({ key, type, userId, restaurantId, payload, meta 
       meta: meta || null,
       sentAt: new Date(),
     });
-  } catch (_) {} // unique çakışırsa sorun değil
+  } catch (_) {
+    /* unique çakışırsa sorun değil */
+  }
 }
 
 // ---- Expo gönderim + receipt kontrol ----
@@ -166,7 +176,9 @@ async function sendExpoPush(tokens, payload) {
   }
 
   // Token string’lerini birleştirip benzersizleştir
-  const invalidTokens = [...new Set([...invalidImmediate, ...immediateInvalidTokens, ...invalidFromReceipts])];
+  const invalidTokens = [
+    ...new Set([...invalidImmediate, ...immediateInvalidTokens, ...invalidFromReceipts]),
+  ];
 
   return {
     ok: true,
@@ -176,6 +188,65 @@ async function sendExpoPush(tokens, payload) {
     invalidCodes: [...new Set(invalidCodes)],
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* ----------------------- DEVICE (GUEST) PUSH ----------------------- */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Misafir/cihaz listesine push gönderir.
+ * @param {Array<{deviceId:string, expoToken:string, userId?:string, platform?:string}>} devices
+ * @param {{ title:string, body?:string, data?:object, type?:string, keyPrefix?:string }} param1
+ * @returns
+ */
+export async function sendToDevices(
+  devices,
+  { title, body, data, type, keyPrefix = "device" }
+) {
+  const tokens = devices.map((d) => d.expoToken).filter(Boolean);
+  const payload = { title, body, data };
+  const r = await sendExpoPush(tokens, payload);
+
+  // Geçersizleri Device tablosunda disable et
+  if (r.invalidTokens?.length) {
+    await Device.updateMany(
+      { expoToken: { $in: r.invalidTokens } },
+      {
+        $set: {
+          isActive: false,
+          lastInvalidAt: new Date(),
+          lastInvalidCode: "DeviceNotRegistered",
+        },
+      }
+    ).catch(() => {});
+  }
+
+  // Log
+  const logs = [];
+  for (const d of devices) {
+    logs.push({
+      key: `${keyPrefix}:${d.deviceId}:${Date.now()}`,
+      type: type || "device_push",
+      userId: d.userId || null,
+      payload,
+      meta: { deviceId: d.deviceId, platform: d.platform || null },
+      sentAt: new Date(),
+    });
+  }
+  if (logs.length) {
+    try {
+      await NotificationLog.insertMany(logs, { ordered: false });
+    } catch {
+      /* noop */
+    }
+  }
+
+  return r;
+}
+
+/* ------------------------------------------------------------------ */
+/* ------------------------- USER-BOUND PUSH ------------------------- */
+/* ------------------------------------------------------------------ */
 
 // ---- Public API ----
 export async function notifyUser(userId, { title, body, data, key, type }) {
@@ -203,7 +274,10 @@ export async function notifyUser(userId, { title, body, data, key, type }) {
   return r;
 }
 
-export async function notifyRestaurantOwner(restaurantId, { title, body, data, key, type }) {
+export async function notifyRestaurantOwner(
+  restaurantId,
+  { title, body, data, key, type }
+) {
   if (key && (await alreadySent(key))) return { ok: true, dup: true };
 
   const tokens = await getRestaurantOwnerTokens(restaurantId);
@@ -211,7 +285,10 @@ export async function notifyRestaurantOwner(restaurantId, { title, body, data, k
   const r = await sendExpoPush(tokens, payload);
 
   if (r.invalidTokens?.length) {
-    const rest = await Restaurant.findById(restaurantId).select("owner").lean().catch(() => null);
+    const rest = await Restaurant.findById(restaurantId)
+      .select("owner")
+      .lean()
+      .catch(() => null);
     if (rest?.owner) {
       await User.updateOne(
         { _id: rest.owner },

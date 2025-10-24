@@ -77,9 +77,15 @@ function computeDeposit(restaurant, totalPrice) {
 }
 
 /** POST /api/reservations */
-/** POST /api/reservations */
 export const createReservation = async (req, res, next) => {
   try {
+    // ✅ Misafir kullanıcı rezervasyon oluşturamaz
+    if (req.user?.role === "guest") {
+      return res.status(401).json({
+        message: "Rezervasyon oluşturmak için lütfen giriş yapın veya kayıt olun."
+      });
+    }
+
     const { restaurantId, dateTimeISO, selections = [] } = req.body;
 
     const restaurant = await Restaurant.findById(restaurantId).lean();
@@ -93,7 +99,6 @@ export const createReservation = async (req, res, next) => {
       throw { status: 400, message: "Invalid dateTimeISO" };
     }
 
-    // Restoran ayarlarında minimum önden rezervasyon süresi (dk) varsa kullan
     const minLeadMin =
       Number(
         restaurant?.settings?.minAdvanceMinutes ??
