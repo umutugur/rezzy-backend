@@ -18,7 +18,7 @@ const googleClient = new OAuth2Client();
 
 /* ========== TOKENS ========== */
 // .env ÖNERİ: ACCESS_EXPIRES=2h, REFRESH_EXPIRES=30d
-const ACCESS_EXPIRES  = process.env.JWT_EXPIRES || "30s";
+const ACCESS_EXPIRES  = process.env.JWT_EXPIRES || "2h";
 const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES || "30d";
 const ACCESS_SECRET   = process.env.JWT_SECRET;
 const REFRESH_SECRET  = process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRET + ".refresh");
