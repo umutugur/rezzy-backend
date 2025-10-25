@@ -12,6 +12,13 @@ const PushTokenSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 }, { _id: false });
 
+const IncidentSchema = new mongoose.Schema({
+  type: { type: String, enum: ["NO_SHOW", "LATE_CANCEL", "UNDER_ATTEND", "GOOD_ATTEND"], required: true },
+  weight: { type: Number, required: true },          // 0..1 (GOOD_ATTEND negatif olabilir)
+  reservationId: { type: mongoose.Schema.Types.ObjectId, ref: "Reservation" },
+  at: { type: Date, default: Date.now }
+}, { _id: false });
+
 const UserSchema = new mongoose.Schema({
   name:   { type: String, required: true },
   email:  { type: String, unique: true, sparse: true },
@@ -19,8 +26,13 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, select: false }, // sosyal girişte boş olabilir
   role:   { type: String, enum: ["customer", "restaurant", "admin"], default: "customer" },
   restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: "Restaurant", default: null },
+
+  // Risk & no-show
   noShowCount: { type: Number, default: 0 },
   riskScore:   { type: Number, default: 0 },
+  riskIncidents: { type: [IncidentSchema], default: [] },
+  consecutiveGoodShows: { type: Number, default: 0 },
+
   providers:   { type: [ProviderSchema], default: [] },
 
   banned:      { type: Boolean, default: false },
@@ -54,6 +66,25 @@ UserSchema.pre("save", async function(next){
 UserSchema.methods.compare = function(pw){
   if (!this.password) return false;
   return bcrypt.compare(pw, this.password);
+};
+
+// --- Yardımcı instance metodlar
+UserSchema.methods._clampRisk = function() {
+  if (this.riskScore < 0) this.riskScore = 0;
+  if (this.riskScore > 100) this.riskScore = 100;
+};
+
+UserSchema.methods._autobanIfNeeded = function() {
+  // Basit eşikler — ihtiyaca göre ayarla
+  const tooManyNoShows = (this.noShowCount || 0) >= 3; // toplam
+  const highRisk       = (this.riskScore   || 0) >= 75;
+
+  if ((tooManyNoShows || highRisk) && !this.banned) {
+    this.banned = true;
+    this.banReason = tooManyNoShows ? "Çoklu no-show" : "Yüksek risk skoru";
+    this.bannedAt = new Date();
+    // İstersen bannedUntil = now + 7 gün vb. ayarlayabilirsin.
+  }
 };
 
 UserSchema.index({ "providers.name": 1, "providers.sub": 1 });

@@ -2,9 +2,10 @@ import cron from "node-cron";
 import { dayjs } from "../utils/dates.js";
 import Reservation from "../models/Reservation.js";
 import Restaurant from "../models/Restaurant.js";
+import { addIncident } from "../services/userRisk.service.js";
 
 // Her 10 dakikada bir kontrol
-cron.schedule("*/10 * * * *", async ()=>{
+cron.schedule("*/10 * * * *", async () => {
   const now = dayjs();
   const from = now.subtract(6, "hour").toDate(); // dar aralık (performans)
   const to = now.toDate();
@@ -14,14 +15,30 @@ cron.schedule("*/10 * * * *", async ()=>{
     dateTimeUTC: { $lte: to, $gte: from }
   }).populate("restaurantId");
 
+  let marked = 0;
+
   for (const r of resvs) {
     const grace = r.restaurantId?.graceMinutes ?? 15;
-    const deadline = dayjs(r.dateTimeUTC).add(grace,"minute");
+    const deadline = dayjs(r.dateTimeUTC).add(grace, "minute");
     if (now.isAfter(deadline)) {
       r.status = "no_show";
       r.noShowAt = new Date();
       await r.save();
+
+      // Kullanıcı risk/no-show güncelle
+      try {
+        await addIncident({
+          userId: r.userId,
+          type: "NO_SHOW",
+          reservationId: r._id.toString(),
+        });
+      } catch (e) {
+        console.warn("[noshow.job] addIncident warn:", e?.message || e);
+      }
+
+      marked++;
     }
   }
-  if (resvs.length) console.log(`⏰ no-show check ${resvs.length} items`);
+
+  if (marked) console.log(`⏰ no-show check -> ${marked} item updated`);
 });

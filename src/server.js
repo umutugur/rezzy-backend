@@ -10,6 +10,11 @@ try {
 } catch (_) {
   // opsiyonel
 }
+try {
+  await import("./jobs/riskDecay.job.js");
+} catch (_) {
+  // opsiyonel
+}
 
 const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI;
 if (!MONGO_URI) {

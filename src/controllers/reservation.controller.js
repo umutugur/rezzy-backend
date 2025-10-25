@@ -6,6 +6,7 @@ import { dayjs } from "../utils/dates.js";
 import { generateQRDataURL, verifyQR } from "../utils/qr.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import { notifyUser, notifyRestaurantOwner } from "../services/notification.service.js";
+import { addIncident, computeUnderAttendWeight } from "../services/userRisk.service.js";
 import joi from "joi";
 
 /** persons dizisi tam 1..N ve benzersiz ise INDEX, aksi halde COUNT */
@@ -427,6 +428,21 @@ export const cancelReservation = async (req, res, next) => {
     r.cancelledAt = new Date();
     await r.save();
 
+    // --- Geç iptal ise incident ekle (ör: < 2 saat kala iptal)
+    try {
+      const diffMs = new Date(r.dateTimeUTC) - Date.now();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      if (diffHours < 2 && diffHours > -24) {
+        await addIncident({
+          userId: r.userId,
+          type: "LATE_CANCEL",
+          reservationId: r._id.toString(),
+        });
+      }
+    } catch (e) {
+      console.warn("[cancelReservation] addIncident warn:", e?.message || e);
+    }
+
     // Restoran — müşteri iptali
     try {
       await notifyRestaurantOwner(r.restaurantId._id, {
@@ -549,6 +565,33 @@ export const checkin = async (req, res, next) => {
     r.checkinAt = new Date();
     await r.save();
 
+    // --- Risk incident (UNDER_ATTEND / GOOD_ATTEND)
+    try {
+      if (isUnder) {
+        const w = computeUnderAttendWeight({
+          partySize: r.partySize,
+          arrivedCount: arrived,
+          thresholdPercent: threshold,
+        });
+        if (w > 0) {
+          await addIncident({
+            userId: r.userId,
+            type: "UNDER_ATTEND",
+            baseWeight: Math.min(1, w),
+            reservationId: r._id.toString(),
+          });
+        }
+      } else {
+        await addIncident({
+          userId: r.userId,
+          type: "GOOD_ATTEND",
+          reservationId: r._id.toString(),
+        });
+      }
+    } catch (e) {
+      console.warn("[checkin] addIncident warn:", e?.message || e);
+    }
+
     // Müşteri — check-in
     try {
       await notifyUser(r.userId, {
@@ -616,6 +659,9 @@ export const updateArrivedCount = async (req, res, next) => {
     if (r.status !== "arrived") r.status = "arrived";
     r.underattended = !!isUnder;
     await r.save();
+
+    // Not: Risk incident burada tekrar EKLENMİYOR (idempotency).
+    // Gerekirse geçmiş incident üzerinde düzeltme mantığı ayrıca ele alınabilir.
 
     res.json({ ok: true, arrivedCount: r.arrivedCount, underattended: r.underattended });
   } catch (e) {

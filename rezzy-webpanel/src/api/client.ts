@@ -123,6 +123,61 @@ export async function adminUpdateUserRole(
   return data;
 }
 
+/** ✅ NEW: Admin — User Risk History */
+export type RiskIncidentType = "NO_SHOW" | "LATE_CANCEL" | "UNDER_ATTEND" | "GOOD_ATTEND";
+export interface AdminUserRiskIncident {
+  type: RiskIncidentType;
+  weight: number;
+  at: string;              // ISO
+  reservationId: string | null;
+}
+export interface AdminUserRiskSnapshot {
+  riskScore: number;
+  noShowCount: number;
+  banned: boolean;
+  bannedUntil: string | null;
+  banReason: string | null;
+  consecutiveGoodShows: number;
+  windowDays: number; // 180
+  weights: Record<"NO_SHOW" | "LATE_CANCEL" | "UNDER_ATTEND" | "GOOD_ATTEND", number>;
+  multiplier: number; // 25
+}
+export async function adminGetUserRiskHistory(
+  uid: string,
+  params?: { start?: string; end?: string; limit?: number }
+): Promise<{
+  user: { _id: string; name: string; email: string; createdAt: string };
+  snapshot: AdminUserRiskSnapshot;
+  incidents: AdminUserRiskIncident[];
+  range: { start: string | null; end: string | null; limit: number };
+}> {
+  const { data } = await api.get(`/admin/users/${uid}/risk`, { params });
+  return data;
+}
+/** ADMIN — User Stats & Export */
+export async function adminGetUserStats(): Promise<{
+  ok: boolean;
+  total: number;
+  banned: number;
+  highRisk: number;
+  avgRisk: number;
+}> {
+  const { data } = await api.get("/admin/users/stats");
+  return data;
+}
+
+export async function adminExportUsers(): Promise<void> {
+  const resp = await api.get("/admin/users/export", { responseType: "blob" });
+  const blob = new Blob([resp.data], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "users.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 // =========================
 /** ADMIN — Moderation */
 // =========================

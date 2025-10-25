@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
 import { allow } from "../middlewares/roles.js";
-
+import { exportUsers, userStats } from "../controllers/admin.controller.js";
 import * as admin from "../controllers/admin.controller.js";
 // ✅ Senin dosyan ve fonksiyon isimlerin:
 import { commissionsPreview, commissionsExport } from "../controllers/commission.controller.js";
@@ -12,6 +12,9 @@ const r = Router();
 r.get("/kpi/global",             auth(), allow("admin"), admin.kpiGlobal);
 r.get("/kpi/restaurants/:rid",   auth(), allow("admin"), admin.kpiByRestaurant);
 r.get("/kpi/users/:uid",         auth(), allow("admin"), admin.kpiByUser);
+// ✅ Kullanıcı istatistikleri ve dışa aktarım
+r.get("/users/stats",  auth(), allow("admin"), userStats);
+r.get("/users/export", auth(), allow("admin"), exportUsers);
 
 // ---- Restaurants ----
 r.get("/restaurants",                        auth(), allow("admin"), admin.listRestaurants);
@@ -24,6 +27,7 @@ r.patch("/restaurants/:rid/commission",      auth(), allow("admin"), admin.updat
 // ---- Users (list + detail + ban/unban + role) ----
 r.get(   "/users",               auth(), allow("admin"), admin.listUsers);
 r.get(   "/users/:uid",          auth(), allow("admin"), admin.getUserDetail);
+r.get(   "/users/:uid/risk",     auth(), allow("admin"), admin.getUserRiskHistory); // ✅ NEW: risk geçmişi
 r.post(  "/users/:uid/ban",      auth(), allow("admin"), admin.banUser);
 r.post(  "/users/:uid/unban",    auth(), allow("admin"), admin.unbanUser);
 

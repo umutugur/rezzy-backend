@@ -50,7 +50,6 @@ async function kpiAggregate(match) {
   const arrived   = by.get("arrived")?.c   || 0;
   const cancelled = by.get("cancelled")?.c || 0;
 
-  // 🔴 İstenen kırılım
   const arrivedRevenue = by.get("arrived")?.revenue || 0;
   const depositFromConfirmedNoShow =
     (by.get("confirmed")?.deposits || 0) +
@@ -65,8 +64,8 @@ async function kpiAggregate(match) {
       cancelled,
       no_show:   by.get("no_show")?.c   || 0,
     },
-    revenue,   // genel
-    deposits,  // genel
+    revenue,
+    deposits,
     breakdown: { arrivedRevenue, depositFromConfirmedNoShow },
     rates: {
       confirm: total     ? Number((confirmed / total).toFixed(3))  : 0,
@@ -405,7 +404,8 @@ export const listUsers = async (req, res, next) => {
     const rows = await User.find(q)
       .sort({ _id: -1 })
       .limit(limit + 1)
-      .select("_id name email role restaurantId banned banReason bannedUntil createdAt")
+      // ✅ riskScore ve noShowCount listeye eklendi
+      .select("_id name email role restaurantId banned banReason bannedUntil createdAt riskScore noShowCount")
       .lean();
 
     res.json({ items: cut(rows, limit), nextCursor: nextCursor(rows, limit) });
@@ -450,6 +450,65 @@ export const getUserDetail = async (req, res, next) => {
         revenue,
         deposits,
       }
+    });
+  } catch (e) { next(e); }
+};
+
+/* ------------ NEW: User Risk History (read-only) ------------ */
+export const getUserRiskHistory = async (req, res, next) => {
+  try {
+    const uid = toObjectId(req.params.uid);
+    if (!uid) return res.status(400).json({ message: "Invalid user id" });
+
+    const { start, end } = req.query;
+    const { start: s, end: e } = parseDateRange({ start, end });
+
+    const u = await User.findById(uid)
+      .select("_id name email banned banReason bannedUntil riskScore noShowCount riskIncidents consecutiveGoodShows createdAt")
+      .lean();
+    if (!u) return res.status(404).json({ message: "User not found" });
+
+    let incidents = Array.isArray(u.riskIncidents) ? u.riskIncidents.slice() : [];
+    incidents.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    if (s || e) {
+      incidents = incidents.filter(it => {
+        const t = new Date(it.at).getTime();
+        if (s && t < s.getTime()) return false;
+        if (e && t > e.getTime()) return false;
+        return true;
+      });
+    }
+
+    const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+    incidents = incidents.slice(0, limit);
+
+    const snapshot = {
+      riskScore: u.riskScore || 0,
+      noShowCount: u.noShowCount || 0,
+      banned: !!u.banned,
+      bannedUntil: u.bannedUntil || null,
+      banReason: u.banReason || null,
+      consecutiveGoodShows: u.consecutiveGoodShows || 0,
+      windowDays: 180,
+      weights: {
+        NO_SHOW: 1.0,
+        LATE_CANCEL: 0.5,
+        UNDER_ATTEND: 0.25,
+        GOOD_ATTEND: -0.10,
+      },
+      multiplier: 25,
+    };
+
+    res.json({
+      user: { _id: u._id, name: u.name, email: u.email, createdAt: u.createdAt },
+      snapshot,
+      incidents: incidents.map(it => ({
+        type: it.type,
+        weight: it.weight,
+        at: it.at,
+        reservationId: it.reservationId || null,
+      })),
+      range: { start: start || null, end: end || null, limit },
     });
   } catch (e) { next(e); }
 };
@@ -526,12 +585,17 @@ export const updateUserRole = async (req, res, next) => {
 /* ------------ Reservations (global read-only) ------------ */
 export const listReservationsAdmin = async (req, res, next) => {
   try {
-    const { status, restaurantId, userId, start, end } = req.query;
+    const { status, restaurantId, userId, start, end, reservationId } = req.query;
     const { limit, cursor } = pageParams(req.query);
     const { dt } = parseDateRange({ start, end });
 
     const q = {};
     if (status) q.status = status;
+    if (reservationId) {
+      const rid = toObjectId(reservationId);
+      if (!rid) return res.status(400).json({ message: "Invalid reservationId" });
+      q._id = rid;
+    }
 
     if (restaurantId) {
       const rid = toObjectId(restaurantId);
@@ -544,7 +608,7 @@ export const listReservationsAdmin = async (req, res, next) => {
       q.userId = uid;
     }
 
-    if (cursor) q._id = { $lt: cursor };
+    if (cursor) q._id = { ...(q._id || {}), $lt: cursor };
     if (start || end) q.dateTimeUTC = dt;
 
     const rows = await Reservation.find(q)
@@ -623,33 +687,58 @@ export const removeReview = async (req, res, next) => {
     res.json({ ok: true, status: r.status });
   } catch (e) { next(e); }
 };
+/* ------------ USERS: Export & Stats ------------ */
+import { Parser } from "json2csv";
 
-/* ------------ Complaints ------------ */
-export const listComplaints = async (req, res, next) => {
+/** CSV dışa aktarım */
+export const exportUsers = async (req, res, next) => {
   try {
-    const { restaurantId, userId, status } = req.query;
-    const { limit, cursor } = pageParams(req.query);
-    const q = {};
-    if (restaurantId) q.restaurantId = toObjectId(restaurantId);
-    if (userId)       q.userId       = toObjectId(userId);
-    if (status)       q.status       = status;
-    if (cursor)       q._id          = { $lt: cursor };
+    const users = await User.find({})
+      .select("name email phone role banned riskScore noShowCount createdAt")
+      .lean();
 
-    const rows = await Complaint.find(q).sort({ _id: -1 }).limit(limit + 1).lean();
-    res.json({ items: cut(rows, limit), nextCursor: nextCursor(rows, limit) });
-  } catch (e) { next(e); }
+    const parser = new Parser({
+      fields: [
+        "name",
+        "email",
+        "phone",
+        "role",
+        "banned",
+        "riskScore",
+        "noShowCount",
+        "createdAt",
+      ],
+    });
+    const csv = parser.parse(users);
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=users.csv");
+    res.send(csv);
+  } catch (err) {
+    next(err);
+  }
 };
-export const resolveComplaint = async (req, res, next) => {
+
+/** Toplam kullanıcı, banlı, yüksek riskli, ortalama risk */
+export const userStats = async (req, res, next) => {
   try {
-    const c = await Complaint.findByIdAndUpdate(req.params.id, { $set: { status: "resolved" } }, { new: true }).lean();
-    if (!c) return res.status(404).json({ message: "Complaint not found" });
-    res.json({ ok: true, status: c.status });
-  } catch (e) { next(e); }
-};
-export const dismissComplaint = async (req, res, next) => {
-  try {
-    const c = await Complaint.findByIdAndUpdate(req.params.id, { $set: { status: "dismissed" } }, { new: true }).lean();
-    if (!c) return res.status(404).json({ message: "Complaint not found" });
-    res.json({ ok: true, status: c.status });
-  } catch (e) { next(e); }
+    const total = await User.countDocuments({});
+    const banned = await User.countDocuments({ banned: true });
+    const highRisk = await User.countDocuments({ riskScore: { $gte: 75 } });
+    const avgRiskAgg = await User.aggregate([
+      { $match: { riskScore: { $ne: null } } },
+      { $group: { _id: null, avg: { $avg: "$riskScore" } } },
+    ]);
+    const avgRisk = avgRiskAgg[0]?.avg ?? 0;
+
+    res.json({
+      ok: true,
+      total,
+      banned,
+      highRisk,
+      avgRisk: Number(avgRisk.toFixed(1)),
+    });
+  } catch (e) {
+    next(e);
+  }
 };

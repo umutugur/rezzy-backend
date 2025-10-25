@@ -7,7 +7,8 @@ import {
   adminGetUser,
   adminBanUser,
   adminUnbanUser,
-  adminUpdateUserRole
+  adminUpdateUserRole,
+  adminGetUserRiskHistory
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
 
@@ -26,6 +27,7 @@ export default function AdminUserDetailPage() {
     onSuccess: () => {
       showToast("Kullanıcı banlandı", "success");
       qc.invalidateQueries({ queryKey: ["admin-user", uid] });
+      qc.invalidateQueries({ queryKey: ["admin-user-risk", uid] });
     }
   });
 
@@ -34,6 +36,7 @@ export default function AdminUserDetailPage() {
     onSuccess: () => {
       showToast("Ban kaldırıldı", "success");
       qc.invalidateQueries({ queryKey: ["admin-user", uid] });
+      qc.invalidateQueries({ queryKey: ["admin-user-risk", uid] });
     }
   });
 
@@ -49,6 +52,36 @@ export default function AdminUserDetailPage() {
       qc.invalidateQueries({ queryKey: ["admin-user", uid] });
     }
   });
+
+  // -----------------------------
+  // Risk geçmişi (liste + snapshot)
+  // -----------------------------
+  const [start, setStart] = React.useState<string>("");
+  const [end, setEnd] = React.useState<string>("");
+  const [limit, setLimit] = React.useState<number>(100);
+
+  const riskQ = useQuery({
+    queryKey: ["admin-user-risk", uid, start, end, limit],
+    queryFn: () =>
+      adminGetUserRiskHistory(uid, {
+        start: start || undefined,
+        end: end || undefined,
+        limit
+      }),
+    enabled: !!uid
+  });
+
+  const fmtDateTime = (v?: string) => {
+    if (!v) return "-";
+    try {
+      const d = new Date(v);
+      return d.toLocaleString();
+    } catch {
+      return v;
+    }
+  };
+
+  const riskScore = riskQ.data?.snapshot?.riskScore ?? 0;
 
   return (
     <div className="flex gap-6">
@@ -133,6 +166,184 @@ export default function AdminUserDetailPage() {
               </button>
             </div>
           </div>
+        </Card>
+
+        {/* ----------------------------- */}
+        {/* RISK ÖZETİ                    */}
+        {/* ----------------------------- */}
+        <Card title="Risk Özeti">
+          {riskQ.isLoading ? (
+            "Yükleniyor…"
+          ) : riskQ.error ? (
+            <div className="text-red-600 text-sm">Risk verisi alınamadı.</div>
+          ) : (
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="p-3 rounded-lg border">
+                <div className="text-gray-500 text-sm">Risk Skoru</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-2xl font-semibold">
+                    {riskScore}
+                  </div>
+                  {riskScore >= 75 && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+                      Yüksek risk
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="p-3 rounded-lg border">
+                <div className="text-gray-500 text-sm">No-show Sayısı</div>
+                <div className="text-2xl font-semibold">
+                  {riskQ.data?.snapshot?.noShowCount ?? 0}
+                </div>
+              </div>
+              <div className="p-3 rounded-lg border">
+                <div className="text-gray-500 text-sm">Ban Durumu</div>
+                <div className="text-2xl font-semibold">
+                  {riskQ.data?.snapshot?.banned ? "Banlı" : "Aktif"}
+                </div>
+                {riskQ.data?.snapshot?.bannedUntil && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    {fmtDateTime(riskQ.data.snapshot.bannedUntil)}
+                  </div>
+                )}
+              </div>
+
+              <div className="md:col-span-3 grid md:grid-cols-4 gap-4">
+                <div className="p-3 rounded-lg border">
+                  <div className="text-gray-500 text-sm">İyi Katılım Serisi</div>
+                  <div className="text-xl font-semibold">
+                    {riskQ.data?.snapshot?.consecutiveGoodShows ?? 0}
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg border">
+                  <div className="text-gray-500 text-sm">Pencere (gün)</div>
+                  <div className="text-xl font-semibold">
+                    {riskQ.data?.snapshot?.windowDays ?? 180}
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg border">
+                  <div className="text-gray-500 text-sm">Ağırlık Çarpanı</div>
+                  <div className="text-xl font-semibold">
+                    {riskQ.data?.snapshot?.multiplier ?? 25}
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg border">
+                  <div className="text-gray-500 text-sm">Ban Nedeni</div>
+                  <div className="text-sm">
+                    {riskQ.data?.snapshot?.banReason || "-"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* ----------------------------- */}
+        {/* RISK OLAYLARI                 */}
+        {/* ----------------------------- */}
+        <Card title="Risk Olayları">
+          {/* Toolbar */}
+          <div className="flex flex-wrap items-end gap-3 mb-3">
+            <div className="ml-auto flex items-end gap-2">
+              <div>
+                <label className="block text-xs text-gray-500">Başlangıç</label>
+                <input
+                  type="date"
+                  className="border rounded px-2 py-1"
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500">Bitiş</label>
+                <input
+                  type="date"
+                  className="border rounded px-2 py-1"
+                  value={end}
+                  onChange={(e) => setEnd(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500">Limit</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  className="border rounded px-2 py-1 w-24"
+                  value={limit}
+                  onChange={(e) => setLimit(Number(e.target.value || 100))}
+                />
+              </div>
+            </div>
+          </div>
+
+          {riskQ.isLoading ? (
+            "Yükleniyor…"
+          ) : !riskQ.data?.incidents?.length ? (
+            <div className="text-gray-500 text-sm">Kayıt bulunamadı.</div>
+          ) : (
+            <div className="overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    <th className="py-2 pr-4">Tarih</th>
+                    <th className="py-2 pr-4">Tip</th>
+                    <th className="py-2 pr-4">Ağırlık</th>
+                    <th className="py-2 pr-4">Rezervasyon</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {riskQ.data.incidents.map((it, idx) => {
+                    const tooltip =
+                      it.type === "NO_SHOW"
+                        ? "No-show: +25"
+                        : it.type === "LATE_CANCEL"
+                        ? "Geç iptal: +12.5"
+                        : it.type === "UNDER_ATTEND"
+                        ? "Eksik katılım: oran*25*0.25"
+                        : "İyi katılım: -2.5";
+                    const cls =
+                      it.type === "NO_SHOW"
+                        ? "bg-red-100 text-red-700 border border-red-200"
+                        : it.type === "LATE_CANCEL"
+                        ? "bg-orange-100 text-orange-700 border border-orange-200"
+                        : it.type === "UNDER_ATTEND"
+                        ? "bg-amber-100 text-amber-800 border border-amber-200"
+                        : "bg-green-100 text-green-700 border border-green-200";
+
+                    return (
+                      <tr key={idx} className="border-t">
+                        <td className="py-2 pr-4">{fmtDateTime(it.at)}</td>
+                        <td className="py-2 pr-4">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full ${cls}`}
+                            title={tooltip}
+                          >
+                            {it.type}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-4">{it.weight}</td>
+                        <td className="py-2 pr-4">
+                          {it.reservationId ? (
+                            <a
+                              className="text-blue-600 hover:underline"
+                              href={`/admin/reservations?reservationId=${it.reservationId}`}
+                              title="Rezervasyon listesinde aç"
+                            >
+                              <code className="text-xs">{it.reservationId}</code>
+                            </a>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       </div>
     </div>
