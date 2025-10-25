@@ -742,3 +742,56 @@ export const userStats = async (req, res, next) => {
     next(e);
   }
 };
+/* ------------ Complaints (şikayet yönetimi) ------------ */
+/** Listele (admin panel tablosu için) */
+export const listComplaints = async (req, res, next) => {
+  try {
+    const { status, restaurantId, userId } = req.query;
+    const q = {};
+    if (status) q.status = status;
+    if (restaurantId) q.restaurantId = new mongoose.Types.ObjectId(restaurantId);
+    if (userId) q.userId = new mongoose.Types.ObjectId(userId);
+
+    const rows = await Complaint.find(q)
+      .sort({ createdAt: -1 })
+      .populate("restaurantId", "name")
+      .populate("userId", "name email")
+      .lean();
+
+    res.json({ items: rows });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/** Çözüldü olarak işaretle */
+export const resolveComplaint = async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const c = await Complaint.findByIdAndUpdate(
+      id,
+      { $set: { status: "resolved" } },
+      { new: true }
+    ).lean();
+    if (!c) return res.status(404).json({ message: "Complaint not found" });
+    res.json({ ok: true, status: c.status });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/** Geçersiz / reddedildi olarak işaretle */
+export const dismissComplaint = async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const c = await Complaint.findByIdAndUpdate(
+      id,
+      { $set: { status: "dismissed" } },
+      { new: true }
+    ).lean();
+    if (!c) return res.status(404).json({ message: "Complaint not found" });
+    res.json({ ok: true, status: c.status });
+  } catch (e) {
+    next(e);
+  }
+};
