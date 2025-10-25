@@ -22,6 +22,9 @@ import {
   removeReview,
   exportUsers,
   userStats,
+   listComplaints,
+  resolveComplaint,
+  dismissComplaint
 } from "../controllers/admin.controller.js";
 import { commissionsPreview, commissionsExport } from "../controllers/commission.controller.js";
 
