@@ -21,18 +21,22 @@ r.get("/restaurants/:rid/reservations",      auth(), allow("admin"), admin.listR
 r.patch("/restaurants/:rid/commission",      auth(), allow("admin"), admin.updateRestaurantCommission);
 
 // ---- Users (list + detail + ban/unban + role) ----
-r.get(   "/users",               auth(), allow("admin"), admin.listUsers);
-r.get(   "/users/:uid",          auth(), allow("admin"), admin.getUserDetail);
-r.get(   "/users/:uid/risk",     auth(), allow("admin"), admin.getUserRiskHistory); // ✅ NEW: risk geçmişi
-r.post(  "/users/:uid/ban",      auth(), allow("admin"), admin.banUser);
-r.post(  "/users/:uid/unban",    auth(), allow("admin"), admin.unbanUser);
-// ✅ Kullanıcı istatistikleri ve dışa aktarım
+
+// ✅ ÖNCE statik yollar
 r.get("/users/stats",  auth(), allow("admin"), admin.userStats);
 r.get("/users/export", auth(), allow("admin"), admin.exportUsers);
 
-// ✅ Rol güncelle
-r.post(  "/users/:uid/role",     auth(), allow("admin"), admin.updateUserRole);
+// sonra liste vb.
+r.get("/users",               auth(), allow("admin"), admin.listUsers);
 
+// sonra diğer statik (risk)
+r.get("/users/:uid/risk",     auth(), allow("admin"), admin.getUserRiskHistory);
+
+// en sona dinamik id’li yollar
+r.get("/users/:uid",          auth(), allow("admin"), admin.getUserDetail);
+r.post("/users/:uid/ban",     auth(), allow("admin"), admin.banUser);
+r.post("/users/:uid/unban",   auth(), allow("admin"), admin.unbanUser);
+r.post("/users/:uid/role",    auth(), allow("admin"), admin.updateUserRole);
 // ---- Reservations (global, read-only) ----
 r.get("/reservations",           auth(), allow("admin"), admin.listReservationsAdmin);
 
