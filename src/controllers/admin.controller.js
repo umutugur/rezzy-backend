@@ -689,7 +689,6 @@ export const removeReview = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 /* ------------ USERS: Export & Stats ------------ */
-import { Parser } from "json2csv";
 
 /** CSV dışa aktarım */
 export const exportUsers = async (req, res, next) => {
