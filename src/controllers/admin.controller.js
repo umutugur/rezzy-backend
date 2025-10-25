@@ -5,7 +5,8 @@ import User from "../models/User.js";
 import Review from "../models/Review.js";
 import Complaint from "../models/Complaint.js";
 import { ensureRestaurantForOwner } from "../services/restaurantOwner.service.js";
-
+// EN ÜSTE EKLE (diğer importların yanına)
+import { Parser } from "json2csv";
 /* ------------ helpers ------------ */
 function toObjectId(id) {
   try { return new mongoose.Types.ObjectId(id); } catch { return null; }
