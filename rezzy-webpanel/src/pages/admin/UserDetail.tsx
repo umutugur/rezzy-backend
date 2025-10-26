@@ -29,10 +29,20 @@ export default function AdminUserDetailPage() {
     enabled: !!uid
   });
 
+  // ---- Ban form state
+  const [banReason, setBanReason] = React.useState("");
+  const [banUntil, setBanUntil] = React.useState(""); // YYYY-MM-DD
+
   const banMut = useMutation({
-    mutationFn: () => adminBanUser(uid),
+    mutationFn: () =>
+      adminBanUser(uid, {
+        reason: banReason.trim(),
+        bannedUntil: banUntil ? new Date(banUntil).toISOString() : undefined
+      }),
     onSuccess: () => {
       showToast("Kullanıcı banlandı", "success");
+      setBanReason("");
+      setBanUntil("");
       qc.invalidateQueries({ queryKey: ["admin-user", uid] });
       qc.invalidateQueries({ queryKey: ["admin-user-risk", uid] });
     }
@@ -47,7 +57,6 @@ export default function AdminUserDetailPage() {
     }
   });
 
-  // adminGetUser hem {user, kpi} hem de düz user dönebilir; ikisini de destekle
   const user = (uQ.data as any)?.user ?? uQ.data;
 
   const [role, setRole] = React.useState("customer");
@@ -64,7 +73,7 @@ export default function AdminUserDetailPage() {
   });
 
   // -----------------------------
-  // Risk geçmişi (liste + snapshot)
+  // Risk geçmişi
   // -----------------------------
   const [start, setStart] = React.useState<string>("");
   const [end, setEnd] = React.useState<string>("");
@@ -139,50 +148,76 @@ export default function AdminUserDetailPage() {
         </Card>
 
         <Card title="İşlemler">
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              className="px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-black text-white disabled:opacity-60"
-              onClick={() => banMut.mutate()}
-              disabled={banMut.isPending || user?.banned || uQ.isLoading}
-            >
-              Banla
-            </button>
-
-            <button
-              className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
-              onClick={() => unbanMut.mutate()}
-              disabled={unbanMut.isPending || !user?.banned || uQ.isLoading}
-            >
-              Banı Kaldır
-            </button>
-
-            <div className="ml-4 flex items-end gap-2">
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Rol</label>
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="border rounded-lg px-3 py-2"
-                >
-                  <option value="customer">customer</option>
-                  <option value="restaurant">restaurant</option>
-                  <option value="admin">admin</option>
-                </select>
+          <div className="flex flex-col gap-3">
+            {/* Ban formu */}
+            <div className="grid md:grid-cols-3 gap-3">
+              <div className="md:col-span-2">
+                <label className="block text-sm text-gray-600 mb-1">Ban Sebebi *</label>
+                <input
+                  type="text"
+                  className="w-full border rounded-lg px-3 py-2"
+                  placeholder="Örn: Son 3 rezervasyonda no-show"
+                  value={banReason}
+                  onChange={(e) => setBanReason(e.target.value)}
+                />
               </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Bitiş (opsiyonel)</label>
+                <input
+                  type="date"
+                  className="w-full border rounded-lg px-3 py-2"
+                  value={banUntil}
+                  onChange={(e) => setBanUntil(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
               <button
-                className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-60"
-                onClick={() => roleMut.mutate()}
-                disabled={roleMut.isPending || uQ.isLoading}
+                className="px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-black text-white disabled:opacity-60"
+                onClick={() => banMut.mutate()}
+                disabled={
+                  banMut.isPending || uQ.isLoading || user?.banned || banReason.trim().length === 0
+                }
+                title={banReason.trim() ? "" : "Sebep gerekli"}
               >
-                Rolü Kaydet
+                Banla
               </button>
+
+              <button
+                className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
+                onClick={() => unbanMut.mutate()}
+                disabled={unbanMut.isPending || uQ.isLoading || !user?.banned}
+              >
+                Banı Kaldır
+              </button>
+
+              <div className="ml-auto flex items-end gap-2">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Rol</label>
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    className="border rounded-lg px-3 py-2"
+                  >
+                    <option value="customer">customer</option>
+                    <option value="restaurant">restaurant</option>
+                    <option value="admin">admin</option>
+                  </select>
+                </div>
+                <button
+                  className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-60"
+                  onClick={() => roleMut.mutate()}
+                  disabled={roleMut.isPending || uQ.isLoading}
+                >
+                  Rolü Kaydet
+                </button>
+              </div>
             </div>
           </div>
         </Card>
 
-        {/* ----------------------------- */}
-        {/* RISK ÖZETİ                    */}
-        {/* ----------------------------- */}
+        {/* RİSK ÖZETİ */}
         <Card title="Risk Özeti">
           {riskQ.isLoading ? (
             "Yükleniyor…"
@@ -249,11 +284,8 @@ export default function AdminUserDetailPage() {
           )}
         </Card>
 
-        {/* ----------------------------- */}
-        {/* RISK OLAYLARI                 */}
-        {/* ----------------------------- */}
+        {/* RİSK OLAYLARI */}
         <Card title="Risk Olayları">
-          {/* Toolbar */}
           <div className="flex flex-wrap items-end gap-3 mb-3">
             <div className="ml-auto flex items-end gap-2">
               <div>

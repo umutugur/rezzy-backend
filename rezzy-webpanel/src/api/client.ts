@@ -107,9 +107,12 @@ export async function adminGetUser(uid: string) {
   const { data } = await api.get(`/admin/users/${uid}`);
   return data?.user ?? data;
 }
-export async function adminBanUser(uid: string) {
-  const { data } = await api.post(`/admin/users/${uid}/ban`);
-  return data;
+export async function adminBanUser(
+  uid: string,
+  input: { reason: string; bannedUntil?: string } // ISO tarih (opsiyonel)
+) {
+  const { data } = await api.post(`/admin/users/${uid}/ban`, input);
+  return data as { ok: boolean; user: { _id: string; banned: boolean } };
 }
 export async function adminUnbanUser(uid: string) {
   const { data } = await api.post(`/admin/users/${uid}/unban`);
