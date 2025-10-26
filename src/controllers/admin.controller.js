@@ -419,7 +419,7 @@ export const getUserDetail = async (req, res, next) => {
     if (!uid) return res.status(400).json({ message: "Invalid user id" });
 
     const user = await User.findById(uid)
-      .select("_id name email role restaurantId banned banReason bannedUntil createdAt")
+      .select("_id name email phone role restaurantId banned banReason bannedUntil createdAt")
       .lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 

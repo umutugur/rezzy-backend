@@ -105,7 +105,7 @@ export async function adminListReservationsByRestaurant(
 // =========================
 export async function adminGetUser(uid: string) {
   const { data } = await api.get(`/admin/users/${uid}`);
-  return data;
+  return data?.user ?? data;
 }
 export async function adminBanUser(uid: string) {
   const { data } = await api.post(`/admin/users/${uid}/ban`);

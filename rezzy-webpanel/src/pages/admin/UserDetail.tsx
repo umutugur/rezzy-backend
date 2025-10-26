@@ -12,6 +12,13 @@ import {
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
 
+const TYPE_LABEL: Record<string, string> = {
+  NO_SHOW: "Gelmedi",
+  LATE_CANCEL: "Geç iptal",
+  UNDER_ATTEND: "Eksik katılım",
+  GOOD_ATTEND: "İyi katılım",
+};
+
 export default function AdminUserDetailPage() {
   const { uid = "" } = useParams();
   const qc = useQueryClient();
@@ -40,10 +47,13 @@ export default function AdminUserDetailPage() {
     }
   });
 
+  // adminGetUser hem {user, kpi} hem de düz user dönebilir; ikisini de destekle
+  const user = (uQ.data as any)?.user ?? uQ.data;
+
   const [role, setRole] = React.useState("customer");
   React.useEffect(() => {
-    if (uQ.data?.role) setRole(uQ.data.role);
-  }, [uQ.data?.role]);
+    if (user?.role) setRole(user.role);
+  }, [user?.role]);
 
   const roleMut = useMutation({
     mutationFn: () => adminUpdateUserRole(uid, role as any),
@@ -77,7 +87,7 @@ export default function AdminUserDetailPage() {
       const d = new Date(v);
       return d.toLocaleString();
     } catch {
-      return v;
+      return v!;
     }
   };
 
@@ -100,27 +110,29 @@ export default function AdminUserDetailPage() {
         <Card title="Bilgiler">
           {uQ.isLoading ? (
             "Yükleniyor…"
+          ) : uQ.error ? (
+            <div className="text-red-600 text-sm">Kullanıcı bilgileri alınamadı.</div>
           ) : (
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <span className="text-gray-500 text-sm">Ad</span>
-                <div>{uQ.data?.name || "-"}</div>
+                <div>{user?.name || "-"}</div>
               </div>
               <div>
                 <span className="text-gray-500 text-sm">E-posta</span>
-                <div>{uQ.data?.email || "-"}</div>
+                <div>{user?.email || "-"}</div>
               </div>
               <div>
                 <span className="text-gray-500 text-sm">Telefon</span>
-                <div>{uQ.data?.phone || "-"}</div>
+                <div>{user?.phone || "-"}</div>
               </div>
               <div>
                 <span className="text-gray-500 text-sm">Rol</span>
-                <div>{uQ.data?.role || "-"}</div>
+                <div>{user?.role || "-"}</div>
               </div>
               <div>
                 <span className="text-gray-500 text-sm">Durum</span>
-                <div>{uQ.data?.banned ? "Banlı" : "Aktif"}</div>
+                <div>{user?.banned ? "Banlı" : "Aktif"}</div>
               </div>
             </div>
           )}
@@ -131,7 +143,7 @@ export default function AdminUserDetailPage() {
             <button
               className="px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-black text-white disabled:opacity-60"
               onClick={() => banMut.mutate()}
-              disabled={banMut.isPending || uQ.data?.banned}
+              disabled={banMut.isPending || user?.banned || uQ.isLoading}
             >
               Banla
             </button>
@@ -139,7 +151,7 @@ export default function AdminUserDetailPage() {
             <button
               className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
               onClick={() => unbanMut.mutate()}
-              disabled={unbanMut.isPending || !uQ.data?.banned}
+              disabled={unbanMut.isPending || !user?.banned || uQ.isLoading}
             >
               Banı Kaldır
             </button>
@@ -160,7 +172,7 @@ export default function AdminUserDetailPage() {
               <button
                 className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-60"
                 onClick={() => roleMut.mutate()}
-                disabled={roleMut.isPending}
+                disabled={roleMut.isPending || uQ.isLoading}
               >
                 Rolü Kaydet
               </button>
@@ -181,9 +193,7 @@ export default function AdminUserDetailPage() {
               <div className="p-3 rounded-lg border">
                 <div className="text-gray-500 text-sm">Risk Skoru</div>
                 <div className="flex items-center gap-2">
-                  <div className="text-2xl font-semibold">
-                    {riskScore}
-                  </div>
+                  <div className="text-2xl font-semibold">{riskScore}</div>
                   {riskScore >= 75 && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
                       Yüksek risk
@@ -320,7 +330,7 @@ export default function AdminUserDetailPage() {
                             className={`text-xs px-2 py-0.5 rounded-full ${cls}`}
                             title={tooltip}
                           >
-                            {it.type}
+                            {TYPE_LABEL[it.type] ?? it.type}
                           </span>
                         </td>
                         <td className="py-2 pr-4">{it.weight}</td>
@@ -331,7 +341,8 @@ export default function AdminUserDetailPage() {
                               href={`/admin/reservations?reservationId=${it.reservationId}`}
                               title="Rezervasyon listesinde aç"
                             >
-                              <code className="text-xs">{it.reservationId}</code>
+                              Rezervasyonu aç{" "}
+                              <code className="text-xs ml-1">{it.reservationId}</code>
                             </a>
                           ) : (
                             "-"
