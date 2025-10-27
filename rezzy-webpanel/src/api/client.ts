@@ -103,7 +103,16 @@ export async function adminSearchUsers(query: string): Promise<Array<{ _id: stri
   const items = Array.isArray(data) ? data : data?.items || [];
   return items;
 }
-
+// ✅ Admin — Create user (minimal; role backend’de default "customer")
+export async function adminCreateUser(input: {
+  name: string;
+  email?: string;
+  phone?: string;
+  password?: string; // opsiyonel; boşsa backend random üretir
+}) {
+  const { data } = await api.post("/admin/users", input);
+  return data; // { ok, user }
+}
 // ✅ Restoran oluştur
 export async function adminCreateRestaurant(input: {
   ownerId: string;

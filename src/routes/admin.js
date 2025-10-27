@@ -25,7 +25,8 @@ import {
   listComplaints,
   resolveComplaint,
   dismissComplaint,
-  createRestaurant, // ✅ YENİ
+  createRestaurant, // ✅
+  createUser,       // ✅ YENİ
 } from "../controllers/admin.controller.js";
 import { commissionsPreview, commissionsExport } from "../controllers/commission.controller.js";
 
@@ -38,7 +39,7 @@ r.get("/kpi/users/:uid", auth(), allow("admin"), kpiByUser);
 
 // ---- Restaurants ----
 r.get("/restaurants", auth(), allow("admin"), listRestaurants);
-r.post("/restaurants", auth(), allow("admin"), createRestaurant); // ✅ YENİ
+r.post("/restaurants", auth(), allow("admin"), createRestaurant);
 r.get("/restaurants/:rid", auth(), allow("admin"), getRestaurantDetail);
 r.get("/restaurants/:rid/reservations", auth(), allow("admin"), listReservationsByRestaurantAdmin);
 r.patch("/restaurants/:rid/commission", auth(), allow("admin"), updateRestaurantCommission);
@@ -47,6 +48,7 @@ r.patch("/restaurants/:rid/commission", auth(), allow("admin"), updateRestaurant
 r.get("/users/stats", auth(), allow("admin"), userStats);
 r.get("/users/export", auth(), allow("admin"), exportUsers);
 r.get("/users", auth(), allow("admin"), listUsers);
+r.post("/users", auth(), allow("admin"), createUser); // ✅ YENİ
 r.get("/users/:uid/risk", auth(), allow("admin"), getUserRiskHistory);
 r.get("/users/:uid", auth(), allow("admin"), getUserDetail);
 r.post("/users/:uid/ban", auth(), allow("admin"), banUser);

@@ -290,7 +290,62 @@ export const listRestaurants = async (req, res, next) => {
     res.json({ items: cut(rows, limit), nextCursor: nextCursor(rows, limit) });
   } catch (e) { next(e); }
 };
+// -------------------------
+// ✅ NEW: Admin — Create User
+// -------------------------
+export const createUser = async (req, res, next) => {
+  try {
+    let { name, email, phone, password } = req.body || {};
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ message: "name is required" });
+    }
+    name = String(name).trim();
+    if (email) email = String(email).trim().toLowerCase();
+    if (phone) phone = String(phone).trim();
+    if (password) password = String(password).trim();
 
+    if (!email && !phone) {
+      return res.status(400).json({ message: "email or phone is required" });
+    }
+
+    // Benzersizlik kontrolleri
+    if (email) {
+      const ex = await User.findOne({ email }).select("_id").lean();
+      if (ex) return res.status(409).json({ message: "Email already in use" });
+    }
+    if (phone) {
+      const ex2 = await User.findOne({ phone }).select("_id").lean();
+      if (ex2) return res.status(409).json({ message: "Phone already in use" });
+    }
+
+    // Şifre yoksa güvenli random üret
+    if (!password) {
+      // basit bir random; dilersen crypto ile daha güçlü üret
+      password = Math.random().toString(36).slice(-10);
+    }
+
+    const user = await User.create({
+      name,
+      email: email || undefined,
+      phone: phone || undefined,
+      password,
+      role: "customer", // 🔒 B akışına uygun: restoran oluşturulunca role -> restaurant yapılacak
+      providers: email ? [{ name: "password", sub: email }] : []
+    });
+
+    res.status(201).json({
+      ok: true,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email || null,
+        phone: user.phone || null,
+        role: user.role,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (e) { next(e); }};
+  
 export const createRestaurant = async (req, res, next) => {
   try {
     let {
