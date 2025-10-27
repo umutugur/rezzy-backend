@@ -11,15 +11,24 @@ cron.schedule("*/10 * * * *", async () => {
   const to = now.toDate();
 
   const resvs = await Reservation.find({
-    status: { $in: ["pending","confirmed"] },
+    status: { $in: ["confirmed"] },
     dateTimeUTC: { $lte: to, $gte: from }
   }).populate("restaurantId");
 
   let marked = 0;
 
   for (const r of resvs) {
-    const grace = r.restaurantId?.graceMinutes ?? 15;
-    const deadline = dayjs(r.dateTimeUTC).add(grace, "minute");
+     // Yeni mantık: check-in penceresinin SONU kadar bekle.
+    const afterWin = Number(r.restaurantId?.checkinWindowAfterMinutes);
+    const legacyGrace = Number(r.restaurantId?.graceMinutes);
+    const bufferMin =
+      Number.isFinite(afterWin) && afterWin > 0
+        ? afterWin
+        : Number.isFinite(legacyGrace) && legacyGrace > 0
+        ? legacyGrace
+        : 90; // güvenli varsayılan
+
+    const deadline = dayjs(r.dateTimeUTC).add(bufferMin, "minute");
     if (now.isAfter(deadline)) {
       r.status = "no_show";
       r.noShowAt = new Date();
