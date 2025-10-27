@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
@@ -24,6 +24,7 @@ export default function AdminRestaurantsPage() {
     queryKey: ["admin-restaurants"],
     queryFn: fetchRestaurants
   });
+  const nav = useNavigate();
 
   return (
     <div className="flex gap-6">
@@ -37,7 +38,16 @@ export default function AdminRestaurantsPage() {
         ]}
       />
       <div className="flex-1 space-y-6">
-        <h2 className="text-lg font-semibold">Restoranlar</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Restoranlar</h2>
+          <button
+            onClick={() => nav("/admin/restaurants/new")}
+            className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm"
+          >
+            Restoran Ekle
+          </button>
+        </div>
+
         {isLoading && <div>Yükleniyor…</div>}
         {error && <div className="text-red-600 text-sm">Liste çekilemedi</div>}
 

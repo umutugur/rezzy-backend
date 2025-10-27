@@ -22,9 +22,10 @@ import {
   removeReview,
   exportUsers,
   userStats,
-   listComplaints,
+  listComplaints,
   resolveComplaint,
-  dismissComplaint
+  dismissComplaint,
+  createRestaurant, // ✅ YENİ
 } from "../controllers/admin.controller.js";
 import { commissionsPreview, commissionsExport } from "../controllers/commission.controller.js";
 
@@ -37,10 +38,9 @@ r.get("/kpi/users/:uid", auth(), allow("admin"), kpiByUser);
 
 // ---- Restaurants ----
 r.get("/restaurants", auth(), allow("admin"), listRestaurants);
+r.post("/restaurants", auth(), allow("admin"), createRestaurant); // ✅ YENİ
 r.get("/restaurants/:rid", auth(), allow("admin"), getRestaurantDetail);
 r.get("/restaurants/:rid/reservations", auth(), allow("admin"), listReservationsByRestaurantAdmin);
-
-// ✅ Komisyon oranı güncelle
 r.patch("/restaurants/:rid/commission", auth(), allow("admin"), updateRestaurantCommission);
 
 // ---- Users ----

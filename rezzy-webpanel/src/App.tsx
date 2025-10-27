@@ -13,6 +13,7 @@ import AdminModerationPage from "./pages/admin/Moderation";
 import AdminUserDetailPage from "./pages/admin/UserDetail";
 import AdminNotificationsPage from "./pages/admin/Notifications";
 import AdminCommissionsPage from "./pages/admin/commissions";
+import AdminRestaurantCreatePage from "./pages/admin/RestaurantCreate"; // ✅ YENİ
 
 import RestaurantDashboardPage from "./pages/restaurant/Dashboard";
 import RestaurantReservationsPage from "./pages/restaurant/Reservations";
@@ -169,12 +170,12 @@ export default function App() {
         <Route path="/admin" element={<Shell><AdminDashboardPage /></Shell>} />
         <Route path="/admin/notifications" element={<Shell><AdminNotificationsPage /></Shell>} />
         <Route path="/admin/restaurants" element={<Shell><AdminRestaurantsPage /></Shell>} />
+        <Route path="/admin/restaurants/new" element={<Shell><AdminRestaurantCreatePage /></Shell>} /> {/* ✅ YENİ */}
         <Route path="/admin/restaurants/:rid" element={<Shell><AdminRestaurantDetailPage /></Shell>} />
         <Route path="/admin/users" element={<Shell><AdminUsersPage /></Shell>} />
         <Route path="/admin/users/:uid" element={<Shell><AdminUserDetailPage /></Shell>} />
         <Route path="/admin/reservations" element={<Shell><AdminReservationsPage /></Shell>} />
         <Route path="/admin/moderation" element={<Shell><AdminModerationPage /></Shell>} />
-        {/* ✅ DOĞRU ROTA */}
         <Route path="/admin/commissions" element={<Shell><AdminCommissionsPage /></Shell>} />
       </Route>
 

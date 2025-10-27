@@ -86,10 +86,7 @@ export async function adminGetRestaurant(rid: string) {
   return data;
 }
 export async function adminUpdateRestaurantCommission(rid: string, commissionRate: number) {
-  // İster 5 (yüzde) ister 0.05 (oran) verin; backend normalize ediyor
-  const { data } = await api.patch(`/admin/restaurants/${rid}/commission`, {
-    commissionRate
-  });
+  const { data } = await api.patch(`/admin/restaurants/${rid}/commission`, { commissionRate });
   return data;
 }
 export async function adminListReservationsByRestaurant(
@@ -99,6 +96,35 @@ export async function adminListReservationsByRestaurant(
   const { data } = await api.get(`/restaurants/${rid}/reservations`, { params });
   return data;
 }
+
+// ✅ Kullanıcı arama (owner seçimi için)
+export async function adminSearchUsers(query: string): Promise<Array<{ _id: string; name?: string; email?: string; role?: string }>> {
+  const { data } = await api.get("/admin/users", { params: { query, limit: 20 } });
+  const items = Array.isArray(data) ? data : data?.items || [];
+  return items;
+}
+
+// ✅ Restoran oluştur
+export async function adminCreateRestaurant(input: {
+  ownerId: string;
+  name: string;
+  city?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  commissionRate?: number; // yüzde verilebilir; backend normalize eder
+  depositRequired?: boolean;
+  depositAmount?: number;
+  checkinWindowBeforeMinutes?: number;
+  checkinWindowAfterMinutes?: number;
+  underattendanceThresholdPercent?: number;
+}) {
+  const { data } = await api.post("/admin/restaurants", input);
+  return data;
+}
+
+// ... aşağıdaki Users / Moderation / Restaurant tarafı / Commissions kodların tamamı senin gönderdiğin haliyle kalsın ...
+
 
 // =========================
 /** ADMIN — Users */

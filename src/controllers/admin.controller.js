@@ -270,6 +270,7 @@ export const kpiByUser = async (req, res, next) => {
 };
 
 /* ------------ Restaurants ------------ */
+/* ------------ Restaurants ------------ */
 export const listRestaurants = async (req, res, next) => {
   try {
     const { query, city } = req.query;
@@ -283,23 +284,96 @@ export const listRestaurants = async (req, res, next) => {
     const rows = await Restaurant.find(q)
       .sort({ _id: -1 })
       .limit(limit + 1)
-      .select("_id name city owner commissionRate")
+      .select("_id name city owner commissionRate address phone email")
       .lean();
 
     res.json({ items: cut(rows, limit), nextCursor: nextCursor(rows, limit) });
   } catch (e) { next(e); }
 };
 
+export const createRestaurant = async (req, res, next) => {
+  try {
+    let {
+      ownerId,
+      name,
+      city,
+      address,
+      phone,
+      email,
+      commissionRate,
+      depositRequired,
+      depositAmount,
+      checkinWindowBeforeMinutes,
+      checkinWindowAfterMinutes,
+      underattendanceThresholdPercent,
+    } = req.body || {};
+
+    if (!ownerId || !String(ownerId).trim()) {
+      return res.status(400).json({ message: "ownerId is required" });
+    }
+    const owner = toObjectId(ownerId);
+    if (!owner) return res.status(400).json({ message: "Invalid ownerId" });
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ message: "name is required" });
+    }
+
+    // Komisyon normalizasyonu: 5 -> 0.05
+    if (commissionRate != null) {
+      commissionRate = Number(commissionRate);
+      if (Number.isNaN(commissionRate)) return res.status(400).json({ message: "Invalid commissionRate" });
+      if (commissionRate > 1) commissionRate = commissionRate / 100;
+      commissionRate = Math.max(0, Math.min(1, commissionRate));
+    }
+
+    // Owner var mı?
+    const u = await User.findById(owner).lean();
+    if (!u) return res.status(404).json({ message: "Owner user not found" });
+
+    const doc = await Restaurant.create({
+      owner,
+      name: String(name).trim(),
+      city: city || undefined,
+      address: address || undefined,
+      phone: phone || undefined,
+      email: email || undefined,
+      commissionRate: commissionRate != null ? commissionRate : undefined,
+      depositRequired: !!depositRequired,
+      depositAmount: depositAmount != null ? Number(depositAmount) : undefined,
+      checkinWindowBeforeMinutes: checkinWindowBeforeMinutes != null ? Number(checkinWindowBeforeMinutes) : undefined,
+      checkinWindowAfterMinutes:  checkinWindowAfterMinutes  != null ? Number(checkinWindowAfterMinutes)  : undefined,
+      underattendanceThresholdPercent: underattendanceThresholdPercent != null ? Number(underattendanceThresholdPercent) : undefined,
+    });
+
+    // Owner'ı restoran sahibi yap ve ilişkilendir
+    await User.findByIdAndUpdate(owner, {
+      $set: {
+        role: "restaurant",
+        restaurantId: doc._id,
+      }
+    });
+
+    res.status(201).json({ ok: true, restaurant: {
+      _id: doc._id,
+      name: doc.name,
+      city: doc.city,
+      address: doc.address,
+      phone: doc.phone,
+      email: doc.email,
+      commissionRate: doc.commissionRate,
+    }});
+  } catch (e) { next(e); }
+};
+
 export const getRestaurantDetail = async (req, res, next) => {
   try {
     const r = await Restaurant.findById(req.params.rid)
-      .select("_id name city address owner settings depositAmount depositRate depositType commissionRate")
+      .select("_id name city address owner settings depositAmount depositRate depositType commissionRate phone email")
       .lean();
     if (!r) return res.status(404).json({ message: "Restaurant not found" });
     res.json(r);
   } catch (e) { next(e); }
 };
-
 export const listReservationsByRestaurantAdmin = async (req, res, next) => {
   try {
     const { status, start, end } = req.query;
