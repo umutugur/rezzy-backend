@@ -3,18 +3,20 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
-import { adminCreateRestaurant, adminSearchUsers } from "../../api/client";
+import { adminCreateRestaurant, adminSearchUsers, adminCreateUser } from "../../api/client";
 import { showToast } from "../../ui/Toast";
+import Modal from "../../components/Modal";
 
 type UserLite = { _id: string; name?: string; email?: string; role?: string };
 
 export default function AdminRestaurantCreatePage() {
   const nav = useNavigate();
 
-  // Form state
+  // Owner seçimi
   const [ownerQuery, setOwnerQuery] = React.useState("");
   const [owner, setOwner] = React.useState<UserLite | null>(null);
 
+  // Restoran formu
   const [name, setName] = React.useState("");
   const [city, setCity] = React.useState("");
   const [address, setAddress] = React.useState("");
@@ -26,6 +28,13 @@ export default function AdminRestaurantCreatePage() {
   const [checkinBefore, setCheckinBefore] = React.useState<string>("15");
   const [checkinAfter, setCheckinAfter] = React.useState<string>("90");
   const [uaThreshold, setUaThreshold] = React.useState<string>("80");
+
+  // Yeni kullanıcı modalı
+  const [userModalOpen, setUserModalOpen] = React.useState(false);
+  const [newName, setNewName] = React.useState("");
+  const [newEmail, setNewEmail] = React.useState("");
+  const [newPhone, setNewPhone] = React.useState("");
+  const [newPassword, setNewPassword] = React.useState("");
 
   const searchQ = useQuery({
     queryKey: ["admin-user-search", ownerQuery],
@@ -42,7 +51,7 @@ export default function AdminRestaurantCreatePage() {
         address: address || undefined,
         phone: phone || undefined,
         email: email || undefined,
-        commissionRate: Number(commissionPct), // yüzde veya oran, backend normalize ediyor
+        commissionRate: Number(commissionPct),
         depositRequired,
         depositAmount: Number(depositAmount || "0"),
         checkinWindowBeforeMinutes: Number(checkinBefore || "0"),
@@ -58,8 +67,30 @@ export default function AdminRestaurantCreatePage() {
     onError: () => showToast("Restoran oluşturulamadı", "error")
   });
 
-  const canSubmit =
-    !!owner && name.trim().length > 0;
+  const createUserMut = useMutation({
+    mutationFn: () =>
+      adminCreateUser({
+        name: newName.trim(),
+        email: newEmail.trim() || undefined,
+        phone: newPhone.trim() || undefined,
+        password: newPassword || undefined, // opsiyonel
+      }),
+    onSuccess: (u) => {
+      showToast("Kullanıcı oluşturuldu", "success");
+      // Owner olarak seç
+      setOwner({ _id: u._id, name: u.name, email: u.email, role: u.role });
+      setOwnerQuery(u.email || u.name || "");
+      setUserModalOpen(false);
+      // Modal formunu temizle
+      setNewName(""); setNewEmail(""); setNewPhone(""); setNewPassword("");
+    },
+    onError: () => showToast("Kullanıcı oluşturulamadı", "error"),
+  });
+
+  const canSubmit = !!owner && name.trim().length > 0;
+  const canCreateUser =
+    newName.trim().length > 0 &&
+    (!!newEmail.trim() || !!newPhone.trim()); // en az e-posta veya telefon
 
   return (
     <div className="flex gap-6">
@@ -87,7 +118,16 @@ export default function AdminRestaurantCreatePage() {
         <Card title="Sahip (Owner) Seçimi">
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Kullanıcı Ara</label>
+              <div className="flex items-end gap-2 mb-1">
+                <label className="block text-sm text-gray-600">Kullanıcı Ara</label>
+                <button
+                  type="button"
+                  onClick={() => setUserModalOpen(true)}
+                  className="ml-auto px-2.5 py-1.5 text-xs rounded-md bg-brand-600 text-white hover:bg-brand-700"
+                >
+                  Yeni Kullanıcı
+                </button>
+              </div>
               <input
                 type="text"
                 value={ownerQuery}
@@ -115,6 +155,7 @@ export default function AdminRestaurantCreatePage() {
                 </div>
               )}
             </div>
+
             <div>
               <label className="block text-sm text-gray-600 mb-1">Seçilen Sahip</label>
               <div className="border rounded-lg px-3 py-2 min-h-[42px]">
@@ -199,6 +240,39 @@ export default function AdminRestaurantCreatePage() {
           <span className="text-sm text-gray-500">* zorunlu alan</span>
         </div>
       </div>
+
+      {/* Yeni Kullanıcı Modalı */}
+      <Modal open={userModalOpen} onClose={()=>setUserModalOpen(false)} title="Yeni Kullanıcı Oluştur">
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Ad *</label>
+            <input value={newName} onChange={(e)=>setNewName(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">E-posta</label>
+            <input type="email" value={newEmail} onChange={(e)=>setNewEmail(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Telefon</label>
+            <input value={newPhone} onChange={(e)=>setNewPhone(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Şifre (opsiyonel)</label>
+            <input type="password" value={newPassword} onChange={(e)=>setNewPassword(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={()=>setUserModalOpen(false)}>Vazgeç</button>
+            <button
+              className="px-3 py-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
+              disabled={!canCreateUser || createUserMut.isPending}
+              onClick={()=>createUserMut.mutate()}
+            >
+              {createUserMut.isPending ? "Oluşturuluyor…" : "Oluştur"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
