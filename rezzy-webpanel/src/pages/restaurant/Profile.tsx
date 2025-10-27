@@ -25,6 +25,8 @@ type Policies = {
   depositRequired: boolean;
   depositAmount: number;
   blackoutDates: string[];
+  checkinWindowBeforeMinutes: number;
+  checkinWindowAfterMinutes: number;
 };
 type Restaurant = {
   _id: string;
@@ -51,6 +53,8 @@ type Restaurant = {
   depositRequired?: boolean;
   depositAmount?: number;
   blackoutDates?: string[];
+  checkinWindowBeforeMinutes: number;
+  checkinWindowAfterMinutes: number;
 };
 
 const DAYS = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"] as const;
@@ -68,6 +72,8 @@ const DEFAULT_POLICIES: Policies = {
   depositRequired: false,
   depositAmount: 0,
   blackoutDates: [],
+  checkinWindowBeforeMinutes: 15,
+  checkinWindowAfterMinutes: 90,
 };
 
 type TabKey = "general" | "photos" | "menus" | "tables" | "hours" | "policies";
@@ -131,6 +137,14 @@ export default function RestaurantProfilePage() {
       depositRequired: data.depositRequired ?? DEFAULT_POLICIES.depositRequired,
       depositAmount: data.depositAmount ?? DEFAULT_POLICIES.depositAmount,
       blackoutDates: Array.isArray(data.blackoutDates) ? data.blackoutDates : [],
+      checkinWindowBeforeMinutes:
+      typeof data.checkinWindowBeforeMinutes === "number"
+        ? data.checkinWindowBeforeMinutes
+        : DEFAULT_POLICIES.checkinWindowBeforeMinutes,
+    checkinWindowAfterMinutes:
+      typeof data.checkinWindowAfterMinutes === "number"
+        ? data.checkinWindowAfterMinutes
+        : DEFAULT_POLICIES.checkinWindowAfterMinutes,
     });
   }, [data]);
 
@@ -212,6 +226,8 @@ export default function RestaurantProfilePage() {
         depositRequired: !!policies.depositRequired,
         depositAmount: Math.max(0, policies.depositAmount),
         blackoutDates: policies.blackoutDates,
+         checkinWindowBeforeMinutes: Math.max(0, policies.checkinWindowBeforeMinutes),
+      checkinWindowAfterMinutes: Math.max(0, policies.checkinWindowAfterMinutes),
       };
       await api.put(`/restaurants/${rid}/policies`, payload);
     },
@@ -678,7 +694,49 @@ export default function RestaurantProfilePage() {
                 />
               </div>
             </div>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label className="block text-sm text-gray-600 mb-1">
+          Check-in Penceresi (ÖNCE, dk)
+        </label>
+        <input
+          type="number"
+          min={0}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2"
+          value={String(policies.checkinWindowBeforeMinutes)}
+          onChange={(e) =>
+            setPolicies((p) => ({
+              ...p,
+              checkinWindowBeforeMinutes: Math.max(0, Number(e.target.value) || 0),
+            }))
+          }
+        />
+        <div className="text-xs text-gray-500 mt-1">
+          Rezervasyon saatinden <b>önce</b> kaç dakika içinde giriş kabul edilir.
+        </div>
+      </div>
 
+      <div>
+        <label className="block text-sm text-gray-600 mb-1">
+          Check-in Penceresi (SONRA, dk)
+        </label>
+        <input
+          type="number"
+          min={0}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2"
+          value={String(policies.checkinWindowAfterMinutes)}
+          onChange={(e) =>
+            setPolicies((p) => ({
+              ...p,
+              checkinWindowAfterMinutes: Math.max(0, Number(e.target.value) || 0),
+            }))
+          }
+        />
+        <div className="text-xs text-gray-500 mt-1">
+          Rezervasyon saatinden <b>sonra</b> kaç dakika içinde giriş kabul edilir.
+        </div>
+      </div>
+    </div>
             <div className="mt-4 flex items-center gap-4">
               <label className="flex items-center gap-2 text-sm">
                 <span className="text-gray-600">Depozito gerekli</span>

@@ -279,6 +279,8 @@ export const updatePolicies = async (req, res, next) => {
       depositRequired,
       depositAmount,
       blackoutDates,
+      checkinWindowBeforeMinutes,
+      checkinWindowAfterMinutes,
     } = req.body;
     if (req.user.role !== "admin") {
       const rest = await Restaurant.findById(id).select("owner");
@@ -293,6 +295,10 @@ export const updatePolicies = async (req, res, next) => {
     if (typeof depositRequired !== "undefined") $set.depositRequired = depositRequired;
     if (typeof depositAmount !== "undefined") $set.depositAmount = depositAmount;
     if (typeof blackoutDates !== "undefined") $set.blackoutDates = blackoutDates;
+    if (typeof checkinWindowBeforeMinutes !== "undefined")
+      $set.checkinWindowBeforeMinutes = checkinWindowBeforeMinutes;
+    if (typeof checkinWindowAfterMinutes !== "undefined")
+      $set.checkinWindowAfterMinutes = checkinWindowAfterMinutes;
     const updated = await Restaurant.findByIdAndUpdate(
       id,
       { $set },
