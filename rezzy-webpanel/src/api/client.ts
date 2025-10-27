@@ -256,8 +256,21 @@ export async function restaurantGet(rid: string) {
   const { data } = await api.get(`/restaurants/${rid}`);
   return data;
 }
-export async function restaurantUpdateProfile(rid: string, patch: any) {
-  const { data } = await api.put(`/restaurants/${rid}`, patch);
+export async function restaurantUpdateProfile(rid: string, form: any) {
+  const payload = {
+    name: form.name ?? "",
+    email: form.email ?? "",
+    phone: form.phone ?? "",
+    city: form.city ?? "",
+    address: form.address ?? "",
+    description: form.description ?? "",
+    iban: form.iban ?? "",
+    ibanName: form.ibanName ?? "",
+    bankName: form.bankName ?? "",
+    priceRange: form.priceRange ?? "₺₺", // 👈 yeni eklendi
+  };
+
+  const { data } = await api.put(`/restaurants/${rid}`, payload);
   return data;
 }
 export async function restaurantGetInsights(
