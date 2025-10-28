@@ -77,6 +77,26 @@ export const createRestaurantSchema = Joi.object({
     googleMapsUrl: Joi.string().uri().allow("", null),
   }),
 });
+export const createMenuSchema = Joi.object({
+  query: anyObject,
+  params: Joi.object({
+    id: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object({
+    name: Joi.string().required(),
+    items: Joi.array()
+      .items(
+        Joi.object({
+          name: Joi.string().required(),
+          price: Joi.number().min(0).required(),
+          description: Joi.string().allow("", null),
+          isActive: Joi.boolean().default(true),
+        })
+      )
+      .default([]),
+    isActive: Joi.boolean().default(true),
+  }),
+});
 /* ---------------------------------------------
  * RESTORAN GÜNCELLEME
  * -------------------------------------------*/
