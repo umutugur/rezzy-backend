@@ -419,9 +419,7 @@ export default function RestaurantProfilePage() {
                 {saveGeneralMut.isPending ? "Kaydediliyor…" : "Kaydet"}
               </button>
             </div>
-          </Card>
-        )}
-          {/* --- Konum Bilgileri --- */}
+                      {/* --- Konum Bilgileri --- */}
 <div className="md:col-span-2 border-t pt-4 mt-6">
   <h3 className="text-sm font-semibold text-gray-700 mb-2">Konum Bilgileri</h3>
 
@@ -506,6 +504,9 @@ export default function RestaurantProfilePage() {
     </div>
   )}
 </div>
+          </Card>
+        )}
+
         {/* === FOTOĞRAFLAR === */}
         {tab === "photos" && (
           <Card title="Fotoğraflar">
