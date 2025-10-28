@@ -28,6 +28,8 @@ type Policies = {
   checkinWindowBeforeMinutes: number;
   checkinWindowAfterMinutes: number;
 };
+type GeoPoint = { type?: "Point"; coordinates: [number, number] }; // [lng, lat]
+
 type Restaurant = {
   _id: string;
   name: string;
@@ -38,12 +40,16 @@ type Restaurant = {
   description?: string;
   photos?: string[];
 
-  // ödeme bilgileri
   iban?: string;
   ibanName?: string;
   bankName?: string;
 
-  // toplu alanlar
+  // ✅ yeni alanlar
+  mapAddress?: string;
+  placeId?: string;
+  googleMapsUrl?: string;
+  location?: GeoPoint;
+
   menus?: any[];
   tables?: TableItem[];
   openingHours?: OpeningHour[];
@@ -56,7 +62,6 @@ type Restaurant = {
   checkinWindowBeforeMinutes: number;
   checkinWindowAfterMinutes: number;
 };
-
 const DAYS = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"] as const;
 
 const DEFAULT_OPENING_HOURS: OpeningHour[] = Array.from({ length: 7 }, (_, i) => ({
@@ -90,7 +95,12 @@ export default function RestaurantProfilePage() {
     enabled: !!rid,
   });
 
-  const [form, setForm] = React.useState<Partial<Restaurant>>({});
+  const [form, setForm] = React.useState<Partial<Restaurant & {
+  location?: { coordinates?: [number, number] };
+  mapAddress?: string;
+  googleMapsUrl?: string;
+  placeId?: string;
+}>>({});
   const [menus, setMenus] = React.useState<MenuItem[]>([]);
   const [tables, setTables] = React.useState<TableItem[]>([]);
   const [hours, setHours] = React.useState<OpeningHour[]>(DEFAULT_OPENING_HOURS);
@@ -101,16 +111,31 @@ export default function RestaurantProfilePage() {
     if (!data) return;
 
     setForm({
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      city: data.city,
-      address: data.address,
-      description: data.description,
-      iban: data.iban,
-      ibanName: data.ibanName,
-      bankName: data.bankName,
-    });
+  name: data.name,
+  email: data.email,
+  phone: data.phone,
+  city: data.city,
+  address: data.address,
+  description: data.description,
+  iban: data.iban,
+  ibanName: data.ibanName,
+  bankName: data.bankName,
+
+  // ✅ konum ve ilgili metalar
+  mapAddress: data.mapAddress ?? "",
+  placeId: data.placeId ?? "",
+  googleMapsUrl: data.googleMapsUrl ?? "",
+  location:
+    data.location && Array.isArray((data.location as any).coordinates)
+      ? {
+          type: "Point",
+          coordinates: [
+            Number((data.location as any).coordinates[0]) || 0, // lng
+            Number((data.location as any).coordinates[1]) || 0, // lat
+          ],
+        }
+      : { type: "Point", coordinates: [0, 0] },
+});
 
     // 🆕 Menüler: description'ı da al
     setMenus(
@@ -150,14 +175,28 @@ export default function RestaurantProfilePage() {
 
   // Mutations
   const saveGeneralMut = useMutation({
-    mutationFn: () => restaurantUpdateProfile(rid, form),
-    onSuccess: () => {
-      showToast("Kaydedildi", "success");
-      qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
-    },
-    onError: (e: any) => showToast(e?.response?.data?.message || e?.message || "Kaydedilemedi", "error"),
-  });
-
+  mutationFn: () => {
+    const lng = Number((form.location?.coordinates?.[0] ?? 0));
+    const lat = Number((form.location?.coordinates?.[1] ?? 0));
+    const payload: any = {
+      ...form,
+      location: {
+        type: "Point",
+        coordinates: [lng, lat],
+      },
+      mapAddress: form.mapAddress ?? "",
+      placeId: form.placeId ?? "",
+      googleMapsUrl: form.googleMapsUrl ?? "",
+    };
+    return restaurantUpdateProfile(rid, payload);
+  },
+  onSuccess: () => {
+    showToast("Kaydedildi", "success");
+    qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
+  },
+  onError: (e: any) =>
+    showToast(e?.response?.data?.message || e?.message || "Kaydedilemedi", "error"),
+});
   const uploadMut = useMutation({
     mutationFn: (file: File) => restaurantAddPhoto(rid, file),
     onSuccess: () => {
@@ -382,7 +421,91 @@ export default function RestaurantProfilePage() {
             </div>
           </Card>
         )}
+          {/* --- Konum Bilgileri --- */}
+<div className="md:col-span-2 border-t pt-4 mt-6">
+  <h3 className="text-sm font-semibold text-gray-700 mb-2">Konum Bilgileri</h3>
 
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label className="block text-sm text-gray-600 mb-1">Harita Adresi</label>
+      <input
+        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+        placeholder="Google Harita üzerindeki adres"
+        value={form.mapAddress || ""}
+        onChange={(e) =>
+          setForm((f) => ({ ...f, mapAddress: e.target.value }))
+        }
+      />
+    </div>
+    <div>
+      <label className="block text-sm text-gray-600 mb-1">Google Maps URL</label>
+      <input
+        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+        placeholder="https://maps.google.com/?q=..."
+        value={form.googleMapsUrl || ""}
+        onChange={(e) =>
+          setForm((f) => ({ ...f, googleMapsUrl: e.target.value }))
+        }
+      />
+    </div>
+    <div>
+      <label className="block text-sm text-gray-600 mb-1">Latitude (enlem)</label>
+      <input
+        type="number"
+        step="0.000001"
+        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+        value={form.location?.coordinates?.[1] ?? ""}
+        onChange={(e) =>
+          setForm((f) => ({
+            ...f,
+            location: {
+              ...f.location,
+              coordinates: [
+                f.location?.coordinates?.[0] ?? 0,
+                parseFloat(e.target.value) || 0,
+              ],
+            },
+          }))
+        }
+      />
+    </div>
+    <div>
+      <label className="block text-sm text-gray-600 mb-1">Longitude (boylam)</label>
+      <input
+        type="number"
+        step="0.000001"
+        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+        value={form.location?.coordinates?.[0] ?? ""}
+        onChange={(e) =>
+          setForm((f) => ({
+            ...f,
+            location: {
+              ...f.location,
+              coordinates: [
+                parseFloat(e.target.value) || 0,
+                f.location?.coordinates?.[1] ?? 0,
+              ],
+            },
+          }))
+        }
+      />
+    </div>
+  </div>
+
+  {/* Google Maps önizlemesi */}
+  {form.location?.coordinates?.[1] && form.location?.coordinates?.[0] && (
+    <div className="mt-4">
+      <iframe
+        title="map"
+        width="100%"
+        height="250"
+        className="rounded-lg border"
+        loading="lazy"
+        src={`https://www.google.com/maps?q=${form.location.coordinates[1]},${form.location.coordinates[0]}&hl=tr&z=16&output=embed`}
+      />
+    </div>
+  )}
+</div>
         {/* === FOTOĞRAFLAR === */}
         {tab === "photos" && (
           <Card title="Fotoğraflar">

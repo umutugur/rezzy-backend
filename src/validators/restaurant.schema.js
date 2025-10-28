@@ -24,7 +24,23 @@ const anyObject = Joi.object({}).unknown(true);
  * Bu nedenle her şema, KÖKTE { body, params, query } anahtarlarını içeren
  * TEK bir Joi şeması olarak tanımlandı.
  */
+/* ---------------------------------------------
+ * YARDIMCI ALT ŞEMALAR
+ * -------------------------------------------*/
+const locationSchema = Joi.object({
+  type: Joi.string().valid("Point").default("Point"),
+  coordinates: Joi.array()
+    .items(Joi.number().min(-180).max(180))
+    .length(2)
+    .required() // [lng, lat]
+    .messages({
+      "array.length": "Koordinatlar [lng, lat] biçiminde olmalıdır.",
+    }),
+});
 
+/* ---------------------------------------------
+ * RESTORAN OLUŞTURMA
+ * -------------------------------------------*/
 export const createRestaurantSchema = Joi.object({
   params: anyObject,
   query: anyObject,
@@ -36,15 +52,16 @@ export const createRestaurantSchema = Joi.object({
     priceRange: Joi.string().valid("₺", "₺₺", "₺₺₺", "₺₺₺₺").default("₺₺"),
     rating: Joi.number().min(0).max(5).default(0),
     iban: Joi.string().required(),
-    // openingHours: dizi olarak kabul edilir
-    openingHours: Joi.array().items(
-      Joi.object({
-        day: Joi.number().integer().min(0).max(6).required(),
-        open: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
-        close: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
-        isClosed: Joi.boolean().default(false),
-      })
-    ).default([]),
+    openingHours: Joi.array()
+      .items(
+        Joi.object({
+          day: Joi.number().integer().min(0).max(6).required(),
+          open: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
+          close: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
+          isClosed: Joi.boolean().default(false),
+        })
+      )
+      .default([]),
     photos: Joi.array().items(Joi.string().uri()).default([]),
     description: Joi.string().allow("", null),
     social: Joi.array().items(Joi.string().allow("")).default([]),
@@ -52,49 +69,17 @@ export const createRestaurantSchema = Joi.object({
     cancelPolicy: Joi.string().default("24h_100;3h_50;lt3h_0"),
     graceMinutes: Joi.number().min(0).max(120).default(15),
     isActive: Joi.boolean().default(true),
+
+    // ✅ Yeni alanlar: konum
+    location: locationSchema.optional(),
+    mapAddress: Joi.string().allow("", null),
+    placeId: Joi.string().allow("", null),
+    googleMapsUrl: Joi.string().uri().allow("", null),
   }),
 });
-
-export const listRestaurantsSchema = Joi.object({
-  params: anyObject,
-  body:   anyObject,
-  query:  Joi.object({
-    city:  Joi.string().allow("", null),
-    query: Joi.string().allow("", null),   // ✅ arama metni de opsiyonel
-  }),
-});
-
-
-export const getRestaurantSchema = Joi.object({
-  query: anyObject,
-  body: anyObject,
-  params: Joi.object({
-    id: Joi.string().custom(objectId).required(),
-  }),
-});
-
-export const createMenuSchema = Joi.object({
-  query: anyObject,
-  params: Joi.object({
-    id: Joi.string().custom(objectId).required(),
-  }),
-  body: Joi.object({
-    name: Joi.string().required(),
-    items: Joi.array()
-      .items(
-        Joi.object({
-          name: Joi.string().required(),
-          price: Joi.number().min(0).required(),
-          description: Joi.string().allow("", null),
-          isActive: Joi.boolean().default(true),
-        })
-      )
-      .default([]),
-    isActive: Joi.boolean().default(true),
-  }),
-});
-
-/* --- Güncelleme --- */
+/* ---------------------------------------------
+ * RESTORAN GÜNCELLEME
+ * -------------------------------------------*/
 export const updateRestaurantSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
@@ -123,6 +108,12 @@ export const updateRestaurantSchema = Joi.object({
     cancelPolicy: Joi.string(),
     graceMinutes: Joi.number().min(0).max(120),
     isActive: Joi.boolean(),
+
+    // ✅ Yeni alanlar: konum
+    location: locationSchema.optional(),
+    mapAddress: Joi.string().allow("", null),
+    placeId: Joi.string().allow("", null),
+    googleMapsUrl: Joi.string().uri().allow("", null),
   }).min(1),
 });
 
@@ -260,6 +251,22 @@ export const updateReservationStatusSchema = Joi.object({
 export const getReservationQRSchema = Joi.object({
   body: anyObject,
   query: anyObject,
+  params: Joi.object({
+    id: Joi.string().custom(objectId).required(),
+  }),
+});
+export const listRestaurantsSchema = Joi.object({
+  params: anyObject,
+  body: anyObject,
+  query: Joi.object({
+    city: Joi.string().allow("", null),
+    query: Joi.string().allow("", null),
+  }),
+});
+
+export const getRestaurantSchema = Joi.object({
+  query: anyObject,
+  body: anyObject,
   params: Joi.object({
     id: Joi.string().custom(objectId).required(),
   }),

@@ -51,16 +51,33 @@ const RestaurantSchema = new mongoose.Schema(
     },
 
     // ✅ Check-in zaman penceresi
-    // Rezervasyon saatinden kaç dakika ÖNCE ve SONRAYA kadar check-in kabul edilecek
     checkinWindowBeforeMinutes: { type: Number, min: 0, default: 15 },
-    checkinWindowAfterMinutes:  { type: Number, min: 0, default: 90 },
+    checkinWindowAfterMinutes: { type: Number, min: 0, default: 90 },
 
-    // ✅ Eksik katılım eşiği (%). 80 -> %80. 0..100
-    // arrivedCount < partySize * (threshold/100) ise "eksik katılım" sayılır
+    // ✅ Eksik katılım eşiği
     underattendanceThresholdPercent: { type: Number, min: 0, max: 100, default: 80 },
+
+    // ✅ Konum bilgisi (GeoJSON formatında)
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point",
+      },
+      coordinates: {
+        type: [Number], // [lng, lat]
+        index: "2dsphere",
+      },
+    },
+    mapAddress: String, // Harita üzerinde gösterilecek adres metni
+    placeId: String, // Google Place ID
+    googleMapsUrl: String, // Harita bağlantısı (opsiyonel)
   },
   { timestamps: true }
 );
+
+// Arama ve konum indeksleri
 RestaurantSchema.index({ name: "text" });
+RestaurantSchema.index({ location: "2dsphere" });
 
 export default mongoose.model("Restaurant", RestaurantSchema);

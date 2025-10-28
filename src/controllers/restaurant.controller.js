@@ -17,6 +17,16 @@ import { generateQRDataURL, signQR } from "../utils/qr.js";
 export const createRestaurant = async (req, res, next) => {
   try {
     const body = { ...req.body, owner: req.user.id };
+
+    // GeoJSON location biçimini normalize et
+    if (body.location && Array.isArray(body.location.coordinates)) {
+      const [lng, lat] = body.location.coordinates.map(Number);
+      body.location = {
+        type: "Point",
+        coordinates: [lng, lat],
+      };
+    }
+
     const rest = await Restaurant.create(body);
     res.json(rest);
   } catch (e) {
@@ -28,17 +38,15 @@ export const createRestaurant = async (req, res, next) => {
 export const listRestaurants = async (req, res, next) => {
   try {
     const { city, query } = req.query || {};
-
     const q = { isActive: true };
     if (city) q.city = String(city);
 
-    // isim araması (case-insensitive)
     if (query && String(query).trim().length > 0) {
       q.name = { $regex: String(query).trim(), $options: "i" };
     }
 
     const data = await Restaurant.find(q)
-      .select("name city priceRange rating photos description")
+      .select("name city priceRange rating photos description location mapAddress")
       .sort({ rating: -1, name: 1 });
 
     res.json(data);
@@ -52,10 +60,12 @@ export const getRestaurant = async (req, res, next) => {
   try {
     const rest = await Restaurant.findById(req.params.id);
     if (!rest) throw { status: 404, message: "Restaurant not found" };
+
     const menus = await Menu.find({
       restaurantId: rest._id,
       isActive: true,
     });
+
     res.json({ ...rest.toObject(), menus });
   } catch (e) {
     next(e);
@@ -65,7 +75,6 @@ export const getRestaurant = async (req, res, next) => {
 // Yeni menü oluştur (panelde kullanılır)
 export const createMenu = async (req, res, next) => {
   try {
-    // sahibi kontrol et (admin hariç)
     if (req.user.role !== "admin") {
       const r = await Restaurant.findById(req.params.id);
       if (!r || r.owner.toString() !== req.user.id)
@@ -83,9 +92,7 @@ export const createMenu = async (req, res, next) => {
 
 /*
  * Genel restoran güncellemesi.
- * Bu uç, restoranın temel özelliklerini (isim, adres, fotoğraflar vb.)
- * günceller. Panelde masa listesi, çalışma saatleri ve politikalar için
- * ayrı uçlar kullanmalısınız.
+ * Artık konum bilgisi de güncellenebilir.
  */
 export const updateRestaurant = async (req, res, next) => {
   try {
@@ -108,24 +115,43 @@ export const updateRestaurant = async (req, res, next) => {
       "cancelPolicy",
       "graceMinutes",
       "isActive",
+      // 🆕 Konum alanları
+      "location",
+      "mapAddress",
+      "placeId",
+      "googleMapsUrl",
     ];
+
     const $set = {};
     for (const k of allowed) {
       if (typeof req.body[k] !== "undefined") $set[k] = req.body[k];
     }
+
+    // GeoJSON formatı kontrolü
+    if ($set.location && Array.isArray($set.location.coordinates)) {
+      const [lng, lat] = $set.location.coordinates.map(Number);
+      $set.location = {
+        type: "Point",
+        coordinates: [lng, lat],
+      };
+    }
+
     // Yetki kontrolü: admin değilse sahip olmalı
     if (req.user.role !== "admin") {
       const own = await Restaurant.findById(req.params.id).select("owner");
       if (!own || own.owner.toString() !== req.user.id)
         throw { status: 403, message: "Forbidden" };
     }
+
     const updated = await Restaurant.findByIdAndUpdate(
       req.params.id,
       { $set },
       { new: true }
     );
+
     if (!updated)
       throw { status: 404, message: "Restaurant not found" };
+
     res.json(updated);
   } catch (e) {
     next(e);
@@ -133,9 +159,7 @@ export const updateRestaurant = async (req, res, next) => {
 };
 
 /*
- * Rezervasyon uygunluk hesabı.
- * İstenen tarih ve kişi sayısı için olası zaman dilimlerini hesaplar.
- * slotMinutes, blackoutDates ve min/max party size gibi politikaları dikkate alır.
+ * Rezervasyon uygunluk hesabı (değişmedi)
  */
 export const getAvailability = async (req, res, next) => {
   try {
@@ -143,7 +167,6 @@ export const getAvailability = async (req, res, next) => {
     const date = String(req.query.date || "");
     const partySize = Math.max(1, parseInt(req.query.partySize || "1", 10));
 
-    // tarih formatı kontrolü
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw { status: 400, message: "Invalid date format. Expecting YYYY-MM-DD" };
     }
@@ -152,14 +175,11 @@ export const getAvailability = async (req, res, next) => {
       "openingHours isActive slotMinutes minPartySize maxPartySize blackoutDates"
     );
 
-    // SADECE YOKSA 404 AT — isActive false olsa bile devam et
     if (!r) throw { status: 404, message: "Restaurant not found" };
 
-    // Kara gün kontrolü
     if (Array.isArray(r.blackoutDates) && r.blackoutDates.includes(date)) {
       return res.json({ date, partySize, slots: [] });
     }
-    // Parti büyüklüğü kontrolü
     if (typeof r.minPartySize === "number" && partySize < r.minPartySize) {
       return res.json({ date, partySize, slots: [] });
     }
@@ -167,42 +187,32 @@ export const getAvailability = async (req, res, next) => {
       return res.json({ date, partySize, slots: [] });
     }
 
-    // YYYY-MM-DD'i UTC gece yarısına sabitle
     const d = new Date(`${date}T00:00:00Z`);
-    const dayIdx = d.getUTCDay(); // 0=Sun .. 6=Sat
+    const dayIdx = d.getUTCDay();
 
-    // openingHours: Array of objects { day, open, close, isClosed }
-    // Kayıt yoksa varsayılanı kullan (10:00-23:00)
     let oh = Array.isArray(r.openingHours)
       ? r.openingHours.find((h) => h?.day === dayIdx)
       : null;
-    if (!oh) {
-      oh = { day: dayIdx, open: "10:00", close: "23:00", isClosed: false };
-    }
+    if (!oh) oh = { day: dayIdx, open: "10:00", close: "23:00", isClosed: false };
 
     const slots = [];
-    if (oh.isClosed) {
-      return res.json({ date, partySize, slots });
-    }
+    if (oh.isClosed) return res.json({ date, partySize, slots });
 
     const toMins = (hhmm) => {
       const [h, m] = String(hhmm || "").split(":").map((x) => parseInt(x, 10));
-      const hh = Number.isFinite(h) ? h : 0;
-      const mm = Number.isFinite(m) ? m : 0;
-      return hh * 60 + mm;
+      return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
     };
     const pad = (n) => String(n).padStart(2, "0");
     const labelOf = (mins) => `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`;
 
     const start = toMins(oh.open || "10:00");
-    const end   = toMins(oh.close || "23:00");
-    const step  = r.slotMinutes && r.slotMinutes > 0 ? r.slotMinutes : 90;
+    const end = toMins(oh.close || "23:00");
+    const step = r.slotMinutes && r.slotMinutes > 0 ? r.slotMinutes : 90;
 
     if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) {
       return res.json({ date, partySize, slots });
     }
 
-    // en az 60 dk oturum varsayımı
     for (let t = start; t + 60 <= end; t += step) {
       const label = labelOf(t);
       const timeISO = new Date(`${date}T${label}:00.000Z`).toISOString();
