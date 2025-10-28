@@ -1,3 +1,4 @@
+// src/pages/admin/AdminRestaurantCreatePage.tsx
 import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -6,6 +7,7 @@ import { Card } from "../../components/Card";
 import { adminCreateRestaurant, adminSearchUsers, adminCreateUser } from "../../api/client";
 import { showToast } from "../../ui/Toast";
 import Modal from "../../components/Modal";
+import { parseLatLngFromGoogleMaps } from "../../utils/geo";
 
 type UserLite = { _id: string; name?: string; email?: string; role?: string };
 
@@ -22,12 +24,20 @@ export default function AdminRestaurantCreatePage() {
   const [address, setAddress] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [email, setEmail] = React.useState("");
+
+  // Finans/kurallar
   const [commissionPct, setCommissionPct] = React.useState<string>("5");
   const [depositRequired, setDepositRequired] = React.useState(false);
   const [depositAmount, setDepositAmount] = React.useState<string>("0");
   const [checkinBefore, setCheckinBefore] = React.useState<string>("15");
   const [checkinAfter, setCheckinAfter] = React.useState<string>("90");
   const [uaThreshold, setUaThreshold] = React.useState<string>("80");
+
+  // Konum
+  const [mapAddress, setMapAddress] = React.useState("");
+  const [googleMapsUrl, setGoogleMapsUrl] = React.useState("");
+  const [lat, setLat] = React.useState<number | "">("");
+  const [lng, setLng] = React.useState<number | "">("");
 
   // Yeni kullanıcı modalı
   const [userModalOpen, setUserModalOpen] = React.useState(false);
@@ -42,29 +52,60 @@ export default function AdminRestaurantCreatePage() {
     enabled: ownerQuery.trim().length >= 2
   });
 
+  // Google Maps URL değişince otomatik lat/lng çek
+  React.useEffect(() => {
+    if (!googleMapsUrl) return;
+    const p = parseLatLngFromGoogleMaps(googleMapsUrl);
+    if (p) {
+      setLat(Number(p.lat.toFixed(6)));
+      setLng(Number(p.lng.toFixed(6)));
+    }
+  }, [googleMapsUrl]);
+
   const createMut = useMutation({
-    mutationFn: () =>
-      adminCreateRestaurant({
+    mutationFn: () => {
+      // % → fraksiyon dönüştür
+      const commissionRate = Math.max(0, Number(commissionPct || "0")) / 100;
+
+      // GeoJSON location (sadece ikisi de sayıysa gönder)
+      let location: any | undefined = undefined;
+      const latNum = typeof lat === "string" ? Number(lat) : lat;
+      const lngNum = typeof lng === "string" ? Number(lng) : lng;
+      if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+        location = { type: "Point", coordinates: [Number(lngNum), Number(latNum)] }; // [lng,lat]
+      }
+
+      return adminCreateRestaurant({
         ownerId: owner?._id as string,
         name,
         city: city || undefined,
         address: address || undefined,
         phone: phone || undefined,
         email: email || undefined,
-        commissionRate: Number(commissionPct),
+
+        // finans/kurallar
+        commissionRate,
         depositRequired,
         depositAmount: Number(depositAmount || "0"),
         checkinWindowBeforeMinutes: Number(checkinBefore || "0"),
         checkinWindowAfterMinutes: Number(checkinAfter || "0"),
         underattendanceThresholdPercent: Number(uaThreshold || "80"),
-      }),
+
+        // konum
+        mapAddress: mapAddress || "",
+        googleMapsUrl: googleMapsUrl || "",
+        ...(location ? { location } : {}),
+      });
+    },
     onSuccess: (res: any) => {
       const rid = res?.restaurant?._id || res?._id;
       showToast("Restoran oluşturuldu", "success");
       if (rid) nav(`/admin/restaurants/${rid}`, { replace: true });
       else nav("/admin/restaurants", { replace: true });
     },
-    onError: () => showToast("Restoran oluşturulamadı", "error")
+    onError: (e: any) => {
+      showToast(e?.response?.data?.message || "Restoran oluşturulamadı", "error");
+    }
   });
 
   const createUserMut = useMutation({
@@ -77,14 +118,12 @@ export default function AdminRestaurantCreatePage() {
       }),
     onSuccess: (u) => {
       showToast("Kullanıcı oluşturuldu", "success");
-      // Owner olarak seç
       setOwner({ _id: u._id, name: u.name, email: u.email, role: u.role });
       setOwnerQuery(u.email || u.name || "");
       setUserModalOpen(false);
-      // Modal formunu temizle
       setNewName(""); setNewEmail(""); setNewPhone(""); setNewPassword("");
     },
-    onError: () => showToast("Kullanıcı oluşturulamadı", "error"),
+    onError: (e: any) => showToast(e?.response?.data?.message || "Kullanıcı oluşturulamadı", "error"),
   });
 
   const canSubmit = !!owner && name.trim().length > 0;
@@ -197,34 +236,120 @@ export default function AdminRestaurantCreatePage() {
           </div>
         </Card>
 
+        {/* KONUM - harita linkinden otomatik lat/lng */}
+        <Card title="Konum Bilgileri">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Harita Adresi</label>
+              <input
+                value={mapAddress}
+                onChange={(e)=>setMapAddress(e.target.value)}
+                placeholder="Google Harita üzerindeki adres"
+                className="w-full border rounded-lg px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Google Maps URL</label>
+              <input
+                value={googleMapsUrl}
+                onChange={(e)=>setGoogleMapsUrl(e.target.value)}
+                placeholder="https://maps.google.com/... veya https://maps.app.goo.gl/..."
+                className="w-full border rounded-lg px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Latitude (enlem)</label>
+              <input
+                type="number"
+                step="0.000001"
+                value={lat}
+                onChange={(e)=>setLat(e.target.value === "" ? "" : Number(e.target.value))}
+                className="w-full border rounded-lg px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Longitude (boylam)</label>
+              <input
+                type="number"
+                step="0.000001"
+                value={lng}
+                onChange={(e)=>setLng(e.target.value === "" ? "" : Number(e.target.value))}
+                className="w-full border rounded-lg px-3 py-2"
+              />
+            </div>
+          </div>
+
+          {typeof lat === "number" && typeof lng === "number" && Number.isFinite(lat) && Number.isFinite(lng) && (
+            <div className="mt-4">
+              <iframe
+                title="map"
+                width="100%"
+                height="250"
+                className="rounded-lg border"
+                loading="lazy"
+                src={`https://www.google.com/maps?q=${lat},${lng}&hl=tr&z=16&output=embed`}
+              />
+            </div>
+          )}
+        </Card>
+
         <Card title="Kurallar & Finans">
           <div className="grid md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm text-gray-600 mb-1">Komisyon (%)</label>
-              <input type="number" min={0} step={0.1} value={commissionPct} onChange={(e)=>setCommissionPct(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+              <input
+                type="number" min={0} step={0.1}
+                value={commissionPct}
+                onChange={(e)=>setCommissionPct(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              />
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Depozito Zorunlu mu?</label>
-              <select value={depositRequired ? "yes" : "no"} onChange={(e)=>setDepositRequired(e.target.value==="yes")} className="w-full border rounded-lg px-3 py-2">
+              <select
+                value={depositRequired ? "yes" : "no"}
+                onChange={(e)=>setDepositRequired(e.target.value==="yes")}
+                className="w-full border rounded-lg px-3 py-2"
+              >
                 <option value="no">Hayır</option>
                 <option value="yes">Evet</option>
               </select>
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Depozito Tutarı</label>
-              <input type="number" min={0} step={1} value={depositAmount} onChange={(e)=>setDepositAmount(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+              <input
+                type="number" min={0} step={1}
+                value={depositAmount}
+                onChange={(e)=>setDepositAmount(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              />
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Check-in Önce (dk)</label>
-              <input type="number" min={0} step={1} value={checkinBefore} onChange={(e)=>setCheckinBefore(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+              <input
+                type="number" min={0} step={1}
+                value={checkinBefore}
+                onChange={(e)=>setCheckinBefore(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              />
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Check-in Sonra (dk)</label>
-              <input type="number" min={0} step={1} value={checkinAfter} onChange={(e)=>setCheckinAfter(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+              <input
+                type="number" min={0} step={1}
+                value={checkinAfter}
+                onChange={(e)=>setCheckinAfter(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              />
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Eksik Katılım Eşiği (%)</label>
-              <input type="number" min={0} max={100} step={1} value={uaThreshold} onChange={(e)=>setUaThreshold(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+              <input
+                type="number" min={0} max={100} step={1}
+                value={uaThreshold}
+                onChange={(e)=>setUaThreshold(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              />
             </div>
           </div>
         </Card>

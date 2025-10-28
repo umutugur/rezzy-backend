@@ -13,7 +13,7 @@ import {
   api,
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
-
+import {parseLatLngFromGoogleMaps} from "../../utils/geo"
 // === Tipler ===
 type OpeningHour = { day: number; open: string; close: string; isClosed?: boolean };
 type MenuItem = { name: string; price: number; description?: string; isActive?: boolean };
@@ -430,13 +430,25 @@ export default function RestaurantProfilePage() {
     <div>
       <label className="block text-sm text-gray-600 mb-1">Google Maps URL</label>
       <input
-        className="w-full rounded-lg border border-gray-300 px-3 py-2"
-        placeholder="https://maps.google.com/?q=..."
-        value={form.googleMapsUrl || ""}
-        onChange={(e) =>
-          setForm((f) => ({ ...f, googleMapsUrl: e.target.value }))
-        }
-      />
+  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+  placeholder="https://maps.google.com/?q=..."
+  value={form.googleMapsUrl || ""}
+  onChange={(e) => {
+    const val = e.target.value;
+    setForm((f) => ({ ...f, googleMapsUrl: val }));
+
+    const parsed = parseLatLngFromGoogleMaps(val);
+    if (parsed) {
+      setForm((f) => ({
+        ...f,
+        location: {
+          type: "Point",
+          coordinates: [parsed.lng, parsed.lat],
+        },
+      }));
+    }
+  }}
+/>
     </div>
     <div>
       <label className="block text-sm text-gray-600 mb-1">Latitude (enlem)</label>

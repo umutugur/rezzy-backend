@@ -127,6 +127,13 @@ export async function adminCreateRestaurant(input: {
   checkinWindowBeforeMinutes?: number;
   checkinWindowAfterMinutes?: number;
   underattendanceThresholdPercent?: number;
+  // 🆕 Yeni alanlar
+  mapAddress?: string;
+  googleMapsUrl?: string;
+  location?: {
+    type: "Point";
+    coordinates: [number, number]; // [lng, lat]
+  };
 }) {
   const { data } = await api.post("/admin/restaurants", input);
   return data;
