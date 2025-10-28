@@ -410,15 +410,7 @@ export default function RestaurantProfilePage() {
               </div>
             </div>
 
-            <div className="mt-4">
-              <button
-                onClick={() => saveGeneralMut.mutate()}
-                disabled={saveGeneralMut.isPending}
-                className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 disabled:opacity-60"
-              >
-                {saveGeneralMut.isPending ? "Kaydediliyor…" : "Kaydet"}
-              </button>
-            </div>
+            
                       {/* --- Konum Bilgileri --- */}
 <div className="md:col-span-2 border-t pt-4 mt-6">
   <h3 className="text-sm font-semibold text-gray-700 mb-2">Konum Bilgileri</h3>
@@ -504,6 +496,15 @@ export default function RestaurantProfilePage() {
     </div>
   )}
 </div>
+<div className="mt-4">
+              <button
+                onClick={() => saveGeneralMut.mutate()}
+                disabled={saveGeneralMut.isPending}
+                className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 disabled:opacity-60"
+              >
+                {saveGeneralMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+              </button>
+            </div>
           </Card>
         )}
 
