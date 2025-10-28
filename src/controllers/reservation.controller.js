@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import Menu from "../models/Menu.js";
 import Restaurant from "../models/Restaurant.js";
 import Reservation from "../models/Reservation.js";
-import { dayjs } from "../utils/dates.js";
+import { fmtTR, dayjs} from "../utils/dates.js";
 import { generateQRDataURL, verifyQR } from "../utils/qr.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import { notifyUser, notifyRestaurantOwner } from "../services/notification.service.js";
@@ -199,7 +199,7 @@ export const uploadReceipt = async (req, res, next) => {
     // Müşteri — pending
     await notifyUser(r.userId, {
       title: "Talebin alındı ✅",
-      body: `${(dayjs.utc(r.dateTimeUTC).local().format("DD.MM.YYYY HH:mm") )} için talebin restorana iletildi. Onaylanınca QR kodun açılacak.`,
+      body: `${fmtTR(r.dateTimeUTC)} için talebin restorana iletildi. Onaylanınca QR kodun açılacak.`,
       data: {
         type: "reservation_pending",
         rid: String(r._id),
@@ -212,7 +212,7 @@ export const uploadReceipt = async (req, res, next) => {
     // Restoran sahibi — yeni istek
     await notifyRestaurantOwner(r.restaurantId, {
       title: "Yeni rezervasyon talebi",
-      body: `${dayjs.utc(r.dateTimeUTC).local().format("DD.MM.YYYY HH:mm")} • ${r.partySize} kişilik rezervasyon bekliyor. Lütfen kontrol edin.`,
+      body: `${fmtTR(r.dateTimeUTC)} • ${r.partySize} kişilik rezervasyon bekliyor. Lütfen kontrol edin.`,
       data: {
         type: "restaurant_new_request",
         rid: String(r._id),
@@ -368,7 +368,7 @@ export const approveReservation = async (req, res, next) => {
     try {
       await notifyUser(r.userId, {
         title: "Rezervasyonun onaylandı 🎉",
-        body: `${dayjs.utc(r.dateTimeUTC).local().format("DD.MM.YYYY HH:mm")} • QR kodun hazır. Rezzy > Rezervasyonlarım üzerinden erişebilirsin.`,
+        body: `${fmtTR(r.dateTimeUTC)} • QR kodun hazır. Rezzy > Rezervasyonlarım üzerinden erişebilirsin.`,
         data: { type: "reservation_approved", rid: String(r._id), section: "qrcode" },
         key: `cust:approved:${r._id}`,
         type: "reservation_approved",
@@ -441,7 +441,7 @@ export const cancelReservation = async (req, res, next) => {
     try {
       await notifyRestaurantOwner(r.restaurantId._id, {
         title: "Rezervasyon iptal edildi",
-        body: `${dayjs.utc(r.dateTimeUTC).local().format("DD.MM.YYYY HH:mm")} tarihli rezervasyon, müşteri tarafından iptal edildi.`,
+        body: `${fmtTR(r.dateTimeUTC)} tarihli rezervasyon, müşteri tarafından iptal edildi.`,
         data: { type: "reservation_cancelled", rid: String(r._id), section: "reservations" },
         key: `rest:cancelled:${r._id}`,
         type: "reservation_cancelled",
@@ -588,7 +588,7 @@ export const checkin = async (req, res, next) => {
     try {
       await notifyUser(r.userId, {
         title: "Check-in tamam ✅",
-        body: `İyi eğlenceler! ${dayjs.utc(r.dateTimeUTC).local().format("DD.MM.YYYY HH:mm")} rezervasyonun için girişin alındı.`,
+        body: `İyi eğlenceler! ${fmtTR(r.dateTimeUTC)} rezervasyonun için girişin alındı.`,
         data: { type: "checkin", rid: String(r._id), section: "reservation" },
         key: `cust:checkin:${r._id}`,
         type: "checkin",
