@@ -3,7 +3,20 @@ import { authStore } from "../store/auth";
 import { showToast } from "../ui/Toast";
 
 const baseURL = import.meta.env.VITE_API_BASE || "/api";
-
+function normalizeMapsUrl(raw?: string): string {
+  const v = String(raw ?? "").trim();
+  if (!v) return "";
+  // Kullanıcı "maps.app.goo.gl/..." yapıştırdıysa protokol ekle
+  const withProto = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+  try {
+    // Geçerli mi?
+    new URL(withProto);
+    return withProto;
+  } catch {
+    // Geçersizse boş gönder (Joi geçer)
+    return "";
+  }
+}
 export const api = axios.create({
   baseURL,
   withCredentials: false,
@@ -136,7 +149,8 @@ export async function adminCreateRestaurant(input: {
     coordinates: [number, number];
   };
 }) {
-  const { data } = await api.post("/admin/restaurants", input);
+  const payload = { ...input, googleMapsUrl: normalizeMapsUrl(input.googleMapsUrl) };
+  const { data } = await api.post("/admin/restaurants", payload);
   return data;
 }
 
@@ -288,7 +302,7 @@ export async function restaurantUpdateProfile(
     // 🆕 Konum/metalar — boş gelirse string olarak "" bırakıyoruz
     mapAddress: form.mapAddress ?? "",
     placeId: form.placeId ?? "",
-    googleMapsUrl: form.googleMapsUrl ?? "",
+    googleMapsUrl: normalizeMapsUrl(form.googleMapsUrl), // 👈 burada normalize ettik
   };
 
   // Sadece her iki koordinat da geçerliyse gönder
