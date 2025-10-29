@@ -121,18 +121,19 @@ export async function adminCreateRestaurant(input: {
   address?: string;
   phone?: string;
   email?: string;
-  commissionRate?: number; // yüzde verilebilir; backend normalize eder
+  commissionRate?: number;
   depositRequired?: boolean;
   depositAmount?: number;
   checkinWindowBeforeMinutes?: number;
   checkinWindowAfterMinutes?: number;
   underattendanceThresholdPercent?: number;
-  // 🆕 Yeni alanlar
+  // 🆕
   mapAddress?: string;
   googleMapsUrl?: string;
+  placeId?: string; // <-- ekledik
   location?: {
     type: "Point";
-    coordinates: [number, number]; // [lng, lat]
+    coordinates: [number, number];
   };
 }) {
   const { data } = await api.post("/admin/restaurants", input);
@@ -263,8 +264,16 @@ export async function restaurantGet(rid: string) {
   const { data } = await api.get(`/restaurants/${rid}`);
   return data;
 }
-export async function restaurantUpdateProfile(rid: string, form: any) {
-  const payload = {
+export async function restaurantUpdateProfile(
+  rid: string,
+  form: any
+) {
+  // Güvenli normalizasyon
+  const lng = Number(form?.location?.coordinates?.[0]);
+  const lat = Number(form?.location?.coordinates?.[1]);
+  const hasCoords = Number.isFinite(lng) && Number.isFinite(lat);
+
+  const payload: any = {
     name: form.name ?? "",
     email: form.email ?? "",
     phone: form.phone ?? "",
@@ -274,8 +283,21 @@ export async function restaurantUpdateProfile(rid: string, form: any) {
     iban: form.iban ?? "",
     ibanName: form.ibanName ?? "",
     bankName: form.bankName ?? "",
-    priceRange: form.priceRange ?? "₺₺", // 👈 yeni eklendi
+    priceRange: form.priceRange ?? "₺₺",
+
+    // 🆕 Konum/metalar — boş gelirse string olarak "" bırakıyoruz
+    mapAddress: form.mapAddress ?? "",
+    placeId: form.placeId ?? "",
+    googleMapsUrl: form.googleMapsUrl ?? "",
   };
+
+  // Sadece her iki koordinat da geçerliyse gönder
+  if (hasCoords) {
+    payload.location = {
+      type: "Point",
+      coordinates: [lng, lat], // [lng, lat]
+    };
+  }
 
   const { data } = await api.put(`/restaurants/${rid}`, payload);
   return data;
