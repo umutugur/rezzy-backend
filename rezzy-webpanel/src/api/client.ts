@@ -3,18 +3,25 @@ import { authStore } from "../store/auth";
 import { showToast } from "../ui/Toast";
 
 const baseURL = import.meta.env.VITE_API_BASE || "/api";
-function normalizeMapsUrl(raw?: string): string {
+// src/api/client.ts
+function normalizeMapsUrl(raw?: string): string | undefined {
   const v = String(raw ?? "").trim();
-  if (!v) return "";
-  // Kullanıcı "maps.app.goo.gl/..." yapıştırdıysa protokol ekle
+  if (!v) return undefined;
+
+  // Protokol ekle
   const withProto = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+
+  // Görünür boşlukları ve parantez gibi sorun çıkaran karakterleri encode et
+  // NOT: encodeURI tüm URL'yi uygun şekilde % ile kodlar ama mevcut %'leri bozmaz.
+  const encoded = encodeURI(withProto);
+
   try {
-    // Geçerli mi?
-    new URL(withProto);
-    return withProto;
+    const u = new URL(encoded); // geçerliyse hata atmaz
+    // Güvenlik: sadece http/https
+    if (!/^https?:$/i.test(u.protocol)) return undefined;
+    return u.toString();
   } catch {
-    // Geçersizse boş gönder (Joi geçer)
-    return "";
+    return undefined;
   }
 }
 export const api = axios.create({
@@ -127,6 +134,9 @@ export async function adminCreateUser(input: {
   return data; // { ok, user }
 }
 // ✅ Restoran oluştur
+// utils tarafında:
+// function normalizeMapsUrl(raw?: string): string { /* sende zaten var */ }
+
 export async function adminCreateRestaurant(input: {
   ownerId: string;
   name: string;
@@ -134,22 +144,51 @@ export async function adminCreateRestaurant(input: {
   address?: string;
   phone?: string;
   email?: string;
+
+  // 👇 Bunlar aynen kalsın (dokunmuyoruz)
   commissionRate?: number;
   depositRequired?: boolean;
   depositAmount?: number;
   checkinWindowBeforeMinutes?: number;
   checkinWindowAfterMinutes?: number;
   underattendanceThresholdPercent?: number;
-  // 🆕
+
+  // 👇 Sadece konum/metalar
   mapAddress?: string;
+  placeId?: string;
   googleMapsUrl?: string;
-  placeId?: string; // <-- ekledik
   location?: {
     type: "Point";
-    coordinates: [number, number];
+    coordinates: [number, number]; // [lng, lat]
   };
 }) {
-  const payload = { ...input, googleMapsUrl: normalizeMapsUrl(input.googleMapsUrl) };
+  // Koordinat var mı?
+  const lng = Number(input?.location?.coordinates?.[0]);
+  const lat = Number(input?.location?.coordinates?.[1]);
+  const hasCoords = Number.isFinite(lng) && Number.isFinite(lat);
+
+  // Payload: diğer tüm alanları PASSTHROUGH
+  const payload: any = {
+    ...input,
+    mapAddress: input.mapAddress ?? "",
+    placeId: input.placeId ?? "",
+  };
+
+  // Sadece geçerli URL ise gönder
+  const gm = normalizeMapsUrl(input.googleMapsUrl);
+  if (gm) payload.googleMapsUrl = gm;
+  else delete payload.googleMapsUrl;
+
+  // Sadece geçerli koordinatlar varsa GeoJSON olarak gönder
+  if (hasCoords) {
+    payload.location = {
+      type: "Point",
+      coordinates: [lng, lat] as [number, number],
+    };
+  } else {
+    delete payload.location;
+  }
+
   const { data } = await api.post("/admin/restaurants", payload);
   return data;
 }
@@ -278,11 +317,7 @@ export async function restaurantGet(rid: string) {
   const { data } = await api.get(`/restaurants/${rid}`);
   return data;
 }
-export async function restaurantUpdateProfile(
-  rid: string,
-  form: any
-) {
-  // Güvenli normalizasyon
+export async function restaurantUpdateProfile(rid: string, form: any) {
   const lng = Number(form?.location?.coordinates?.[0]);
   const lat = Number(form?.location?.coordinates?.[1]);
   const hasCoords = Number.isFinite(lng) && Number.isFinite(lat);
@@ -298,19 +333,15 @@ export async function restaurantUpdateProfile(
     ibanName: form.ibanName ?? "",
     bankName: form.bankName ?? "",
     priceRange: form.priceRange ?? "₺₺",
-
-    // 🆕 Konum/metalar — boş gelirse string olarak "" bırakıyoruz
     mapAddress: form.mapAddress ?? "",
     placeId: form.placeId ?? "",
-    googleMapsUrl: normalizeMapsUrl(form.googleMapsUrl), // 👈 burada normalize ettik
   };
 
-  // Sadece her iki koordinat da geçerliyse gönder
+  const gm = normalizeMapsUrl(form.googleMapsUrl);
+  if (gm) payload.googleMapsUrl = gm;             // ✅ sadece geçerliyse ekle
+
   if (hasCoords) {
-    payload.location = {
-      type: "Point",
-      coordinates: [lng, lat], // [lng, lat]
-    };
+    payload.location = { type: "Point", coordinates: [lng, lat] as [number, number] };
   }
 
   const { data } = await api.put(`/restaurants/${rid}`, payload);
