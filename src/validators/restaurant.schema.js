@@ -133,11 +133,7 @@ export const updateRestaurantSchema = Joi.object({
     location: locationSchema.optional(),
     mapAddress: Joi.string().allow("", null),
     placeId: Joi.string().allow("", null),
-// validators dosyasında her iki yerde de:
-googleMapsUrl: Joi.string()
-  .trim()
-  .uri({ scheme: ['http', 'https'] })
-  .allow('', null),
+    googleMapsUrl: Joi.string().allow("", null),  
   }).min(1),
 });
 
