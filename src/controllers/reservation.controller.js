@@ -265,53 +265,88 @@ export const listMyReservations = async (req, res, next) => {
 };
 
 /** GET /api/reservations/:rid */
+/** GET /api/reservations/:rid */
 export const getReservation = async (req, res, next) => {
   try {
+    // 👇 Restoranın harita alanlarını da dahil ederek populate et
     const rDoc = await Reservation.findById(req.params.rid)
-      .populate("restaurantId", "_id name")
+      .populate(
+        "restaurantId",
+        [
+          "_id",
+          "name",
+          "address",
+          "city",
+          "mapAddress",
+          "placeId",
+          "googleMapsUrl",
+          // GeoJSON içindeki sadece koordinasyon alanını seç
+          "location.coordinates",
+        ].join(" ")
+      )
       .lean();
 
     if (!rDoc) return res.status(404).json({ message: "Reservation not found" });
-    if (
-      req.user.role === "customer" &&
-      String(rDoc.userId) !== String(req.user.id)
-    )
+    if (req.user.role === "customer" && String(rDoc.userId) !== String(req.user.id)) {
       return res.status(403).json({ message: "Forbidden" });
+    }
 
+    // —— Toplam/party/deposit normalize (mevcut mantık) ——
     const { mode, partySize, totalPrice } = computeTotalsStrict(rDoc.selections || []);
-    const restaurant = await Restaurant.findById(
-      rDoc.restaurantId?._id || rDoc.restaurantId
-    ).lean();
+
+    // rDoc.restaurantId, populate’lı (objedir); yine de garanti olsun diye id’den de çekiyoruz
+    const restId = rDoc?.restaurantId?._id || rDoc?.restaurantId;
+    const restaurant = await Restaurant.findById(restId).lean();
+
     const depositAmount = computeDeposit(restaurant, totalPrice);
 
     const patch = {};
     let need = false;
-    if (partySize > 0 && partySize !== rDoc.partySize) {
-      patch.partySize = partySize;
-      need = true;
-    }
-    if (totalPrice !== rDoc.totalPrice) {
-      patch.totalPrice = totalPrice;
-      need = true;
-    }
-    if (depositAmount !== rDoc.depositAmount) {
-      patch.depositAmount = depositAmount;
-      need = true;
-    }
+    if (partySize > 0 && partySize !== rDoc.partySize) { patch.partySize = partySize; need = true; }
+    if (totalPrice !== rDoc.totalPrice) { patch.totalPrice = totalPrice; need = true; }
+    if (depositAmount !== rDoc.depositAmount) { patch.depositAmount = depositAmount; need = true; }
     if (need) {
       await Reservation.updateOne({ _id: rDoc._id }, { $set: patch }).catch(() => {});
       Object.assign(rDoc, patch);
       console.log("NORMALIZE", rDoc._id.toString(), "mode:", mode, "patch:", patch);
     }
 
+    // — Menüler —
     const menuIds = (rDoc.selections || []).map((s) => s.menuId).filter(Boolean);
     const menus = await Menu.find({ _id: { $in: menuIds } })
       .select("_id name title pricePerPerson")
       .lean();
 
+    // — Restoranı client’a açık ve sabit bir formatla gönder —
+    const restaurantSafe = (() => {
+      const src = rDoc?.restaurantId && typeof rDoc.restaurantId === "object"
+        ? rDoc.restaurantId
+        : restaurant || {};
+
+      // Koordinatlar GeoJSON: [lng, lat]
+      const coords = Array.isArray(src?.location?.coordinates) ? src.location.coordinates : undefined;
+      const lng = typeof coords?.[0] === "number" ? coords[0] : undefined;
+      const lat = typeof coords?.[1] === "number" ? coords[1] : undefined;
+
+      return {
+        _id: String(src?._id || restId || ""),
+        name: src?.name || "",
+        address: src?.address || "",
+        city: src?.city || "",
+        mapAddress: src?.mapAddress || "",
+        placeId: src?.placeId || "",
+        googleMapsUrl: src?.googleMapsUrl || "",
+        coordinates: (typeof lat === "number" && typeof lng === "number")
+          ? { lat, lng } // 👈 frontend’de direkt kullanılabilir
+          : undefined,
+      };
+    })();
+
     res.json({
       _id: rDoc._id,
-      restaurantId: rDoc.restaurantId,
+      // restaurantId alanını objeye sabitle (geri uyum için de tutuyoruz)
+      restaurantId: restaurantSafe,          // 👈 artık burada tüm harita alanları var
+      restaurant: restaurantSafe,            // (opsiyonel) explicit anahtar
       userId: rDoc.userId,
       dateTimeUTC: rDoc.dateTimeUTC,
       status: rDoc.status,
