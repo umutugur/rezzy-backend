@@ -42,6 +42,17 @@ const UserSchema = new mongoose.Schema({
   bannedUntil: { type: Date },
   avatarUrl: { type: String, default: null },
 
+  preferredRegion: {
+    type: String,
+    enum: ["CY", "UK"],
+    default: "CY",
+  },
+  preferredLanguage: {
+    type: String,
+    enum: ["tr", "en"],
+    default: "tr",
+  },
+  
   notificationPrefs: {
     push:   { type: Boolean, default: true },
     sms:    { type: Boolean, default: false },

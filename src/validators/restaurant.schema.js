@@ -1,12 +1,6 @@
 import Joi from "joi";
 import mongoose from "mongoose";
 
-/*
- * Bu dosya restoranla ilgili tüm Joi doğrulama şemalarını içerir.
- * Mevcut şemalara ek olarak panelde çalışma saatleri, masalar ve
- * rezervasyon politikaları için yeni şemalar tanımlanmıştır.
- */
-
 const objectId = (value, helpers) => {
   if (!mongoose.Types.ObjectId.isValid(value)) {
     return helpers.error("any.invalid");
@@ -14,38 +8,27 @@ const objectId = (value, helpers) => {
   return value;
 };
 
-// Boş alanları doğrulamada kullanmak için yardımcı şema
 const anyObject = Joi.object({}).unknown(true);
 
-/**
- * NOT: Mevcut validate middleware'iniz şöyle çalışıyor:
- *   const data = { body:req.body, params:req.params, query:req.query };
- *   schema.validate(data, { ... })
- * Bu nedenle her şema, KÖKTE { body, params, query } anahtarlarını içeren
- * TEK bir Joi şeması olarak tanımlandı.
- */
-/* ---------------------------------------------
- * YARDIMCI ALT ŞEMALAR
- * -------------------------------------------*/
 const locationSchema = Joi.object({
   type: Joi.string().valid("Point").default("Point"),
   coordinates: Joi.array()
     .items(Joi.number().min(-180).max(180))
     .length(2)
-    .required() // [lng, lat]
+    .required()
     .messages({
       "array.length": "Koordinatlar [lng, lat] biçiminde olmalıdır.",
     }),
 });
 
-/* ---------------------------------------------
- * RESTORAN OLUŞTURMA
- * -------------------------------------------*/
+/* ---------- CREATE RESTAURANT ---------- */
 export const createRestaurantSchema = Joi.object({
   params: anyObject,
   query: anyObject,
   body: Joi.object({
     name: Joi.string().required(),
+    // 🌍 bölge
+    region: Joi.string().valid("CY", "UK").default("CY"),
     address: Joi.string().allow("", null),
     phone: Joi.string().allow("", null),
     city: Joi.string().allow("", null),
@@ -70,13 +53,15 @@ export const createRestaurantSchema = Joi.object({
     graceMinutes: Joi.number().min(0).max(120).default(15),
     isActive: Joi.boolean().default(true),
 
-    // ✅ Yeni alanlar: konum
+    // konum
     location: locationSchema.optional(),
     mapAddress: Joi.string().allow("", null),
     placeId: Joi.string().allow("", null),
     googleMapsUrl: Joi.string().uri().allow("", null),
   }),
 });
+
+/* ---------- CREATE MENU (legacy) ---------- */
 export const createMenuSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
@@ -97,9 +82,8 @@ export const createMenuSchema = Joi.object({
     isActive: Joi.boolean().default(true),
   }),
 });
-/* ---------------------------------------------
- * RESTORAN GÜNCELLEME
- * -------------------------------------------*/
+
+/* ---------- UPDATE RESTAURANT ---------- */
 export const updateRestaurantSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
@@ -107,6 +91,7 @@ export const updateRestaurantSchema = Joi.object({
   }),
   body: Joi.object({
     name: Joi.string(),
+    region: Joi.string().valid("CY", "UK"),
     address: Joi.string().allow("", null),
     phone: Joi.string().allow("", null),
     city: Joi.string().allow("", null),
@@ -129,15 +114,15 @@ export const updateRestaurantSchema = Joi.object({
     graceMinutes: Joi.number().min(0).max(120),
     isActive: Joi.boolean(),
 
-    // ✅ Yeni alanlar: konum
+    // konum
     location: locationSchema.optional(),
     mapAddress: Joi.string().allow("", null),
     placeId: Joi.string().allow("", null),
-    googleMapsUrl: Joi.string().allow("", null),  
+    googleMapsUrl: Joi.string().allow("", null),
   }).min(1),
 });
 
-/* --- Müsaitlik --- */
+/* ---------- AVAILABILITY ---------- */
 export const getAvailabilitySchema = Joi.object({
   body: anyObject,
   params: Joi.object({
@@ -149,7 +134,7 @@ export const getAvailabilitySchema = Joi.object({
   }),
 });
 
-/* --- Yeni: Çalışma saatlerini güncelle --- */
+/* ---------- OPENING HOURS ---------- */
 export const updateOpeningHoursSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
@@ -169,7 +154,7 @@ export const updateOpeningHoursSchema = Joi.object({
   }),
 });
 
-/* --- Yeni: Masaları güncelle --- */
+/* ---------- TABLES ---------- */
 export const updateTablesSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
@@ -188,7 +173,7 @@ export const updateTablesSchema = Joi.object({
   }),
 });
 
-/* --- Yeni: Rezervasyon politikalarını güncelle --- */
+/* ---------- POLICIES ---------- */
 export const updatePoliciesSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
@@ -204,7 +189,7 @@ export const updatePoliciesSchema = Joi.object({
   }).min(1),
 });
 
-/* --- Yeni: Menüler listesini güncelle --- */
+/* ---------- MENUS ---------- */
 export const updateMenusSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
@@ -225,7 +210,7 @@ export const updateMenusSchema = Joi.object({
   }),
 });
 
-/* --- Yeni: Fotoğraf ekle --- */
+/* ---------- PHOTOS ---------- */
 export const addPhotoSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
@@ -236,7 +221,6 @@ export const addPhotoSchema = Joi.object({
   }),
 });
 
-/* --- Yeni: Fotoğraf sil --- */
 export const removePhotoSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
@@ -247,7 +231,7 @@ export const removePhotoSchema = Joi.object({
   }),
 });
 
-/* --- Yeni: Rezervasyon listesi (panel) --- */
+/* ---------- RESERVATIONS LIST (PANEL) ---------- */
 export const fetchReservationsByRestaurantSchema = Joi.object({
   body: anyObject,
   query: anyObject,
@@ -256,18 +240,20 @@ export const fetchReservationsByRestaurantSchema = Joi.object({
   }),
 });
 
-/* --- Yeni: Rezervasyon durumu güncelle --- */
+/* ---------- UPDATE RESERVATION STATUS ---------- */
 export const updateReservationStatusSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
     id: Joi.string().custom(objectId).required(),
   }),
   body: Joi.object({
-    status: Joi.string().valid("pending", "confirmed", "cancelled", "rejected").required(),
+    status: Joi.string()
+      .valid("pending", "confirmed", "cancelled", "arrived", "no_show")
+      .required(),
   }),
 });
 
-/* --- Yeni: Rezervasyon QR kodu --- */
+/* ---------- RESERVATION QR ---------- */
 export const getReservationQRSchema = Joi.object({
   body: anyObject,
   query: anyObject,
@@ -275,12 +261,16 @@ export const getReservationQRSchema = Joi.object({
     id: Joi.string().custom(objectId).required(),
   }),
 });
+
 export const listRestaurantsSchema = Joi.object({
   params: anyObject,
   body: anyObject,
   query: Joi.object({
     city: Joi.string().allow("", null),
     query: Joi.string().allow("", null),
+    region: Joi.string().valid("CY", "UK").optional(),
+    lat: Joi.number().optional(),
+    lng: Joi.number().optional(),
   }),
 });
 

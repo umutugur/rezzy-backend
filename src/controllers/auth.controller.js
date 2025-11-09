@@ -52,6 +52,11 @@ function signRefreshToken(user){
 
 /** Client’a dönecek user şekli */
 function toClientUser(u) {
+  const preferredRegion = u.preferredRegion || "CY";
+  const preferredLanguage =
+    u.preferredLanguage ||
+    (preferredRegion === "UK" ? "en" : "tr");
+
   return {
     id: u._id?.toString?.() ?? null,
     name: u.name,
@@ -68,6 +73,8 @@ function toClientUser(u) {
     providers: Array.isArray(u.providers) ? u.providers.map(p => p.name) : [],
     noShowCount: u.noShowCount ?? 0,
     riskScore:   u.riskScore ?? 0,
+    preferredRegion,
+    preferredLanguage,
     createdAt: u.createdAt ?? null,
     updatedAt: u.updatedAt ?? null,
   };
@@ -271,8 +278,10 @@ export const me = async (req, res, next) => {
     }
 
     const u = await User.findById(req.user.id)
-      .select("_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore createdAt updatedAt");
-    if (!u) return res.status(401).json({ message: "Unauthorized" });
+  .select(
+    "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt"
+  );
+  if (!u) return res.status(401).json({ message: "Unauthorized" });
 
     if (u.role === "restaurant" && !u.restaurantId) {
       await ensureRestaurantForOwner(u._id);
@@ -289,17 +298,35 @@ export const updateMe = async (req, res, next) => {
     }
 
     const patch = {};
-    const { name, email, phone, notificationPrefs, avatarUrl } = req.body;
+    const {
+      name,
+      email,
+      phone,
+      notificationPrefs,
+      avatarUrl,
+      preferredRegion,
+      preferredLanguage,
+    } = req.body;
+
     if (name != null)  patch.name  = String(name);
     if (email != null) patch.email = String(email);
     if (phone != null) patch.phone = String(phone);
     if (avatarUrl != null) patch.avatarUrl = String(avatarUrl);
+
     if (notificationPrefs && typeof notificationPrefs === "object") {
       patch.notificationPrefs = {
         push:  !!notificationPrefs.push,
         sms:   !!notificationPrefs.sms,
         email: !!notificationPrefs.email,
       };
+    }
+
+    if (preferredRegion && ["CY", "UK"].includes(preferredRegion)) {
+      patch.preferredRegion = preferredRegion;
+    }
+
+    if (preferredLanguage && ["tr", "en"].includes(preferredLanguage)) {
+      patch.preferredLanguage = preferredLanguage;
     }
 
     const u = await User.findByIdAndUpdate(req.user.id, { $set: patch }, { new: true }).lean();

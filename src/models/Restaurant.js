@@ -4,6 +4,15 @@ const RestaurantSchema = new mongoose.Schema(
   {
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     name: { type: String, required: true },
+
+    // ✅ Bölge (ülke)
+    region: {
+      type: String,
+      enum: ["CY", "UK"],
+      default: "CY",
+      index: true,
+    },
+
     city: String,
     priceRange: String,
     rating: Number,
@@ -69,9 +78,9 @@ const RestaurantSchema = new mongoose.Schema(
         index: "2dsphere",
       },
     },
-    mapAddress: String, // Harita üzerinde gösterilecek adres metni
-    placeId: String, // Google Place ID
-    googleMapsUrl: String, // Harita bağlantısı (opsiyonel)
+    mapAddress: String,
+    placeId: String,
+    googleMapsUrl: String,
   },
   { timestamps: true }
 );
@@ -79,5 +88,6 @@ const RestaurantSchema = new mongoose.Schema(
 // Arama ve konum indeksleri
 RestaurantSchema.index({ name: "text" });
 RestaurantSchema.index({ location: "2dsphere" });
+RestaurantSchema.index({ region: 1, city: 1 });
 
 export default mongoose.model("Restaurant", RestaurantSchema);
