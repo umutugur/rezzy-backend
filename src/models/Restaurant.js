@@ -5,11 +5,9 @@ const RestaurantSchema = new mongoose.Schema(
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     name: { type: String, required: true },
 
-    // ✅ Bölge (ülke)
+    // ✅ Bölge (ülke) – artık sabit enum yok; herhangi bir ISO kodu kabul edebilir
     region: {
       type: String,
-      enum: ["CY", "UK"],
-      default: "CY",
       index: true,
     },
 
@@ -75,7 +73,7 @@ const RestaurantSchema = new mongoose.Schema(
       },
       coordinates: {
         type: [Number], // [lng, lat]
-        index: "2dsphere",
+        index: "2dsphere", // tek 2dsphere indeks bu satırda tanımlanıyor
       },
     },
     mapAddress: String,
@@ -87,7 +85,7 @@ const RestaurantSchema = new mongoose.Schema(
 
 // Arama ve konum indeksleri
 RestaurantSchema.index({ name: "text" });
-RestaurantSchema.index({ location: "2dsphere" });
+// location için ikinci bir 2dsphere indeks tanımlamıyoruz
 RestaurantSchema.index({ region: 1, city: 1 });
 
 export default mongoose.model("Restaurant", RestaurantSchema);
