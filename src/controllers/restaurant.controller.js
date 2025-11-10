@@ -29,23 +29,23 @@ export const createRestaurant = async (req, res, next) => {
   }
 };
 // Aktif restoranları listele
+
 export const listRestaurants = async (req, res, next) => {
+  const start = Date.now();
+  console.log("[listRestaurants] START", req.query);
+
   try {
     const { city, query, region, lat, lng } = req.query || {};
     const filter = { isActive: true };
 
-    // Bölge filtresi (opsiyonel)
     if (region) {
-      // iki harfli ülke kodunu büyük harfe çevirerek filtrele
       filter.region = String(region).trim().toUpperCase();
     }
 
-    // Şehir filtresi (opsiyonel)
     if (city) {
       filter.city = String(city);
     }
 
-    // Arama metni
     if (query && String(query).trim().length > 0) {
       filter.name = { $regex: String(query).trim(), $options: "i" };
     }
@@ -59,10 +59,11 @@ export const listRestaurants = async (req, res, next) => {
       lng !== null &&
       !Number.isNaN(Number(lng));
 
-    // ✅ Konum varsa: $geoNear ile en yakından uzağa sırala
     if (hasLat && hasLng) {
       const latNum = Number(lat);
       const lngNum = Number(lng);
+
+      console.log("[listRestaurants] geoNear filter:", filter);
 
       const data = await Restaurant.aggregate([
         {
@@ -88,17 +89,31 @@ export const listRestaurants = async (req, res, next) => {
         { $sort: { distance: 1, rating: -1, name: 1 } },
       ]);
 
+      console.log("[listRestaurants] END geoNear", {
+        dur: Date.now() - start,
+        count: data.length,
+      });
+
       return res.json(data);
     }
 
-    // ✅ Konum yoksa: bölge/şehir/arama + rating'e göre sırala
+    console.log("[listRestaurants] filter:", filter);
+
     const data = await Restaurant.find(filter)
-      .select("name city priceRange rating photos description location mapAddress")
+      .select(
+        "name city priceRange rating photos description location mapAddress"
+      )
       .sort({ rating: -1, name: 1 });
 
-    res.json(data);
+    console.log("[listRestaurants] END find", {
+      dur: Date.now() - start,
+      count: data.length,
+    });
+
+    return res.json(data);
   } catch (e) {
-    next(e);
+    console.error("[listRestaurants] ERROR", e);
+    return next(e);
   }
 };
 /* ---------- GET RESTAURANT (menus) ---------- */
