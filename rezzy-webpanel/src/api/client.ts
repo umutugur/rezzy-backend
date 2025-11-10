@@ -338,8 +338,16 @@ export async function restaurantUpdateProfile(rid: string, form: any) {
     placeId: form.placeId ?? "",
   };
 
+  // ✅ Region (ülke kodu) gönder
+  if (typeof form.region === "string") {
+    const r = form.region.trim().toUpperCase();
+    if (r) {
+      payload.region = r;
+    }
+  }
+
   const gm = normalizeMapsUrl(form.googleMapsUrl);
-  if (gm) payload.googleMapsUrl = gm;             // ✅ sadece geçerliyse ekle
+  if (gm) payload.googleMapsUrl = gm;
 
   if (hasCoords) {
     payload.location = { type: "Point", coordinates: [lng, lat] as [number, number] };
