@@ -8,6 +8,10 @@ import { generateQRDataURL, signQR } from "../utils/qr.js";
 export const createRestaurant = async (req, res, next) => {
   try {
     const body = { ...req.body, owner: req.user.id };
+    if (typeof body.region === "string") {
+      const r = body.region.trim().toUpperCase();
+      body.region = r || undefined;
+    }
 
     // GeoJSON location normalize
     if (body.location && Array.isArray(body.location.coordinates)) {
@@ -31,10 +35,10 @@ export const listRestaurants = async (req, res, next) => {
     const filter = { isActive: true };
 
     // Bölge filtresi (opsiyonel)
-if (region) {
-  // iki harfli ülke kodunu büyük harfe çevirerek filtrele
-  filter.region = String(region).trim().toUpperCase();
-}
+    if (region) {
+      // iki harfli ülke kodunu büyük harfe çevirerek filtrele
+      filter.region = String(region).trim().toUpperCase();
+    }
 
     // Şehir filtresi (opsiyonel)
     if (city) {
@@ -164,6 +168,11 @@ export const updateRestaurant = async (req, res, next) => {
     const $set = {};
     for (const k of allowed) {
       if (typeof req.body[k] !== "undefined") $set[k] = req.body[k];
+    }
+    if (typeof $set.region === "string") {
+      const r = $set.region.trim().toUpperCase();
+      if (r) $set.region = r;
+      else delete $set.region;
     }
 
     // GeoJSON normalize
