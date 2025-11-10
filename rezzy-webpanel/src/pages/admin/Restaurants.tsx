@@ -12,6 +12,8 @@ type Restaurant = {
   address?: string;
   phone?: string;
   email?: string;
+  region?:string;
+  isActive?:boolean;
 };
 
 async function fetchRestaurants(): Promise<Restaurant[]> {
@@ -60,6 +62,8 @@ export default function AdminRestaurantsPage() {
                 <th className="py-2 px-4">Adres</th>
                 <th className="py-2 px-4">Telefon</th>
                 <th className="py-2 px-4">E-posta</th>
+                <th className="py-2 px-4">Bölge</th>
+                <th className="py-2 px-4">Durum</th>
               </tr>
             </thead>
             <tbody>

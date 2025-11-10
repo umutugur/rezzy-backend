@@ -284,7 +284,7 @@ export const listRestaurants = async (req, res, next) => {
     const rows = await Restaurant.find(q)
       .sort({ _id: -1 })
       .limit(limit + 1)
-      .select("_id name city owner commissionRate address phone email")
+      .select("_id name city address phone email region isActive commissionRate")
       .lean();
 
     res.json({ items: cut(rows, limit), nextCursor: nextCursor(rows, limit) });
