@@ -31,9 +31,10 @@ export const listRestaurants = async (req, res, next) => {
     const filter = { isActive: true };
 
     // Bölge filtresi (opsiyonel)
-    if (region === "CY" || region === "UK") {
-      filter.region = region;
-    }
+if (region) {
+  // iki harfli ülke kodunu büyük harfe çevirerek filtrele
+  filter.region = String(region).trim().toUpperCase();
+}
 
     // Şehir filtresi (opsiyonel)
     if (city) {

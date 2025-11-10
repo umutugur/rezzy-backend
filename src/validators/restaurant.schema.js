@@ -28,7 +28,7 @@ export const createRestaurantSchema = Joi.object({
   body: Joi.object({
     name: Joi.string().required(),
     // 🌍 bölge
-    region: Joi.string().valid("CY", "UK").default("CY"),
+    region: Joi.string().uppercase().min(2).max(3).required(), // ISO kod beklenebilir, default kaldırıldı
     address: Joi.string().allow("", null),
     phone: Joi.string().allow("", null),
     city: Joi.string().allow("", null),
@@ -91,7 +91,7 @@ export const updateRestaurantSchema = Joi.object({
   }),
   body: Joi.object({
     name: Joi.string(),
-    region: Joi.string().valid("CY", "UK"),
+    region: Joi.string().uppercase().min(2).max(3),
     address: Joi.string().allow("", null),
     phone: Joi.string().allow("", null),
     city: Joi.string().allow("", null),
@@ -268,7 +268,7 @@ export const listRestaurantsSchema = Joi.object({
   query: Joi.object({
     city: Joi.string().allow("", null),
     query: Joi.string().allow("", null),
-    region: Joi.string().valid("CY", "UK").optional(),
+    region: Joi.string().uppercase().min(2).max(3).optional(),
     lat: Joi.number().optional(),
     lng: Joi.number().optional(),
   }),

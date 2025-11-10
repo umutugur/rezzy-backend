@@ -35,6 +35,7 @@ type Restaurant = {
   name: string;
   email?: string;
   phone?: string;
+  region?: string;
   city?: string;
   address?: string;
   description?: string;
@@ -111,31 +112,32 @@ export default function RestaurantProfilePage() {
     if (!data) return;
 
     setForm({
-  name: data.name,
-  email: data.email,
-  phone: data.phone,
-  city: data.city,
-  address: data.address,
-  description: data.description,
-  iban: data.iban,
-  ibanName: data.ibanName,
-  bankName: data.bankName,
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      region: data.region ?? "",
+      city: data.city,
+      address: data.address,
+      description: data.description,
+      iban: data.iban,
+      ibanName: data.ibanName,
+      bankName: data.bankName,
 
-  // ✅ konum ve ilgili metalar
-  mapAddress: data.mapAddress ?? "",
-  placeId: data.placeId ?? "",
-  googleMapsUrl: data.googleMapsUrl ?? "",
-  location:
-    data.location && Array.isArray((data.location as any).coordinates)
-      ? {
-          type: "Point",
-          coordinates: [
-            Number((data.location as any).coordinates[0]) || 0, // lng
-            Number((data.location as any).coordinates[1]) || 0, // lat
-          ],
-        }
-      : { type: "Point", coordinates: [0, 0] },
-});
+      // ✅ konum ve ilgili metalar
+      mapAddress: data.mapAddress ?? "",
+      placeId: data.placeId ?? "",
+      googleMapsUrl: data.googleMapsUrl ?? "",
+      location:
+        data.location && Array.isArray((data.location as any).coordinates)
+          ? {
+              type: "Point",
+              coordinates: [
+                Number((data.location as any).coordinates[0]) || 0, // lng
+                Number((data.location as any).coordinates[1]) || 0, // lat
+              ],
+            }
+          : { type: "Point", coordinates: [0, 0] },
+    });
 
     // 🆕 Menüler: description'ı da al
     setMenus(
@@ -175,28 +177,32 @@ export default function RestaurantProfilePage() {
 
   // Mutations
   const saveGeneralMut = useMutation({
-  mutationFn: () => {
-    const lng = Number((form.location?.coordinates?.[0] ?? 0));
-    const lat = Number((form.location?.coordinates?.[1] ?? 0));
-    const payload: any = {
-      ...form,
-      location: {
-        type: "Point",
-        coordinates: [lng, lat],
-      },
-      mapAddress: form.mapAddress ?? "",
-      placeId: form.placeId ?? "",
-      googleMapsUrl: form.googleMapsUrl ?? "",
-    };
-    return restaurantUpdateProfile(rid, payload);
-  },
-  onSuccess: () => {
-    showToast("Kaydedildi", "success");
-    qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
-  },
-  onError: (e: any) =>
-    showToast(e?.response?.data?.message || e?.message || "Kaydedilemedi", "error"),
-});
+    mutationFn: () => {
+      const lng = Number((form.location?.coordinates?.[0] ?? 0));
+      const lat = Number((form.location?.coordinates?.[1] ?? 0));
+      const payload: any = {
+        ...form,
+        location: {
+          type: "Point",
+          coordinates: [lng, lat],
+        },
+        mapAddress: form.mapAddress ?? "",
+        placeId: form.placeId ?? "",
+        googleMapsUrl: form.googleMapsUrl ?? "",
+      };
+      const region = (form as any).region?.trim().toUpperCase();
+      if (region) {
+        payload.region = region;
+      }
+      return restaurantUpdateProfile(rid, payload);
+    },
+    onSuccess: () => {
+      showToast("Kaydedildi", "success");
+      qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
+    },
+    onError: (e: any) =>
+      showToast(e?.response?.data?.message || e?.message || "Kaydedilemedi", "error"),
+  });
   const uploadMut = useMutation({
     mutationFn: (file: File) => restaurantAddPhoto(rid, file),
     onSuccess: () => {
@@ -355,6 +361,23 @@ export default function RestaurantProfilePage() {
                   value={form.phone || ""}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
                 />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Bölge (ülke kodu)</label>
+                <input
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  placeholder="TR, US, UK..."
+                  value={(form as any).region || ""}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      region: e.target.value,
+                    }) as any)
+                  }
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  2-3 harfli ISO ülke kodu girin (örn. TR, US, UK).
+                </p>
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Şehir</label>

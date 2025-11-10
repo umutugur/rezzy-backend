@@ -140,6 +140,7 @@ export async function adminCreateUser(input: {
 export async function adminCreateRestaurant(input: {
   ownerId: string;
   name: string;
+  region?: string;
   city?: string;
   address?: string;
   phone?: string;

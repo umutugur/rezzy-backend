@@ -37,7 +37,8 @@ export default function AdminRestaurantCreatePage() {
   const [mapAddress, setMapAddress] = React.useState("");
   const [googleMapsUrl, setGoogleMapsUrl] = React.useState("");
   const [lat, setLat] = React.useState<number | "">("");
-  const [lng, setLng] = React.useState<number | "">("");
+  const [lng, setLng] = React.useState<number | "">("");    
+  const [region, setRegion] = React.useState("");
 
   // Yeni kullanıcı modalı
   const [userModalOpen, setUserModalOpen] = React.useState(false);
@@ -78,6 +79,7 @@ export default function AdminRestaurantCreatePage() {
       return adminCreateRestaurant({
         ownerId: owner?._id as string,
         name,
+        region: region.trim().toUpperCase(),
         city: city || undefined,
         address: address || undefined,
         phone: phone || undefined,
@@ -126,7 +128,7 @@ export default function AdminRestaurantCreatePage() {
     onError: (e: any) => showToast(e?.response?.data?.message || "Kullanıcı oluşturulamadı", "error"),
   });
 
-  const canSubmit = !!owner && name.trim().length > 0;
+  const canSubmit = !!owner && name.trim().length > 0 && region.trim().length > 0;
   const canCreateUser =
     newName.trim().length > 0 &&
     (!!newEmail.trim() || !!newPhone.trim()); // en az e-posta veya telefon
@@ -216,6 +218,16 @@ export default function AdminRestaurantCreatePage() {
             <div>
               <label className="block text-sm text-gray-600 mb-1">Ad *</label>
               <input value={name} onChange={(e)=>setName(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">Bölge (ülke kodu) *</label>
+              <input
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                placeholder="TR, US, UK..."
+                className="w-full border rounded-lg px-3 py-2"
+              />
+              <p className="mt-1 text-xs text-gray-500">2-3 harfli ISO ülke kodu girin (örn. TR, US, UK).</p>
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Şehir</label>
