@@ -6,7 +6,8 @@ import { Card } from "../../components/Card";
 import {
   adminGetRestaurant,
   adminUpdateRestaurantCommission,
-  adminListReservationsByRestaurant
+  adminListReservationsByRestaurant,
+  adminUpdateRestaurant
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
 
@@ -18,8 +19,13 @@ type RestaurantInfo = {
   address?: string;
   phone?: string;
   email?: string;
-  commissionPct?: number;
-  commission?: number;
+  region?: string;
+  isActive?: boolean;
+  // Yeni model: 0..1 arası oran
+  commissionRate?: number;
+  // Eski alanlarla geriye dönük uyumluluk:
+  commissionPct?: number; // 0..100 arası tutulmuş olabilir
+  commission?: number;    // 0..100 arası tutulmuş olabilir
 };
 
 type Rsv = {
@@ -39,6 +45,7 @@ export default function AdminRestaurantDetailPage() {
   const qc = useQueryClient();
 
   const [commission, setCommission] = React.useState<string>("");
+  const [isActive, setIsActive] = React.useState<boolean>(true);
 
   // Restoran bilgisi
   const infoQ = useQuery<RestaurantInfo | null>({
@@ -47,13 +54,25 @@ export default function AdminRestaurantDetailPage() {
     enabled: !!rid
   });
 
-  // Komisyon inputunu veriye göre doldur
   React.useEffect(() => {
     const d = infoQ.data;
-    if (d) {
-      const pct = d.commissionPct ?? d.commission ?? 0;
-      setCommission(String(pct));
+    if (!d) return;
+
+    // Komisyonu normalize et:
+    // 1) Tercih edilen alan: commissionRate (0..1)
+    // 2) Eski alanlar: commissionPct / commission (0..100)
+    let pct = 5; // varsayılan %5
+    if (typeof d.commissionRate === "number") {
+      pct = d.commissionRate * 100;
+    } else if (typeof d.commissionPct === "number") {
+      pct = d.commissionPct;
+    } else if (typeof d.commission === "number") {
+      pct = d.commission;
     }
+    setCommission(String(pct));
+
+    // Aktif/pasif durumu
+    setIsActive(typeof d.isActive === "boolean" ? d.isActive : true);
   }, [infoQ.data]);
 
   // Liste filtreleri
@@ -77,14 +96,38 @@ export default function AdminRestaurantDetailPage() {
     enabled: !!rid
   });
 
+  const activeMut = useMutation({
+    mutationFn: (next: boolean) => adminUpdateRestaurant(rid, { isActive: next }),
+    onSuccess: () => {
+      showToast("Restoran durumu güncellendi", "success");
+      qc.invalidateQueries({ queryKey: ["admin-restaurant", rid] });
+    },
+    onError: () => {
+      showToast("Restoran durumu güncellenemedi", "error");
+    }
+  });
+
   // Komisyon kaydet
   const saveMut = useMutation({
-    mutationFn: () => adminUpdateRestaurantCommission(rid, Number(commission)),
+    mutationFn: () => {
+      const raw = Number(commission);
+      if (Number.isNaN(raw) || raw < 0) {
+        throw new Error("Geçerli bir komisyon oranı girin");
+      }
+      const rate = raw / 100; // % değerini 0..1'e çevir
+      return adminUpdateRestaurantCommission(rid, rate);
+    },
     onSuccess: () => {
       showToast("Komisyon güncellendi", "success");
       qc.invalidateQueries({ queryKey: ["admin-restaurant", rid] });
     },
-    onError: () => showToast("Komisyon güncellenemedi", "error")
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Komisyon güncellenemedi";
+      showToast(msg, "error");
+    }
   });
 
   const totalPages =
@@ -124,6 +167,23 @@ export default function AdminRestaurantDetailPage() {
               <div>
                 <span className="text-gray-500 text-sm">E-posta</span>
                 <div>{infoQ.data?.email || "-"}</div>
+              </div>
+              <div>
+                <span className="text-gray-500 text-sm">Bölge</span>
+                <div>{infoQ.data?.region || "-"}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500 text-sm">Aktif</span>
+                <input
+                  type="checkbox"
+                  checked={!!isActive}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setIsActive(next);
+                    activeMut.mutate(next);
+                  }}
+                  disabled={activeMut.isPending || infoQ.isLoading}
+                />
               </div>
             </div>
           )}
