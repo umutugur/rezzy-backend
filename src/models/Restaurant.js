@@ -10,6 +10,11 @@ const RestaurantSchema = new mongoose.Schema(
       type: String,
       index: true,
     },
+    isActive: {
+  type: Boolean,
+  default: true,
+  index: true,
+},
 
     city: String,
     priceRange: String,

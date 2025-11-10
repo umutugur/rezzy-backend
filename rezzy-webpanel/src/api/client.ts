@@ -445,3 +445,7 @@ export async function adminExportCommissions(month?: string): Promise<Blob> {
   });
   return resp.data as Blob; // xlsx blob
 }
+export async function adminUpdateRestaurant(rid: string, payload: any) {
+  const { data } = await api.put(`/restaurants/${rid}`, payload);
+  return data;
+}
