@@ -48,9 +48,14 @@ app.use("/api/auth", authLimiter);
 app.use("/api/reservations/checkin", checkinLimiter);
 
 // Rotalar
-app.use("/api/auth", authRoutes);
+
+// Public restoran endpointleri (mobil app burayı kullanacak)
 app.use("/api/restaurants", restaurantRoutes);
-app.use("/api/restaurants", panelRoutes); // panel alt path'leri
+
+// Panel / admin restoran endpointleri
+app.use("/api/panel/restaurants", panelRoutes);
+
+app.use("/api/auth", authRoutes);
 app.use("/api/reservations", reservationRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/admin", adminRoutes);
@@ -58,10 +63,9 @@ app.use("/api/users", userRoutes);
 app.use("/api/jobs", jobsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/me/favorites", favoritesRoutes);
-// 404
-app.use((req,res)=> res.status(404).json({ message: "Not found" }));
 
-// Hata
+// 404 & error aynı kalsın
+app.use((req, res) => res.status(404).json({ message: "Not found" }));
 app.use(errorHandler);
 
 export default app;

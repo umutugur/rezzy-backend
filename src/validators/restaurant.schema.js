@@ -263,15 +263,16 @@ export const getReservationQRSchema = Joi.object({
 });
 
 export const listRestaurantsSchema = Joi.object({
-  params: anyObject,
-  body: anyObject,
+  params: Joi.object().unknown(true),
+  body: Joi.object().unknown(true),
   query: Joi.object({
     city: Joi.string().allow("", null),
     query: Joi.string().allow("", null),
-    region: Joi.string().uppercase().min(2).max(3).optional(),
+    region: Joi.string().trim().uppercase().min(2).max(3).optional(),
     lat: Joi.number().optional(),
     lng: Joi.number().optional(),
-  }),
+    _cb: Joi.any().optional(),       // 🔹 mobilin yolladığı cache-buster
+  }).unknown(true),                  // 🔹 ileride gelecek ekstra filtrelere de izin ver
 });
 
 export const getRestaurantSchema = Joi.object({
