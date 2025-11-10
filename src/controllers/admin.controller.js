@@ -423,8 +423,8 @@ export const createRestaurant = async (req, res, next) => {
 export const getRestaurantDetail = async (req, res, next) => {
   try {
     const r = await Restaurant.findById(req.params.rid)
-      .select("_id name city address owner settings depositAmount depositRate depositType commissionRate phone email")
-      .lean();
+  .select("_id name city address owner settings depositAmount depositRate depositType commissionRate phone email isActive region")     
+  .lean();
     if (!r) return res.status(404).json({ message: "Restaurant not found" });
     res.json(r);
   } catch (e) { next(e); }
