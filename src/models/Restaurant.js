@@ -98,3 +98,4 @@ RestaurantSchema.index(
   { isActive: 1, region: 1, rating: -1, name: 1 },
   { name: "isActive_region_rating_name" }
 );
+export default mongoose.model("Restaurant", RestaurantSchema);
