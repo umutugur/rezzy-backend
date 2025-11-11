@@ -30,7 +30,6 @@ export const createRestaurant = async (req, res, next) => {
 };
 // Aktif restoranları listele
 
-
 export const listRestaurants = async (req, res, next) => {
   const start = Date.now();
   console.log("[listRestaurants] START", req.query);
@@ -42,11 +41,9 @@ export const listRestaurants = async (req, res, next) => {
     if (region) {
       filter.region = String(region).trim().toUpperCase();
     }
-
     if (city) {
       filter.city = String(city);
     }
-
     if (query && String(query).trim().length > 0) {
       filter.name = { $regex: String(query).trim(), $options: "i" };
     }
@@ -61,7 +58,7 @@ export const listRestaurants = async (req, res, next) => {
       !Number.isNaN(Number(lng));
 
     // -----------------------------
-    // 1) Konumlu arama ($geoNear)
+    // 1) Konumlu istek (geoNear)
     // -----------------------------
     if (hasLat && hasLng) {
       const latNum = Number(lat);
@@ -69,7 +66,6 @@ export const listRestaurants = async (req, res, next) => {
 
       console.log("[listRestaurants] geoNear filter:", filter);
 
-      const qStart = Date.now();
       const data = await Restaurant.aggregate([
         {
           $geoNear: {
@@ -85,71 +81,52 @@ export const listRestaurants = async (req, res, next) => {
             city: 1,
             priceRange: 1,
             rating: 1,
-            mapAddress: 1,
+            description: 1,
             location: 1,
-            // sadece ilk foto
-            photo: { $arrayElemAt: ["$photos", 0] },
+            mapAddress: 1,
+            photos: { $slice: ["$photos", 1] }, // ✅ sadece ilk foto
           },
         },
         { $sort: { distance: 1, rating: -1, name: 1 } },
       ]);
-      const qdur = Date.now() - qStart;
 
-      const payload = data; // zaten projelenmiş
-      const size = JSON.stringify(payload).length;
+      const size = JSON.stringify(data).length;
 
       console.log("[listRestaurants] END geoNear", {
-        qdur,
         dur: Date.now() - start,
-        count: payload.length,
+        count: data.length,
         size,
       });
 
-      return res.json(payload);
+      return res.json(data);
     }
 
     // -----------------------------
-    // 2) Normal liste (region / city / query)
+    // 2) Normal istek (region / city)
     // -----------------------------
     console.log("[listRestaurants] filter:", filter);
 
     const qStart = Date.now();
     const docs = await Restaurant.find(filter)
       .select(
-        // DİKKAT: description YOK, photos full yok
-        "name city priceRange rating mapAddress location photos"
+        "name city priceRange rating description location mapAddress"
       )
+      .slice("photos", 1)         // ✅ Mongo seviyesinde sadece 1 foto
       .sort({ rating: -1, name: 1 })
       .lean();
     const qdur = Date.now() - qStart;
 
-    const mapStart = Date.now();
-    const payload = docs.map((r) => ({
-      _id: r._id,
-      name: r.name,
-      city: r.city,
-      priceRange: r.priceRange,
-      rating: r.rating,
-      mapAddress: r.mapAddress,
-      location: r.location,
-      photo:
-        Array.isArray(r.photos) && r.photos.length > 0
-          ? r.photos[0]
-          : null,
-    }));
-    const mapdur = Date.now() - mapStart;
-
-    const size = JSON.stringify(payload).length;
+    const size = JSON.stringify(docs).length;
 
     console.log("[listRestaurants] END find", {
       qdur,
-      mapdur,
+      mapdur: 0,
       dur: Date.now() - start,
-      count: payload.length,
+      count: docs.length,
       size,
     });
 
-    return res.json(payload);
+    return res.json(docs);
   } catch (e) {
     console.error("[listRestaurants] ERROR", e);
     return next(e);
