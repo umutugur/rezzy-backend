@@ -29,8 +29,7 @@ export const createRestaurant = async (req, res, next) => {
   }
 };
 // Aktif restoranları listele
-// controllers/restaurant.controller.js
-import Restaurant from "../models/Restaurant.js";
+
 
 export const listRestaurants = async (req, res, next) => {
   const start = Date.now();
