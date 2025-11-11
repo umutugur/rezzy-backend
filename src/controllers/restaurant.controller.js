@@ -38,14 +38,17 @@ export const listRestaurants = async (req, res, next) => {
     const { city, query, region, lat, lng } = req.query || {};
     const filter = { isActive: true };
 
+    // Bölge
     if (region) {
       filter.region = String(region).trim().toUpperCase();
     }
 
+    // Şehir
     if (city) {
       filter.city = String(city);
     }
 
+    // Arama
     if (query && String(query).trim().length > 0) {
       filter.name = { $regex: String(query).trim(), $options: "i" };
     }
@@ -59,6 +62,7 @@ export const listRestaurants = async (req, res, next) => {
       lng !== null &&
       !Number.isNaN(Number(lng));
 
+    // ---- Konum bazlı (geoNear) ----
     if (hasLat && hasLng) {
       const latNum = Number(lat);
       const lngNum = Number(lng);
@@ -80,10 +84,12 @@ export const listRestaurants = async (req, res, next) => {
             city: 1,
             priceRange: 1,
             rating: 1,
-            photos: 1,
+            // sadece ilk foto
+            photos: { $slice: ["$photos", 1] },
             description: 1,
             location: 1,
             mapAddress: 1,
+            distance: 1,
           },
         },
         { $sort: { distance: 1, rating: -1, name: 1 } },
@@ -97,13 +103,24 @@ export const listRestaurants = async (req, res, next) => {
       return res.json(data);
     }
 
+    // ---- Normal liste ----
     console.log("[listRestaurants] filter:", filter);
 
-    const data = await Restaurant.find(filter)
+    const rows = await Restaurant.find(filter)
       .select(
         "name city priceRange rating photos description location mapAddress"
       )
-      .sort({ rating: -1, name: 1 });
+      .sort({ rating: -1, name: 1 })
+      .lean();
+
+    // sadece ilk foto
+    const data = rows.map((r) => ({
+      ...r,
+      photos:
+        Array.isArray(r.photos) && r.photos.length > 0
+          ? [r.photos[0]]
+          : [],
+    }));
 
     console.log("[listRestaurants] END find", {
       dur: Date.now() - start,

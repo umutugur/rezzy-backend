@@ -91,6 +91,5 @@ const RestaurantSchema = new mongoose.Schema(
 // Arama ve konum indeksleri
 RestaurantSchema.index({ name: "text" });
 // location için ikinci bir 2dsphere indeks tanımlamıyoruz
-RestaurantSchema.index({ region: 1, city: 1 });
-
+RestaurantSchema.index({ isActive: 1, region: 1, city: 1 });
 export default mongoose.model("Restaurant", RestaurantSchema);
