@@ -31,7 +31,7 @@ export const createRestaurant = async (req, res, next) => {
 // Aktif restoranları listele
 
 export const listRestaurants = async (req, res, next) => {
-  const start = Date.now();
+  const t0 = Date.now();
   console.log("[listRestaurants] START", req.query);
 
   try {
@@ -62,13 +62,16 @@ export const listRestaurants = async (req, res, next) => {
       lng !== null &&
       !Number.isNaN(Number(lng));
 
-    // ---- Konum bazlı (geoNear) ----
+    // =========================
+    // KONUM VAR → geoNear
+    // =========================
     if (hasLat && hasLng) {
       const latNum = Number(lat);
       const lngNum = Number(lng);
 
       console.log("[listRestaurants] geoNear filter:", filter);
 
+      const t1 = Date.now();
       const data = await Restaurant.aggregate([
         {
           $geoNear: {
@@ -80,51 +83,80 @@ export const listRestaurants = async (req, res, next) => {
         },
         {
           $project: {
+            // sadece ihtiyaç olan alanlar
             name: 1,
             city: 1,
             priceRange: 1,
             rating: 1,
-            // sadece ilk foto
-            photos: { $slice: ["$photos", 1] },
-            description: 1,
-            location: 1,
             mapAddress: 1,
+            location: 1,
+            // sadece ilk foto (array olarak)
+            photos: { $slice: ["$photos", 1] },
             distance: 1,
           },
         },
         { $sort: { distance: 1, rating: -1, name: 1 } },
       ]);
+      const t2 = Date.now();
 
       console.log("[listRestaurants] END geoNear", {
-        dur: Date.now() - start,
+        qdur: t2 - t1,
+        dur: t2 - t0,
         count: data.length,
+        size: JSON.stringify(data).length,
       });
 
       return res.json(data);
     }
 
-    // ---- Normal liste ----
+    // =========================
+    // KONUM YOK → NORMAL FIND
+    // =========================
     console.log("[listRestaurants] filter:", filter);
 
-    const rows = await Restaurant.find(filter)
-      .select(
-        "name city priceRange rating photos description location mapAddress"
-      )
-      .sort({ rating: -1, name: 1 })
-      .lean();
+    const tFindStart = Date.now();
 
-    // sadece ilk foto
+    const rows = await Restaurant.find(filter)
+      .select({
+        name: 1,
+        city: 1,
+        priceRange: 1,
+        rating: 1,
+        photos: 1,
+        description: 1,
+        location: 1,
+        mapAddress: 1,
+      })
+      .sort({ rating: -1, name: 1 })
+      .lean()
+      .exec();
+
+    const tFindEnd = Date.now();
+
+    // Cevabı sadeleştir: sadece ilk foto
     const data = rows.map((r) => ({
-      ...r,
+      _id: r._id,
+      name: r.name,
+      city: r.city,
+      priceRange: r.priceRange,
+      rating: r.rating,
+      description: r.description,
+      mapAddress: r.mapAddress,
+      location: r.location,
       photos:
         Array.isArray(r.photos) && r.photos.length > 0
           ? [r.photos[0]]
           : [],
     }));
 
+    const tEnd = Date.now();
+
     console.log("[listRestaurants] END find", {
-      dur: Date.now() - start,
+      qdur: tFindEnd - tFindStart,        // sadece Mongo query süresi
+      mapdur: tEnd - tFindEnd,            // JS tarafı süresi
+      dur: tEnd - t0,                     // toplam
       count: data.length,
+      size: JSON.stringify(data).length,  // byte sayısı
     });
 
     return res.json(data);
