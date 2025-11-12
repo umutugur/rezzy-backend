@@ -39,8 +39,6 @@ const corsAll = cors({
 });
 
 app.use(corsAll);
-// Bazı barındırmalarda preflight için ayrıca iyi gelir:
-app.options("*", corsAll);
 app.use(express.json({ limit: "12mb" }));
 app.use(express.urlencoded({ extended: true, limit:"12mb" }));
 app.use(cookieParser());
