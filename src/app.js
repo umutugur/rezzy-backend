@@ -6,7 +6,6 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import path from "path";
 import rateLimit from "express-rate-limit";
-
 import authRoutes from "./routes/auth.routes.js";
 import restaurantRoutes from "./routes/restaurant.routes.js";
 import reservationRoutes from "./routes/reservation.routes.js";
@@ -35,8 +34,8 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],   // ⬅️ önemli
   exposedHeaders: ["Content-Disposition"],
 }));
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true, limit:"2mb" }));
+app.use(express.json({ limit: "12mb" }));
+app.use(express.urlencoded({ extended: true, limit:"12mb" }));
 app.use(cookieParser());
 app.use(morgan("dev"));
 
