@@ -78,6 +78,12 @@ export default function AdminRestaurantsPage() {
                   <td className="py-2 px-4">{r.address || "-"}</td>
                   <td className="py-2 px-4">{r.phone || "-"}</td>
                   <td className="py-2 px-4">{r.email || "-"}</td>
+                  <td className="py-2 px-4">{r.region || "-"}</td>
+     <td className="py-2 px-4">
+      {r.isActive
+        ? <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700">Aktif</span>
+        : <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-rose-50 text-rose-700">Pasif</span>}
+    </td>
                 </tr>
               ))}
               {(!data || data.length === 0) && (

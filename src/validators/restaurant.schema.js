@@ -217,7 +217,12 @@ export const addPhotoSchema = Joi.object({
     id: Joi.string().custom(objectId).required(),
   }),
   body: Joi.object({
-    fileUrl: Joi.string().uri().required(),
+   fileUrl: Joi.string()
+  .uri({ scheme: ["http", "https"] })
+  .required()
+  .messages({
+    "string.uri": "Geçersiz URL. Sadece http/https Cloudinary linki kabul edilir.",
+  }),
   }),
 });
 

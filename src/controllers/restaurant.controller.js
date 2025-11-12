@@ -3,7 +3,7 @@ import Restaurant from "../models/Restaurant.js";
 import Menu from "../models/Menu.js";
 import Reservation from "../models/Reservation.js";
 import { generateQRDataURL, signQR } from "../utils/qr.js";
-
+import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 /* ---------- CREATE RESTAURANT ---------- */
 export const createRestaurant = async (req, res, next) => {
   try {
@@ -31,42 +31,20 @@ export const createRestaurant = async (req, res, next) => {
 // Aktif restoranları listele
 
 
+// controllers/restaurant.controller.js  (yalnızca listRestaurants değişti)
 export const listRestaurants = async (req, res, next) => {
   const start = Date.now();
   console.log("[listRestaurants] START", req.query);
 
   try {
     const { city, query, region, lat, lng } = req.query || {};
-
-    // 1) Her zaman indeksle hizalı: sadece aktif restoranlar
     const filter = { isActive: true };
 
-    if (region) {
-      filter.region = String(region).trim().toUpperCase();
-    }
+    if (region) filter.region = String(region).trim().toUpperCase();
+    if (city)   filter.city   = String(city).trim();
 
-    if (city) {
-      filter.city = String(city).trim();
-    }
-
-    // 2) İsim araması
-    // Not: Küçük dataset için regex kabul edilebilir; büyürse text index'e geçiririz.
-    if (query && String(query).trim().length > 0) {
-      const q = String(query).trim();
-      filter.name = { $regex: q, $options: "i" };
-      // Alternatif (text index ile):
-      // filter.$text = { $search: q };
-    }
-
-    const hasLat =
-      typeof lat !== "undefined" &&
-      lat !== null &&
-      !Number.isNaN(Number(lat));
-
-    const hasLng =
-      typeof lng !== "undefined" &&
-      lng !== null &&
-      !Number.isNaN(Number(lng));
+    const hasLat = lat != null && !Number.isNaN(Number(lat));
+    const hasLng = lng != null && !Number.isNaN(Number(lng));
 
     // -----------------------------
     // 1) Konumlu istek (geoNear)
@@ -75,10 +53,7 @@ export const listRestaurants = async (req, res, next) => {
       const latNum = Number(lat);
       const lngNum = Number(lng);
 
-      console.log("[listRestaurants] geoNear filter:", filter);
-
       const geoStart = Date.now();
-
       const data = await Restaurant.aggregate([
         {
           $geoNear: {
@@ -97,73 +72,112 @@ export const listRestaurants = async (req, res, next) => {
             rating: 1,
             location: 1,
             mapAddress: 1,
-            primaryPhoto: { $arrayElemAt: ["$photos", 0] }, // sadece kapak foto
+            // yalnız ilk foto, base64’i dışarıda eleyip göndereceğiz:
+            _firstPhoto: { $ifNull: [{ $arrayElemAt: ["$photos", 0] }, null] },
             distance: 1,
           },
         },
         { $sort: { distance: 1, rating: -1, name: 1 } },
-      ]);
+      ]).allowDiskUse(false);
 
-      const geoDur = Date.now() - geoStart;
-      const size = JSON.stringify(data).length;
-
-      console.log("[listRestaurants] END geoNear", {
-        dur: Date.now() - start,
-        qdur: geoDur,
-        count: data.length,
-        size,
+      // base64 fren + alias
+      const shaped = data.map((d) => {
+        let primaryPhoto = d._firstPhoto || null;
+        if (primaryPhoto && (typeof primaryPhoto !== "string" ||
+            primaryPhoto.startsWith("data:") || primaryPhoto.length > 1024)) {
+          primaryPhoto = null;
+        }
+        return {
+          _id: d._id,
+          name: d.name,
+          city: d.city,
+          region: d.region,
+          priceRange: d.priceRange,
+          rating: d.rating,
+          location: d.location,
+          mapAddress: d.mapAddress,
+          distance: d.distance,
+          primaryPhoto,
+          photo: primaryPhoto, // alias (HomeScreen uyumu için)
+        };
       });
 
-      return res.json(data);
+      console.log("[listRestaurants] END geoNear", {
+        qdur: Date.now() - geoStart,
+        dur: Date.now() - start,
+        count: shaped.length,
+        size: JSON.stringify(shaped).length,
+      });
+
+      return res.json(shaped);
     }
 
     // -----------------------------
     // 2) Normal istek (region / city)
     // -----------------------------
-    console.log("[listRestaurants] filter:", filter);
+    const pipe = [
+      { $match: filter },
+      // Hint’i aggregation’da $match stage indexı ile uygulatmak için option’dan vereceğiz
+      {
+        $project: {
+          name: 1,
+          city: 1,
+          region: 1,
+          priceRange: 1,
+          rating: 1,
+          location: 1,
+          mapAddress: 1,
+          _firstPhoto: { $ifNull: [{ $arrayElemAt: ["$photos", 0] }, null] },
+        },
+      },
+      { $sort: { rating: -1, name: 1 } },
+      // İsteğe bağlı: aşırı geniş veriyi frenlemek için üst limit (ör. 200)
+      // { $limit: 200 },
+    ];
 
-    const qStart = Date.now();
-
-    // Burada sadece liste için gerekli alanlar dönüyor.
-    const baseQuery = Restaurant.find(filter)
-      .select("name city region priceRange rating location mapAddress photos")
-      .slice("photos", 1) // Mongo tarafında sadece ilk foto
-      .sort({ rating: -1, name: 1 })
-      .lean();
-
-    // Eğer sadece isActive + region (+ city) filtresi varsa ve metin araması / geo yoksa,
-    // isActive_region_rating_name indeksini kullanmaya zorla.
-    const shouldHintIndex =
-      !query && !hasLat && !hasLng;
-
-    if (shouldHintIndex) {
-      baseQuery.hint("isActive_region_rating_name");
+    // Query varsa text/regex; burada küçük dataset için regex kabul. (Büyürse $search/text index)
+    if (query && String(query).trim().length > 0) {
+      const q = String(query).trim();
+      // Regex’i $match’e eklemek için pipeline başına enjekte edelim:
+      pipe.unshift({ $match: { ...filter, name: { $regex: q, $options: "i" } } });
+      // filter ayrıca altta kullanıldığı için bırakmakta sakınca yok.
     }
 
-    const docs = await baseQuery.exec();
+    const aggOptions = {};
+    // Sadece isActive/region(/city) filtresi ve geo yoksa, index hint uygula
+    if (!query && !hasLat && !hasLng) {
+      // index adıyla hint
+      Object.assign(aggOptions, { hint: "isActive_region_rating_name" });
+    }
 
-    const qdur = Date.now() - qStart;
+    const qStart = Date.now();
+    const docs = await Restaurant.aggregate(pipe, aggOptions).allowDiskUse(false);
 
-    // İstemciye göndereceğimiz payload'ı sadeleştiriyoruz.
-    const data = docs.map((d) => ({
-      _id: d._id,
-      name: d.name,
-      city: d.city,
-      region: d.region,
-      priceRange: d.priceRange,
-      rating: d.rating,
-      location: d.location,
-      mapAddress: d.mapAddress,
-      primaryPhoto: d.photos && d.photos.length > 0 ? d.photos[0] : null,
-    }));
-
-    const size = JSON.stringify(data).length;
+    const data = docs.map((d) => {
+      let primaryPhoto = d._firstPhoto || null;
+      if (primaryPhoto && (typeof primaryPhoto !== "string" ||
+          primaryPhoto.startsWith("data:") || primaryPhoto.length > 1024)) {
+        primaryPhoto = null;
+      }
+      return {
+        _id: d._id,
+        name: d.name,
+        city: d.city,
+        region: d.region,
+        priceRange: d.priceRange,
+        rating: d.rating,
+        location: d.location,
+        mapAddress: d.mapAddress,
+        primaryPhoto,
+        photo: primaryPhoto, // alias
+      };
+    });
 
     console.log("[listRestaurants] END find", {
-      qdur,
+      qdur: Date.now() - qStart,
       dur: Date.now() - start,
       count: data.length,
-      size,
+      size: JSON.stringify(data).length,
     });
 
     return res.json(data);
@@ -240,6 +254,18 @@ export const updateRestaurant = async (req, res, next) => {
     for (const k of allowed) {
       if (typeof req.body[k] !== "undefined") $set[k] = req.body[k];
     }
+    // photos için sadece http/https URL'lere izin ver
+if (Array.isArray($set.photos)) {
+  $set.photos = $set.photos.filter(
+    (p) =>
+      typeof p === "string" &&
+      (p.startsWith("http://") || p.startsWith("https://"))
+  );
+  // Tamamı çöpe gittiyse boş array olsun
+  if ($set.photos.length === 0) {
+    delete $set.photos; // veya $set.photos = [];
+  }
+}
     if (typeof $set.region === "string") {
       const r = $set.region.trim().toUpperCase();
       if (r) $set.region = r;
@@ -512,24 +538,69 @@ export const updateMenus = async (req, res, next) => {
 export const addPhoto = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { fileUrl } = req.body;
-    if (!fileUrl) {
-      throw { status: 400, message: "fileUrl is required" };
+    let { fileUrl } = req.body || {};
+
+    if (!fileUrl || typeof fileUrl !== "string") {
+      return res.status(400).json({ message: "fileUrl is required" });
     }
+
+    fileUrl = fileUrl.trim();
+
+    // Admin/owner yetki kontrolü
     if (req.user.role !== "admin") {
       const rest = await Restaurant.findById(id).select("owner");
       if (!rest || String(rest.owner) !== String(req.user.id)) {
-        throw { status: 403, message: "Forbidden" };
+        return res.status(403).json({ message: "Forbidden" });
       }
     }
+
+    let finalUrl= null;
+
+    // 1) Eğer zaten http/https ise (Cloudinary URL gibi), direkt kaydet
+    if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
+      finalUrl = fileUrl;
+    }
+    // 2) data URL (base64) geldiyse: Cloudinary'e yükle, sadece URL kaydet
+    else if (fileUrl.startsWith("data:")) {
+      const match = fileUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+      if (!match) {
+        return res.status(400).json({ message: "Invalid data URL format" });
+      }
+
+      const mimeType = match[1];
+      const base64Data = match[2];
+
+      const buffer = Buffer.from(base64Data, "base64");
+
+      const uploadResult = await uploadBufferToCloudinary(buffer, {
+        folder: "rezzy/restaurants",
+        resource_type: "image",
+      });
+
+      finalUrl = uploadResult.secure_url;
+    }
+    // 3) file:/// vs geldiyse: reddet (istemci önce Cloudinary'e yüklemeli)
+    else {
+      return res.status(400).json({
+        message:
+          "Invalid fileUrl. Send Cloudinary URL or data URL; local file paths are not accepted.",
+      });
+    }
+
     const updated = await Restaurant.findByIdAndUpdate(
       id,
-      { $push: { photos: fileUrl } },
+      { $push: { photos: finalUrl } },
       { new: true }
-    );
-    if (!updated)
-      throw { status: 404, message: "Restaurant not found" };
-    res.json(updated);
+    ).select("_id photos");
+
+    if (!updated) {
+      return res.status(404).json({ message: "Restaurant not found" });
+    }
+
+    return res.json({
+      ok: true,
+      photos: updated.photos || [],
+    });
   } catch (e) {
     next(e);
   }

@@ -11,7 +11,7 @@ async function fetchPhotos(rid: string): Promise<string[]> {
 }
 
 async function addPhoto(rid: string, url: string) {
-  const { data } = await api.post(`/restaurants/${rid}/photos`, { url });
+  const { data } = await api.post(`/restaurants/${rid}/photos`, { fileUrl: url });
   return data;
 }
 
