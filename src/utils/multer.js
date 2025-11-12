@@ -18,3 +18,12 @@ export const receiptUpload = multer({
   },
   limits: { fileSize: 10 * 1024 * 1024 },
 });
+export const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 }, // 12MB
+  fileFilter: (req, file, cb) => {
+    const ok = /^image\/(jpeg|jpg|png|webp|gif|heic|heif)$/i.test(file.mimetype);
+    if (!ok) return cb(new Error("Sadece görüntü dosyalarına izin verilir"));
+    cb(null, true);
+  },
+});

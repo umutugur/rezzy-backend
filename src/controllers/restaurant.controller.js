@@ -529,14 +529,9 @@ export const addPhoto = async (req, res, next) => {
   try {
     const { id } = req.params;
     let { fileUrl } = req.body || {};
+    const f = req.file;
 
-    if (!fileUrl || typeof fileUrl !== "string") {
-      return res.status(400).json({ message: "fileUrl is required" });
-    }
-
-    fileUrl = fileUrl.trim();
-
-    // Admin/owner yetki kontrolü
+    // Yetki kontrolü (aynı)
     if (req.user.role !== "admin") {
       const rest = await Restaurant.findById(id).select("owner");
       if (!rest || String(rest.owner) !== String(req.user.id)) {
@@ -544,36 +539,40 @@ export const addPhoto = async (req, res, next) => {
       }
     }
 
-    let finalUrl= null;
+    let finalUrl = null;
 
-    // 1) Eğer zaten http/https ise (Cloudinary URL gibi), direkt kaydet
-    if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
-      finalUrl = fileUrl;
+    // 0) Multipart geldiyse en güvenlisi bu
+    if (f?.buffer) {
+      const uploadResult = await uploadBufferToCloudinary(f.buffer, {
+        folder:
+          process.env.CLOUDINARY_FOLDER_RESTAURANTS ||
+          "rezzy/restaurants",                    // ⬅️ restoranlar için ayrı klasör
+        resource_type: "image",
+      });
+      finalUrl = uploadResult.secure_url;
     }
-    // 2) data URL (base64) geldiyse: Cloudinary'e yükle, sadece URL kaydet
-    else if (fileUrl.startsWith("data:")) {
+    // 1) Doğrudan http/https URL
+    else if (fileUrl && (fileUrl.startsWith("http://") || fileUrl.startsWith("https://"))) {
+      finalUrl = fileUrl.trim();
+    }
+    // 2) data URL (base64) fallback
+    else if (fileUrl && fileUrl.startsWith("data:")) {
       const match = fileUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
       if (!match) {
         return res.status(400).json({ message: "Invalid data URL format" });
       }
-
-      const mimeType = match[1];
-      const base64Data = match[2];
-
-      const buffer = Buffer.from(base64Data, "base64");
-
+      const buffer = Buffer.from(match[2], "base64");
       const uploadResult = await uploadBufferToCloudinary(buffer, {
-        folder: "rezzy/restaurants",
+        folder:
+          process.env.CLOUDINARY_FOLDER_RESTAURANTS ||
+          "rezzy/restaurants",
         resource_type: "image",
       });
-
       finalUrl = uploadResult.secure_url;
-    }
-    // 3) file:/// vs geldiyse: reddet (istemci önce Cloudinary'e yüklemeli)
-    else {
+    } else {
       return res.status(400).json({
         message:
-          "Invalid fileUrl. Send Cloudinary URL or data URL; local file paths are not accepted.",
+          "Görsel bulunamadı. Multipart 'file' alanı gönderin ya da 'fileUrl' olarak http/https veya data URL verin.",
       });
     }
 
@@ -583,14 +582,9 @@ export const addPhoto = async (req, res, next) => {
       { new: true }
     ).select("_id photos");
 
-    if (!updated) {
-      return res.status(404).json({ message: "Restaurant not found" });
-    }
+    if (!updated) return res.status(404).json({ message: "Restaurant not found" });
 
-    return res.json({
-      ok: true,
-      photos: updated.photos || [],
-    });
+    return res.json({ ok: true, photos: updated.photos || [] });
   } catch (e) {
     next(e);
   }
