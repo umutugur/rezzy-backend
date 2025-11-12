@@ -27,13 +27,20 @@ const origins = (process.env.CORS_ORIGIN || "")
   .filter(Boolean);
 
 // src/app.js
-app.use(cors({
-  origin: (process.env.CORS_ORIGIN || "").split(",").map(s=>s.trim()).filter(Boolean),
+// CORS (final)
+
+const corsAll = cors({
   credentials: true,
+  // Access-Control-Allow-Origin'ı isteğin Origin'ına birebir yansıtır (credentials ile uyumlu)
+  origin: (_origin, cb) => cb(null, true),
   methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
-  allowedHeaders: ["*"],   // ⬅️ önemli
+  allowedHeaders: "*",                 // ✅ tüm header’lara izin
   exposedHeaders: ["Content-Disposition"],
-}));
+});
+
+app.use(corsAll);
+// Bazı barındırmalarda preflight için ayrıca iyi gelir:
+app.options("*", corsAll);
 app.use(express.json({ limit: "12mb" }));
 app.use(express.urlencoded({ extended: true, limit:"12mb" }));
 app.use(cookieParser());
