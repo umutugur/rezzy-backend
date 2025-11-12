@@ -211,18 +211,22 @@ export const updateMenusSchema = Joi.object({
 });
 
 /* ---------- PHOTOS ---------- */
+// validators/restaurant.ts (veya neredeyse)
 export const addPhotoSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
     id: Joi.string().custom(objectId).required(),
   }),
   body: Joi.object({
-   fileUrl: Joi.string()
-  .uri({ scheme: ["http", "https"] })
-  .required()
-  .messages({
-    "string.uri": "Geçersiz URL. Sadece http/https Cloudinary linki kabul edilir.",
-  }),
+    fileUrl: Joi.alternatives().try(
+      // Cloudinary gibi doğrudan URL
+      Joi.string().uri({ scheme: ["http", "https"] }),
+      // Mobilin yolladığı base64 data URL
+      Joi.string().pattern(/^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/)
+    ).required().messages({
+      "alternatives.match": 'Geçersiz fileUrl. "http/https" URL ya da "data:image/...;base64,..." olmalı.',
+      "string.uri": "Geçersiz URL. Sadece http/https Cloudinary linki kabul edilir.",
+    }),
   }),
 });
 
