@@ -125,12 +125,22 @@ export const listRestaurants = async (req, res, next) => {
     const qStart = Date.now();
 
     // Burada sadece liste için gerekli alanlar dönüyor.
-    const docs = await Restaurant.find(filter)
+    const baseQuery = Restaurant.find(filter)
       .select("name city region priceRange rating location mapAddress photos")
       .slice("photos", 1) // Mongo tarafında sadece ilk foto
       .sort({ rating: -1, name: 1 })
-      .lean()
-      .exec();
+      .lean();
+
+    // Eğer sadece isActive + region (+ city) filtresi varsa ve metin araması / geo yoksa,
+    // isActive_region_rating_name indeksini kullanmaya zorla.
+    const shouldHintIndex =
+      !query && !hasLat && !hasLng;
+
+    if (shouldHintIndex) {
+      baseQuery.hint("isActive_region_rating_name");
+    }
+
+    const docs = await baseQuery.exec();
 
     const qdur = Date.now() - qStart;
 
