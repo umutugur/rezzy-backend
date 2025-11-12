@@ -27,8 +27,7 @@ export const createRestaurantSchema = Joi.object({
   query: anyObject,
   body: Joi.object({
     name: Joi.string().required(),
-    // 🌍 bölge
-    region: Joi.string().uppercase().min(2).max(3).required(), // ISO kod beklenebilir, default kaldırıldı
+    region: Joi.string().uppercase().min(2).max(3).required(),
     address: Joi.string().allow("", null),
     phone: Joi.string().allow("", null),
     city: Joi.string().allow("", null),
@@ -52,8 +51,6 @@ export const createRestaurantSchema = Joi.object({
     cancelPolicy: Joi.string().default("24h_100;3h_50;lt3h_0"),
     graceMinutes: Joi.number().min(0).max(120).default(15),
     isActive: Joi.boolean().default(true),
-
-    // konum
     location: locationSchema.optional(),
     mapAddress: Joi.string().allow("", null),
     placeId: Joi.string().allow("", null),
@@ -113,8 +110,6 @@ export const updateRestaurantSchema = Joi.object({
     cancelPolicy: Joi.string(),
     graceMinutes: Joi.number().min(0).max(120),
     isActive: Joi.boolean(),
-
-    // konum
     location: locationSchema.optional(),
     mapAddress: Joi.string().allow("", null),
     placeId: Joi.string().allow("", null),
@@ -211,7 +206,11 @@ export const updateMenusSchema = Joi.object({
 });
 
 /* ---------- PHOTOS ---------- */
-// validators/restaurant.ts (veya neredeyse)
+/**
+ * Multipart yükleme (req.file) için: fileUrl zorunlu değil.
+ * URL veya dataURL ile geliyorsa fileUrl kontrol edilir.
+ * En az bir kaynak var mı kontrolü controller’da yapılır.
+ */
 export const addPhotoSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
@@ -219,15 +218,10 @@ export const addPhotoSchema = Joi.object({
   }),
   body: Joi.object({
     fileUrl: Joi.alternatives().try(
-      // Cloudinary gibi doğrudan URL
       Joi.string().uri({ scheme: ["http", "https"] }),
-      // Mobilin yolladığı base64 data URL
       Joi.string().pattern(/^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/)
-    ).required().messages({
-      "alternatives.match": 'Geçersiz fileUrl. "http/https" URL ya da "data:image/...;base64,..." olmalı.',
-      "string.uri": "Geçersiz URL. Sadece http/https Cloudinary linki kabul edilir.",
-    }),
-  }),
+    ).optional()
+  }).unknown(true),
 });
 
 export const removePhotoSchema = Joi.object({
@@ -280,8 +274,8 @@ export const listRestaurantsSchema = Joi.object({
     region: Joi.string().trim().uppercase().min(2).max(3).optional(),
     lat: Joi.number().optional(),
     lng: Joi.number().optional(),
-    _cb: Joi.any().optional(),       // 🔹 mobilin yolladığı cache-buster
-  }).unknown(true),                  // 🔹 ileride gelecek ekstra filtrelere de izin ver
+    _cb: Joi.any().optional(),
+  }).unknown(true),
 });
 
 export const getRestaurantSchema = Joi.object({
