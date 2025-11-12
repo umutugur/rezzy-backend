@@ -29,22 +29,40 @@ export const createRestaurant = async (req, res, next) => {
   }
 };
 // Aktif restoranları listele
-
-
-// controllers/restaurant.controller.js  (yalnızca listRestaurants değişti)
 export const listRestaurants = async (req, res, next) => {
   const start = Date.now();
   console.log("[listRestaurants] START", req.query);
 
   try {
     const { city, query, region, lat, lng } = req.query || {};
+
+    // Her zaman: sadece aktif restoranlar
     const filter = { isActive: true };
 
     if (region) filter.region = String(region).trim().toUpperCase();
-    if (city)   filter.city   = String(city).trim();
+    if (city) filter.city = String(city).trim();
 
-    const hasLat = lat != null && !Number.isNaN(Number(lat));
-    const hasLng = lng != null && !Number.isNaN(Number(lng));
+    // İsim araması (küçük dataset için regex OK)
+    if (query && String(query).trim().length > 0) {
+      const q = String(query).trim();
+      filter.name = { $regex: q, $options: "i" };
+      // Büyük veri olursa text index'e geçebiliriz
+      // filter.$text = { $search: q };
+    }
+
+    const hasLat = lat !== undefined && lat !== null && !Number.isNaN(Number(lat));
+    const hasLng = lng !== undefined && lng !== null && !Number.isNaN(Number(lng));
+
+    // --- Yardımcı: foto filtresi (yalnızca http/https, base64 yok) ---
+    const sanitizePhotos = (arr) => {
+      if (!Array.isArray(arr) || arr.length === 0) return [];
+      const first = String(arr[0] || "");
+      if (!first) return [];
+      if (first.startsWith("data:")) return [];               // base64’i listeye koyma
+      if (first.length > 1024) return [];                     // anormal uzun stringleri ele
+      if (!/^https?:\/\//i.test(first)) return [];            // sadece http/https
+      return [first]; // sadece ilk foto ile dönüyoruz (payload küçük)
+    };
 
     // -----------------------------
     // 1) Konumlu istek (geoNear)
@@ -53,8 +71,10 @@ export const listRestaurants = async (req, res, next) => {
       const latNum = Number(lat);
       const lngNum = Number(lng);
 
+      console.log("[listRestaurants] geoNear filter:", filter);
       const geoStart = Date.now();
-      const data = await Restaurant.aggregate([
+
+      const raw = await Restaurant.aggregate([
         {
           $geoNear: {
             near: { type: "Point", coordinates: [lngNum, latNum] },
@@ -64,6 +84,7 @@ export const listRestaurants = async (req, res, next) => {
           },
         },
         {
+          // yalnızca gereken alanlar + ilk foto için array’i 1’e kıs
           $project: {
             name: 1,
             city: 1,
@@ -72,94 +93,15 @@ export const listRestaurants = async (req, res, next) => {
             rating: 1,
             location: 1,
             mapAddress: 1,
-            // yalnız ilk foto, base64’i dışarıda eleyip göndereceğiz:
-            _firstPhoto: { $ifNull: [{ $arrayElemAt: ["$photos", 0] }, null] },
+            photos: { $slice: ["$photos", 1] },
             distance: 1,
           },
         },
         { $sort: { distance: 1, rating: -1, name: 1 } },
-      ]).allowDiskUse(false);
+      ]);
 
-      // base64 fren + alias
-      const shaped = data.map((d) => {
-        let primaryPhoto = d._firstPhoto || null;
-        if (primaryPhoto && (typeof primaryPhoto !== "string" ||
-            primaryPhoto.startsWith("data:") || primaryPhoto.length > 1024)) {
-          primaryPhoto = null;
-        }
-        return {
-          _id: d._id,
-          name: d.name,
-          city: d.city,
-          region: d.region,
-          priceRange: d.priceRange,
-          rating: d.rating,
-          location: d.location,
-          mapAddress: d.mapAddress,
-          distance: d.distance,
-          primaryPhoto,
-          photo: primaryPhoto, // alias (HomeScreen uyumu için)
-        };
-      });
-
-      console.log("[listRestaurants] END geoNear", {
-        qdur: Date.now() - geoStart,
-        dur: Date.now() - start,
-        count: shaped.length,
-        size: JSON.stringify(shaped).length,
-      });
-
-      return res.json(shaped);
-    }
-
-    // -----------------------------
-    // 2) Normal istek (region / city)
-    // -----------------------------
-    const pipe = [
-      { $match: filter },
-      // Hint’i aggregation’da $match stage indexı ile uygulatmak için option’dan vereceğiz
-      {
-        $project: {
-          name: 1,
-          city: 1,
-          region: 1,
-          priceRange: 1,
-          rating: 1,
-          location: 1,
-          mapAddress: 1,
-          _firstPhoto: { $ifNull: [{ $arrayElemAt: ["$photos", 0] }, null] },
-        },
-      },
-      { $sort: { rating: -1, name: 1 } },
-      // İsteğe bağlı: aşırı geniş veriyi frenlemek için üst limit (ör. 200)
-      // { $limit: 200 },
-    ];
-
-    // Query varsa text/regex; burada küçük dataset için regex kabul. (Büyürse $search/text index)
-    if (query && String(query).trim().length > 0) {
-      const q = String(query).trim();
-      // Regex’i $match’e eklemek için pipeline başına enjekte edelim:
-      pipe.unshift({ $match: { ...filter, name: { $regex: q, $options: "i" } } });
-      // filter ayrıca altta kullanıldığı için bırakmakta sakınca yok.
-    }
-
-    const aggOptions = {};
-    // Sadece isActive/region(/city) filtresi ve geo yoksa, index hint uygula
-    if (!query && !hasLat && !hasLng) {
-      // index adıyla hint
-      Object.assign(aggOptions, { hint: "isActive_region_rating_name" });
-    }
-
-    const qStart = Date.now();
-    const docs = await Restaurant.aggregate(pipe, aggOptions).allowDiskUse(false);
-
-    const data = docs.map((d) => {
-      let primaryPhoto = d._firstPhoto || null;
-      if (primaryPhoto && (typeof primaryPhoto !== "string" ||
-          primaryPhoto.startsWith("data:") || primaryPhoto.length > 1024)) {
-        primaryPhoto = null;
-      }
-      return {
+      // frontend uyumlu çıktı: photos[] (ilk eleman Cloudinary URL, base64 yok)
+      const data = raw.map((d) => ({
         _id: d._id,
         name: d.name,
         city: d.city,
@@ -168,16 +110,62 @@ export const listRestaurants = async (req, res, next) => {
         rating: d.rating,
         location: d.location,
         mapAddress: d.mapAddress,
-        primaryPhoto,
-        photo: primaryPhoto, // alias
-      };
-    });
+        photos: sanitizePhotos(d.photos),
+        // distance’ı şimdilik göndermiyoruz; gerekirse eklenir
+      }));
 
+      const geoDur = Date.now() - geoStart;
+      const size = JSON.stringify(data).length;
+      console.log("[listRestaurants] END geoNear", {
+        dur: Date.now() - start,
+        qdur: geoDur,
+        count: data.length,
+        size,
+      });
+
+      return res.json(data);
+    }
+
+    // -----------------------------
+    // 2) Normal istek (region / city)
+    // -----------------------------
+    console.log("[listRestaurants] filter:", filter);
+
+    const qStart = Date.now();
+
+    const baseQuery = Restaurant.find(filter)
+      .select("name city region priceRange rating location mapAddress photos")
+      .slice("photos", 1)               // Mongo’dan yalnızca ilk foto
+      .sort({ rating: -1, name: 1 })
+      .lean();
+
+    // Sadece isActive + region(+city) var ve text/geo yoksa indeksi zorla
+    const shouldHintIndex = !query && !hasLat && !hasLng;
+    if (shouldHintIndex) {
+      baseQuery.hint("isActive_region_rating_name");
+    }
+
+    const docs = await baseQuery.exec();
+    const qdur = Date.now() - qStart;
+
+    const data = docs.map((d) => ({
+      _id: d._id,
+      name: d.name,
+      city: d.city,
+      region: d.region,
+      priceRange: d.priceRange,
+      rating: d.rating,
+      location: d.location,
+      mapAddress: d.mapAddress,
+      photos: sanitizePhotos(d.photos),
+    }));
+
+    const size = JSON.stringify(data).length;
     console.log("[listRestaurants] END find", {
-      qdur: Date.now() - qStart,
+      qdur,
       dur: Date.now() - start,
       count: data.length,
-      size: JSON.stringify(data).length,
+      size,
     });
 
     return res.json(data);
@@ -186,6 +174,8 @@ export const listRestaurants = async (req, res, next) => {
     return next(e);
   }
 };
+
+
 /* ---------- GET RESTAURANT (menus) ---------- */
 export const getRestaurant = async (req, res, next) => {
   try {
