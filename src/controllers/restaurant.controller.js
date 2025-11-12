@@ -30,28 +30,42 @@ export const createRestaurant = async (req, res, next) => {
 };
 // Aktif restoranları listele
 
+// controllers/restaurant.controller.js
+
+import Restaurant from "../models/restaurant.model.js";
+
 export const listRestaurants = async (req, res, next) => {
   const start = Date.now();
   console.log("[listRestaurants] START", req.query);
 
   try {
     const { city, query, region, lat, lng } = req.query || {};
+
+    // 1) Her zaman indeksle hizalı: sadece aktif restoranlar
     const filter = { isActive: true };
 
     if (region) {
       filter.region = String(region).trim().toUpperCase();
     }
+
     if (city) {
-      filter.city = String(city);
+      filter.city = String(city).trim();
     }
+
+    // 2) İsim araması
+    // Not: Küçük dataset için regex kabul edilebilir; büyürse text index'e geçiririz.
     if (query && String(query).trim().length > 0) {
-      filter.name = { $regex: String(query).trim(), $options: "i" };
+      const q = String(query).trim();
+      filter.name = { $regex: q, $options: "i" };
+      // Alternatif (text index ile):
+      // filter.$text = { $search: q };
     }
 
     const hasLat =
       typeof lat !== "undefined" &&
       lat !== null &&
       !Number.isNaN(Number(lat));
+
     const hasLng =
       typeof lng !== "undefined" &&
       lng !== null &&
@@ -66,6 +80,8 @@ export const listRestaurants = async (req, res, next) => {
 
       console.log("[listRestaurants] geoNear filter:", filter);
 
+      const geoStart = Date.now();
+
       const data = await Restaurant.aggregate([
         {
           $geoNear: {
@@ -79,21 +95,24 @@ export const listRestaurants = async (req, res, next) => {
           $project: {
             name: 1,
             city: 1,
+            region: 1,
             priceRange: 1,
             rating: 1,
-            description: 1,
             location: 1,
             mapAddress: 1,
-            photos: { $slice: ["$photos", 1] }, // ✅ sadece ilk foto
+            primaryPhoto: { $arrayElemAt: ["$photos", 0] }, // sadece kapak foto
+            distance: 1,
           },
         },
         { $sort: { distance: 1, rating: -1, name: 1 } },
       ]);
 
+      const geoDur = Date.now() - geoStart;
       const size = JSON.stringify(data).length;
 
       console.log("[listRestaurants] END geoNear", {
         dur: Date.now() - start,
+        qdur: geoDur,
         count: data.length,
         size,
       });
@@ -107,26 +126,40 @@ export const listRestaurants = async (req, res, next) => {
     console.log("[listRestaurants] filter:", filter);
 
     const qStart = Date.now();
+
+    // Burada sadece liste için gerekli alanlar dönüyor.
     const docs = await Restaurant.find(filter)
-      .select(
-        "name city priceRange rating description location mapAddress"
-      )
-      .slice("photos", 1)         // ✅ Mongo seviyesinde sadece 1 foto
+      .select("name city region priceRange rating location mapAddress photos")
+      .slice("photos", 1) // Mongo tarafında sadece ilk foto
       .sort({ rating: -1, name: 1 })
-      .lean();
+      .lean()
+      .exec();
+
     const qdur = Date.now() - qStart;
 
-    const size = JSON.stringify(docs).length;
+    // İstemciye göndereceğimiz payload'ı sadeleştiriyoruz.
+    const data = docs.map((d) => ({
+      _id: d._id,
+      name: d.name,
+      city: d.city,
+      region: d.region,
+      priceRange: d.priceRange,
+      rating: d.rating,
+      location: d.location,
+      mapAddress: d.mapAddress,
+      primaryPhoto: d.photos && d.photos.length > 0 ? d.photos[0] : null,
+    }));
+
+    const size = JSON.stringify(data).length;
 
     console.log("[listRestaurants] END find", {
       qdur,
-      mapdur: 0,
       dur: Date.now() - start,
-      count: docs.length,
+      count: data.length,
       size,
     });
 
-    return res.json(docs);
+    return res.json(data);
   } catch (e) {
     console.error("[listRestaurants] ERROR", e);
     return next(e);
