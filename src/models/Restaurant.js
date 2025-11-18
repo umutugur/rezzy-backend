@@ -10,6 +10,11 @@ const RestaurantSchema = new mongoose.Schema(
       type: String,
       index: true,
     },
+    // 🌐 Restoran arayüz dili (örn: "tr", "en", "ru", "el")
+    preferredLanguage: {
+      type: String,
+      default: "tr",
+    },
     isActive: {
   type: Boolean,
   default: true,

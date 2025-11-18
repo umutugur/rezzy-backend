@@ -4,44 +4,108 @@ import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import bcrypt from "bcrypt";
 
 /** GET /users/me */
-export const getMe = async (req,res,next)=>{
-  try{
+/** GET /users/me */
+export const getMe = async (req, res, next) => {
+  try {
     const u = await User.findById(req.user.id)
-      .select("_id name email phone role restaurantId avatarUrl notificationPrefs providers createdAt updatedAt");
-    if(!u) return res.status(404).json({message:"User not found"});
+      .select(
+        "_id name email phone role restaurantId avatarUrl notificationPrefs providers preferredRegion preferredLanguage createdAt updatedAt"
+      );
+
+    if (!u) return res.status(404).json({ message: "User not found" });
+
     res.json({
       user: {
-        _id: u._id, name: u.name, email: u.email, phone: u.phone, role: u.role,
-        restaurantId: u.restaurantId, avatarUrl: u.avatarUrl, notificationPrefs: u.notificationPrefs,
-        providers: (u.providers||[]).map(p=>p.name), createdAt: u.createdAt, updatedAt: u.updatedAt
-      }
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+        phone: u.phone,
+        role: u.role,
+        restaurantId: u.restaurantId,
+        avatarUrl: u.avatarUrl,
+        notificationPrefs: u.notificationPrefs,
+        providers: (u.providers || []).map((p) => p.name),
+        preferredRegion: u.preferredRegion,
+        preferredLanguage: u.preferredLanguage,
+        createdAt: u.createdAt,
+        updatedAt: u.updatedAt,
+      },
     });
-  }catch(e){ next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
-/** PATCH /users/me  (name, phone, notificationPrefs, optionally email) */
-export const updateMe = async (req,res,next)=>{
-  try{
+/** PATCH /users/me  (name, phone, notificationPrefs, optionally email, preferredRegion, preferredLanguage) */
+export const updateMe = async (req, res, next) => {
+  try {
     const allowed = {};
-    const { name, phone, email, notificationPrefs } = req.body || {};
-    if (name != null) allowed.name = String(name).trim().slice(0, 80);
-    if (phone != null) allowed.phone = String(phone).trim().slice(0, 40);
-    if (email != null) allowed.email = String(email).trim().toLowerCase();
+    const {
+      name,
+      phone,
+      email,
+      notificationPrefs,
+      preferredRegion,
+      preferredLanguage,
+    } = req.body || {};
+
+    if (name != null) {
+      allowed.name = String(name).trim().slice(0, 80);
+    }
+
+    if (phone != null) {
+      allowed.phone = String(phone).trim().slice(0, 40);
+    }
+
+    if (email != null) {
+      allowed.email = String(email).trim().toLowerCase();
+    }
+
     if (notificationPrefs && typeof notificationPrefs === "object") {
-      allowed["notificationPrefs.push"]  = !!notificationPrefs.push;
-      allowed["notificationPrefs.sms"]   = !!notificationPrefs.sms;
+      allowed["notificationPrefs.push"] = !!notificationPrefs.push;
+      allowed["notificationPrefs.sms"] = !!notificationPrefs.sms;
       allowed["notificationPrefs.email"] = !!notificationPrefs.email;
     }
 
-    const u = await User.findByIdAndUpdate(req.user.id, { $set: allowed }, { new:true })
-      .select("_id name email phone role restaurantId avatarUrl notificationPrefs providers");
-    if(!u) return res.status(404).json({message:"User not found"});
-    res.json({ ok:true, user: {
-      _id: u._id, name: u.name, email: u.email, phone: u.phone, role: u.role,
-      restaurantId: u.restaurantId, avatarUrl: u.avatarUrl, notificationPrefs: u.notificationPrefs,
-      providers: (u.providers||[]).map(p=>p.name),
-    }});
-  }catch(e){ next(e); }
+    // 🔹 Bölge (ülke) tercihi
+    if (preferredRegion != null) {
+      allowed.preferredRegion = String(preferredRegion).trim();
+    }
+
+    // 🔹 Dil tercihi
+    if (preferredLanguage != null) {
+      allowed.preferredLanguage = String(preferredLanguage).trim();
+    }
+
+    const u = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: allowed },
+      { new: true }
+    ).select(
+      "_id name email phone role restaurantId avatarUrl notificationPrefs providers preferredRegion preferredLanguage"
+    );
+
+    if (!u) return res.status(404).json({ message: "User not found" });
+
+    res.json({
+      ok: true,
+      user: {
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+        phone: u.phone,
+        role: u.role,
+        restaurantId: u.restaurantId,
+        avatarUrl: u.avatarUrl,
+        notificationPrefs: u.notificationPrefs,
+        providers: (u.providers || []).map((p) => p.name),
+        preferredRegion: u.preferredRegion,
+        preferredLanguage: u.preferredLanguage,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
 };
 
 /** POST /users/me/avatar (multipart) */
