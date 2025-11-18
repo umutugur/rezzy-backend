@@ -321,16 +321,25 @@ export const updateMe = async (req, res, next) => {
       };
     }
 
+    // 🔹 Bölge: CY / UK
     if (preferredRegion && ["CY", "UK"].includes(preferredRegion)) {
       patch.preferredRegion = preferredRegion;
     }
 
-    if (preferredLanguage && ["tr", "en"].includes(preferredLanguage)) {
+    // 🔹 Dil: tr / en / ru / el
+    const ALLOWED_LANGS = ["tr", "en", "ru", "el"];
+    if (preferredLanguage && ALLOWED_LANGS.includes(preferredLanguage)) {
       patch.preferredLanguage = preferredLanguage;
     }
 
-    const u = await User.findByIdAndUpdate(req.user.id, { $set: patch }, { new: true }).lean();
+    const u = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: patch },
+      { new: true }
+    ).lean();
+
     if (!u) return res.status(404).json({ message: "User not found" });
+
     res.json(toClientUser(u));
   } catch (e) { next(e); }
 };
