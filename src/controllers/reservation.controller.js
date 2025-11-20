@@ -2,12 +2,34 @@ import mongoose from "mongoose";
 import Menu from "../models/Menu.js";
 import Restaurant from "../models/Restaurant.js";
 import Reservation from "../models/Reservation.js";
+import User from "../models/User.js"; // ✅ Stripe müşteri için
 import { fmtTR, dayjs} from "../utils/dates.js";
 import { generateQRDataURL, verifyQR } from "../utils/qr.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import { notifyUser, notifyRestaurantOwner } from "../services/notification.service.js";
 import { addIncident, computeUnderAttendWeight } from "../services/userRisk.service.js";
 import joi from "joi";
+import Stripe from "stripe";
+
+// ✅ Stripe client (env varsa aktif)
+const stripeSecret = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeSecret
+  ? new Stripe(stripeSecret, { apiVersion: "2024-06-20" })
+  : null;
+
+// Bölge → para birimi eşlemesi
+function mapRegionToCurrency(region) {
+  const r = String(region || "").toUpperCase();
+
+  // İngiltere
+  if (r === "UK" || r === "GB" || r === "UK-GB" || r === "EN") return "GBP";
+
+  // KKTC (sende genelde CY kullanılıyor) ve Türkiye → TRY
+  if (r === "CY" || r === "CY-TRNC" || r === "TR" || r === "TR-TR") return "TRY";
+
+  // Default: TRY
+  return "TRY";
+}
 
 /** persons dizisi tam 1..N ve benzersiz ise INDEX, aksi halde COUNT */
 function detectModeStrict(selections = []) {
@@ -149,6 +171,14 @@ export const createReservation = async (req, res, next) => {
       totalPrice,
       depositAmount,
       status: "pending",
+
+      // Stripe alanları: havale default → null/pending
+      paymentProvider: null,
+      paymentIntentId: null,
+      depositPaid: false,
+      depositStatus: "pending",
+      paidCurrency: null,
+      paidAmount: 0,
     });
 
     res.json({
@@ -158,6 +188,147 @@ export const createReservation = async (req, res, next) => {
       deposit: r.depositAmount,
       status: r.status,
       selectionMode: mode,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * POST /api/reservations/:rid/stripe-intent
+ * - Sadece depozito için Stripe PaymentIntent oluşturur
+ * - Havale sistemi aynen durur; bu endpoint sadece "Kart / Apple Pay / Google Pay" seçeneği için
+ */
+export const createStripePaymentIntentForReservation = async (req, res, next) => {
+  try {
+    if (!stripe) {
+      throw {
+        status: 500,
+        message: "Stripe henüz yapılandırılmamış. STRIPE_SECRET_KEY env değişkenini kontrol edin.",
+      };
+    }
+
+    const { rid } = req.params;
+    const { saveCard = true } = req.body || {};
+
+    const reservation = await Reservation.findById(rid).populate("restaurantId");
+    if (!reservation) throw { status: 404, message: "Reservation not found" };
+
+    // Yalnızca ilgili müşteri kendi rezervasyonu için ödeme başlatabilsin
+    if (req.user.role === "customer" && String(reservation.userId) !== String(req.user.id)) {
+      throw { status: 403, message: "Forbidden" };
+    }
+
+    // Zaten ödenmişse tekrar PaymentIntent oluşturma
+    if (reservation.depositPaid === true || reservation.depositStatus === "paid") {
+      return res.status(400).json({
+        message: "Bu rezervasyon için depozito zaten ödenmiş görünüyor.",
+      });
+    }
+
+    if (!reservation.depositAmount || reservation.depositAmount <= 0) {
+      return res.status(400).json({
+        message: "Bu rezervasyon için Stripe ile alınacak bir depozito bulunmuyor.",
+      });
+    }
+
+    const restaurant = reservation.restaurantId || (await Restaurant.findById(reservation.restaurantId).lean());
+    if (!restaurant) {
+      throw { status: 404, message: "Restaurant not found for reservation" };
+    }
+
+    // Bölgeden para birimini belirle
+    const currency = mapRegionToCurrency(restaurant.region || restaurant.settings?.region);
+
+    // Kullanıcıyı getir (Stripe customer için)
+    const user = await User.findById(reservation.userId);
+    if (!user) throw { status: 404, message: "User not found" };
+
+    // Stripe Customer oluştur / kullan
+    let stripeCustomerId = user.stripeCustomerId;
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: user.email || undefined,
+        name: user.name || undefined,
+        metadata: {
+          appUserId: String(user._id),
+        },
+      });
+      stripeCustomerId = customer.id;
+      user.stripeCustomerId = stripeCustomerId;
+      await user.save();
+    }
+
+    // PaymentIntent tutarı (küçük birim → kuruş/pence)
+    const amountMinor = Math.round(Number(reservation.depositAmount) * 100);
+    if (!Number.isFinite(amountMinor) || amountMinor <= 0) {
+      throw { status: 400, message: "Deposit amount is invalid for Stripe payment" };
+    }
+
+    // Daha önce oluşturulmuş PaymentIntent varsa, tekrar kullanmayı deneyebiliriz
+    let paymentIntent;
+    if (reservation.paymentProvider === "stripe" && reservation.paymentIntentId) {
+      try {
+        const existing = await stripe.paymentIntents.retrieve(reservation.paymentIntentId);
+        if (
+          existing &&
+          existing.status !== "succeeded" &&
+          existing.status !== "canceled" &&
+          existing.amount === amountMinor &&
+          existing.currency.toUpperCase() === currency.toUpperCase()
+        ) {
+          paymentIntent = existing;
+        }
+      } catch (err) {
+        // retrive error → yeni PI oluşturacağız
+        console.warn("[Stripe] retrieve existing PaymentIntent failed:", err?.message || err);
+      }
+    }
+
+    // Yeni PaymentIntent oluştur
+    if (!paymentIntent) {
+      const params = {
+        amount: amountMinor,
+        currency: currency.toLowerCase(),
+        customer: stripeCustomerId,
+        automatic_payment_methods: {
+          enabled: true,
+          allow_redirects: "never", // mobil native için ideal
+        },
+        metadata: {
+          app: "rezzy",
+          type: "reservation_deposit",
+          reservationId: String(reservation._id),
+          restaurantId: String(reservation.restaurantId),
+          userId: String(user._id),
+          depositAmount: String(reservation.depositAmount),
+          region: restaurant.region || "",
+        },
+      };
+
+      // Kartı saklama → sonraki rezervasyonlarda kart tekrar girilmesin
+      if (saveCard) {
+        params.setup_future_usage = "off_session"; // future off-session ödemeler için
+      }
+
+      paymentIntent = await stripe.paymentIntents.create(params);
+    }
+
+    // Reservation içine Stripe bilgilerini yaz
+    reservation.paymentProvider = "stripe";
+    reservation.paymentIntentId = paymentIntent.id;
+    reservation.depositStatus = "pending";
+    reservation.depositPaid = false;
+    reservation.paidCurrency = currency.toUpperCase();
+    // paidAmount'ı ödeme başarılı olduğunda webhook güncelleyecek
+    await reservation.save();
+
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      currency: currency.toUpperCase(),
+      amount: reservation.depositAmount,
+      depositStatus: reservation.depositStatus,
     });
   } catch (e) {
     next(e);
@@ -257,6 +428,14 @@ export const listMyReservations = async (req, res, next) => {
         depositAmount: r.depositAmount,
         receiptUploadedAt: r.receiptUploadedAt || null,
         underattended: !!r.underattended,
+
+        // ✅ Stripe alanları
+        paymentProvider: r.paymentProvider || null,
+        paymentIntentId: r.paymentIntentId || null,
+        depositPaid: !!r.depositPaid,
+        depositStatus: r.depositStatus || "pending",
+        paidCurrency: r.paidCurrency || null,
+        paidAmount: r.paidAmount || 0,
       }))
     );
   } catch (e) {
@@ -264,7 +443,6 @@ export const listMyReservations = async (req, res, next) => {
   }
 };
 
-/** GET /api/reservations/:rid */
 /** GET /api/reservations/:rid */
 export const getReservation = async (req, res, next) => {
   try {
@@ -282,6 +460,7 @@ export const getReservation = async (req, res, next) => {
           "googleMapsUrl",
           // GeoJSON içindeki sadece koordinasyon alanını seç
           "location.coordinates",
+          "region",
         ].join(" ")
       )
       .lean();
@@ -339,6 +518,7 @@ export const getReservation = async (req, res, next) => {
         coordinates: (typeof lat === "number" && typeof lng === "number")
           ? { lat, lng } // 👈 frontend’de direkt kullanılabilir
           : undefined,
+        region: src?.region || restaurant?.region || "",
       };
     })();
 
@@ -372,6 +552,14 @@ export const getReservation = async (req, res, next) => {
       updatedAt: rDoc.updatedAt,
       receiptUploadedAt: rDoc.receiptUploadedAt || null,
       underattended: !!rDoc.underattended,
+
+      // ✅ Stripe alanları
+      paymentProvider: rDoc.paymentProvider || null,
+      paymentIntentId: rDoc.paymentIntentId || null,
+      depositPaid: !!rDoc.depositPaid,
+      depositStatus: rDoc.depositStatus || "pending",
+      paidCurrency: rDoc.paidCurrency || null,
+      paidAmount: rDoc.paidAmount || 0,
     });
   } catch (e) {
     next(e);
@@ -746,6 +934,14 @@ export const listReservationsByRestaurant = async (req, res, next) => {
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
         underattended: !!r.underattended,
+
+        // ✅ Stripe alanları
+        paymentProvider: r.paymentProvider || null,
+        paymentIntentId: r.paymentIntentId || null,
+        depositPaid: !!r.depositPaid,
+        depositStatus: r.depositStatus || "pending",
+        paidCurrency: r.paidCurrency || null,
+        paidAmount: r.paidAmount || 0,
       })),
       nextCursor,
     });

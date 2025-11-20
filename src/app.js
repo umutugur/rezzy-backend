@@ -17,6 +17,8 @@ import userRoutes from "./routes/user.routes.js";
 import jobsRouter from "./routes/jobs.js";
 import notificationsRouter from "./routes/notifications.js";
 import favoritesRoutes from "./routes/favorites.routes.js";
+import { stripeWebhook } from "./controllers/stripe.webhook.controller.js"; // ✅ Stripe webhook controller
+
 dotenv.config();
 const app = express();
 
@@ -39,6 +41,14 @@ const corsAll = cors({
 });
 
 app.use(corsAll);
+
+// ✅ Stripe webhook (raw body, JSON parser'dan ÖNCE!)
+app.post(
+  "/webhooks/stripe",
+  express.raw({ type: "application/json" }),
+  stripeWebhook
+);
+
 app.use(express.json({ limit: "12mb" }));
 app.use(express.urlencoded({ extended: true, limit:"12mb" }));
 app.use(cookieParser());

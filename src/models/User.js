@@ -57,6 +57,10 @@ const UserSchema = new mongoose.Schema({
   // ✅ Favoriler (restaurant ObjectId listesi)
   favorites: { type: [mongoose.Schema.Types.ObjectId], ref: "Restaurant", default: [] },
 
+  // ✅ Stripe müşteri & kart saklama bilgileri
+  stripeCustomerId:       { type: String, default: null },
+  defaultPaymentMethodId: { type: String, default: null },
+
 }, { timestamps: true });
 
 UserSchema.pre("save", async function(next){

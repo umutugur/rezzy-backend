@@ -49,10 +49,14 @@ export const checkinSchema = Joi.object({
     rid: oid().required(),
     mid: oid().required(),
     // ⬇️ ISO **veya** epoch (saniye/ms) kabul edilir
-    ts: Joi.alternatives().try(
-      Joi.string().isoDate(),
-      Joi.string().pattern(epochRegex).message("ts must be ISO date or epoch (10/13 digits)")
-    ).required(),
+    ts: Joi.alternatives()
+      .try(
+        Joi.string().isoDate(),
+        Joi.string()
+          .pattern(epochRegex)
+          .message("ts must be ISO date or epoch (10/13 digits)")
+      )
+      .required(),
     sig: Joi.string().length(64).required(),
     arrivedCount: Joi.number().min(0).optional(),
   }).required(),
@@ -71,6 +75,18 @@ export const updateArrivedCountSchema = Joi.object({
   params: Joi.object({ rid: oid().required() }).required(),
   body: Joi.object({
     arrivedCount: Joi.number().min(0).required(),
+  }).required(),
+  query: Joi.object().empty({}),
+});
+
+// ✅ Stripe PaymentIntent oluşturma (kart / Apple Pay / Google Pay)
+export const createStripePaymentIntentSchema = Joi.object({
+  params: Joi.object({
+    rid: oid().required(),
+  }).required(),
+  body: Joi.object({
+    // Kartı kaydedip kaydetmeme tercihi (opsiyonel, default backend'de handle ediliyor)
+    saveCard: Joi.boolean().optional(),
   }).required(),
   query: Joi.object().empty({}),
 });

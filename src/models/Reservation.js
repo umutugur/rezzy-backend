@@ -49,6 +49,26 @@ const ReservationSchema = new mongoose.Schema(
     reminder24hSent:    { type: Boolean, default: false },
     reminder3hSent:     { type: Boolean, default: false },
     restPendingRemSent: { type: Boolean, default: false },
+
+    // ✅ Stripe ödeme bilgileri (depozito)
+    paymentProvider: {
+      type: String,
+      enum: ["stripe"],
+      default: null, // havale/IBAN için null kalacak
+    },
+    paymentIntentId: { type: String, default: null },
+
+    depositPaid: {
+      type: Boolean,
+      default: false,
+    },
+    depositStatus: {
+      type: String,
+      enum: ["pending", "paid", "failed"],
+      default: "pending",
+    },
+    paidCurrency: { type: String, default: null }, // Örn: "GBP", "TRY"
+    paidAmount:   { type: Number, min: 0, default: 0 }, // Ödenen depozito tutarı (küçük birim değil, normal para birimi)
   },
   { timestamps: true }
 );
