@@ -300,15 +300,20 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
     }
 
     // 🔐 META – sade, sadece stringler
-    const metadata = {
-      app: "rezzy",
-      type: "reservation_deposit",
-      reservationId: String(reservation._id),
-      restaurantId: String(reservation.restaurantId),
-      userId: String(user._id),
-      depositAmount: String(reservation.depositAmount),
-      region: restaurant.region || "",
-    };
+   const restaurantIdForMeta =
+  restaurant && restaurant._id
+    ? String(restaurant._id)
+    : String(reservation.restaurantId); // populate değilse yine id gelir
+
+const metadata = {
+  app: "rezzy",
+  type: "reservation_deposit",
+  reservationId: String(reservation._id),
+  restaurantId: restaurantIdForMeta,   // ✅ Artık sadece "68c2d6e7de6c06173302b1a3" gibi bir string
+  userId: String(user._id),
+  depositAmount: String(reservation.depositAmount),
+  region: restaurant.region || "",
+};
 
     console.log("[Stripe] PI metadata:", metadata);
 
