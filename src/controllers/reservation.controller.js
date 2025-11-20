@@ -232,7 +232,9 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
       });
     }
 
-    const restaurant = reservation.restaurantId || (await Restaurant.findById(reservation.restaurantId).lean());
+    const restaurant =
+      reservation.restaurantId ||
+      (await Restaurant.findById(reservation.restaurantId).lean());
     if (!restaurant) {
       throw { status: 404, message: "Restaurant not found for reservation" };
     }
@@ -265,8 +267,20 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
       throw { status: 400, message: "Deposit amount is invalid for Stripe payment" };
     }
 
-    // Daha önce oluşturulmuş PaymentIntent varsa, tekrar kullanmayı deneyebiliriz
+    // Metadata’yı **sadece küçük string’lerle** tut
+    const metadata = {
+      app: "rezzy",
+      type: "reservation_deposit",
+      reservationId: String(reservation._id),
+      restaurantId: String(reservation.restaurantId),
+      userId: String(user._id),
+      depositAmount: String(reservation.depositAmount),
+      region: restaurant.region || "",
+    };
+
     let paymentIntent;
+
+    // Daha önce oluşturulmuş PaymentIntent varsa, tekrar kullanmayı dene
     if (reservation.paymentProvider === "stripe" && reservation.paymentIntentId) {
       try {
         const existing = await stripe.paymentIntents.retrieve(reservation.paymentIntentId);
@@ -280,35 +294,28 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
           paymentIntent = existing;
         }
       } catch (err) {
-        // retrive error → yeni PI oluşturacağız
         console.warn("[Stripe] retrieve existing PaymentIntent failed:", err?.message || err);
       }
     }
 
     // Yeni PaymentIntent oluştur
     if (!paymentIntent) {
+      /** Stripe'a giden PARAMS */
       const params = {
         amount: amountMinor,
         currency: currency.toLowerCase(),
         customer: stripeCustomerId,
         automatic_payment_methods: {
           enabled: true,
-          allow_redirects: "never", // mobil native için ideal
+          allow_redirects: "never",
         },
-        metadata: {
-          app: "rezzy",
-          type: "reservation_deposit",
-          reservationId: String(reservation._id),
-          restaurantId: String(reservation.restaurantId),
-          userId: String(user._id),
-          depositAmount: String(reservation.depositAmount),
-          region: restaurant.region || "",
-        },
+        metadata, // 👈 sadece yukarıdaki küçük metadata kullanılıyor
       };
 
-      // Kartı saklama → sonraki rezervasyonlarda kart tekrar girilmesin
+      // Kartı saklama
       if (saveCard) {
-        params.setup_future_usage = "off_session"; // future off-session ödemeler için
+        // @ts-ignore – type tanımı yoksa
+        params.setup_future_usage = "off_session";
       }
 
       paymentIntent = await stripe.paymentIntents.create(params);
@@ -320,7 +327,7 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
     reservation.depositStatus = "pending";
     reservation.depositPaid = false;
     reservation.paidCurrency = currency.toUpperCase();
-    // paidAmount'ı ödeme başarılı olduğunda webhook güncelleyecek
+    reservation.paidAmount = 0; // ödeme başarılı olduğunda webhook güncelleyecek
     await reservation.save();
 
     res.json({
@@ -334,7 +341,6 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
     next(e);
   }
 };
-
 /** POST /api/reservations/:rid/receipt */
 export const uploadReceipt = async (req, res, next) => {
   try {
