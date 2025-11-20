@@ -204,7 +204,8 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
     if (!stripe) {
       throw {
         status: 500,
-        message: "Stripe henüz yapılandırılmamış. STRIPE_SECRET_KEY env değişkenini kontrol edin.",
+        message:
+          "Stripe henüz yapılandırılmamış. STRIPE_SECRET_KEY env değişkenini kontrol edin.",
       };
     }
 
@@ -214,8 +215,11 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
     const reservation = await Reservation.findById(rid).populate("restaurantId");
     if (!reservation) throw { status: 404, message: "Reservation not found" };
 
-    // Yalnızca ilgili müşteri kendi rezervasyonu için ödeme başlatabilsin
-    if (req.user.role === "customer" && String(reservation.userId) !== String(req.user.id)) {
+    // 🔒 Sadece kendi rezervasyonu için ödeme
+    if (
+      req.user.role === "customer" &&
+      String(reservation.userId) !== String(req.user.id)
+    ) {
       throw { status: 403, message: "Forbidden" };
     }
 
@@ -239,14 +243,15 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
       throw { status: 404, message: "Restaurant not found for reservation" };
     }
 
-    // Bölgeden para birimini belirle
-    const currency = mapRegionToCurrency(restaurant.region || restaurant.settings?.region);
+    // 💱 Bölgeden para birimi
+    const currency = mapRegionToCurrency(
+      restaurant.region || restaurant.settings?.region
+    );
 
-    // Kullanıcıyı getir (Stripe customer için)
+    // 👤 Kullanıcı (Stripe customer)
     const user = await User.findById(reservation.userId);
     if (!user) throw { status: 404, message: "User not found" };
 
-    // Stripe Customer oluştur / kullan
     let stripeCustomerId = user.stripeCustomerId;
     if (!stripeCustomerId) {
       const customer = await stripe.customers.create({
@@ -261,29 +266,22 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
       await user.save();
     }
 
-    // PaymentIntent tutarı (küçük birim → kuruş/pence)
+    // 💰 Tutar (minor unit)
     const amountMinor = Math.round(Number(reservation.depositAmount) * 100);
     if (!Number.isFinite(amountMinor) || amountMinor <= 0) {
-      throw { status: 400, message: "Deposit amount is invalid for Stripe payment" };
+      throw {
+        status: 400,
+        message: "Deposit amount is invalid for Stripe payment",
+      };
     }
 
-    // Metadata’yı **sadece küçük string’lerle** tut
-    const metadata = {
-      app: "rezzy",
-      type: "reservation_deposit",
-      reservationId: String(reservation._id),
-      restaurantId: String(reservation.restaurantId),
-      userId: String(user._id),
-      depositAmount: String(reservation.depositAmount),
-      region: restaurant.region || "",
-    };
-
+    // Daha önce Stripe PI var mı?
     let paymentIntent;
-
-    // Daha önce oluşturulmuş PaymentIntent varsa, tekrar kullanmayı dene
     if (reservation.paymentProvider === "stripe" && reservation.paymentIntentId) {
       try {
-        const existing = await stripe.paymentIntents.retrieve(reservation.paymentIntentId);
+        const existing = await stripe.paymentIntents.retrieve(
+          reservation.paymentIntentId
+        );
         if (
           existing &&
           existing.status !== "succeeded" &&
@@ -294,13 +292,28 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
           paymentIntent = existing;
         }
       } catch (err) {
-        console.warn("[Stripe] retrieve existing PaymentIntent failed:", err?.message || err);
+        console.warn(
+          "[Stripe] retrieve existing PaymentIntent failed:",
+          err?.message || err
+        );
       }
     }
 
-    // Yeni PaymentIntent oluştur
+    // 🔐 META – sade, sadece stringler
+    const metadata = {
+      app: "rezzy",
+      type: "reservation_deposit",
+      reservationId: String(reservation._id),
+      restaurantId: String(reservation.restaurantId),
+      userId: String(user._id),
+      depositAmount: String(reservation.depositAmount),
+      region: restaurant.region || "",
+    };
+
+    console.log("[Stripe] PI metadata:", metadata);
+
+    // ✅ Yeni PaymentIntent
     if (!paymentIntent) {
-      /** Stripe'a giden PARAMS */
       const params = {
         amount: amountMinor,
         currency: currency.toLowerCase(),
@@ -309,28 +322,26 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
           enabled: true,
           allow_redirects: "never",
         },
-        metadata, // 👈 sadece yukarıdaki küçük metadata kullanılıyor
+        metadata, // 👈 SADE metadata – restaurant objesi yok
       };
 
-      // Kartı saklama
       if (saveCard) {
-        // @ts-ignore – type tanımı yoksa
+        // sonradan kartı kullanabilmek için
         params.setup_future_usage = "off_session";
       }
 
       paymentIntent = await stripe.paymentIntents.create(params);
     }
 
-    // Reservation içine Stripe bilgilerini yaz
+    // 🔄 Reservation kaydını Stripe bilgileriyle güncelle
     reservation.paymentProvider = "stripe";
     reservation.paymentIntentId = paymentIntent.id;
     reservation.depositStatus = "pending";
     reservation.depositPaid = false;
     reservation.paidCurrency = currency.toUpperCase();
-    reservation.paidAmount = 0; // ödeme başarılı olduğunda webhook güncelleyecek
     await reservation.save();
 
-    res.json({
+    return res.json({
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
       currency: currency.toUpperCase(),
