@@ -300,11 +300,15 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
     }
 
     // 🔐 META – sade, sadece stringler
-   const restaurantIdForMeta =
-  restaurant && restaurant._id
-    ? String(restaurant._id)
-    : String(reservation.restaurantId); // populate değilse yine id gelir
-
+   const restaurantIdForMeta = (() => {
+  if (restaurant && restaurant._id && mongoose.Types.ObjectId.isValid(restaurant._id)) {
+    return String(restaurant._id);
+  }
+  if (mongoose.Types.ObjectId.isValid(reservation.restaurantId)) {
+    return String(reservation.restaurantId);
+  }
+  return ""; // fallback
+})();
 const metadata = {
   app: "rezzy",
   type: "reservation_deposit",
