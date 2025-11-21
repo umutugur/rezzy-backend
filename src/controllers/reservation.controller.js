@@ -109,12 +109,10 @@ export const createReservation = async (req, res, next) => {
       });
     }
 
-    const { restaurantId, dateTimeISO, selections = [] } = req.body;
+    const { restaurantId, dateTimeISO, selections = [], partySize: partySizeFromBody } = req.body;
 
     const restaurant = await Restaurant.findById(restaurantId).lean();
     if (!restaurant) throw { status: 404, message: "Restaurant not found" };
-    if (!Array.isArray(selections) || selections.length === 0)
-      throw { status: 400, message: "At least one selection is required" };
 
     // ⬇️ ZAMAN KONTROLÜ (past slotları kapat)
     const dt = new Date(dateTimeISO);
@@ -141,31 +139,75 @@ export const createReservation = async (req, res, next) => {
     }
     // ⬆️ ZAMAN KONTROLÜ BİTİŞ
 
-    // Menü/ücret hesapları (mevcut mantığın aynısı)
-    const ids = selections.map((s) => s.menuId).filter(Boolean);
-    const menus = await Menu.find({ _id: { $in: ids }, isActive: true }).lean();
-    const priceMap = new Map(menus.map((m) => [String(m._id), Number(m.pricePerPerson || 0)]));
+    // ✅ SELECTIONS NORMALIZE
+    let normalizedSelections = Array.isArray(selections) ? selections : [];
 
-    const missing = ids.filter((id) => !priceMap.has(String(id)));
-    if (missing.length)
-      throw { status: 400, message: "Some menus are inactive or not found", detail: missing };
+    // boş menuId olanları at (skip akışında hepsi boş gelebilir)
+    normalizedSelections = normalizedSelections.filter(
+      (s) => s && s.menuId && String(s.menuId).length > 0
+    );
 
-    const withPrices = selections.map((s) => ({
-      person: Number(s.person) || 0,
-      menuId: s.menuId,
-      price: priceMap.get(String(s.menuId)) ?? 0,
-    }));
+    const hasFixedMenuSelection = normalizedSelections.length > 0;
 
-    const { mode, partySize, totalPrice } = computeTotalsStrict(withPrices);
-    if (partySize <= 0)
-      throw { status: 400, message: "partySize must be at least 1 based on selections" };
+    let withPrices = [];
+    let totalPrice = 0;
+    let partySize = 0;
+    let mode = "count";
+
+    if (hasFixedMenuSelection) {
+      // Menü/ücret hesapları (mevcut mantığın aynısı)
+      const ids = normalizedSelections.map((s) => s.menuId).filter(Boolean);
+
+      const menus = await Menu.find({ _id: { $in: ids }, isActive: true }).lean();
+      const priceMap = new Map(
+        menus.map((m) => [String(m._id), Number(m.pricePerPerson || 0)])
+      );
+
+      const missing = ids.filter((id) => !priceMap.has(String(id)));
+      if (missing.length)
+        throw {
+          status: 400,
+          message: "Some menus are inactive or not found",
+          detail: missing,
+        };
+
+      withPrices = normalizedSelections.map((s) => ({
+        person: Number(s.person) || 0,
+        menuId: s.menuId,
+        price: priceMap.get(String(s.menuId)) ?? 0,
+      }));
+
+      const totals = computeTotalsStrict(withPrices);
+      mode = totals.mode;
+      partySize = totals.partySize;
+      totalPrice = totals.totalPrice;
+
+      if (partySize <= 0) {
+        throw {
+          status: 400,
+          message: "partySize must be at least 1 based on selections",
+        };
+      }
+    } else {
+      // ✅ Fix menü seçilmediyse partySize body’den gelsin
+      partySize = Number(partySizeFromBody) || 0;
+      if (partySize <= 0) {
+        throw {
+          status: 400,
+          message: "partySize is required when no fixed menu selected",
+        };
+      }
+      totalPrice = 0;
+      mode = "none";
+      withPrices = []; // boş kalsın
+    }
 
     const depositAmount = computeDeposit(restaurant, totalPrice);
 
     const r = await Reservation.create({
       restaurantId,
       userId: req.user.id,
-      dateTimeUTC: dt, // doğrulanmış tarih
+      dateTimeUTC: dt,
       partySize,
       selections: withPrices,
       totalPrice,
@@ -179,6 +221,10 @@ export const createReservation = async (req, res, next) => {
       depositStatus: "pending",
       paidCurrency: null,
       paidAmount: 0,
+
+      // ✅ istersen ileride kullanırsın (frontend’e göstermiyorsun)
+      hasFixedMenuSelection,
+      selectionMode: mode,
     });
 
     res.json({
@@ -188,12 +234,12 @@ export const createReservation = async (req, res, next) => {
       deposit: r.depositAmount,
       status: r.status,
       selectionMode: mode,
+      hasFixedMenuSelection,
     });
   } catch (e) {
     next(e);
   }
 };
-
 /**
  * POST /api/reservations/:rid/stripe-intent
  * - Sadece depozito için Stripe PaymentIntent oluşturur

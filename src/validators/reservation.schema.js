@@ -6,17 +6,23 @@ export const createReservationSchema = Joi.object({
   body: Joi.object({
     restaurantId: oid().required(),
     dateTimeISO: Joi.string().isoDate().required(),
+
+    // ✅ selections artık opsiyonel, boş gelebilir
     selections: Joi.array()
-      .min(1)
       .items(
         Joi.object({
           person: Joi.number().min(1).required(),
-          menuId: oid().required(),
+          // ✅ menuId boş/undefined olabilir (skip akışı)
+          menuId: oid().optional().allow("", null),
         })
       )
-      .required(),
-    // partySize GÖNDERME; backend selections'tan hesaplıyor
+      .default([])
+      .optional(),
+
+    // ✅ selections boş gelirse partySize zorunlu olacak (controller’da kontrol ediyoruz)
+    partySize: Joi.number().min(1).optional(),
   }).required(),
+
   params: Joi.object().empty({}),
   query: Joi.object().empty({}),
 });

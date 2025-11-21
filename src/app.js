@@ -44,7 +44,7 @@ app.use(corsAll);
 
 // ✅ Stripe webhook (raw body, JSON parser'dan ÖNCE!)
 app.post(
-  "/webhooks/stripe",
+  "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
   stripeWebhook
 );
