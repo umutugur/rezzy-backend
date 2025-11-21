@@ -59,6 +59,16 @@ function computeTotalsStrict(selections = []) {
 }
 
 function computeDeposit(restaurant, totalPrice) {
+  // ✅ 1) Restoran flat kapora girdiyse, direkt onu kullan
+  const flat = Number(
+    restaurant?.depositAmount ??
+      restaurant?.settings?.depositAmount ??
+      0
+  ) || 0;
+
+  if (flat > 0) return flat;
+
+  // ✅ 2) Yoksa yüzde / min depozito gibi eski mantık çalışsın
   const cfg = {
     type:
       restaurant?.depositType ||
@@ -68,8 +78,6 @@ function computeDeposit(restaurant, totalPrice) {
       restaurant?.settings?.depositRate ??
       restaurant?.settings?.depositPercent) != null
         ? "percent"
-        : (restaurant?.depositAmount ?? restaurant?.settings?.depositAmount) != null
-        ? "flat"
         : "percent",
     ratePercent:
       Number(
@@ -79,50 +87,57 @@ function computeDeposit(restaurant, totalPrice) {
           restaurant?.settings?.depositPercent ??
           0
       ) || 0,
-    flatAmount:
-      Number(restaurant?.depositAmount ?? restaurant?.settings?.depositAmount ?? 0) || 0,
     minAmount:
       Number(restaurant?.minDeposit ?? restaurant?.settings?.minDeposit ?? 0) || 0,
   };
 
-  let depositAmount = 0;
-  if (cfg.type === "flat") depositAmount = cfg.flatAmount;
-  else depositAmount = Math.round(totalPrice * (Math.max(0, cfg.ratePercent) / 100));
+  let depositAmount = Math.round(
+    totalPrice * (Math.max(0, cfg.ratePercent) / 100)
+  );
 
-  if (depositAmount === 0 && cfg.ratePercent === 0 && cfg.flatAmount === 0) {
+  if (depositAmount === 0 && cfg.ratePercent === 0) {
     depositAmount = Math.round(totalPrice * 0.2);
   }
 
   if (cfg.minAmount > 0) depositAmount = Math.max(depositAmount, cfg.minAmount);
   if (!Number.isFinite(depositAmount) || depositAmount < 0) depositAmount = 0;
-  if (depositAmount > totalPrice) depositAmount = totalPrice;
+  if (depositAmount > totalPrice && totalPrice > 0) depositAmount = totalPrice;
+
   return depositAmount;
 }
 
 // controllers/reservation.controller.js
 
+/** POST /api/reservations */
 export const createReservation = async (req, res, next) => {
   try {
     if (req.user?.role === "guest") {
       return res.status(401).json({
-        message: "Rezervasyon oluşturmak için lütfen giriş yapın veya kayıt olun."
+        message: "Rezervasyon oluşturmak için lütfen giriş yapın veya kayıt olun.",
       });
     }
 
-    const { restaurantId, dateTimeISO, selections = [], partySize } = req.body;
+    const {
+      restaurantId,
+      dateTimeISO,
+      partySize,
+      selections = [],
+    } = req.body;
 
     const restaurant = await Restaurant.findById(restaurantId).lean();
     if (!restaurant) throw { status: 404, message: "Restaurant not found" };
 
-    // ⬇️ ZAMAN KONTROLÜ aynen
+    // ⬇️ ZAMAN KONTROLÜ
     const dt = new Date(dateTimeISO);
-    if (Number.isNaN(dt.getTime())) throw { status: 400, message: "Invalid dateTimeISO" };
+    if (Number.isNaN(dt.getTime())) {
+      throw { status: 400, message: "Invalid dateTimeISO" };
+    }
 
     const minLeadMin =
       Number(
         restaurant?.settings?.minAdvanceMinutes ??
-        restaurant?.minAdvanceMinutes ??
-        0
+          restaurant?.minAdvanceMinutes ??
+          0
       ) || 0;
 
     const now = new Date();
@@ -135,15 +150,14 @@ export const createReservation = async (req, res, next) => {
           : "Geçmiş saate rezervasyon yapılamaz";
       throw { status: 400, message: baseMsg };
     }
-    // ⬆️ zaman kontrolü bitiş
+    // ⬆️ ZAMAN KONTROLÜ BİTİŞ
 
     let withPrices = [];
-    let mode = "count";
-    let computedPartySize = 0;
     let totalPrice = 0;
+    let selectionMode = "count";
 
+    // ✅ FIX: selections varsa eski menü hesabı çalışır
     if (Array.isArray(selections) && selections.length > 0) {
-      // ✅ eski akış (menü seçilmiş)
       const ids = selections.map((s) => s.menuId).filter(Boolean);
       const menus = await Menu.find({ _id: { $in: ids }, isActive: true }).lean();
       const priceMap = new Map(
@@ -152,7 +166,11 @@ export const createReservation = async (req, res, next) => {
 
       const missing = ids.filter((id) => !priceMap.has(String(id)));
       if (missing.length)
-        throw { status: 400, message: "Some menus are inactive or not found", detail: missing };
+        throw {
+          status: 400,
+          message: "Some menus are inactive or not found",
+          detail: missing,
+        };
 
       withPrices = selections.map((s) => ({
         person: Number(s.person) || 0,
@@ -160,24 +178,20 @@ export const createReservation = async (req, res, next) => {
         price: priceMap.get(String(s.menuId)) ?? 0,
       }));
 
-      const totals = computeTotalsStrict(withPrices);
-      mode = totals.mode;
-      computedPartySize = totals.partySize;
-      totalPrice = totals.totalPrice;
+      const strict = computeTotalsStrict(withPrices);
+      selectionMode = strict.mode;
+      totalPrice = strict.totalPrice;
 
-      if (computedPartySize <= 0) {
-        throw { status: 400, message: "partySize must be at least 1 based on selections" };
-      }
-    } else {
-      // ✅ yeni akış (fix menü seçilmedi)
-      computedPartySize = Number(partySize) || 0;
-      if (computedPartySize <= 0) {
-        throw { status: 400, message: "partySize is required when no menu selected" };
-      }
-      totalPrice = 0;
-      withPrices = [];
-      mode = "count";
+      if (strict.partySize <= 0)
+        throw {
+          status: 400,
+          message: "partySize must be at least 1 based on selections",
+        };
     }
+
+    // ✅ FIX: partySize artık body’den geliyor (fix menüsüz akış için)
+    const ps = Number(partySize) || 0;
+    if (ps <= 0) throw { status: 400, message: "partySize must be at least 1" };
 
     const depositAmount = computeDeposit(restaurant, totalPrice);
 
@@ -185,8 +199,8 @@ export const createReservation = async (req, res, next) => {
       restaurantId,
       userId: req.user.id,
       dateTimeUTC: dt,
-      partySize: computedPartySize,
-      selections: withPrices,
+      partySize: ps,
+      selections: withPrices.length ? withPrices : undefined, // boşsa schema default'u çalışır
       totalPrice,
       depositAmount,
       status: "pending",
@@ -205,7 +219,7 @@ export const createReservation = async (req, res, next) => {
       total: r.totalPrice,
       deposit: r.depositAmount,
       status: r.status,
-      selectionMode: mode,
+      selectionMode,
     });
   } catch (e) {
     next(e);

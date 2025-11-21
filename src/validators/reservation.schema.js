@@ -2,15 +2,17 @@
 import Joi from "joi";
 
 const oid = () =>
-  Joi.string()
-    .regex(/^[0-9a-fA-F]{24}$/)
-    .message("invalid objectId");
+  Joi.string().regex(/^[0-9a-fA-F]{24}$/).message("invalid objectId");
 
 export const createReservationSchema = Joi.object({
   body: Joi.object({
     restaurantId: oid().required(),
     dateTimeISO: Joi.string().isoDate().required(),
-    // ✅ artık optional ve min(0)
+
+    // ✅ FIX: fix menüsüz akışta kişi sayısını buradan alacağız
+    partySize: Joi.number().min(1).required(),
+
+    // ✅ FIX: selections artık boş olabilir
     selections: Joi.array()
       .min(0)
       .items(
@@ -19,8 +21,7 @@ export const createReservationSchema = Joi.object({
           menuId: oid().required(),
         })
       )
-      .default([]),
-    partySize: Joi.number().min(1).required(), // ✅ boş selections için lazım
+      .optional(),
   }).required(),
   params: Joi.object().empty({}),
   query: Joi.object().empty({}),
