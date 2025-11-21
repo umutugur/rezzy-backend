@@ -99,22 +99,22 @@ function computeDeposit(restaurant, totalPrice) {
   return depositAmount;
 }
 
-/** POST /api/reservations */
+// controllers/reservation.controller.js
+
 export const createReservation = async (req, res, next) => {
   try {
-    // ✅ Misafir kullanıcı rezervasyon oluşturamaz
     if (req.user?.role === "guest") {
       return res.status(401).json({
-        message: "Rezervasyon oluşturmak için lütfen giriş yapın veya kayıt olun."
+        message: "Rezervasyon oluşturmak için lütfen giriş yapın veya kayıt olun.",
       });
     }
 
-    const { restaurantId, dateTimeISO, selections = [], partySize: partySizeFromBody } = req.body;
+    const { restaurantId, dateTimeISO, selections = [], partySize } = req.body;
 
     const restaurant = await Restaurant.findById(restaurantId).lean();
     if (!restaurant) throw { status: 404, message: "Restaurant not found" };
 
-    // ⬇️ ZAMAN KONTROLÜ (past slotları kapat)
+    // ⬇️ zaman kontrolü
     const dt = new Date(dateTimeISO);
     if (Number.isNaN(dt.getTime())) {
       throw { status: 400, message: "Invalid dateTimeISO" };
@@ -123,8 +123,8 @@ export const createReservation = async (req, res, next) => {
     const minLeadMin =
       Number(
         restaurant?.settings?.minAdvanceMinutes ??
-        restaurant?.minAdvanceMinutes ??
-        0
+          restaurant?.minAdvanceMinutes ??
+          0
       ) || 0;
 
     const now = new Date();
@@ -137,26 +137,16 @@ export const createReservation = async (req, res, next) => {
           : "Geçmiş saate rezervasyon yapılamaz";
       throw { status: 400, message: baseMsg };
     }
-    // ⬆️ ZAMAN KONTROLÜ BİTİŞ
-
-    // ✅ SELECTIONS NORMALIZE
-    let normalizedSelections = Array.isArray(selections) ? selections : [];
-
-    // boş menuId olanları at (skip akışında hepsi boş gelebilir)
-    normalizedSelections = normalizedSelections.filter(
-      (s) => s && s.menuId && String(s.menuId).length > 0
-    );
-
-    const hasFixedMenuSelection = normalizedSelections.length > 0;
+    // ⬆️ zaman kontrolü bitti
 
     let withPrices = [];
+    let mode = "none";
+    let finalPartySize = Number(partySize) || 0;
     let totalPrice = 0;
-    let partySize = 0;
-    let mode = "count";
 
-    if (hasFixedMenuSelection) {
-      // Menü/ücret hesapları (mevcut mantığın aynısı)
-      const ids = normalizedSelections.map((s) => s.menuId).filter(Boolean);
+    // ✅ selections varsa eski mantıkla hesapla
+    if (Array.isArray(selections) && selections.length > 0) {
+      const ids = selections.map((s) => s.menuId).filter(Boolean);
 
       const menus = await Menu.find({ _id: { $in: ids }, isActive: true }).lean();
       const priceMap = new Map(
@@ -171,7 +161,7 @@ export const createReservation = async (req, res, next) => {
           detail: missing,
         };
 
-      withPrices = normalizedSelections.map((s) => ({
+      withPrices = selections.map((s) => ({
         person: Number(s.person) || 0,
         menuId: s.menuId,
         price: priceMap.get(String(s.menuId)) ?? 0,
@@ -179,27 +169,19 @@ export const createReservation = async (req, res, next) => {
 
       const totals = computeTotalsStrict(withPrices);
       mode = totals.mode;
-      partySize = totals.partySize;
+      finalPartySize = totals.partySize;
       totalPrice = totals.totalPrice;
 
-      if (partySize <= 0) {
+      if (finalPartySize <= 0)
         throw {
           status: 400,
           message: "partySize must be at least 1 based on selections",
         };
-      }
     } else {
-      // ✅ Fix menü seçilmediyse partySize body’den gelsin
-      partySize = Number(partySizeFromBody) || 0;
-      if (partySize <= 0) {
-        throw {
-          status: 400,
-          message: "partySize is required when no fixed menu selected",
-        };
+      // ✅ selections boşsa: sadece partySize ile ilerle
+      if (finalPartySize <= 0) {
+        throw { status: 400, message: "partySize must be at least 1" };
       }
-      totalPrice = 0;
-      mode = "none";
-      withPrices = []; // boş kalsın
     }
 
     const depositAmount = computeDeposit(restaurant, totalPrice);
@@ -208,23 +190,18 @@ export const createReservation = async (req, res, next) => {
       restaurantId,
       userId: req.user.id,
       dateTimeUTC: dt,
-      partySize,
-      selections: withPrices,
+      partySize: finalPartySize,
+      selections: withPrices, // boş olabilir artık
       totalPrice,
       depositAmount,
       status: "pending",
 
-      // Stripe alanları: havale default → null/pending
       paymentProvider: null,
       paymentIntentId: null,
       depositPaid: false,
       depositStatus: "pending",
       paidCurrency: null,
       paidAmount: 0,
-
-      // ✅ istersen ileride kullanırsın (frontend’e göstermiyorsun)
-      hasFixedMenuSelection,
-      selectionMode: mode,
     });
 
     res.json({
@@ -234,7 +211,6 @@ export const createReservation = async (req, res, next) => {
       deposit: r.depositAmount,
       status: r.status,
       selectionMode: mode,
-      hasFixedMenuSelection,
     });
   } catch (e) {
     next(e);

@@ -1,28 +1,29 @@
+// validators/reservation.schema.js
 import Joi from "joi";
 
-const oid = () => Joi.string().regex(/^[0-9a-fA-F]{24}$/).message("invalid objectId");
+const oid = () =>
+  Joi.string()
+    .regex(/^[0-9a-fA-F]{24}$/)
+    .message("invalid objectId");
 
 export const createReservationSchema = Joi.object({
   body: Joi.object({
     restaurantId: oid().required(),
     dateTimeISO: Joi.string().isoDate().required(),
 
-    // ✅ selections artık opsiyonel, boş gelebilir
+    // ✅ selections artık opsiyonel ve boş olabilir
     selections: Joi.array()
       .items(
         Joi.object({
           person: Joi.number().min(1).required(),
-          // ✅ menuId boş/undefined olabilir (skip akışı)
-          menuId: oid().optional().allow("", null),
+          menuId: oid().required(),
         })
       )
-      .default([])
-      .optional(),
+      .default([]),
 
-    // ✅ selections boş gelirse partySize zorunlu olacak (controller’da kontrol ediyoruz)
-    partySize: Joi.number().min(1).optional(),
+    // ✅ selections boşsa partySize buradan alınacak
+    partySize: Joi.number().min(1).required(),
   }).required(),
-
   params: Joi.object().empty({}),
   query: Joi.object().empty({}),
 });

@@ -16,8 +16,7 @@ const ReservationSchema = new mongoose.Schema(
     dateTimeUTC:  { type: Date, required: true },
 
     partySize:    { type: Number, min: 1, required: true },
-    selections: { type: [SelectionSchema], default: [] },
-    
+    selections: { type: [SelectionSchema], default: [] },    
     totalPrice:    { type: Number, min: 0, default: 0 },
     depositAmount: { type: Number, min: 0, default: 0 },
 
