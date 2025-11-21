@@ -105,7 +105,7 @@ export const createReservation = async (req, res, next) => {
   try {
     if (req.user?.role === "guest") {
       return res.status(401).json({
-        message: "Rezervasyon oluşturmak için lütfen giriş yapın veya kayıt olun.",
+        message: "Rezervasyon oluşturmak için lütfen giriş yapın veya kayıt olun."
       });
     }
 
@@ -114,17 +114,15 @@ export const createReservation = async (req, res, next) => {
     const restaurant = await Restaurant.findById(restaurantId).lean();
     if (!restaurant) throw { status: 404, message: "Restaurant not found" };
 
-    // ⬇️ zaman kontrolü
+    // ⬇️ ZAMAN KONTROLÜ aynen
     const dt = new Date(dateTimeISO);
-    if (Number.isNaN(dt.getTime())) {
-      throw { status: 400, message: "Invalid dateTimeISO" };
-    }
+    if (Number.isNaN(dt.getTime())) throw { status: 400, message: "Invalid dateTimeISO" };
 
     const minLeadMin =
       Number(
         restaurant?.settings?.minAdvanceMinutes ??
-          restaurant?.minAdvanceMinutes ??
-          0
+        restaurant?.minAdvanceMinutes ??
+        0
       ) || 0;
 
     const now = new Date();
@@ -137,17 +135,16 @@ export const createReservation = async (req, res, next) => {
           : "Geçmiş saate rezervasyon yapılamaz";
       throw { status: 400, message: baseMsg };
     }
-    // ⬆️ zaman kontrolü bitti
+    // ⬆️ zaman kontrolü bitiş
 
     let withPrices = [];
-    let mode = "none";
-    let finalPartySize = Number(partySize) || 0;
+    let mode = "count";
+    let computedPartySize = 0;
     let totalPrice = 0;
 
-    // ✅ selections varsa eski mantıkla hesapla
     if (Array.isArray(selections) && selections.length > 0) {
+      // ✅ eski akış (menü seçilmiş)
       const ids = selections.map((s) => s.menuId).filter(Boolean);
-
       const menus = await Menu.find({ _id: { $in: ids }, isActive: true }).lean();
       const priceMap = new Map(
         menus.map((m) => [String(m._id), Number(m.pricePerPerson || 0)])
@@ -155,11 +152,7 @@ export const createReservation = async (req, res, next) => {
 
       const missing = ids.filter((id) => !priceMap.has(String(id)));
       if (missing.length)
-        throw {
-          status: 400,
-          message: "Some menus are inactive or not found",
-          detail: missing,
-        };
+        throw { status: 400, message: "Some menus are inactive or not found", detail: missing };
 
       withPrices = selections.map((s) => ({
         person: Number(s.person) || 0,
@@ -169,19 +162,21 @@ export const createReservation = async (req, res, next) => {
 
       const totals = computeTotalsStrict(withPrices);
       mode = totals.mode;
-      finalPartySize = totals.partySize;
+      computedPartySize = totals.partySize;
       totalPrice = totals.totalPrice;
 
-      if (finalPartySize <= 0)
-        throw {
-          status: 400,
-          message: "partySize must be at least 1 based on selections",
-        };
-    } else {
-      // ✅ selections boşsa: sadece partySize ile ilerle
-      if (finalPartySize <= 0) {
-        throw { status: 400, message: "partySize must be at least 1" };
+      if (computedPartySize <= 0) {
+        throw { status: 400, message: "partySize must be at least 1 based on selections" };
       }
+    } else {
+      // ✅ yeni akış (fix menü seçilmedi)
+      computedPartySize = Number(partySize) || 0;
+      if (computedPartySize <= 0) {
+        throw { status: 400, message: "partySize is required when no menu selected" };
+      }
+      totalPrice = 0;
+      withPrices = [];
+      mode = "count";
     }
 
     const depositAmount = computeDeposit(restaurant, totalPrice);
@@ -190,8 +185,8 @@ export const createReservation = async (req, res, next) => {
       restaurantId,
       userId: req.user.id,
       dateTimeUTC: dt,
-      partySize: finalPartySize,
-      selections: withPrices, // boş olabilir artık
+      partySize: computedPartySize,
+      selections: withPrices,
       totalPrice,
       depositAmount,
       status: "pending",
