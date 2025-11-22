@@ -148,6 +148,7 @@ export async function adminCreateRestaurant(input: {
   email?: string;
 
   businessType?: string; // ✅ eklendi
+  categorySet?: string;  // ✅ hazır kategori seti id'si (MenuCategorySet)
 
   commissionRate?: number;
   depositRequired?: boolean;
@@ -485,8 +486,7 @@ export async function restaurantCreateItem(
 
   const { data } = await api.post(
     `/panel/restaurants/${rid}/menu/items`,
-    fd,
-    { headers: { "Content-Type": "multipart/form-data" } }
+    fd
   );
   return data;
 }
@@ -521,8 +521,7 @@ export async function restaurantUpdateItem(
 
   const { data } = await api.patch(
     `/panel/restaurants/${rid}/menu/items/${iid}`,
-    fd,
-    { headers: { "Content-Type": "multipart/form-data" } }
+    fd
   );
   return data;
 }

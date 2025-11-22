@@ -2,6 +2,14 @@ import mongoose from "mongoose";
 import MenuCategory from "../models/MenuCategory.js";
 import MenuItem from "../models/MenuItem.js";
 import Restaurant from "../models/Restaurant.js";
+import MenuCategorySet from "../models/MenuCategorySet.js";
+import {
+  createCategorySchema,
+  updateCategorySchema,
+  createItemSchema,
+  updateItemSchema,
+  listItemsQuerySchema,
+} from "../validators/menu.schema.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 
 /* ---------------- helpers ---------------- */
@@ -62,6 +70,39 @@ export const listCategories = async (req, res, next) => {
     const { rid } = req.params;
     if (!isValidId(rid)) return res.status(400).json({ message: "Invalid restaurant id" });
 
+    // 1) Önce mevcut kategorileri say
+    const existingCount = await MenuCategory.countDocuments({
+      restaurantId: rid,
+      isActive: true,
+    });
+
+    // 2) Eğer hiç kategori yoksa ve restoran bir kategori setine bağlıysa, setten seed et
+    if (existingCount === 0) {
+      const rest = await Restaurant.findById(rid)
+        .select("_id categorySet")
+        .lean();
+
+      if (rest?.categorySet) {
+        const set = await MenuCategorySet.findById(rest.categorySet)
+          .select("categories")
+          .lean();
+
+        if (set?.categories?.length) {
+          const seedDocs = set.categories.map((c) => ({
+            restaurantId: rid,
+            title: String(c.title || "").trim(),
+            description: String(c.description || "").trim(),
+            order: Number(c.order ?? c.position ?? 0) || 0,
+            isActive: true,
+          })).filter(d => d.title);
+
+          if (seedDocs.length) {
+            await MenuCategory.insertMany(seedDocs);
+          }
+        }
+      }
+    }
+
     const items = await MenuCategory.find({
       restaurantId: rid,
       isActive: true,
@@ -79,11 +120,11 @@ export const createCategory = async (req, res, next) => {
     const { rid } = req.params;
     if (!isValidId(rid)) return res.status(400).json({ message: "Invalid restaurant id" });
 
-    const { title, description = "", order = 0 } = req.body || {};
-    if (!title || !String(title).trim())
-      return res.status(400).json({ message: "title is required" });
+    const { error, value } = createCategorySchema.validate(req.body || {}, { abortEarly: true });
+    if (error) return res.status(400).json({ message: error.details[0].message });
 
-    // restoran var mı (soft kontrol)
+    const { title, description = "", order = 0 } = value;
+
     const rest = await Restaurant.findById(rid).select("_id owner").lean();
     if (!rest) return res.status(404).json({ message: "Restaurant not found" });
 
@@ -106,8 +147,11 @@ export const updateCategory = async (req, res, next) => {
     if (!isValidId(rid) || !isValidId(cid))
       return res.status(400).json({ message: "Invalid id" });
 
+    const { error, value } = updateCategorySchema.validate(req.body || {}, { abortEarly: true });
+    if (error) return res.status(400).json({ message: error.details[0].message });
+
     const patch = {};
-    const { title, description, order, isActive } = req.body || {};
+    const { title, description, order, isActive } = value;
 
     if (title != null) patch.title = String(title).trim();
     if (description != null) patch.description = String(description).trim();
@@ -140,7 +184,6 @@ export const deleteCategory = async (req, res, next) => {
 
     if (!doc) return res.status(404).json({ message: "Category not found" });
 
-    // kategori silinince ürünler de soft pasif olsun
     await MenuItem.updateMany(
       { restaurantId: rid, categoryId: cid },
       { $set: { isActive: false } }
@@ -156,9 +199,11 @@ export const deleteCategory = async (req, res, next) => {
 export const listItems = async (req, res, next) => {
   try {
     const { rid } = req.params;
-    const { categoryId } = req.query;
-
     if (!isValidId(rid)) return res.status(400).json({ message: "Invalid restaurant id" });
+
+    const { error: qErr, value: qVal } = listItemsQuerySchema.validate(req.query || {}, { abortEarly: true });
+    if (qErr) return res.status(400).json({ message: qErr.details[0].message });
+    const { categoryId } = qVal;
 
     const q = { restaurantId: rid, isActive: true };
     if (categoryId && isValidId(categoryId)) q.categoryId = categoryId;
@@ -177,14 +222,11 @@ export const createItem = async (req, res, next) => {
     const { rid } = req.params;
     if (!isValidId(rid)) return res.status(400).json({ message: "Invalid restaurant id" });
 
-    const { categoryId, title, description = "", price, tags = [], order = 0, isAvailable = true } = req.body || {};
-    if (!isValidId(categoryId)) return res.status(400).json({ message: "categoryId is required" });
-    if (!title || !String(title).trim()) return res.status(400).json({ message: "title is required" });
+    const { error: iErr, value: iVal } = createItemSchema.validate(req.body || {}, { abortEarly: true });
+    if (iErr) return res.status(400).json({ message: iErr.details[0].message });
 
-    const p = Number(price);
-    if (!Number.isFinite(p) || p < 0) return res.status(400).json({ message: "price is invalid" });
+    const { categoryId, title, description = "", price, tags = [], order = 0, isAvailable = true } = iVal;
 
-    // kategori bu restorana mı ait?
     const cat = await MenuCategory.findOne({ _id: categoryId, restaurantId: rid, isActive: true }).lean();
     if (!cat) return res.status(404).json({ message: "Category not found" });
 
@@ -208,7 +250,7 @@ export const createItem = async (req, res, next) => {
       categoryId,
       title: String(title).trim(),
       description: String(description || "").trim(),
-      price: p,
+      price: Number(price),
       photoUrl,
       tags: Array.isArray(tags) ? tags.map(String) : [],
       order: Number(order) || 0,
@@ -227,15 +269,16 @@ export const updateItem = async (req, res, next) => {
     if (!isValidId(rid) || !isValidId(iid))
       return res.status(400).json({ message: "Invalid id" });
 
+    const { error: uErr, value: uVal } = updateItemSchema.validate(req.body || {}, { abortEarly: true });
+    if (uErr) return res.status(400).json({ message: uErr.details[0].message });
+
     const patch = {};
     const {
       categoryId, title, description, price, tags, order,
       isAvailable, isActive, removePhoto
-    } = req.body || {};
+    } = uVal;
 
     if (categoryId != null) {
-      if (!isValidId(categoryId)) return res.status(400).json({ message: "categoryId invalid" });
-      // kategori bu restorana mı ait?
       const cat = await MenuCategory.findOne({ _id: categoryId, restaurantId: rid, isActive: true }).lean();
       if (!cat) return res.status(404).json({ message: "Category not found" });
       patch.categoryId = categoryId;
@@ -243,13 +286,7 @@ export const updateItem = async (req, res, next) => {
 
     if (title != null) patch.title = String(title).trim();
     if (description != null) patch.description = String(description).trim();
-
-    if (price != null) {
-      const p = Number(price);
-      if (!Number.isFinite(p) || p < 0) return res.status(400).json({ message: "price invalid" });
-      patch.price = p;
-    }
-
+    if (price != null) patch.price = Number(price);
     if (tags != null) patch.tags = Array.isArray(tags) ? tags.map(String) : [];
     if (order != null) patch.order = Number(order) || 0;
     if (isAvailable != null) patch.isAvailable = !!isAvailable;

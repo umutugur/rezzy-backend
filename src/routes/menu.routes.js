@@ -1,5 +1,5 @@
 // src/routes/menu.routes.js
-import { Router } from "express";
+import express, { Router } from "express";
 import { auth } from "../middlewares/auth.js";
 import { allow } from "../middlewares/roles.js";
 import { imageUpload } from "../utils/multer.js"; // ✅ named import
@@ -25,6 +25,11 @@ import {
 } from "../validators/menu.schema.js";
 
 const r = Router();
+
+// Ensure JSON bodies are parsed for category endpoints.
+// (Items use multer below; adding this here prevents empty req.body on categories
+// even if app-level json middleware is missing.)
+r.use(express.json());
 
 /**
  * app.js mount:
