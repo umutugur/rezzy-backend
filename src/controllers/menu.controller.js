@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import MenuCategory from "../models/MenuCategory.js";
 import MenuItem from "../models/MenuItem.js";
 import Restaurant from "../models/Restaurant.js";
-import MenuCategorySet from "../models/MenuCategorySet.js";
+import MenuCategorySet from "../models/MenuCategory.js";
 import {
   createCategorySchema,
   updateCategorySchema,
