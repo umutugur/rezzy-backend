@@ -23,6 +23,8 @@ import TablesPage from "./pages/restaurant/Tables";
 import MenusPage from "./pages/restaurant/Menus";
 import PhotosPage from "./pages/restaurant/Photos";
 import PoliciesPage from "./pages/restaurant/Policies";
+import MenuManagerPage from "./pages/restaurant/MenuManager"; 
+
 
 // ---- Basit UI parçaları ----
 function Shell({ children }: { children: React.ReactNode }) {
@@ -189,6 +191,8 @@ export default function App() {
         <Route path="/restaurant/photos" element={<Shell><PhotosPage /></Shell>} />
         <Route path="/restaurant/profile" element={<Shell><RestaurantProfilePage /></Shell>} />
         <Route path="/restaurant/policies" element={<Shell><PoliciesPage /></Shell>} />
+        <Route path="/restaurant/menu-manager" element={<Shell><MenuManagerPage /></Shell>} />
+
       </Route>
 
       {/* Kök rota */}

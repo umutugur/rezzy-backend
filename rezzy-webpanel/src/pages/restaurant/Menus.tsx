@@ -78,12 +78,19 @@ export default function MenusPage() {
           { to: "/restaurant/reservations", label: "Rezervasyonlar" },
           { to: "/restaurant/opening-hours", label: "Çalışma Saatleri" },
           { to: "/restaurant/tables", label: "Masalar" },
+
+          // ✅ YENİ: kategori + ürün yönetimi
+          { to: "/restaurant/menu-manager", label: "Menü Yönetimi" },
+
+          // (Legacy sabit menüler)
           { to: "/restaurant/menus", label: "Menüler" },
+
           { to: "/restaurant/policies", label: "Politikalar" },
           { to: "/restaurant/photos", label: "Fotoğraflar" },
           { to: "/restaurant/profile", label: "Profil & Ayarlar" },
         ]}
       />
+
       <div className="flex-1 space-y-6">
         <h2 className="text-lg font-semibold">Menüler</h2>
 
@@ -159,9 +166,11 @@ export default function MenusPage() {
                 </div>
               </div>
             ))}
+
             {rows.length === 0 && (
               <div className="text-sm text-gray-500">Kayıt yok</div>
             )}
+
             <button
               className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
               onClick={addRow}
