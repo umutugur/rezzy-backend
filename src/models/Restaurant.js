@@ -1,30 +1,30 @@
-// src/models/Restaurant.js
 import mongoose from "mongoose";
+
+// ✅ Controller ve validator aynı kaynaktan okusun diye burada export ediyoruz
+export const BUSINESS_TYPES = [
+  "restaurant",
+  "meyhane",
+  "bar",
+  "cafe",
+  "kebapci",
+  "fast_food",
+  "coffee_shop",
+  "pub",
+  "other",
+];
 
 const RestaurantSchema = new mongoose.Schema(
   {
-    owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    name: { type: String, required: true },
-
-    // ✅ YENİ: işletme tipi
-    businessType: {
-      type: String,
-      enum: [
-        "restaurant",
-        "meyhane",
-        "bar",
-        "cafe",
-        "kebapci",
-        "fast_food",
-        "coffee_shop",
-        "pub",
-        "other",
-      ],
-      default: "restaurant",
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
       index: true,
     },
 
-    // ✅ Bölge (ülke)
+    name: { type: String, required: true },
+
+    // ✅ Bölge (ülke) – sabit enum yok
     region: {
       type: String,
       index: true,
@@ -51,6 +51,14 @@ const RestaurantSchema = new mongoose.Schema(
     phone: String,
     email: String,
 
+    // ✅ İşletme tipi (core kategoriler için şart)
+    businessType: {
+      type: String,
+      enum: BUSINESS_TYPES,
+      default: "restaurant",
+      index: true,
+    },
+
     openingHours: [
       {
         day: Number,
@@ -59,6 +67,7 @@ const RestaurantSchema = new mongoose.Schema(
         isClosed: Boolean,
       },
     ],
+
     tables: [
       {
         name: String,
@@ -66,6 +75,7 @@ const RestaurantSchema = new mongoose.Schema(
         isActive: Boolean,
       },
     ],
+
     minPartySize: Number,
     maxPartySize: Number,
     slotMinutes: Number,
@@ -81,7 +91,7 @@ const RestaurantSchema = new mongoose.Schema(
     ibanName: String,
     bankName: String,
 
-    // ✅ Komisyon oranı (0..1)
+    // ✅ Komisyon oranı (0..1) (varsayılan %5)
     commissionRate: {
       type: Number,
       min: 0,
@@ -94,9 +104,14 @@ const RestaurantSchema = new mongoose.Schema(
     checkinWindowAfterMinutes: { type: Number, min: 0, default: 90 },
 
     // ✅ Eksik katılım eşiği
-    underattendanceThresholdPercent: { type: Number, min: 0, max: 100, default: 80 },
+    underattendanceThresholdPercent: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 80,
+    },
 
-    // ✅ Konum bilgisi (GeoJSON formatında)
+    // ✅ Konum bilgisi (GeoJSON)
     location: {
       type: {
         type: String,
@@ -108,6 +123,7 @@ const RestaurantSchema = new mongoose.Schema(
         index: "2dsphere",
       },
     },
+
     mapAddress: String,
     placeId: String,
     googleMapsUrl: String,
