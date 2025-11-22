@@ -91,5 +91,5 @@ export const updateItemSchema = Joi.object({
 /* ---------------- LIST QUERY ---------------- */
 
 export const listItemsQuerySchema = Joi.object({
-  categoryId: Joi.string().optional(),
-});
+  categoryId: Joi.string().optional().allow("",null),
+}).unknown(true);
