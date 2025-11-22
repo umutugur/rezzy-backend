@@ -189,13 +189,20 @@ export default function RestaurantDashboardPage() {
 
   return (
     <div className="flex gap-6">
-      <Sidebar
-        items={[
-          { to: "/restaurant", label: "Dashboard" },
-          { to: "/restaurant/reservations", label: "Rezervasyonlar" },
-          { to: "/restaurant/profile", label: "Profil & Ayarlar" },
-        ]}
-      />
+     <Sidebar
+  items={[
+    { to: "/restaurant", label: "Dashboard" },
+    { to: "/restaurant/reservations", label: "Rezervasyonlar" },
+
+    // ✅ EKLEDİK — MENÜ YÖNETİMİ (kategori + item)
+    { to: "/restaurant/menu-manager", label: "Menü Yönetimi" },
+
+    // varsa eski menüler sayfası
+    { to: "/restaurant/menus", label: "Basit Menüler" },
+
+    { to: "/restaurant/profile", label: "Profil & Ayarlar" },
+  ]}
+/>
 
       <div className="flex-1 space-y-6">
         <div className="flex items-center justify-between">
