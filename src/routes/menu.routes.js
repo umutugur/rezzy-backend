@@ -2,7 +2,7 @@
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
 import { allow } from "../middlewares/roles.js";
-import multer from "../utils/multer.js";
+import { imageUpload } from "../utils/multer.js"; // ✅ named import
 import { validate } from "../middlewares/validate.js";
 
 import {
@@ -80,7 +80,7 @@ r.post(
   "/:rid/menu/items",
   auth(),
   allow("restaurant", "admin"),
-  multer.single("photo"),
+  imageUpload.single("photo"), // ✅ foto için doğru uploader
   validate(createItemSchema),
   createItem
 );
@@ -89,7 +89,7 @@ r.patch(
   "/:rid/menu/items/:iid",
   auth(),
   allow("restaurant", "admin"),
-  multer.single("photo"),
+  imageUpload.single("photo"),
   validate(updateItemSchema),
   updateItem
 );

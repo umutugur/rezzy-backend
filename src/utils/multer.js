@@ -2,8 +2,13 @@
 import multer from "multer";
 
 const okTypes = [
-  "image/jpeg", "image/jpg", "image/png", "image/webp",
-  "image/heic", "image/heif", "application/pdf"
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "application/pdf",
 ];
 
 export const receiptUpload = multer({
@@ -11,13 +16,14 @@ export const receiptUpload = multer({
   fileFilter: (req, file, cb) => {
     console.log("multer got:", file.mimetype);
     if (okTypes.includes(file.mimetype)) {
-      cb(null, true);                 // ✅ KABUL
+      cb(null, true); // ✅ KABUL
     } else {
-      cb(new Error("invalid file type")); // ❌ RED (hata fırlat)
+      cb(new Error("invalid file type")); // ❌ RED
     }
   },
   limits: { fileSize: 10 * 1024 * 1024 },
 });
+
 export const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 }, // 12MB
@@ -27,3 +33,7 @@ export const imageUpload = multer({
     cb(null, true);
   },
 });
+
+// ✅ Legacy default export (yanlış import kalsa bile patlamasın diye)
+// Named importlar (receiptUpload, imageUpload) aynen çalışır.
+export default imageUpload;
