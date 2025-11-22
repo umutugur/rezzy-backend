@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import Restaurant from "../models/Restaurant.js";
 import Menu from "../models/Menu.js";
 import Reservation from "../models/Reservation.js";
 import CoreCategory from "../models/CoreCategory.js";       // ✅ yeni
