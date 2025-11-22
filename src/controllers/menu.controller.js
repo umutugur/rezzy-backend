@@ -11,6 +11,8 @@ import {
   listItemsQuerySchema,
 } from "../validators/menu.schema.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
+import CoreCategory from "../models/CoreCategory.js";
+
 
 /* ---------------- helpers ---------------- */
 function toObjectId(id) {
@@ -78,30 +80,35 @@ export const listCategories = async (req, res, next) => {
 
     // 2) Eğer hiç kategori yoksa ve restoran bir kategori setine bağlıysa, setten seed et
     if (existingCount === 0) {
-      const rest = await Restaurant.findById(rid)
-        .select("_id categorySet")
-        .lean();
+  const rest = await Restaurant.findById(rid)
+    .select("_id businessType preferredLanguage")
+    .lean();
 
-      if (rest?.categorySet) {
-        const set = await MenuCategorySet.findById(rest.categorySet)
-          .select("categories")
-          .lean();
+  const bt = rest?.businessType || "restaurant";
 
-        if (set?.categories?.length) {
-          const seedDocs = set.categories.map((c) => ({
-            restaurantId: rid,
-            title: String(c.title || "").trim(),
-            description: String(c.description || "").trim(),
-            order: Number(c.order ?? c.position ?? 0) || 0,
-            isActive: true,
-          })).filter(d => d.title);
+  // CoreCategory'den bu businessType'a uygun olanları çek
+  const coreCats = await CoreCategory.find({
+    isActive: true,
+    businessTypes: bt,
+  })
+    .sort({ order: 1, createdAt: 1 })
+    .lean();
 
-          if (seedDocs.length) {
-            await MenuCategory.insertMany(seedDocs);
-          }
-        }
-      }
-    }
+  if (coreCats.length) {
+    const lang = rest?.preferredLanguage || "tr";
+
+    const seedDocs = coreCats.map((c) => ({
+      restaurantId: rid,
+      coreCategoryId: c._id,
+      title: c.i18n?.[lang]?.title || c.i18n?.tr?.title || c.key,
+      description: c.i18n?.[lang]?.description || c.i18n?.tr?.description || "",
+      order: Number(c.order ?? 0) || 0,
+      isActive: true,
+    }));
+
+    await MenuCategory.insertMany(seedDocs);
+  }
+}
 
     const items = await MenuCategory.find({
       restaurantId: rid,

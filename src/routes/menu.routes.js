@@ -53,7 +53,7 @@ r.post(
   "/:rid/menu/categories",
   auth(),
   allow("restaurant", "admin"),
-  validate(createCategorySchema),
+  validate(createCategorySchema,"body"),
   createCategory
 );
 
@@ -61,7 +61,7 @@ r.patch(
   "/:rid/menu/categories/:cid",
   auth(),
   allow("restaurant", "admin"),
-  validate(updateCategorySchema),
+  validate(updateCategorySchema,"body"),
   updateCategory
 );
 
