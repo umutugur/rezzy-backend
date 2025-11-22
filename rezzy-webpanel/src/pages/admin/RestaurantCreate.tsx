@@ -4,12 +4,28 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
-import { adminCreateRestaurant, adminSearchUsers, adminCreateUser } from "../../api/client";
+import {
+  adminCreateRestaurant,
+  adminSearchUsers,
+  adminCreateUser,
+} from "../../api/client";
 import { showToast } from "../../ui/Toast";
 import Modal from "../../components/Modal";
 import { parseLatLngFromGoogleMaps } from "../../utils/geo";
 
 type UserLite = { _id: string; name?: string; email?: string; role?: string };
+
+const BUSINESS_TYPES = [
+  { value: "restaurant", label: "Restoran" },
+  { value: "meyhane", label: "Meyhane" },
+  { value: "bar", label: "Bar" },
+  { value: "cafe", label: "Kafe" },
+  { value: "kebapci", label: "Kebapçı" },
+  { value: "fast_food", label: "Fast Food" },
+  { value: "coffee_shop", label: "Coffee Shop" },
+  { value: "pub", label: "Pub" },
+  { value: "other", label: "Diğer" },
+];
 
 export default function AdminRestaurantCreatePage() {
   const nav = useNavigate();
@@ -25,6 +41,10 @@ export default function AdminRestaurantCreatePage() {
   const [phone, setPhone] = React.useState("");
   const [email, setEmail] = React.useState("");
 
+  // ✅ Business type
+  const [businessType, setBusinessType] =
+    React.useState<string>("restaurant");
+
   // Finans/kurallar
   const [commissionPct, setCommissionPct] = React.useState<string>("5");
   const [depositRequired, setDepositRequired] = React.useState(false);
@@ -37,7 +57,7 @@ export default function AdminRestaurantCreatePage() {
   const [mapAddress, setMapAddress] = React.useState("");
   const [googleMapsUrl, setGoogleMapsUrl] = React.useState("");
   const [lat, setLat] = React.useState<number | "">("");
-  const [lng, setLng] = React.useState<number | "">("");    
+  const [lng, setLng] = React.useState<number | "">("");
   const [region, setRegion] = React.useState("");
 
   // Yeni kullanıcı modalı
@@ -50,7 +70,7 @@ export default function AdminRestaurantCreatePage() {
   const searchQ = useQuery({
     queryKey: ["admin-user-search", ownerQuery],
     queryFn: () => adminSearchUsers(ownerQuery),
-    enabled: ownerQuery.trim().length >= 2
+    enabled: ownerQuery.trim().length >= 2,
   });
 
   // Google Maps URL değişince otomatik lat/lng çek
@@ -66,14 +86,18 @@ export default function AdminRestaurantCreatePage() {
   const createMut = useMutation({
     mutationFn: () => {
       // % → fraksiyon dönüştür
-      const commissionRate = Math.max(0, Number(commissionPct || "0")) / 100;
+      const commissionRate =
+        Math.max(0, Number(commissionPct || "0")) / 100;
 
       // GeoJSON location (sadece ikisi de sayıysa gönder)
       let location: any | undefined = undefined;
       const latNum = typeof lat === "string" ? Number(lat) : lat;
       const lngNum = typeof lng === "string" ? Number(lng) : lng;
       if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
-        location = { type: "Point", coordinates: [Number(lngNum), Number(latNum)] }; // [lng,lat]
+        location = {
+          type: "Point",
+          coordinates: [Number(lngNum), Number(latNum)],
+        }; // [lng,lat]
       }
 
       return adminCreateRestaurant({
@@ -85,13 +109,20 @@ export default function AdminRestaurantCreatePage() {
         phone: phone || undefined,
         email: email || undefined,
 
+        // ✅ işletme tipi
+        businessType,
+
         // finans/kurallar
         commissionRate,
         depositRequired,
-        depositAmount: Number(depositAmount || "0"),
+        depositAmount: depositRequired
+          ? Number(depositAmount || "0")
+          : 0,
         checkinWindowBeforeMinutes: Number(checkinBefore || "0"),
         checkinWindowAfterMinutes: Number(checkinAfter || "0"),
-        underattendanceThresholdPercent: Number(uaThreshold || "80"),
+        underattendanceThresholdPercent: Number(
+          uaThreshold || "80"
+        ),
 
         // konum
         mapAddress: mapAddress || "",
@@ -106,8 +137,11 @@ export default function AdminRestaurantCreatePage() {
       else nav("/admin/restaurants", { replace: true });
     },
     onError: (e: any) => {
-      showToast(e?.response?.data?.message || "Restoran oluşturulamadı", "error");
-    }
+      showToast(
+        e?.response?.data?.message || "Restoran oluşturulamadı",
+        "error"
+      );
+    },
   });
 
   const createUserMut = useMutation({
@@ -118,17 +152,27 @@ export default function AdminRestaurantCreatePage() {
         phone: newPhone.trim() || undefined,
         password: newPassword || undefined, // opsiyonel
       }),
-    onSuccess: (u) => {
+    onSuccess: (resp: any) => {
+      // ✅ backend { ok, user } döndürse de patlamasın
+      const u = resp?.user ?? resp;
       showToast("Kullanıcı oluşturuldu", "success");
       setOwner({ _id: u._id, name: u.name, email: u.email, role: u.role });
       setOwnerQuery(u.email || u.name || "");
       setUserModalOpen(false);
-      setNewName(""); setNewEmail(""); setNewPhone(""); setNewPassword("");
+      setNewName("");
+      setNewEmail("");
+      setNewPhone("");
+      setNewPassword("");
     },
-    onError: (e: any) => showToast(e?.response?.data?.message || "Kullanıcı oluşturulamadı", "error"),
+    onError: (e: any) =>
+      showToast(
+        e?.response?.data?.message || "Kullanıcı oluşturulamadı",
+        "error"
+      ),
   });
 
-  const canSubmit = !!owner && name.trim().length > 0 && region.trim().length > 0;
+  const canSubmit =
+    !!owner && name.trim().length > 0 && region.trim().length > 0;
   const canCreateUser =
     newName.trim().length > 0 &&
     (!!newEmail.trim() || !!newPhone.trim()); // en az e-posta veya telefon
@@ -141,7 +185,7 @@ export default function AdminRestaurantCreatePage() {
           { to: "/admin/restaurants", label: "Restoranlar" },
           { to: "/admin/users", label: "Kullanıcılar" },
           { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" }
+          { to: "/admin/moderation", label: "Moderasyon" },
         ]}
       />
 
@@ -160,7 +204,9 @@ export default function AdminRestaurantCreatePage() {
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <div className="flex items-end gap-2 mb-1">
-                <label className="block text-sm text-gray-600">Kullanıcı Ara</label>
+                <label className="block text-sm text-gray-600">
+                  Kullanıcı Ara
+                </label>
                 <button
                   type="button"
                   onClick={() => setUserModalOpen(true)}
@@ -172,14 +218,25 @@ export default function AdminRestaurantCreatePage() {
               <input
                 type="text"
                 value={ownerQuery}
-                onChange={(e) => { setOwnerQuery(e.target.value); setOwner(null); }}
+                onChange={(e) => {
+                  setOwnerQuery(e.target.value);
+                  setOwner(null);
+                }}
                 placeholder="İsim veya e-posta yaz"
                 className="w-full border rounded-lg px-3 py-2"
               />
               {ownerQuery.trim().length >= 2 && (
                 <div className="mt-2 max-h-48 overflow-auto border rounded-lg">
-                  {searchQ.isLoading && <div className="px-3 py-2 text-sm text-gray-500">Aranıyor…</div>}
-                  {searchQ.data?.length === 0 && <div className="px-3 py-2 text-sm text-gray-500">Sonuç yok</div>}
+                  {searchQ.isLoading && (
+                    <div className="px-3 py-2 text-sm text-gray-500">
+                      Aranıyor…
+                    </div>
+                  )}
+                  {searchQ.data?.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-gray-500">
+                      Sonuç yok
+                    </div>
+                  )}
                   {(searchQ.data ?? []).map((u: UserLite) => (
                     <button
                       key={u._id}
@@ -198,15 +255,21 @@ export default function AdminRestaurantCreatePage() {
             </div>
 
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Seçilen Sahip</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Seçilen Sahip
+              </label>
               <div className="border rounded-lg px-3 py-2 min-h-[42px]">
                 {owner ? (
                   <div>
                     <div className="font-medium">{owner.name || "-"}</div>
-                    <div className="text-gray-500 text-sm">{owner.email || ""}</div>
+                    <div className="text-gray-500 text-sm">
+                      {owner.email || ""}
+                    </div>
                   </div>
                 ) : (
-                  <span className="text-gray-500 text-sm">Henüz seçilmedi</span>
+                  <span className="text-gray-500 text-sm">
+                    Henüz seçilmedi
+                  </span>
                 )}
               </div>
             </div>
@@ -216,111 +279,196 @@ export default function AdminRestaurantCreatePage() {
         <Card title="Restoran Bilgileri">
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Ad *</label>
-              <input value={name} onChange={(e)=>setName(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+              <label className="block text-sm text-gray-600 mb-1">
+                Ad *
+              </label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              />
             </div>
+
+            {/* ✅ BusinessType */}
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Bölge (ülke kodu) *</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                İşletme Tipi *
+              </label>
+              <select
+                value={businessType}
+                onChange={(e) => setBusinessType(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              >
+                {BUSINESS_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">
+                Bölge (ülke kodu) *
+              </label>
               <input
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
                 placeholder="TR, US, UK..."
                 className="w-full border rounded-lg px-3 py-2"
               />
-              <p className="mt-1 text-xs text-gray-500">2-3 harfli ISO ülke kodu girin (örn. TR, US, UK).</p>
+              <p className="mt-1 text-xs text-gray-500">
+                2-3 harfli ISO ülke kodu girin (örn. TR, US,
+                UK).
+              </p>
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Şehir</label>
-              <input value={city} onChange={(e)=>setCity(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+              <label className="block text-sm text-gray-600 mb-1">
+                Şehir
+              </label>
+              <input
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm text-gray-600 mb-1">Adres</label>
-              <input value={address} onChange={(e)=>setAddress(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+              <label className="block text-sm text-gray-600 mb-1">
+                Adres
+              </label>
+              <input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Telefon</label>
-              <input value={phone} onChange={(e)=>setPhone(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+              <label className="block text-sm text-gray-600 mb-1">
+                Telefon
+              </label>
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">E-posta</label>
-              <input type="email" value={email} onChange={(e)=>setEmail(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+              <label className="block text-sm text-gray-600 mb-1">
+                E-posta
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2"
+              />
             </div>
           </div>
         </Card>
 
-        {/* KONUM - harita linkinden otomatik lat/lng */}
         <Card title="Konum Bilgileri">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Harita Adresi</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Harita Adresi
+              </label>
               <input
                 value={mapAddress}
-                onChange={(e)=>setMapAddress(e.target.value)}
+                onChange={(e) => setMapAddress(e.target.value)}
                 placeholder="Google Harita üzerindeki adres"
                 className="w-full border rounded-lg px-3 py-2"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Google Maps URL</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Google Maps URL
+              </label>
               <input
                 value={googleMapsUrl}
-                onChange={(e)=>setGoogleMapsUrl(e.target.value)}
+                onChange={(e) => setGoogleMapsUrl(e.target.value)}
                 placeholder="https://maps.google.com/... veya https://maps.app.goo.gl/..."
                 className="w-full border rounded-lg px-3 py-2"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Latitude (enlem)</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Latitude (enlem)
+              </label>
               <input
                 type="number"
                 step="0.000001"
                 value={lat}
-                onChange={(e)=>setLat(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) =>
+                  setLat(
+                    e.target.value === ""
+                      ? ""
+                      : Number(e.target.value)
+                  )
+                }
                 className="w-full border rounded-lg px-3 py-2"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Longitude (boylam)</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Longitude (boylam)
+              </label>
               <input
                 type="number"
                 step="0.000001"
                 value={lng}
-                onChange={(e)=>setLng(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) =>
+                  setLng(
+                    e.target.value === ""
+                      ? ""
+                      : Number(e.target.value)
+                  )
+                }
                 className="w-full border rounded-lg px-3 py-2"
               />
             </div>
           </div>
 
-          {typeof lat === "number" && typeof lng === "number" && Number.isFinite(lat) && Number.isFinite(lng) && (
-            <div className="mt-4">
-              <iframe
-                title="map"
-                width="100%"
-                height="250"
-                className="rounded-lg border"
-                loading="lazy"
-                src={`https://www.google.com/maps?q=${lat},${lng}&hl=tr&z=16&output=embed`}
-              />
-            </div>
-          )}
+          {typeof lat === "number" &&
+            typeof lng === "number" &&
+            Number.isFinite(lat) &&
+            Number.isFinite(lng) && (
+              <div className="mt-4">
+                <iframe
+                  title="map"
+                  width="100%"
+                  height="250"
+                  className="rounded-lg border"
+                  loading="lazy"
+                  src={`https://www.google.com/maps?q=${lat},${lng}&hl=tr&z=16&output=embed`}
+                />
+              </div>
+            )}
         </Card>
 
         <Card title="Kurallar & Finans">
           <div className="grid md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Komisyon (%)</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Komisyon (%)
+              </label>
               <input
-                type="number" min={0} step={0.1}
+                type="number"
+                min={0}
+                step={0.1}
                 value={commissionPct}
-                onChange={(e)=>setCommissionPct(e.target.value)}
+                onChange={(e) => setCommissionPct(e.target.value)}
                 className="w-full border rounded-lg px-3 py-2"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Depozito Zorunlu mu?</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Depozito Zorunlu mu?
+              </label>
               <select
                 value={depositRequired ? "yes" : "no"}
-                onChange={(e)=>setDepositRequired(e.target.value==="yes")}
+                onChange={(e) =>
+                  setDepositRequired(e.target.value === "yes")
+                }
                 className="w-full border rounded-lg px-3 py-2"
               >
                 <option value="no">Hayır</option>
@@ -328,38 +476,64 @@ export default function AdminRestaurantCreatePage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Depozito Tutarı</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Depozito Tutarı
+              </label>
               <input
-                type="number" min={0} step={1}
+                type="number"
+                min={0}
+                step={1}
                 value={depositAmount}
-                onChange={(e)=>setDepositAmount(e.target.value)}
+                onChange={(e) =>
+                  setDepositAmount(e.target.value)
+                }
                 className="w-full border rounded-lg px-3 py-2"
+                disabled={!depositRequired}
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Check-in Önce (dk)</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Check-in Önce (dk)
+              </label>
               <input
-                type="number" min={0} step={1}
+                type="number"
+                min={0}
+                step={1}
                 value={checkinBefore}
-                onChange={(e)=>setCheckinBefore(e.target.value)}
+                onChange={(e) =>
+                  setCheckinBefore(e.target.value)
+                }
                 className="w-full border rounded-lg px-3 py-2"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Check-in Sonra (dk)</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Check-in Sonra (dk)
+              </label>
               <input
-                type="number" min={0} step={1}
+                type="number"
+                min={0}
+                step={1}
                 value={checkinAfter}
-                onChange={(e)=>setCheckinAfter(e.target.value)}
+                onChange={(e) =>
+                  setCheckinAfter(e.target.value)
+                }
                 className="w-full border rounded-lg px-3 py-2"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Eksik Katılım Eşiği (%)</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Eksik Katılım Eşiği (%)
+              </label>
               <input
-                type="number" min={0} max={100} step={1}
+                type="number"
+                min={0}
+                max={100}
+                step={1}
                 value={uaThreshold}
-                onChange={(e)=>setUaThreshold(e.target.value)}
+                onChange={(e) =>
+                  setUaThreshold(e.target.value)
+                }
                 className="w-full border rounded-lg px-3 py-2"
               />
             </div>
@@ -374,38 +548,78 @@ export default function AdminRestaurantCreatePage() {
           >
             {createMut.isPending ? "Kaydediliyor…" : "Kaydet"}
           </button>
-          <span className="text-sm text-gray-500">* zorunlu alan</span>
+          <span className="text-sm text-gray-500">
+            * zorunlu alan
+          </span>
         </div>
       </div>
 
-      {/* Yeni Kullanıcı Modalı */}
-      <Modal open={userModalOpen} onClose={()=>setUserModalOpen(false)} title="Yeni Kullanıcı Oluştur">
+      <Modal
+        open={userModalOpen}
+        onClose={() => setUserModalOpen(false)}
+        title="Yeni Kullanıcı Oluştur"
+      >
         <div className="space-y-3">
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Ad *</label>
-            <input value={newName} onChange={(e)=>setNewName(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+            <label className="block text-sm text-gray-600 mb-1">
+              Ad *
+            </label>
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2"
+            />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">E-posta</label>
-            <input type="email" value={newEmail} onChange={(e)=>setNewEmail(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+            <label className="block text-sm text-gray-600 mb-1">
+              E-posta
+            </label>
+            <input
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2"
+            />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Telefon</label>
-            <input value={newPhone} onChange={(e)=>setNewPhone(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+            <label className="block text-sm text-gray-600 mb-1">
+              Telefon
+            </label>
+            <input
+              value={newPhone}
+              onChange={(e) => setNewPhone(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2"
+            />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Şifre (opsiyonel)</label>
-            <input type="password" value={newPassword} onChange={(e)=>setNewPassword(e.target.value)} className="w-full border rounded-lg px-3 py-2" />
+            <label className="block text-sm text-gray-600 mb-1">
+              Şifre (opsiyonel)
+            </label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) =>
+                setNewPassword(e.target.value)
+              }
+              className="w-full border rounded-lg px-3 py-2"
+            />
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2">
-            <button className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={()=>setUserModalOpen(false)}>Vazgeç</button>
+            <button
+              className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200"
+              onClick={() => setUserModalOpen(false)}
+            >
+              Vazgeç
+            </button>
             <button
               className="px-3 py-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
               disabled={!canCreateUser || createUserMut.isPending}
-              onClick={()=>createUserMut.mutate()}
+              onClick={() => createUserMut.mutate()}
             >
-              {createUserMut.isPending ? "Oluşturuluyor…" : "Oluştur"}
+              {createUserMut.isPending
+                ? "Oluşturuluyor…"
+                : "Oluştur"}
             </button>
           </div>
         </div>

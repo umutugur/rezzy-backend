@@ -137,6 +137,7 @@ export async function adminCreateUser(input: {
 // utils tarafında:
 // function normalizeMapsUrl(raw?: string): string { /* sende zaten var */ }
 
+// src/api/client.ts (sadece adminCreateRestaurant kısmı)
 export async function adminCreateRestaurant(input: {
   ownerId: string;
   name: string;
@@ -146,7 +147,8 @@ export async function adminCreateRestaurant(input: {
   phone?: string;
   email?: string;
 
-  // 👇 Bunlar aynen kalsın (dokunmuyoruz)
+  businessType?: string; // ✅ eklendi
+
   commissionRate?: number;
   depositRequired?: boolean;
   depositAmount?: number;
@@ -154,33 +156,28 @@ export async function adminCreateRestaurant(input: {
   checkinWindowAfterMinutes?: number;
   underattendanceThresholdPercent?: number;
 
-  // 👇 Sadece konum/metalar
   mapAddress?: string;
   placeId?: string;
   googleMapsUrl?: string;
   location?: {
     type: "Point";
-    coordinates: [number, number]; // [lng, lat]
+    coordinates: [number, number];
   };
 }) {
-  // Koordinat var mı?
   const lng = Number(input?.location?.coordinates?.[0]);
   const lat = Number(input?.location?.coordinates?.[1]);
   const hasCoords = Number.isFinite(lng) && Number.isFinite(lat);
 
-  // Payload: diğer tüm alanları PASSTHROUGH
   const payload: any = {
     ...input,
     mapAddress: input.mapAddress ?? "",
     placeId: input.placeId ?? "",
   };
 
-  // Sadece geçerli URL ise gönder
   const gm = normalizeMapsUrl(input.googleMapsUrl);
   if (gm) payload.googleMapsUrl = gm;
   else delete payload.googleMapsUrl;
 
-  // Sadece geçerli koordinatlar varsa GeoJSON olarak gönder
   if (hasCoords) {
     payload.location = {
       type: "Point",
@@ -412,6 +409,129 @@ export async function restaurantGetReservationQR(resId: string) {
     // geriye dönük uyumluluk
     qrUrl?: string;
   };
+}
+// =========================
+/** RESTAURANT — Menu Categories & Items */
+// =========================
+export async function restaurantListCategories(rid: string) {
+  const { data } = await api.get(`/panel/restaurants/${rid}/menu/categories`);
+  return (data?.items ?? data ?? []) as Array<any>;
+}
+
+export async function restaurantCreateCategory(
+  rid: string,
+  input: { title: string; description?: string; order?: number }
+) {
+  const { data } = await api.post(
+    `/panel/restaurants/${rid}/menu/categories`,
+    input
+  );
+  return data;
+}
+
+export async function restaurantUpdateCategory(
+  rid: string,
+  cid: string,
+  input: { title?: string; description?: string; order?: number; isActive?: boolean }
+) {
+  const { data } = await api.patch(
+    `/panel/restaurants/${rid}/menu/categories/${cid}`,
+    input
+  );
+  return data;
+}
+
+export async function restaurantDeleteCategory(rid: string, cid: string) {
+  const { data } = await api.delete(
+    `/panel/restaurants/${rid}/menu/categories/${cid}`
+  );
+  return data;
+}
+
+export async function restaurantListItems(
+  rid: string,
+  params?: { categoryId?: string }
+) {
+  const { data } = await api.get(
+    `/panel/restaurants/${rid}/menu/items`,
+    { params }
+  );
+  return (data?.items ?? data ?? []) as Array<any>;
+}
+
+export async function restaurantCreateItem(
+  rid: string,
+  input: {
+    categoryId: string;
+    title: string;
+    description?: string;
+    price: number;
+    tags?: string[];
+    order?: number;
+    isAvailable?: boolean;
+    photoFile?: File | null;
+  }
+) {
+  // multipart (multer.single("photo"))
+  const fd = new FormData();
+  fd.append("categoryId", input.categoryId);
+  fd.append("title", input.title);
+  fd.append("description", input.description ?? "");
+  fd.append("price", String(input.price ?? 0));
+  fd.append("order", String(input.order ?? 0));
+  fd.append("isAvailable", String(input.isAvailable ?? true));
+  (input.tags ?? []).forEach((t) => fd.append("tags", t));
+  if (input.photoFile) fd.append("photo", input.photoFile);
+
+  const { data } = await api.post(
+    `/panel/restaurants/${rid}/menu/items`,
+    fd,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  return data;
+}
+
+export async function restaurantUpdateItem(
+  rid: string,
+  iid: string,
+  input: {
+    categoryId?: string;
+    title?: string;
+    description?: string;
+    price?: number;
+    tags?: string[];
+    order?: number;
+    isAvailable?: boolean;
+    isActive?: boolean;
+    removePhoto?: boolean;
+    photoFile?: File | null;
+  }
+) {
+  const fd = new FormData();
+  if (input.categoryId) fd.append("categoryId", input.categoryId);
+  if (input.title != null) fd.append("title", input.title);
+  if (input.description != null) fd.append("description", input.description);
+  if (input.price != null) fd.append("price", String(input.price));
+  if (input.order != null) fd.append("order", String(input.order));
+  if (input.isAvailable != null) fd.append("isAvailable", String(input.isAvailable));
+  if (input.isActive != null) fd.append("isActive", String(input.isActive));
+  if (input.removePhoto != null) fd.append("removePhoto", String(input.removePhoto));
+  (input.tags ?? []).forEach((t) => fd.append("tags", t));
+  if (input.photoFile) fd.append("photo", input.photoFile);
+
+  const { data } = await api.patch(
+    `/panel/restaurants/${rid}/menu/items/${iid}`,
+    fd,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  return data;
+}
+
+export async function restaurantDeleteItem(rid: string, iid: string) {
+  const { data } = await api.delete(
+    `/panel/restaurants/${rid}/menu/items/${iid}`
+  );
+  return data;
 }
 
 // =========================
