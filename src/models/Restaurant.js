@@ -1,3 +1,4 @@
+// src/models/Restaurant.js
 import mongoose from "mongoose";
 
 const RestaurantSchema = new mongoose.Schema(
@@ -5,21 +6,41 @@ const RestaurantSchema = new mongoose.Schema(
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     name: { type: String, required: true },
 
-    // ✅ Bölge (ülke) – artık sabit enum yok; herhangi bir ISO kodu kabul edebilir
+    // ✅ YENİ: işletme tipi
+    businessType: {
+      type: String,
+      enum: [
+        "restaurant",
+        "meyhane",
+        "bar",
+        "cafe",
+        "kebapci",
+        "fast_food",
+        "coffee_shop",
+        "pub",
+        "other",
+      ],
+      default: "restaurant",
+      index: true,
+    },
+
+    // ✅ Bölge (ülke)
     region: {
       type: String,
       index: true,
     },
-    // 🌐 Restoran arayüz dili (örn: "tr", "en", "ru", "el")
+
+    // 🌐 Restoran arayüz dili
     preferredLanguage: {
       type: String,
       default: "tr",
     },
+
     isActive: {
-  type: Boolean,
-  default: true,
-  index: true,
-},
+      type: Boolean,
+      default: true,
+      index: true,
+    },
 
     city: String,
     priceRange: String,
@@ -29,6 +50,7 @@ const RestaurantSchema = new mongoose.Schema(
     address: String,
     phone: String,
     email: String,
+
     openingHours: [
       {
         day: Number,
@@ -59,7 +81,7 @@ const RestaurantSchema = new mongoose.Schema(
     ibanName: String,
     bankName: String,
 
-    // ✅ Komisyon oranı (0..1) (varsayılan %5)
+    // ✅ Komisyon oranı (0..1)
     commissionRate: {
       type: Number,
       min: 0,
@@ -83,7 +105,7 @@ const RestaurantSchema = new mongoose.Schema(
       },
       coordinates: {
         type: [Number], // [lng, lat]
-        index: "2dsphere", // tek 2dsphere indeks bu satırda tanımlanıyor
+        index: "2dsphere",
       },
     },
     mapAddress: String,
@@ -96,11 +118,10 @@ const RestaurantSchema = new mongoose.Schema(
 // Arama ve konum indeksleri
 RestaurantSchema.index({ name: "text" });
 
-// Listeleme için optimize index:
-// filter: isActive + region
-// sort:   rating DESC + name ASC
+// Listeleme için optimize index
 RestaurantSchema.index(
   { isActive: 1, region: 1, rating: -1, name: 1 },
   { name: "isActive_region_rating_name" }
 );
+
 export default mongoose.model("Restaurant", RestaurantSchema);

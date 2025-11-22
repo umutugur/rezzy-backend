@@ -2,12 +2,17 @@ import mongoose from "mongoose";
 import Restaurant from "../models/Restaurant.js";
 import Menu from "../models/Menu.js";
 import Reservation from "../models/Reservation.js";
+import CoreCategory from "../models/CoreCategory.js";       // ✅ yeni
+import MenuCategory from "../models/MenuCategory.js";
 import { generateQRDataURL, signQR } from "../utils/qr.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
+import Restaurant, { BUSINESS_TYPES } from "../models/Restaurant.js";
+
 /* ---------- CREATE RESTAURANT ---------- */
 export const createRestaurant = async (req, res, next) => {
   try {
     const body = { ...req.body, owner: req.user.id };
+
     if (typeof body.region === "string") {
       const r = body.region.trim().toUpperCase();
       body.region = r || undefined;
@@ -22,7 +27,37 @@ export const createRestaurant = async (req, res, next) => {
       };
     }
 
+    // ✅ 1) Restoranı oluştur
     const rest = await Restaurant.create(body);
+
+    // ✅ 2) Core kategorileri çek (businessType bazlı)
+    const businessType = rest.businessType || "restaurant";
+    const lang = (rest.preferredLanguage || "tr").toLowerCase();
+
+    const coreCats = await CoreCategory.find({
+      isActive: true,
+      businessTypes: businessType, // Array içinde eşleşme
+    })
+      .sort({ order: 1, createdAt: 1 })
+      .lean();
+
+    // ✅ 3) Restoran altına kopyala
+    if (coreCats.length) {
+      const docs = coreCats.map((c) => {
+        const pack = c.i18n?.[lang] || c.i18n?.tr; // fallback tr
+        return {
+          restaurantId: rest._id,
+          coreCategoryId: c._id,
+          title: pack?.title || c.key,
+          description: pack?.description || "",
+          order: Number(c.order || 0),
+          isActive: true,
+        };
+      });
+
+      await MenuCategory.insertMany(docs);
+    }
+
     res.json(rest);
   } catch (e) {
     next(e);
@@ -238,40 +273,42 @@ export const updateRestaurant = async (req, res, next) => {
       "mapAddress",
       "placeId",
       "googleMapsUrl",
+
+      // ✅ NEW
+      "businessType",
     ];
 
     const $set = {};
     for (const k of allowed) {
       if (typeof req.body[k] !== "undefined") $set[k] = req.body[k];
     }
-    // photos için sadece http/https URL'lere izin ver
-if (Array.isArray($set.photos)) {
-  $set.photos = $set.photos.filter(
-    (p) =>
-      typeof p === "string" &&
-      (p.startsWith("http://") || p.startsWith("https://"))
-  );
-  // Tamamı çöpe gittiyse boş array olsun
-  if ($set.photos.length === 0) {
-    delete $set.photos; // veya $set.photos = [];
-  }
-}
+
+    // photos sanitize aynı kalsın
+    if (Array.isArray($set.photos)) {
+      $set.photos = $set.photos.filter(
+        (p) => typeof p === "string" && (p.startsWith("http://") || p.startsWith("https://"))
+      );
+      if ($set.photos.length === 0) delete $set.photos;
+    }
+
     if (typeof $set.region === "string") {
       const r = $set.region.trim().toUpperCase();
       if (r) $set.region = r;
       else delete $set.region;
     }
 
-    // GeoJSON normalize
-    if ($set.location && Array.isArray($set.location.coordinates)) {
-      const [lng, lat] = $set.location.coordinates.map(Number);
-      $set.location = {
-        type: "Point",
-        coordinates: [lng, lat],
-      };
+    // ✅ businessType normalize + core list kontrol
+    if (typeof $set.businessType === "string") {
+      const bt = $set.businessType.trim().toLowerCase();
+      if (BUSINESS_TYPES.includes(bt)) $set.businessType = bt;
+      else $set.businessType = "other";
     }
 
-    // Yetki
+    if ($set.location && Array.isArray($set.location.coordinates)) {
+      const [lng, lat] = $set.location.coordinates.map(Number);
+      $set.location = { type: "Point", coordinates: [lng, lat] };
+    }
+
     if (req.user.role !== "admin") {
       const own = await Restaurant.findById(req.params.id).select("owner");
       if (!own || own.owner.toString() !== req.user.id)
@@ -284,8 +321,7 @@ if (Array.isArray($set.photos)) {
       { new: true }
     );
 
-    if (!updated)
-      throw { status: 404, message: "Restaurant not found" };
+    if (!updated) throw { status: 404, message: "Restaurant not found" };
 
     res.json(updated);
   } catch (e) {

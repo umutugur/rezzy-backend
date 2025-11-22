@@ -7,6 +7,17 @@ const objectId = (value, helpers) => {
   }
   return value;
 };
+const BUSINESS_TYPES = [
+  "restaurant",
+  "meyhane",
+  "bar",
+  "cafe",
+  "kebapci",
+  "fast_food",
+  "coffee_shop",
+  "pub",
+  "other",
+];
 
 const anyObject = Joi.object({}).unknown(true);
 
@@ -55,6 +66,10 @@ export const createRestaurantSchema = Joi.object({
     mapAddress: Joi.string().allow("", null),
     placeId: Joi.string().allow("", null),
     googleMapsUrl: Joi.string().uri().allow("", null),
+    businessType: Joi.string()
+    .valid(...BUSINESS_TYPES)
+    .default("restaurant"),
+
   }),
 });
 
@@ -114,6 +129,8 @@ export const updateRestaurantSchema = Joi.object({
     mapAddress: Joi.string().allow("", null),
     placeId: Joi.string().allow("", null),
     googleMapsUrl: Joi.string().allow("", null),
+    businessType: Joi.string().valid(...BUSINESS_TYPES),
+
   }).min(1),
 });
 

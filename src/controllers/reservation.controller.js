@@ -10,6 +10,7 @@ import { notifyUser, notifyRestaurantOwner } from "../services/notification.serv
 import { addIncident, computeUnderAttendWeight } from "../services/userRisk.service.js";
 import joi from "joi";
 import Stripe from "stripe";
+import { computeAvgSpendBaseForRestaurant } from "./menu.controller.js"; 
 
 // ✅ Stripe client (env varsa aktif)
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
@@ -156,7 +157,7 @@ export const createReservation = async (req, res, next) => {
     let totalPrice = 0;
     let selectionMode = "count";
 
-    // ✅ FIX: selections varsa eski menü hesabı çalışır
+    // ✅ FIX MENÜ VARSA: eski hesap
     if (Array.isArray(selections) && selections.length > 0) {
       const ids = selections.map((s) => s.menuId).filter(Boolean);
       const menus = await Menu.find({ _id: { $in: ids }, isActive: true }).lean();
@@ -189,9 +190,16 @@ export const createReservation = async (req, res, next) => {
         };
     }
 
-    // ✅ FIX: partySize artık body’den geliyor (fix menüsüz akış için)
+    // ✅ FIX: partySize body’den geliyor (fix menüsüz akış için)
     const ps = Number(partySize) || 0;
     if (ps <= 0) throw { status: 400, message: "partySize must be at least 1" };
+
+    // ✅ FIX MENÜ YOKSA: avgSpendBase * kişi
+    if (!Array.isArray(selections) || selections.length === 0) {
+      const avgBase = await computeAvgSpendBaseForRestaurant(restaurantId);
+      totalPrice = Math.round(avgBase) * ps;
+      selectionMode = "avg_base"; // debug için net isim
+    }
 
     const depositAmount = computeDeposit(restaurant, totalPrice);
 
@@ -200,7 +208,7 @@ export const createReservation = async (req, res, next) => {
       userId: req.user.id,
       dateTimeUTC: dt,
       partySize: ps,
-      selections: withPrices.length ? withPrices : undefined, // boşsa schema default'u çalışır
+      selections: withPrices.length ? withPrices : undefined,
       totalPrice,
       depositAmount,
       status: "pending",
@@ -513,21 +521,12 @@ export const listMyReservations = async (req, res, next) => {
 /** GET /api/reservations/:rid */
 export const getReservation = async (req, res, next) => {
   try {
-    // 👇 Restoranın harita alanlarını da dahil ederek populate et
     const rDoc = await Reservation.findById(req.params.rid)
       .populate(
         "restaurantId",
         [
-          "_id",
-          "name",
-          "address",
-          "city",
-          "mapAddress",
-          "placeId",
-          "googleMapsUrl",
-          // GeoJSON içindeki sadece koordinasyon alanını seç
-          "location.coordinates",
-          "region",
+          "_id","name","address","city","mapAddress","placeId",
+          "googleMapsUrl","location.coordinates","region",
         ].join(" ")
       )
       .lean();
@@ -537,10 +536,27 @@ export const getReservation = async (req, res, next) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    // —— Toplam/party/deposit normalize (mevcut mantık) ——
-    const { mode, partySize, totalPrice } = computeTotalsStrict(rDoc.selections || []);
+    // ✅ totals normalize (FIX)
+    let mode = "count";
+    let partySize = rDoc.partySize || 0;
+    let totalPrice = rDoc.totalPrice || 0;
 
-    // rDoc.restaurantId, populate’lı (objedir); yine de garanti olsun diye id’den de çekiyoruz
+    if (Array.isArray(rDoc.selections) && rDoc.selections.length > 0) {
+      const strict = computeTotalsStrict(rDoc.selections);
+      mode = strict.mode;
+      partySize = strict.partySize;
+      totalPrice = strict.totalPrice;
+    } else {
+      mode = "avg_base";
+      // stored total 0 ise tekrar avg_base hesapla
+      if (!totalPrice || totalPrice <= 0) {
+        const avgBase = await computeAvgSpendBaseForRestaurant(
+          rDoc.restaurantId?._id || rDoc.restaurantId
+        );
+        totalPrice = Math.round(avgBase) * partySize;
+      }
+    }
+
     const restId = rDoc?.restaurantId?._id || rDoc?.restaurantId;
     const restaurant = await Restaurant.findById(restId).lean();
 
@@ -548,9 +564,17 @@ export const getReservation = async (req, res, next) => {
 
     const patch = {};
     let need = false;
-    if (partySize > 0 && partySize !== rDoc.partySize) { patch.partySize = partySize; need = true; }
-    if (totalPrice !== rDoc.totalPrice) { patch.totalPrice = totalPrice; need = true; }
-    if (depositAmount !== rDoc.depositAmount) { patch.depositAmount = depositAmount; need = true; }
+
+    if (partySize > 0 && partySize !== rDoc.partySize) {
+      patch.partySize = partySize; need = true;
+    }
+    if (totalPrice !== rDoc.totalPrice) {
+      patch.totalPrice = totalPrice; need = true;
+    }
+    if (depositAmount !== rDoc.depositAmount) {
+      patch.depositAmount = depositAmount; need = true;
+    }
+
     if (need) {
       await Reservation.updateOne({ _id: rDoc._id }, { $set: patch }).catch(() => {});
       Object.assign(rDoc, patch);

@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import path from "path";
 import rateLimit from "express-rate-limit";
+import menuRoutes from "./routes/menu.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import restaurantRoutes from "./routes/restaurant.routes.js";
 import reservationRoutes from "./routes/reservation.routes.js";
@@ -68,6 +69,7 @@ app.use("/api/restaurants", restaurantRoutes);
 
 // Panel / admin restoran endpointleri
 app.use("/api/panel/restaurants", panelRoutes);
+app.use("/api/panel/restaurants", menuRoutes);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/reservations", reservationRoutes);
