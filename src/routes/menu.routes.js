@@ -85,8 +85,14 @@ r.post(
   "/:rid/menu/items",
   auth(),
   allow("restaurant", "admin"),
-  imageUpload.single("photo"), // ✅ foto için doğru uploader
-  validate(createItemSchema,"body"),
+  imageUpload.single("photo"),
+  (req, _res, next) => {
+    console.log("CT:", req.headers["content-type"]);
+    console.log("BODY KEYS:", Object.keys(req.body || {}));
+    console.log("BODY:", req.body);
+    next();
+  },
+  validate(createItemSchema, "body"),
   createItem
 );
 
