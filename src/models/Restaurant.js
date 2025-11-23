@@ -59,6 +59,14 @@ const RestaurantSchema = new mongoose.Schema(
       index: true,
     },
 
+    // ✅ Admin restoran oluştururken seçilen hazır kategori seti.
+    // Restaurant panel ilk kez kategori çektiğinde boşsa, bu setten seed edilir.
+    categorySet: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MenuCategorySet",
+      index: true,
+    },
+
     openingHours: [
       {
         day: Number,

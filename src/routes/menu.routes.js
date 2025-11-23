@@ -86,7 +86,7 @@ r.post(
   auth(),
   allow("restaurant", "admin"),
   imageUpload.single("photo"), // ✅ foto için doğru uploader
-  validate(createItemSchema),
+  validate(createItemSchema,"body"),
   createItem
 );
 
@@ -95,7 +95,7 @@ r.patch(
   auth(),
   allow("restaurant", "admin"),
   imageUpload.single("photo"),
-  validate(updateItemSchema),
+  validate(updateItemSchema,"body"),
   updateItem
 );
 

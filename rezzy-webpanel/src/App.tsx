@@ -188,11 +188,19 @@ export default function App() {
         <Route path="/restaurant/opening-hours" element={<Shell><OpeningHoursPage /></Shell>} />
         <Route path="/restaurant/tables" element={<Shell><TablesPage /></Shell>} />
         <Route path="/restaurant/menus" element={<Shell><MenusPage /></Shell>} />
+        {/* Geriye dönük uyumluluk: eski /restaurant/menus yolunu yeni prefix'e yönlendir */}
+        <Route path="/restaurant/menu" element={<Navigate to="/panel/restaurant/menu" replace />} />
         <Route path="/restaurant/photos" element={<Shell><PhotosPage /></Shell>} />
         <Route path="/restaurant/profile" element={<Shell><RestaurantProfilePage /></Shell>} />
         <Route path="/restaurant/policies" element={<Shell><PoliciesPage /></Shell>} />
         <Route path="/restaurant/menu-manager" element={<Shell><MenuManagerPage /></Shell>} />
 
+        {/* Yeni panel prefix'li menü rotaları (Sidebar bu yolu kullanıyor) */}
+        <Route path="/panel/restaurant/menu" element={<Shell><MenuManagerPage /></Shell>} />
+        <Route path="/panel/restaurant/menus" element={<Shell><MenusPage /></Shell>} />
+
+        {/* Geriye dönük uyumluluk: eski /restaurant/* yollarını yeni prefix'e yönlendir */}
+        <Route path="/panel/restaurant/menu-manager" element={<Navigate to="/panel/restaurant/menu" replace />} />
       </Route>
 
       {/* Kök rota */}

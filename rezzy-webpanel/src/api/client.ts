@@ -31,7 +31,7 @@ api.interceptors.request.use((config) => {
   const t = authStore.getToken();
   if (t) {
     config.headers = config.headers || {};
-    config.headers.Authorization = `Bearer ${t}`;
+    (config.headers as any).Authorization = `Bearer ${t}`;
   }
 
   // ✅ FormData ise Content-Type set ETME / boundary'yi axios koysun
@@ -62,7 +62,10 @@ api.interceptors.response.use(
     return res;
   },
   (err) => {
-    const msg = err?.response?.data?.message || err?.message || "İstek başarısız";
+    const msg =
+      err?.response?.data?.message ||
+      err?.message ||
+      "İstek başarısız";
     if (err?.response?.status === 401) {
       authStore.logout();
     }
@@ -131,7 +134,13 @@ export async function adminUpdateRestaurantCommission(
 
 export async function adminListReservationsByRestaurant(
   rid: string,
-  params: { from?: string; to?: string; status?: string; page?: number; limit?: number }
+  params: {
+    from?: string;
+    to?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }
 ) {
   const { data } = await api.get(`/restaurants/${rid}/reservations`, { params });
   return data;
@@ -241,7 +250,11 @@ export async function adminUpdateUserRole(
 }
 
 // ✅ Risk history
-export type RiskIncidentType = "NO_SHOW" | "LATE_CANCEL" | "UNDER_ATTEND" | "GOOD_ATTEND";
+export type RiskIncidentType =
+  | "NO_SHOW"
+  | "LATE_CANCEL"
+  | "UNDER_ATTEND"
+  | "GOOD_ATTEND";
 
 export interface AdminUserRiskIncident {
   type: RiskIncidentType;
@@ -258,7 +271,10 @@ export interface AdminUserRiskSnapshot {
   banReason: string | null;
   consecutiveGoodShows: number;
   windowDays: number;
-  weights: Record<"NO_SHOW" | "LATE_CANCEL" | "UNDER_ATTEND" | "GOOD_ATTEND", number>;
+  weights: Record<
+    "NO_SHOW" | "LATE_CANCEL" | "UNDER_ATTEND" | "GOOD_ATTEND",
+    number
+ >;
   multiplier: number;
 }
 
@@ -302,7 +318,10 @@ export async function adminExportUsers(): Promise<void> {
 // =========================
 // ADMIN — Moderation
 // =========================
-export async function adminListReviews(params?: { page?: number; limit?: number }) {
+export async function adminListReviews(params?: {
+  page?: number;
+  limit?: number;
+}) {
   const { data } = await api.get(`/admin/reviews`, { params });
   return data;
 }
@@ -322,7 +341,10 @@ export async function adminDeleteReview(id: string) {
   return data;
 }
 
-export async function adminListComplaints(params?: { page?: number; limit?: number }) {
+export async function adminListComplaints(params?: {
+  page?: number;
+  limit?: number;
+}) {
   const { data } = await api.get(`/admin/complaints`, { params });
   return data;
 }
@@ -449,7 +471,9 @@ export async function restaurantGetReservationQR(resId: string) {
 // RESTAURANT — Menu Categories & Items
 // =========================
 export async function restaurantListCategories(rid: string) {
-  const { data } = await api.get(`/panel/restaurants/${rid}/menu/categories`);
+  const { data } = await api.get(
+    `/panel/restaurants/${rid}/menu/categories`
+  );
   return (data?.items ?? data ?? []) as Array<any>;
 }
 
@@ -467,7 +491,12 @@ export async function restaurantCreateCategory(
 export async function restaurantUpdateCategory(
   rid: string,
   cid: string,
-  input: { title?: string; description?: string; order?: number; isActive?: boolean }
+  input: {
+    title?: string;
+    description?: string;
+    order?: number;
+    isActive?: boolean;
+  }
 ) {
   const { data } = await api.patch(
     `/panel/restaurants/${rid}/menu/categories/${cid}`,
@@ -516,7 +545,9 @@ export async function restaurantCreateItem(
   fd.append("order", String(input.order ?? 0));
   fd.append("isAvailable", String(input.isAvailable ?? true));
 
-  (input.tags ?? []).forEach((t) => fd.append("tags", t));
+  (input.tags ?? []).forEach((t) => {
+    if (t) fd.append("tags", t);
+  });
 
   if (input.photoFile instanceof File) {
     fd.append("photo", input.photoFile);
@@ -552,10 +583,14 @@ export async function restaurantUpdateItem(
   if (input.description != null) fd.append("description", input.description);
   if (input.price != null) fd.append("price", String(input.price));
   if (input.order != null) fd.append("order", String(input.order));
-  if (input.isAvailable != null) fd.append("isAvailable", String(input.isAvailable));
+  if (input.isAvailable != null)
+    fd.append("isAvailable", String(input.isAvailable));
   if (input.isActive != null) fd.append("isActive", String(input.isActive));
-  if (input.removePhoto != null) fd.append("removePhoto", String(input.removePhoto));
-  (input.tags ?? []).forEach((t) => fd.append("tags", t));
+  if (input.removePhoto != null)
+    fd.append("removePhoto", String(input.removePhoto));
+  (input.tags ?? []).forEach((t) => {
+    if (t) fd.append("tags", t);
+  });
   if (input.photoFile) fd.append("photo", input.photoFile);
 
   const { data } = await api.patch(
