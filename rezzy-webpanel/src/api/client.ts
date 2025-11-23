@@ -3,33 +3,30 @@ import { authStore } from "../store/auth";
 import { showToast } from "../ui/Toast";
 
 const baseURL = import.meta.env.VITE_API_BASE || "/api";
+
 // src/api/client.ts
 function normalizeMapsUrl(raw?: string): string | undefined {
   const v = String(raw ?? "").trim();
   if (!v) return undefined;
 
-  // Protokol ekle
   const withProto = /^https?:\/\//i.test(v) ? v : `https://${v}`;
-
-  // Görünür boşlukları ve parantez gibi sorun çıkaran karakterleri encode et
-  // NOT: encodeURI tüm URL'yi uygun şekilde % ile kodlar ama mevcut %'leri bozmaz.
   const encoded = encodeURI(withProto);
 
   try {
-    const u = new URL(encoded); // geçerliyse hata atmaz
-    // Güvenlik: sadece http/https
+    const u = new URL(encoded);
     if (!/^https?:$/i.test(u.protocol)) return undefined;
     return u.toString();
   } catch {
     return undefined;
   }
 }
+
 export const api = axios.create({
   baseURL,
   withCredentials: false,
 });
 
-// ---- Request interceptor: Auth + GET cache-buster (headers YOK!)
+// ---- Request interceptor: Auth + GET cache-buster
 api.interceptors.request.use((config) => {
   const t = authStore.getToken();
   if (t) {
@@ -37,7 +34,7 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${t}`;
   }
 
-  // ✅ FormData ise JSON header'ını ezme, tarayıcı boundary koysun
+  // ✅ FormData ise Content-Type set ETME / boundary'yi axios koysun
   if (config.data instanceof FormData) {
     if (config.headers) {
       delete (config.headers as any)["Content-Type"];
@@ -46,7 +43,10 @@ api.interceptors.request.use((config) => {
   }
 
   const method = (config.method || "get").toLowerCase();
-  if (method === "get") {
+  const url = String(config.url || "");
+
+  // ✅ _ts sadece panel DIŞI GET’lerde
+  if (method === "get" && !url.includes("/panel/")) {
     config.params = { ...(config.params || {}), _ts: Date.now() };
   }
 
@@ -74,10 +74,15 @@ api.interceptors.response.use(
 // =========================
 // Auth
 // =========================
-export async function loginWithEmail(input: { email?: string; phone?: string; password: string }) {
+export async function loginWithEmail(input: {
+  email?: string;
+  phone?: string;
+  password: string;
+}) {
   const { data } = await api.post("/auth/login", input);
   return data as { token: string; user: any };
 }
+
 export async function fetchMe() {
   const { data } = await api.get("/auth/me");
   return data;
@@ -87,12 +92,14 @@ export async function fetchMe() {
 // ADMIN — Notifications
 // =========================
 export type AdminSendTargets = "all" | "customers" | "restaurants" | "email";
+
 export interface AdminSendResponse {
   ok: boolean;
   targetedUsers: number;
   targetedTokens: number;
   sent: number;
 }
+
 export async function adminSendNotification(input: {
   targets: AdminSendTargets;
   email?: string;
@@ -105,16 +112,23 @@ export async function adminSendNotification(input: {
 }
 
 // =========================
-/** ADMIN — Restaurants */
+// ADMIN — Restaurants
 // =========================
 export async function adminGetRestaurant(rid: string) {
   const { data } = await api.get(`/admin/restaurants/${rid}`);
   return data;
 }
-export async function adminUpdateRestaurantCommission(rid: string, commissionRate: number) {
-  const { data } = await api.patch(`/admin/restaurants/${rid}/commission`, { commissionRate });
+
+export async function adminUpdateRestaurantCommission(
+  rid: string,
+  commissionRate: number
+) {
+  const { data } = await api.patch(`/admin/restaurants/${rid}/commission`, {
+    commissionRate,
+  });
   return data;
 }
+
 export async function adminListReservationsByRestaurant(
   rid: string,
   params: { from?: string; to?: string; status?: string; page?: number; limit?: number }
@@ -123,27 +137,29 @@ export async function adminListReservationsByRestaurant(
   return data;
 }
 
-// ✅ Kullanıcı arama (owner seçimi için)
-export async function adminSearchUsers(query: string): Promise<Array<{ _id: string; name?: string; email?: string; role?: string }>> {
-  const { data } = await api.get("/admin/users", { params: { query, limit: 20 } });
+// ✅ owner seçimi için user arama
+export async function adminSearchUsers(
+  query: string
+): Promise<Array<{ _id: string; name?: string; email?: string; role?: string }>> {
+  const { data } = await api.get("/admin/users", {
+    params: { query, limit: 20 },
+  });
   const items = Array.isArray(data) ? data : data?.items || [];
   return items;
 }
-// ✅ Admin — Create user (minimal; role backend’de default "customer")
+
+// ✅ Admin — Create user
 export async function adminCreateUser(input: {
   name: string;
   email?: string;
   phone?: string;
-  password?: string; // opsiyonel; boşsa backend random üretir
+  password?: string;
 }) {
   const { data } = await api.post("/admin/users", input);
-  return data; // { ok, user }
+  return data;
 }
-// ✅ Restoran oluştur
-// utils tarafında:
-// function normalizeMapsUrl(raw?: string): string { /* sende zaten var */ }
 
-// src/api/client.ts (sadece adminCreateRestaurant kısmı)
+// ✅ Admin — Create restaurant
 export async function adminCreateRestaurant(input: {
   ownerId: string;
   name: string;
@@ -153,8 +169,8 @@ export async function adminCreateRestaurant(input: {
   phone?: string;
   email?: string;
 
-  businessType?: string; // ✅ eklendi
-  categorySet?: string;  // ✅ hazır kategori seti id'si (MenuCategorySet)
+  businessType?: string;
+  categorySet?: string;
 
   commissionRate?: number;
   depositRequired?: boolean;
@@ -166,10 +182,7 @@ export async function adminCreateRestaurant(input: {
   mapAddress?: string;
   placeId?: string;
   googleMapsUrl?: string;
-  location?: {
-    type: "Point";
-    coordinates: [number, number];
-  };
+  location?: { type: "Point"; coordinates: [number, number] };
 }) {
   const lng = Number(input?.location?.coordinates?.[0]);
   const lat = Number(input?.location?.coordinates?.[1]);
@@ -198,27 +211,27 @@ export async function adminCreateRestaurant(input: {
   return data;
 }
 
-// ... aşağıdaki Users / Moderation / Restaurant tarafı / Commissions kodların tamamı senin gönderdiğin haliyle kalsın ...
-
-
 // =========================
-/** ADMIN — Users */
+// ADMIN — Users
 // =========================
 export async function adminGetUser(uid: string) {
   const { data } = await api.get(`/admin/users/${uid}`);
   return data?.user ?? data;
 }
+
 export async function adminBanUser(
   uid: string,
-  input: { reason: string; bannedUntil?: string } // ISO tarih (opsiyonel)
+  input: { reason: string; bannedUntil?: string }
 ) {
   const { data } = await api.post(`/admin/users/${uid}/ban`, input);
   return data as { ok: boolean; user: { _id: string; banned: boolean } };
 }
+
 export async function adminUnbanUser(uid: string) {
   const { data } = await api.post(`/admin/users/${uid}/unban`);
   return data;
 }
+
 export async function adminUpdateUserRole(
   uid: string,
   role: "customer" | "restaurant" | "admin"
@@ -227,14 +240,16 @@ export async function adminUpdateUserRole(
   return data;
 }
 
-/** ✅ NEW: Admin — User Risk History */
+// ✅ Risk history
 export type RiskIncidentType = "NO_SHOW" | "LATE_CANCEL" | "UNDER_ATTEND" | "GOOD_ATTEND";
+
 export interface AdminUserRiskIncident {
   type: RiskIncidentType;
   weight: number;
-  at: string;              // ISO
+  at: string;
   reservationId: string | null;
 }
+
 export interface AdminUserRiskSnapshot {
   riskScore: number;
   noShowCount: number;
@@ -242,10 +257,11 @@ export interface AdminUserRiskSnapshot {
   bannedUntil: string | null;
   banReason: string | null;
   consecutiveGoodShows: number;
-  windowDays: number; // 180
+  windowDays: number;
   weights: Record<"NO_SHOW" | "LATE_CANCEL" | "UNDER_ATTEND" | "GOOD_ATTEND", number>;
-  multiplier: number; // 25
+  multiplier: number;
 }
+
 export async function adminGetUserRiskHistory(
   uid: string,
   params?: { start?: string; end?: string; limit?: number }
@@ -258,7 +274,7 @@ export async function adminGetUserRiskHistory(
   const { data } = await api.get(`/admin/users/${uid}/risk`, { params });
   return data;
 }
-/** ADMIN — User Stats & Export */
+
 export async function adminGetUserStats(): Promise<{
   ok: boolean;
   total: number;
@@ -282,21 +298,25 @@ export async function adminExportUsers(): Promise<void> {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
 // =========================
-/** ADMIN — Moderation */
+// ADMIN — Moderation
 // =========================
 export async function adminListReviews(params?: { page?: number; limit?: number }) {
   const { data } = await api.get(`/admin/reviews`, { params });
   return data;
 }
+
 export async function adminHideReview(id: string) {
   const { data } = await api.post(`/admin/reviews/${id}/hide`);
   return data;
 }
+
 export async function adminUnhideReview(id: string) {
   const { data } = await api.post(`/admin/reviews/${id}/unhide`);
   return data;
 }
+
 export async function adminDeleteReview(id: string) {
   const { data } = await api.delete(`/admin/reviews/${id}`);
   return data;
@@ -306,22 +326,25 @@ export async function adminListComplaints(params?: { page?: number; limit?: numb
   const { data } = await api.get(`/admin/complaints`, { params });
   return data;
 }
+
 export async function adminResolveComplaint(id: string) {
   const { data } = await api.post(`/admin/complaints/${id}/resolve`);
   return data;
 }
+
 export async function adminDismissComplaint(id: string) {
   const { data } = await api.post(`/admin/complaints/${id}/dismiss`);
   return data;
 }
 
 // =========================
-/** RESTAURANT — Genel */
+// RESTAURANT — Genel
 // =========================
 export async function restaurantGet(rid: string) {
   const { data } = await api.get(`/restaurants/${rid}`);
   return data;
 }
+
 export async function restaurantUpdateProfile(rid: string, form: any) {
   const lng = Number(form?.location?.coordinates?.[0]);
   const lat = Number(form?.location?.coordinates?.[1]);
@@ -342,24 +365,25 @@ export async function restaurantUpdateProfile(rid: string, form: any) {
     placeId: form.placeId ?? "",
   };
 
-  // ✅ Region (ülke kodu) gönder
   if (typeof form.region === "string") {
     const r = form.region.trim().toUpperCase();
-    if (r) {
-      payload.region = r;
-    }
+    if (r) payload.region = r;
   }
 
   const gm = normalizeMapsUrl(form.googleMapsUrl);
   if (gm) payload.googleMapsUrl = gm;
 
   if (hasCoords) {
-    payload.location = { type: "Point", coordinates: [lng, lat] as [number, number] };
+    payload.location = {
+      type: "Point",
+      coordinates: [lng, lat] as [number, number],
+    };
   }
 
   const { data } = await api.put(`/restaurants/${rid}`, payload);
   return data;
 }
+
 export async function restaurantGetInsights(
   rid: string,
   p?: { from?: string; to?: string }
@@ -370,7 +394,6 @@ export async function restaurantGetInsights(
 
 // Fotoğraflar
 export async function restaurantAddPhoto(rid: string, file: File) {
-  // Dosyayı base64 Data URL'e çevir
   const asDataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
@@ -378,47 +401,52 @@ export async function restaurantAddPhoto(rid: string, file: File) {
     reader.readAsDataURL(file);
   });
 
-  // Backend JSON body’de fileUrl bekliyor
-  const { data } = await api.post(`/restaurants/${rid}/photos`, { fileUrl: asDataUrl });
-  return data;
-}
-export async function restaurantRemovePhoto(rid: string, url: string) {
-  const { data } = await api.delete(`/restaurants/${rid}/photos`, { data: { url } });
+  const { data } = await api.post(`/restaurants/${rid}/photos`, {
+    fileUrl: asDataUrl,
+  });
   return data;
 }
 
-// Rezervasyon durumu (restoran tarafı)
+export async function restaurantRemovePhoto(rid: string, url: string) {
+  const { data } = await api.delete(`/restaurants/${rid}/photos`, {
+    data: { url },
+  });
+  return data;
+}
+
+// Rezervasyon durumu
 export async function restaurantUpdateReservationStatus(
   resId: string,
   status: "confirmed" | "cancelled"
 ) {
   if (status === "confirmed") {
-    // Backend: approve -> { ok: true, qrDataUrl } (payload burada olmayabilir)
     const { data } = await api.post(`/reservations/${resId}/approve`);
-    return data; // içinde qrDataUrl var
+    return data;
   }
-  // iptal vb. için mevcut path kalsın
-  const { data } = await api.put(`/restaurants/reservations/${resId}/status`, { status });
+
+  const { data } = await api.put(
+    `/restaurants/reservations/${resId}/status`,
+    { status }
+  );
   return data;
 }
 
-// ✅ Rezervasyon QR (JSON -> { ok, rid, mid, ts, payload, qrDataUrl })
+// QR
 export async function restaurantGetReservationQR(resId: string) {
   const { data } = await api.get(`/reservations/${resId}/qr`);
-  // Beklenen alanlar: ok, rid, mid, ts (ISO), payload (rid/mid/UNIXsec/sig), qrDataUrl
   return data as {
     ok: boolean;
     rid: string;
     mid: string;
-    ts: string;          // ISO
-    payload?: string;    // ham metin: "rid/mid/tsUnix/sig"
-    qrDataUrl?: string;  // data:image/png;base64,...
-    // geriye dönük uyumluluk
+    ts: string;
+    payload?: string;
+    qrDataUrl?: string;
     qrUrl?: string;
   };
 }
+
 // =========================
-/** RESTAURANT — Menu Categories & Items */
+// RESTAURANT — Menu Categories & Items
 // =========================
 export async function restaurantListCategories(rid: string) {
   const { data } = await api.get(`/panel/restaurants/${rid}/menu/categories`);
@@ -481,7 +509,6 @@ export async function restaurantCreateItem(
 ) {
   const fd = new FormData();
 
-  // TEXT fields – Multer bunları req.body içinde görecek!!
   fd.append("categoryId", input.categoryId);
   fd.append("title", input.title);
   fd.append("description", input.description ?? "");
@@ -489,27 +516,17 @@ export async function restaurantCreateItem(
   fd.append("order", String(input.order ?? 0));
   fd.append("isAvailable", String(input.isAvailable ?? true));
 
-  // TAGS
-  (input.tags ?? []).forEach((t) => {
-    if (t) fd.append("tags", t);
-  });
+  (input.tags ?? []).forEach((t) => fd.append("tags", t));
 
-  // PHOTO
   if (input.photoFile instanceof File) {
     fd.append("photo", input.photoFile);
   }
 
+  // ❗ headers YOK — boundary otomatik
   const { data } = await api.post(
     `/panel/restaurants/${rid}/menu/items`,
-    fd,
-    {
-      headers: {
-        // ❗ axios'a boundary’i tarayıcının belirlemesini söylüyoruz
-        "Content-Type": "multipart/form-data",
-      },
-    }
+    fd
   );
-
   return data;
 }
 
@@ -559,10 +576,10 @@ export async function restaurantDeleteItem(rid: string, iid: string) {
 // ADMIN — Commissions (ARRIVED only)
 // =========================
 export async function adminPreviewCommissions(month?: string) {
-  // month: "YYYY-MM" (opsiyonel; boşsa backend içinde bulunduğun ayı alır)
   const { data } = await api.get("/admin/commissions/monthly", {
-    params: month ? { month } : {}
+    params: month ? { month } : {},
   });
+
   return data as {
     ok: boolean;
     month: string;
@@ -571,8 +588,8 @@ export async function adminPreviewCommissions(month?: string) {
       restaurantName: string;
       arrivedCount: number;
       revenueArrived: number;
-      commissionRate: number;    // 0..1
-      commissionAmount: number;  // revenueArrived * commissionRate
+      commissionRate: number;
+      commissionAmount: number;
       ownerName?: string | null;
       ownerEmail?: string | null;
     }>;
@@ -584,8 +601,9 @@ export async function adminExportCommissions(month?: string): Promise<Blob> {
     params: month ? { month } : {},
     responseType: "blob",
   });
-  return resp.data as Blob; // xlsx blob
+  return resp.data as Blob;
 }
+
 export async function adminUpdateRestaurant(rid: string, payload: any) {
   const { data } = await api.put(`/restaurants/${rid}`, payload);
   return data;
