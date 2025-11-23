@@ -27,7 +27,6 @@ function normalizeMapsUrl(raw?: string): string | undefined {
 export const api = axios.create({
   baseURL,
   withCredentials: false,
-  headers: { "Content-Type": "application/json" }
 });
 
 // ---- Request interceptor: Auth + GET cache-buster (headers YOK!)
@@ -35,12 +34,19 @@ api.interceptors.request.use((config) => {
   const t = authStore.getToken();
   if (t) {
     config.headers = config.headers || {};
-    (config.headers as any).Authorization = `Bearer ${t}`;
+    config.headers.Authorization = `Bearer ${t}`;
+  }
+
+  // ✅ FormData ise JSON header'ını ezme, tarayıcı boundary koysun
+  if (config.data instanceof FormData) {
+    if (config.headers) {
+      delete (config.headers as any)["Content-Type"];
+      delete (config.headers as any)["content-type"];
+    }
   }
 
   const method = (config.method || "get").toLowerCase();
   if (method === "get") {
-    // Sadece query param ile cache kır; CORS preflight tetiklemez
     config.params = { ...(config.params || {}), _ts: Date.now() };
   }
 

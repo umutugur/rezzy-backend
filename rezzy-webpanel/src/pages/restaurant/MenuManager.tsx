@@ -250,19 +250,23 @@ export default function MenuManagerPage() {
                           }))
                         }
                       />
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          className="w-24 border rounded px-2 py-1 text-sm"
-                          value={editingCat.order ?? 0}
-                          onChange={(e) =>
-                            setEditingCat((p) => ({
-                              ...p,
-                              order: Number(e.target.value) || 0,
-                            }))
-                          }
-                        />
-                        <label className="flex items-center gap-2 text-sm">
+                      <div className="flex gap-2 items-center">
+                        <div className="flex flex-col">
+                          <label className="text-xs text-gray-500 mb-1">Sıra (menüde görünme)</label>
+                          <input
+                            type="number"
+                            className="w-28 border rounded px-2 py-1 text-sm"
+                            value={editingCat.order ?? 0}
+                            onChange={(e) =>
+                              setEditingCat((p) => ({
+                                ...p,
+                                order: Number(e.target.value) || 0,
+                              }))
+                            }
+                          />
+                        </div>
+
+                        <label className="flex items-center gap-2 text-sm mt-5">
                           <input
                             type="checkbox"
                             checked={editingCat.isActive ?? true}
@@ -322,18 +326,21 @@ export default function MenuManagerPage() {
                   setNewCat((p) => ({ ...p, description: e.target.value }))
                 }
               />
-              <input
-                type="number"
-                className="w-24 border rounded px-2 py-1 text-sm"
-                placeholder="Sıra"
-                value={newCat.order}
-                onChange={(e) =>
-                  setNewCat((p) => ({
-                    ...p,
-                    order: Number(e.target.value) || 0,
-                  }))
-                }
-              />
+              <div className="flex flex-col w-32">
+                <label className="text-xs text-gray-500 mb-1">Sıra (menüde görünme)</label>
+                <input
+                  type="number"
+                  className="border rounded px-2 py-1 text-sm"
+                  placeholder="Örn: 10"
+                  value={newCat.order}
+                  onChange={(e) =>
+                    setNewCat((p) => ({
+                      ...p,
+                      order: Number(e.target.value) || 0,
+                    }))
+                  }
+                />
+              </div>
               <button
                 className="w-full px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
                 disabled={!newCat.title.trim()}
@@ -435,29 +442,36 @@ export default function MenuManagerPage() {
                       ) : (
                         <div className="space-y-2">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <input
-                              className="border rounded px-2 py-1 text-sm"
-                              value={editingItem.title ?? ""}
-                              placeholder="Ürün adı"
-                              onChange={(e) =>
-                                setEditingItem((p: any) => ({
-                                  ...p,
-                                  title: e.target.value,
-                                }))
-                              }
-                            />
-                            <input
-                              type="number"
-                              className="border rounded px-2 py-1 text-sm"
-                              value={editingItem.price ?? 0}
-                              placeholder="Fiyat"
-                              onChange={(e) =>
-                                setEditingItem((p: any) => ({
-                                  ...p,
-                                  price: Number(e.target.value) || 0,
-                                }))
-                              }
-                            />
+                            <div className="flex flex-col">
+                              <label className="text-xs text-gray-500 mb-1">Ürün adı</label>
+                              <input
+                                className="border rounded px-2 py-1 text-sm"
+                                value={editingItem.title ?? ""}
+                                placeholder="Örn: Levrek Izgara"
+                                onChange={(e) =>
+                                  setEditingItem((p: any) => ({
+                                    ...p,
+                                    title: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+
+                            <div className="flex flex-col">
+                              <label className="text-xs text-gray-500 mb-1">Fiyat (₺)</label>
+                              <input
+                                type="number"
+                                className="border rounded px-2 py-1 text-sm"
+                                value={editingItem.price ?? 0}
+                                placeholder="Örn: 450"
+                                onChange={(e) =>
+                                  setEditingItem((p: any) => ({
+                                    ...p,
+                                    price: Number(e.target.value) || 0,
+                                  }))
+                                }
+                              />
+                            </div>
                           </div>
 
                           <input
@@ -485,17 +499,21 @@ export default function MenuManagerPage() {
                           />
 
                           <div className="flex gap-3 items-center">
-                            <input
-                              type="number"
-                              className="w-24 border rounded px-2 py-1 text-sm"
-                              value={editingItem.order ?? 0}
-                              onChange={(e) =>
-                                setEditingItem((p: any) => ({
-                                  ...p,
-                                  order: Number(e.target.value) || 0,
-                                }))
-                              }
-                            />
+                            <div className="flex flex-col">
+                              <label className="text-xs text-gray-500 mb-1">Sıra (bu kategoride)</label>
+                              <input
+                                type="number"
+                                className="w-28 border rounded px-2 py-1 text-sm"
+                                value={editingItem.order ?? 0}
+                                placeholder="Örn: 1"
+                                onChange={(e) =>
+                                  setEditingItem((p: any) => ({
+                                    ...p,
+                                    order: Number(e.target.value) || 0,
+                                  }))
+                                }
+                              />
+                            </div>
 
                             <label className="flex items-center gap-2 text-sm">
                               <input
@@ -626,41 +644,52 @@ export default function MenuManagerPage() {
                     }
                   />
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                    <input
-                      type="number"
-                      className="border rounded px-2 py-1 text-sm"
-                      placeholder="Fiyat (₺)"
-                      value={newItem.price}
-                      onChange={(e) =>
-                        setNewItem((p) => ({
-                          ...p,
-                          price: Number(e.target.value) || 0,
-                        }))
-                      }
-                    />
-                    <input
-                      type="number"
-                      className="border rounded px-2 py-1 text-sm"
-                      placeholder="Sıra"
-                      value={newItem.order}
-                      onChange={(e) =>
-                        setNewItem((p) => ({
-                          ...p,
-                          order: Number(e.target.value) || 0,
-                        }))
-                      }
-                    />
-                    <input
-                      className="border rounded px-2 py-1 text-sm"
-                      placeholder="Etiketler: acı, vegan"
-                      value={newItem.tagsText}
-                      onChange={(e) =>
-                        setNewItem((p) => ({
-                          ...p,
-                          tagsText: e.target.value,
-                        }))
-                      }
-                    />
+                    <div className="flex flex-col">
+                      <label className="text-xs text-gray-500 mb-1">Fiyat (₺)</label>
+                      <input
+                        type="number"
+                        className="border rounded px-2 py-1 text-sm"
+                        placeholder="Örn: 350"
+                        value={newItem.price}
+                        onChange={(e) =>
+                          setNewItem((p) => ({
+                            ...p,
+                            price: Number(e.target.value) || 0,
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="flex flex-col">
+                      <label className="text-xs text-gray-500 mb-1">Sıra (bu kategoride)</label>
+                      <input
+                        type="number"
+                        className="border rounded px-2 py-1 text-sm"
+                        placeholder="Örn: 1"
+                        value={newItem.order}
+                        onChange={(e) =>
+                          setNewItem((p) => ({
+                            ...p,
+                            order: Number(e.target.value) || 0,
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="flex flex-col">
+                      <label className="text-xs text-gray-500 mb-1">Etiketler (virgülle)</label>
+                      <input
+                        className="border rounded px-2 py-1 text-sm"
+                        placeholder="acı, vegan"
+                        value={newItem.tagsText}
+                        onChange={(e) =>
+                          setNewItem((p) => ({
+                            ...p,
+                            tagsText: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
                   </div>
 
                   <label className="flex items-center gap-2 text-sm">
@@ -676,6 +705,9 @@ export default function MenuManagerPage() {
                     />
                     Serviste
                   </label>
+                  <div className="text-xs text-gray-500">
+                    Sıra küçükten büyüğe menüdeki dizilimi belirler. Boş bırakırsan 0 olarak kaydedilir.
+                  </div>
 
                   <div className="space-y-1">
                     <label className="text-sm text-gray-600">
