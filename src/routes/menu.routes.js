@@ -2,8 +2,7 @@
 import express, { Router } from "express";
 import { auth } from "../middlewares/auth.js";
 import { allow } from "../middlewares/roles.js";
-import { imageUpload } from "../utils/multer.js"; // ✅ named import
-import { validate } from "../middlewares/validate.js";
+import { imageUpload } from "../utils/multer.js";
 
 import {
   listCategories,
@@ -26,20 +25,43 @@ import {
 
 const r = Router();
 
-// Ensure JSON bodies are parsed for category endpoints.
-// (Items use multer below; adding this here prevents empty req.body on categories
-// even if app-level json middleware is missing.)
-r.use(express.json());
-
-/**
- * app.js mount:
- * app.use("/api/panel/restaurants", menuRoutes);
- *
- * Bu yüzden burada "/restaurants" prefix'i YOK.
- *
- * Final URL:
- * /api/panel/restaurants/:rid/menu/...
+/** ✅ SADECE BU ROUTE DOSYASI İÇİN LOKAL VALIDATOR
+ *  Global validate'e dokunmuyoruz.
  */
+const validateBody = (schema) => (req, res, next) => {
+  const { error, value } = schema.validate(req.body || {}, {
+    abortEarly: false,
+    allowUnknown: true,
+    stripUnknown: true,
+    convert: true,
+  });
+  if (error) {
+    return res.status(400).json({
+      message: error.details.map((d) => d.message).join(", "),
+    });
+  }
+  req.body = value;
+  next();
+};
+
+const validateQuery = (schema) => (req, res, next) => {
+  const { error, value } = schema.validate(req.query || {}, {
+    abortEarly: false,
+    allowUnknown: true,
+    stripUnknown: true,
+    convert: true,
+  });
+  if (error) {
+    return res.status(400).json({
+      message: error.details.map((d) => d.message).join(", "),
+    });
+  }
+  req.query = value;
+  next();
+};
+
+// Categories JSON body parse (multer yok)
+r.use(express.json());
 
 // ---- categories ----
 r.get(
@@ -53,7 +75,7 @@ r.post(
   "/:rid/menu/categories",
   auth(),
   allow("restaurant", "admin"),
-  validate(createCategorySchema,"body"),
+  validateBody(createCategorySchema),
   createCategory
 );
 
@@ -61,7 +83,7 @@ r.patch(
   "/:rid/menu/categories/:cid",
   auth(),
   allow("restaurant", "admin"),
-  validate(updateCategorySchema,"body"),
+  validateBody(updateCategorySchema),
   updateCategory
 );
 
@@ -77,7 +99,7 @@ r.get(
   "/:rid/menu/items",
   auth(),
   allow("restaurant", "admin"),
-  validate(listItemsQuerySchema, "query"),
+  validateQuery(listItemsQuerySchema),
   listItems
 );
 
@@ -92,7 +114,7 @@ r.post(
     console.log("BODY:", req.body);
     next();
   },
-  validate(createItemSchema, "body"),
+  validateBody(createItemSchema),
   createItem
 );
 
@@ -101,7 +123,7 @@ r.patch(
   auth(),
   allow("restaurant", "admin"),
   imageUpload.single("photo"),
-  validate(updateItemSchema,"body"),
+  validateBody(updateItemSchema),
   updateItem
 );
 
