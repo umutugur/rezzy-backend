@@ -479,21 +479,37 @@ export async function restaurantCreateItem(
     photoFile?: File | null;
   }
 ) {
-  // multipart (multer.single("photo"))
   const fd = new FormData();
+
+  // TEXT fields – Multer bunları req.body içinde görecek!!
   fd.append("categoryId", input.categoryId);
   fd.append("title", input.title);
   fd.append("description", input.description ?? "");
-  fd.append("price", String(input.price ?? 0));
+  fd.append("price", String(input.price));
   fd.append("order", String(input.order ?? 0));
   fd.append("isAvailable", String(input.isAvailable ?? true));
-  (input.tags ?? []).forEach((t) => fd.append("tags", t));
-  if (input.photoFile) fd.append("photo", input.photoFile);
+
+  // TAGS
+  (input.tags ?? []).forEach((t) => {
+    if (t) fd.append("tags", t);
+  });
+
+  // PHOTO
+  if (input.photoFile instanceof File) {
+    fd.append("photo", input.photoFile);
+  }
 
   const { data } = await api.post(
     `/panel/restaurants/${rid}/menu/items`,
-    fd
+    fd,
+    {
+      headers: {
+        // ❗ axios'a boundary’i tarayıcının belirlemesini söylüyoruz
+        "Content-Type": "multipart/form-data",
+      },
+    }
   );
+
   return data;
 }
 
