@@ -13,6 +13,8 @@ import {
   type LiveTable,
 } from "../../api/client";
 
+const notifySound = new Audio("/sounds/notify.mp3");
+
 // --- Eski tablo CRUD tipi (profil & basic liste) ---
 type TableItem = { _id?: string; name: string; capacity: number; isActive?: boolean };
 
@@ -98,6 +100,9 @@ export default function TablesPage() {
         : a.floor - b.floor
     );
 
+  const prevLiveTablesRef = React.useRef<LiveTable[]>([]);
+  const [alertTableIds, setAlertTableIds] = React.useState<string[]>([]);
+
   const [selectedTableKey, setSelectedTableKey] = React.useState<string | null>(
     null
   );
@@ -169,6 +174,52 @@ export default function TablesPage() {
   // =======================
   // RENDER
   // =======================
+  React.useEffect(() => {
+    const prev = prevLiveTablesRef.current;
+    const curr = liveTables;
+
+    const newlyAlerted: string[] = [];
+
+    curr.forEach((t) => {
+      const old = prev.find((p) => p.id === t.id);
+      if (!old) return;
+
+      const statusChanged = old.status !== t.status;
+      const serviceIncreased = t.openServiceRequests > old.openServiceRequests;
+
+      if (statusChanged || serviceIncreased) {
+        if (
+          t.status === "order_active" ||
+          t.status === "waiter_call" ||
+          t.status === "bill_request" ||
+          serviceIncreased
+        ) {
+          newlyAlerted.push(String(t.id));
+        }
+      }
+    });
+
+    if (newlyAlerted.length > 0) {
+      // Sesli uyarı
+      notifySound.play().catch(() => {});
+
+      // Highlight listesine ekle
+      setAlertTableIds((prevIds) => {
+        const set = new Set(prevIds);
+        newlyAlerted.forEach((id) => set.add(id));
+        return Array.from(set);
+      });
+
+      // 15 saniye sonra highlight'ı temizle
+      window.setTimeout(() => {
+        setAlertTableIds((prevIds) =>
+          prevIds.filter((id) => !newlyAlerted.includes(id))
+        );
+      }, 15000);
+    }
+
+    prevLiveTablesRef.current = curr;
+  }, [liveTables]);
   if (!rid) {
     return (
       <div className="flex">
@@ -251,19 +302,22 @@ export default function TablesPage() {
                 type="button"
                 onClick={() => setSelectedTableKey(String(t.id))}
                 className={[
-                  "relative flex flex-col items-start rounded-2xl border px-4 py-3 text-left shadow-sm transition",
-                  "hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-500",
+                  "relative flex flex-col items-start rounded-2xl border px-4 py-4 text-left shadow-sm transition transform",
+                  "hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-brand-500",
                   statusClasses(t.status),
                   selectedTableKey === String(t.id)
                     ? "ring-2 ring-brand-500"
+                    : "",
+                  alertTableIds.includes(String(t.id))
+                    ? "ring-4 ring-rose-500 animate-pulse"
                     : "",
                 ].join(" ")}
               >
                 <div className="flex w-full items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 shadow">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-md">
                       {/* masa ikonu */}
-                      <span className="text-lg">🍽️</span>
+                      <span className="text-xl">🍽️</span>
                     </div>
                     <div>
                       <div className="text-sm font-semibold">
@@ -282,7 +336,8 @@ export default function TablesPage() {
                 </div>
 
                 <div className="mt-2 flex w-full items-center justify-between text-xs">
-                  <span className="inline-flex items-center rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-gray-800">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-2.5 py-0.5 text-[11px] font-medium text-gray-800">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                     {statusLabel(t.status)}
                   </span>
                   <span className="text-[11px] text-gray-600">
@@ -290,15 +345,15 @@ export default function TablesPage() {
                   </span>
                 </div>
 
-                <div className="mt-2 w-full rounded-xl bg-white/70 px-3 py-2 text-[11px] text-gray-700">
+                <div className="mt-2 w-full rounded-xl bg-white/80 px-3 py-2 text-[11px] text-gray-800">
                   <div className="flex items-center justify-between">
-                    <span>Nakit / Mekanda</span>
+                    <span className="font-medium">Nakit / Mekanda</span>
                     <span className="font-semibold">
                       {t.totals?.payAtVenueTotal?.toFixed(2) ?? "0.00"}
                     </span>
                   </div>
                   <div className="mt-1 flex items-center justify-between">
-                    <span>Kart</span>
+                    <span className="font-medium">Kart</span>
                     <span className="font-semibold">
                       {t.totals?.cardTotal?.toFixed(2) ?? "0.00"}
                     </span>
