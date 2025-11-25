@@ -1,6 +1,5 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
 import { authStore } from "../../store/auth";
 import {
@@ -110,7 +109,7 @@ function getTablePos(t: any) {
 function getTableStyle(status: LiveTable["status"], selected: boolean, alert: boolean) {
   let base =
     "relative flex flex-col items-center justify-center rounded-xl border-2 shadow-xl transition-all cursor-pointer select-none";
-  let size = "w-40 h-40";
+  let size = "w-32 h-32";
   let color = statusColor(status);
   let ring = selected
     ? "ring-4 ring-brand-500"
@@ -204,8 +203,8 @@ function DraggableTableBox({
     transform: transform ? CSS.Translate.toString(transform) : undefined,
     zIndex: isDragging ? 100 : undefined,
     cursor: "grab",
-    width: "160px",
-    height: "160px",
+    width: "140px",
+    height: "140px",
   };
 
   return (
@@ -324,20 +323,25 @@ export default function TablesPage() {
   // Sync layout state with backend positions
   React.useEffect(() => {
     if (!liveTables.length) return;
-    const layout: Record<string, { posX: number; posY: number; floor: number }> = {};
-    liveTables.forEach((t) => {
-      layout[t.id] = {
-        posX: typeof t.posX === "number" ? t.posX : 40 + Math.floor(Math.random() * 300),
-        posY: typeof t.posY === "number" ? t.posY : 40 + Math.floor(Math.random() * 200),
-        floor: t.floor ?? 1,
-      };
+    setTablesLayout(prev => {
+      const next = { ...prev };
+      let changed = false;
+      liveTables.forEach(t => {
+        const id = String(t.id);
+        if (!next[id]) {
+          next[id] = {
+            posX: typeof t.posX === "number" ? t.posX : 40 + Math.floor(Math.random() * 300),
+            posY: typeof t.posY === "number" ? t.posY : 40 + Math.floor(Math.random() * 200),
+            floor: t.floor ?? 1,
+          };
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
     });
-    setTablesLayout(layout);
-    // Set initial floor if not set
     if (currentFloor === null && liveTables.length > 0) {
       setCurrentFloor(liveTables[0].floor ?? 1);
     }
-    // eslint-disable-next-line
   }, [liveTables]);
 
   // =======================
@@ -468,21 +472,17 @@ export default function TablesPage() {
 
   if (!rid) {
     return (
-      <div className="flex">
-        <Sidebar
-          items={[
-            { to: "/restaurant", label: "Dashboard" },
-            { to: "/restaurant/reservations", label: "Rezervasyonlar" },
-            { to: "/restaurant/opening-hours", label: "Çalışma Saatleri" },
-            { to: "/restaurant/tables", label: "Masalar" },
-            { to: "/restaurant/menus", label: "Menüler" },
-            { to: "/restaurant/photos", label: "Fotoğraflar" },
-            { to: "/restaurant/profile", label: "Profil & Ayarlar" },
-          ]}
-        />
-        <div className="flex-1 p-6">
-          Restoran ID bulunamadı.
+      <div className="flex flex-col px-6 py-6 gap-4">
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => { window.location.href = "/restaurant"; }}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            ← Panele Dön
+          </button>
         </div>
+        <div className="text-sm text-red-600">Restoran ID bulunamadı.</div>
       </div>
     );
   }
@@ -501,19 +501,18 @@ export default function TablesPage() {
   }
 
   return (
-    <div className="flex gap-6">
-      <Sidebar
-        items={[
-          { to: "/restaurant", label: "Dashboard" },
-          { to: "/restaurant/reservations", label: "Rezervasyonlar" },
-          { to: "/restaurant/opening-hours", label: "Çalışma Saatleri" },
-          { to: "/restaurant/tables", label: "Masalar" },
-          { to: "/restaurant/menus", label: "Menüler" },
-          { to: "/restaurant/photos", label: "Fotoğraflar" },
-          { to: "/restaurant/profile", label: "Profil & Ayarlar" },
-        ]}
-      />
-      <div className="flex-1 flex flex-col gap-6">
+    <div className="flex flex-col px-6 py-6 gap-4">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => { window.location.href = "/restaurant"; }}
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        >
+          ← Panele Dön
+        </button>
+        <h1 className="text-base font-semibold text-gray-900">Canlı Masalar</h1>
+      </div>
+      <div className="flex flex-col gap-6">
         <section className="space-y-4">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-lg font-semibold">Canlı Masalar</h2>
