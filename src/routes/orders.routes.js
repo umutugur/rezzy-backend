@@ -6,7 +6,7 @@ import {
   closeSession,
   createOrder,
   listSessionOrders,
-  createStripeIntent, // ✅ EKLE
+  createStripeIntent,
 } from "../controllers/orders.controller.js";
 
 const router = Router();
@@ -17,12 +17,10 @@ router.post("/sessions/:id/close", closeSession);
 
 router.post("/", createOrder);
 
-// ⚠️ frontend şu path’i kullanıyor: /orders/sessions/:sessionId
-// senin path: /sessions/:sessionId/orders
-router.get("/sessions/:sessionId", listSessionOrders); // ✅ ALIAS (kolay fix)
+// frontend şu path’i kullanıyor
+router.get("/sessions/:sessionId", listSessionOrders);
 router.get("/sessions/:sessionId/orders", listSessionOrders);
 
-// ✅ STRIPE INTENT ENDPOINT
 router.post("/:orderId/stripe-intent", createStripeIntent);
 
 export default router;

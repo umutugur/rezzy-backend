@@ -199,6 +199,8 @@ export default function RestaurantDashboardPage() {
 
     // varsa eski menüler sayfası
     { to: "/restaurant/menus", label: "Basit Menüler" },
+    { to: "/restaurant/tables", label: "Canlı Masalar" },
+
 
     { to: "/restaurant/profile", label: "Profil & Ayarlar" },
   ]}

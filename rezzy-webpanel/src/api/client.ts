@@ -643,3 +643,112 @@ export async function adminUpdateRestaurant(rid: string, payload: any) {
   const { data } = await api.put(`/restaurants/${rid}`, payload);
   return data;
 }
+// =========================
+// RESTAURANT — Live Tables & Orders
+// =========================
+
+export type TableLiveStatus =
+  | "empty"
+  | "occupied"
+  | "order_active"
+  | "waiter_call"
+  | "bill_request";
+
+export interface LiveTable {
+  id: string;
+  name: string;
+  capacity: number;
+  isActive: boolean;
+  floor: number;
+  posX: number;
+  posY: number;
+
+  hasActiveSession: boolean;
+  sessionId: string | null;
+  status: TableLiveStatus;
+  openServiceRequests: number;
+  lastOrderAt: string | null;
+  totals: {
+    cardTotal: number;
+    payAtVenueTotal: number;
+    grandTotal: number;
+  };
+}
+
+/**
+ * GET /api/panel/restaurants/:rid/tables/live
+ * - Canlı masa durumları (C seçeneği için)
+ */
+export async function restaurantGetLiveTables(
+  rid: string
+): Promise<{ tables: LiveTable[] }> {
+  const { data } = await api.get(`/panel/restaurants/${rid}/tables/live`);
+  return data as { tables: LiveTable[] };
+}
+
+/**
+ * PATCH /api/panel/restaurants/:rid/tables/layout
+ * Body: { tables: [{ id, floor?, posX?, posY? }] }
+ * - Drag & drop sonrası masa konumlarını / katlarını kaydetmek için
+ */
+export async function restaurantUpdateTablesLayout(
+  rid: string,
+  tables: Array<{ id: string; floor?: number; posX?: number; posY?: number }>
+): Promise<{ ok: boolean }> {
+  const { data } = await api.patch(`/panel/restaurants/${rid}/tables/layout`, {
+    tables,
+  });
+  return data as { ok: boolean };
+}
+
+/**
+ * GET /api/panel/restaurants/:rid/tables/:tableKey/detail
+ * - Masa detay + aktif adisyon + siparişler + açık servis istekleri
+ */
+export async function restaurantGetTableDetail(
+  rid: string,
+  tableKey: string
+): Promise<{
+  table: any;
+  session: any | null;
+  totals: any | null;
+  orders: any[];
+  serviceRequests: any[];
+}> {
+  const { data } = await api.get(
+    `/panel/restaurants/${rid}/tables/${tableKey}/detail`
+  );
+  return data;
+}
+
+/**
+ * POST /api/panel/restaurants/:rid/tables/:tableKey/close-session
+ * - Masanın açık adisyonunu kapatır
+ */
+export async function restaurantCloseTableSession(
+  rid: string,
+  tableKey: string
+): Promise<{ ok: boolean; sessionId: string }> {
+  const { data } = await api.post(
+    `/panel/restaurants/${rid}/tables/${tableKey}/close-session`,
+    {}
+  );
+  return data as { ok: boolean; sessionId: string };
+}
+
+/**
+ * POST /api/panel/restaurants/:rid/tables/:tableKey/service/resolve
+ * Body: { requestId?: string }
+ * - Garson çağır / hesap iste taleplerini handled yapar
+ */
+export async function restaurantResolveTableService(
+  rid: string,
+  tableKey: string,
+  body?: { requestId?: string }
+): Promise<{ ok: boolean }> {
+  const { data } = await api.post(
+    `/panel/restaurants/${rid}/tables/${tableKey}/service/resolve`,
+    body ?? {}
+  );
+  return data as { ok: boolean };
+}

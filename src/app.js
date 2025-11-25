@@ -21,6 +21,8 @@ import favoritesRoutes from "./routes/favorites.routes.js";
 import { stripeWebhook } from "./controllers/stripe.webhook.controller.js"; // ✅ Stripe webhook controller
 // app.js içinde importlara ekle
 import ordersRoutes from "./routes/orders.routes.js";
+import tableServiceRoutes from "./routes/tableService.routes.js";
+
 dotenv.config();
 const app = express();
 
@@ -81,6 +83,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/jobs", jobsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/me/favorites", favoritesRoutes);
+app.use("/api/table-service", tableServiceRoutes);
 
 // 404 & error aynı kalsın
 app.use((req, res) => res.status(404).json({ message: "Not found" }));

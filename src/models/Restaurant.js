@@ -76,11 +76,32 @@ const RestaurantSchema = new mongoose.Schema(
       },
     ],
 
+    // ✅ Masalar (kat + drag & drop + live status için genişletildi)
     tables: [
       {
-        name: String,
-        capacity: Number,
-        isActive: Boolean,
+        name: { type: String, required: true },
+        capacity: { type: Number, default: 2 },
+        isActive: { type: Boolean, default: true },
+
+        // Kat bilgisi
+        floor: { type: Number, default: 1 },
+
+        // Panel üzerindeki pozisyon (drag & drop)
+        posX: { type: Number, default: 0 },
+        posY: { type: Number, default: 0 },
+
+        // (Opsiyonel) Cache alanları – panelde kullanmak istersen
+        hasActiveSession: { type: Boolean, default: false },
+        status: {
+          type: String,
+          enum: ["empty", "occupied", "waiter_call", "bill_request", "order_active"],
+          default: "empty",
+        },
+        sessionId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "OrderSession",
+          default: null,
+        },
       },
     ],
 
