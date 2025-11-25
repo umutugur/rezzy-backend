@@ -109,7 +109,7 @@ function getTablePos(t: any) {
 function getTableStyle(status: LiveTable["status"], selected: boolean, alert: boolean) {
   let base =
     "relative flex flex-col items-center justify-center rounded-xl border-2 shadow-xl transition-all cursor-pointer select-none";
-  let size = "w-32 h-32";
+  let size = "w-40 h-44";
   let color = statusColor(status);
   let ring = selected
     ? "ring-4 ring-brand-500"
@@ -135,12 +135,16 @@ function TableBox({
   isDragging?: boolean;
   dragOverlay?: boolean;
 }) {
+  let base =
+    "relative flex flex-col items-center justify-between rounded-xl border-2 shadow-xl transition-all cursor-pointer select-none px-3 py-3";
   return (
     <div
       className={[
         getTableStyle(table.status, selected, alert),
         isDragging ? "opacity-60" : "",
         dragOverlay ? "z-50 scale-110 shadow-2xl" : "",
+        // add new consistent padding
+        base,
       ].join(" ")}
       style={{
         // For drag overlay
@@ -149,33 +153,37 @@ function TableBox({
       onClick={onClick}
       {...props}
     >
-      <div className="flex items-center gap-2 w-full justify-center">
+      <div className="flex flex-col items-center w-full h-full justify-between">
         <div className="flex flex-col items-center">
           <span className="text-3xl mb-1">🍽️</span>
-          <span className="font-semibold text-lg truncate max-w-[120px]">{table.name || "İsimsiz"}</span>
+          <span className="font-semibold text-base truncate max-w-[120px] text-center">
+            {table.name || "İsimsiz"}
+          </span>
         </div>
-      </div>
-      <div className="flex items-center gap-1 mt-2 text-base font-medium">
-        <span title="Kapasite" className="text-gray-700">👥</span>
-        <span>{table.capacity || 2}</span>
-      </div>
-      <div className="flex items-center gap-2 mt-2">
-        {statusIcon(table.status)}
-        <span className="text-sm font-medium">{statusLabel(table.status)}</span>
-      </div>
-      <div className="flex items-center gap-2 mt-2 text-xs">
-        <span className="font-semibold">₺{table.totals?.grandTotal?.toFixed(2) ?? "0.00"}</span>
-      </div>
-      {alert && (
-        <div className="absolute top-2 right-2 bg-rose-600 text-white text-xs px-2 py-1 rounded-lg shadow font-bold animate-bounce">
-          Yeni Sipariş!
+        <div className="flex items-center gap-1 mt-1 text-sm font-medium">
+          <span title="Kapasite" className="text-gray-700">
+            👥
+          </span>
+          <span>{table.capacity || 2}</span>
         </div>
-      )}
-      {table.openServiceRequests > 0 && (
-        <div className="absolute bottom-2 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded-lg shadow font-bold">
-          {table.openServiceRequests} çağrı
+        <div className="flex items-center gap-2 mt-1">
+          {statusIcon(table.status)}
+          <span className="text-xs font-medium">{statusLabel(table.status)}</span>
         </div>
-      )}
+        <div className="mt-1 text-xs font-semibold">
+          ₺{table.totals?.grandTotal?.toFixed(2) ?? "0.00"}
+        </div>
+        {alert && (
+          <div className="absolute top-2 right-2 bg-rose-600 text-white text-xs px-2 py-1 rounded-lg shadow font-bold animate-bounce">
+            Yeni Sipariş!
+          </div>
+        )}
+        {table.openServiceRequests > 0 && (
+          <div className="absolute bottom-2 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded-lg shadow font-bold">
+            {table.openServiceRequests} çağrı
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -203,8 +211,6 @@ function DraggableTableBox({
     transform: transform ? CSS.Translate.toString(transform) : undefined,
     zIndex: isDragging ? 100 : undefined,
     cursor: "grab",
-    width: "140px",
-    height: "140px",
   };
 
   return (
@@ -560,10 +566,10 @@ export default function TablesPage() {
             <div
               className="relative bg-slate-100 border border-slate-200 rounded-xl"
               style={{
-                width: 680,
-                height: 460,
-                minWidth: 680,
-                minHeight: 460,
+                width: 900,
+                height: 520,
+                minWidth: 900,
+                minHeight: 520,
                 overflow: "hidden",
               }}
             >
