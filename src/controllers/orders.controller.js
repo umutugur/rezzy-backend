@@ -205,3 +205,64 @@ export async function listSessionOrders(req, res) {
     return res.status(500).json({ message: "Siparişler alınamadı." });
   }
 }
+export async function createStripeIntent(req, res) {
+  try {
+    const { orderId } = req.params;
+    const { saveCard = true } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ message: "Geçersiz orderId." });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    if (!stripe) {
+      return res.status(500).json({ message: "Stripe konfigüre değil." });
+    }
+
+    // kullanıcı varsa customer'a bağla, yoksa guest gibi devam et
+    let customerId = order.stripeCustomerId;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        metadata: { userId: String(order.userId || "guest") },
+      });
+      customerId = customer.id;
+      order.stripeCustomerId = customerId;
+    }
+
+    const ephemeralKey = await stripe.ephemeralKeys.create(
+      { customer: customerId },
+      { apiVersion: "2024-06-20" }
+    );
+
+    // zaten createOrder içinde PI oluşturmuşsun, onun clientSecret’ini kullan
+    let piClientSecret = undefined;
+    if (order.stripePaymentIntentId) {
+      const pi = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
+      piClientSecret = pi.client_secret;
+    } else {
+      // yoksa bir tane üret (fallback)
+      const pi = await stripe.paymentIntents.create({
+        amount: Math.round(order.total * 100),
+        currency: String(order.currency || "TRY").toLowerCase(),
+        automatic_payment_methods: { enabled: true },
+        customer: customerId,
+        metadata: { kind: "qr_order", orderId: String(order._id) },
+      });
+      order.stripePaymentIntentId = pi.id;
+      piClientSecret = pi.client_secret;
+    }
+
+    await order.save();
+
+    return res.json({
+      paymentIntentClientSecret: piClientSecret,
+      customerId,
+      ephemeralKey: ephemeralKey.secret,
+    });
+  } catch (e) {
+    console.error("[createStripeIntent] err", e);
+    return res.status(500).json({ message: "Stripe intent oluşturulamadı." });
+  }
+}
