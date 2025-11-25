@@ -23,8 +23,12 @@ export async function openSession(req, res) {
     const rid = String(restaurantId);
     const table = String(tableId);
 
-    // Aynı masa için açık adisyon varsa onu dön
-    let s = await OrderSession.findOne({ restaurantId: rid, tableId: table, status: "open" });
+    let s = await OrderSession.findOne({
+      restaurantId: rid,
+      tableId: table,
+      status: "open",
+    });
+
     if (!s) {
       const r = await Restaurant.findById(rid).lean();
       const currency = currencyFromRegion(r?.region);
@@ -32,12 +36,15 @@ export async function openSession(req, res) {
       s = await OrderSession.create({
         restaurantId: rid,
         tableId: table,
-        reservationId: reservationId && mongoose.Types.ObjectId.isValid(reservationId) ? reservationId : null,
+        reservationId:
+          reservationId && mongoose.Types.ObjectId.isValid(reservationId)
+            ? reservationId
+            : null,
         currency,
       });
     }
 
-    return res.json(s);
+    return res.json({ sessionId: s._id });
   } catch (e) {
     console.error("[openSession] err", e);
     return res.status(500).json({ message: "Session açılamadı." });
