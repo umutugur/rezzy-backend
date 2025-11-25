@@ -19,7 +19,8 @@ import jobsRouter from "./routes/jobs.js";
 import notificationsRouter from "./routes/notifications.js";
 import favoritesRoutes from "./routes/favorites.routes.js";
 import { stripeWebhook } from "./controllers/stripe.webhook.controller.js"; // ✅ Stripe webhook controller
-
+// app.js içinde importlara ekle
+import ordersRoutes from "./routes/orders.routes.js";
 dotenv.config();
 const app = express();
 
@@ -73,6 +74,7 @@ app.use("/api/panel/restaurants", menuRoutes);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/reservations", reservationRoutes);
+app.use("/api/orders", ordersRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/users", userRoutes);
