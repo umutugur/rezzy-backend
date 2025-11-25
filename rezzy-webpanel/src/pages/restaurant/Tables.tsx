@@ -225,7 +225,7 @@ export default function TablesPage() {
     queryKey: ["live-tables", rid],
     queryFn: () => restaurantGetLiveTables(rid),
     enabled: !!rid,
-    refetchInterval: 5000,
+    refetchInterval: 2500,
   });
 
   const liveTables: LiveTable[] =
@@ -335,52 +335,78 @@ export default function TablesPage() {
   React.useEffect(() => {
     const prev = prevLiveTablesRef.current;
     const curr = liveTables;
+
     const newlyAlerted: string[] = [];
     const newOrderActive: string[] = [];
+
     curr.forEach((t) => {
       const old = prev.find((p) => p.id === t.id);
       if (!old) return;
+
       const statusChanged = old.status !== t.status;
-      const serviceIncreased = t.openServiceRequests > old.openServiceRequests;
-      if (statusChanged || serviceIncreased) {
+      const serviceIncreased =
+        (t.openServiceRequests || 0) > (old.openServiceRequests || 0);
+      const orderChanged =
+        (t.lastOrderAt && t.lastOrderAt.toString()) !==
+        (old.lastOrderAt && old.lastOrderAt.toString());
+
+      // Herhangi bir önemli değişiklikte ses + highlight
+      if (statusChanged || serviceIncreased || orderChanged) {
         if (
           t.status === "order_active" ||
           t.status === "waiter_call" ||
           t.status === "bill_request" ||
-          serviceIncreased
+          serviceIncreased ||
+          orderChanged
         ) {
           newlyAlerted.push(String(t.id));
         }
-        if (
-          t.status === "order_active" &&
-          (old.status !== "order_active" || serviceIncreased)
-        ) {
-          newOrderActive.push(String(t.id));
-        }
+      }
+
+      // Özellikle yeni sipariş için (status aynı kalsa bile lastOrderAt değişince)
+      if (
+        t.status === "order_active" &&
+        (old.status !== "order_active" || orderChanged)
+      ) {
+        newOrderActive.push(String(t.id));
       }
     });
+
     if (newlyAlerted.length > 0) {
-      notifySound.currentTime = 0;
-      notifySound.play().catch(() => {});
+      try {
+        notifySound.currentTime = 0;
+        void notifySound.play();
+      } catch {
+        // sessizce geç
+      }
+
       setAlertTableIds((prevIds) => {
         const set = new Set(prevIds);
         newlyAlerted.forEach((id) => set.add(id));
         return Array.from(set);
       });
+
       window.setTimeout(() => {
         setAlertTableIds((prevIds) =>
           prevIds.filter((id) => !newlyAlerted.includes(id))
         );
       }, 15000);
     }
+
     if (newOrderActive.length > 0) {
-      setAlertLabelTableIds((prev) => [...prev, ...newOrderActive]);
-      setTimeout(() => {
+      setAlertLabelTableIds((prev) => {
+        const set = new Set(prev);
+        newOrderActive.forEach((id) => set.add(id));
+        return Array.from(set);
+      });
+
+      window.setTimeout(() => {
         setAlertLabelTableIds((prev) =>
           prev.filter((id) => !newOrderActive.includes(id))
         );
       }, 15000);
     }
+
     prevLiveTablesRef.current = curr;
   }, [liveTables]);
 
@@ -527,7 +553,13 @@ export default function TablesPage() {
           <div className="relative w-full flex">
             <div
               className="relative bg-slate-100 border border-slate-200 rounded-xl"
-              style={{ width: 800, height: 500, minWidth: 800, minHeight: 500, overflow: "hidden" }}
+              style={{
+                width: 680,
+                height: 460,
+                minWidth: 680,
+                minHeight: 460,
+                overflow: "hidden",
+              }}
             >
               {liveLoading && (
                 <div className="absolute inset-0 flex items-center justify-center text-gray-500">
@@ -585,9 +617,9 @@ export default function TablesPage() {
             </div>
             {/* Sağ detay panel */}
             {selectedTableKey && (
-              <div className="ml-8 w-[350px] flex-shrink-0">
+              <div className="ml-6 w-[320px] max-w-xs flex-shrink-0 sticky top-4 self-start">
                 <Card>
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-2 max-h-[440px] overflow-y-auto pr-1">
                     <div className="flex items-center justify-between">
                       <h3 className="text-base font-semibold">
                         Masa Detayı
@@ -804,7 +836,7 @@ export default function TablesPage() {
         <section className="space-y-3">
           <details className="rounded-md border border-gray-200 bg-white open:shadow-lg">
             <summary className="p-4 text-lg font-semibold cursor-pointer select-none">
-              Masa Tanımları (Eski)
+              Masa Tanımları (Liste Görünümü)
             </summary>
             <div className="p-4">
               {isLoading && <div>Yükleniyor…</div>}
