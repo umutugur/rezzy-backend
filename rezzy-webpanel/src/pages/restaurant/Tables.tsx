@@ -17,15 +17,8 @@ import {
   useSensor,
   useSensors,
   PointerSensor,
-  closestCenter,
-  DragOverlay,
+  useDraggable,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  rectSortingStrategy,
-  useSortable,
-  arrayMove,
-} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 const notifySound = new Audio("/sounds/notify.mp3");
@@ -188,24 +181,42 @@ function TableBox({
   );
 }
 
-// Sortable wrapper for dnd-kit
-function SortableTableBox({ table, selected, alert, onClick }: any) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: table.id });
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-    position: "absolute" as const,
-    left: table.posX ?? 0,
-    top: table.posY ?? 0,
+
+function DraggableTableBox({
+  table,
+  selected,
+  alert,
+  onClick,
+}: {
+  table: LiveTable;
+  selected: boolean;
+  alert: boolean;
+  onClick?: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: table.id,
+  });
+
+  const style: React.CSSProperties = {
+    position: "absolute",
+    left: table.posX ?? 40,
+    top: table.posY ?? 40,
+    transform: transform ? CSS.Translate.toString(transform) : undefined,
     zIndex: isDragging ? 100 : undefined,
     cursor: "grab",
     width: "160px",
     height: "160px",
   };
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <TableBox table={table} selected={selected} alert={alert} onClick={onClick} isDragging={isDragging} />
+      <TableBox
+        table={table}
+        selected={selected}
+        alert={alert}
+        onClick={onClick}
+        isDragging={isDragging}
+      />
     </div>
   );
 }
@@ -346,28 +357,24 @@ export default function TablesPage() {
       const statusChanged = old.status !== t.status;
       const serviceIncreased =
         (t.openServiceRequests || 0) > (old.openServiceRequests || 0);
-      const orderChanged =
-        (t.lastOrderAt && t.lastOrderAt.toString()) !==
-        (old.lastOrderAt && old.lastOrderAt.toString());
+      const amountIncreased =
+        (t.totals?.grandTotal ?? 0) > (old.totals?.grandTotal ?? 0);
 
       // Herhangi bir önemli değişiklikte ses + highlight
-      if (statusChanged || serviceIncreased || orderChanged) {
+      if (statusChanged || serviceIncreased || amountIncreased) {
         if (
           t.status === "order_active" ||
           t.status === "waiter_call" ||
           t.status === "bill_request" ||
           serviceIncreased ||
-          orderChanged
+          amountIncreased
         ) {
           newlyAlerted.push(String(t.id));
         }
       }
 
-      // Özellikle yeni sipariş için (status aynı kalsa bile lastOrderAt değişince)
-      if (
-        t.status === "order_active" &&
-        (old.status !== "order_active" || orderChanged)
-      ) {
+      // Özellikle yeni sipariş için (toplam tutar artmışsa)
+      if (t.status === "order_active" && amountIncreased) {
         newOrderActive.push(String(t.id));
       }
     });
@@ -569,44 +576,22 @@ export default function TablesPage() {
               {!liveLoading && (
                 <DndContext
                   sensors={sensors}
-                  collisionDetection={closestCenter}
                   onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
                   onDragCancel={handleDragCancel}
                 >
-                  <SortableContext
-                    items={floorTables.map((t) => t.id)}
-                    strategy={rectSortingStrategy}
-                  >
-                    {floorTables.map((t) => {
-                      const pos = getPos(t);
-                      return (
-                        <SortableTableBox
-                          key={t.id}
-                          table={{ ...t, posX: pos.posX, posY: pos.posY }}
-                          selected={selectedTableKey === String(t.id)}
-                          alert={alertLabelTableIds.includes(String(t.id))}
-                          onClick={() => setSelectedTableKey(String(t.id))}
-                        />
-                      );
-                    })}
-                  </SortableContext>
-                  <DragOverlay>
-                    {draggedTableId
-                      ? (() => {
-                          const t = floorTables.find((x) => String(x.id) === String(draggedTableId));
-                          if (!t) return null;
-                          return (
-                            <TableBox
-                              table={t}
-                              selected={selectedTableKey === String(t.id)}
-                              alert={alertLabelTableIds.includes(String(t.id))}
-                              dragOverlay
-                            />
-                          );
-                        })()
-                      : null}
-                  </DragOverlay>
+                  {floorTables.map((t) => {
+                    const pos = getPos(t);
+                    return (
+                      <DraggableTableBox
+                        key={t.id}
+                        table={{ ...t, posX: pos.posX, posY: pos.posY }}
+                        selected={selectedTableKey === String(t.id)}
+                        alert={alertLabelTableIds.includes(String(t.id))}
+                        onClick={() => setSelectedTableKey(String(t.id))}
+                      />
+                    );
+                  })}
                 </DndContext>
               )}
               {floorTables.length === 0 && !liveLoading && (
