@@ -57,13 +57,26 @@ function toClientUser(u) {
     u.preferredLanguage ||
     (preferredRegion === "UK" ? "en" : "tr");
 
+  // restaurantId hem ObjectId hem populate edilmiş obje olabilir
+  let restaurantId = null;
+  let restaurantName = null;
+  if (u.restaurantId) {
+    if (u.restaurantId._id) {
+      restaurantId = u.restaurantId._id.toString();
+      restaurantName = u.restaurantId.name || null;
+    } else {
+      restaurantId = u.restaurantId.toString?.() || null;
+    }
+  }
+
   return {
     id: u._id?.toString?.() ?? null,
     name: u.name,
     email: u.email ?? null,
     phone: u.phone ?? null,
     role: u.role,
-    restaurantId: u.restaurantId ? u.restaurantId.toString() : null,
+    restaurantId,
+    restaurantName,
     avatarUrl: u.avatarUrl ?? null,
     notificationPrefs: {
       push:  u.notificationPrefs?.push ?? true,
@@ -108,6 +121,7 @@ export const guestLogin = async (req, res, next) => {
         phone: null,
         role: "guest",
         restaurantId: null,
+        restaurantName: null,
         avatarUrl: null,
         notificationPrefs: { push: true, sms: false, email: true },
         providers: ["guest"],
@@ -270,25 +284,46 @@ export const me = async (req, res, next) => {
   try {
     if (req.user?.role === "guest") {
       return res.json({
-        id: req.user.id, name: "Misafir", email: null, phone: null,
-        role: "guest", restaurantId: null, avatarUrl: null,
+        id: req.user.id,
+        name: "Misafir",
+        email: null,
+        phone: null,
+        role: "guest",
+        restaurantId: null,
+        restaurantName: null,
+        avatarUrl: null,
         notificationPrefs: { push: true, sms: false, email: true },
-        providers: ["guest"], noShowCount: 0, riskScore: 0, createdAt: null, updatedAt: null,
+        providers: ["guest"],
+        noShowCount: 0,
+        riskScore: 0,
+        createdAt: null,
+        updatedAt: null,
       });
     }
 
-    const u = await User.findById(req.user.id)
-  .select(
-    "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt"
-  );
-  if (!u) return res.status(401).json({ message: "Unauthorized" });
+    // Önce kullanıcıyı al
+    let u = await User.findById(req.user.id)
+      .select(
+        "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt"
+      )
+      .populate({ path: "restaurantId", select: "_id name" });
 
+    if (!u) return res.status(401).json({ message: "Unauthorized" });
+
+    // Restaurant kullanıcıları için restoran kaydı yoksa oluştur ve tekrar populate et
     if (u.role === "restaurant" && !u.restaurantId) {
       await ensureRestaurantForOwner(u._id);
-      await u.populate({ path: "restaurantId", select: "_id name" });
+      u = await User.findById(req.user.id)
+        .select(
+          "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt"
+        )
+        .populate({ path: "restaurantId", select: "_id name" });
     }
-    res.json(toClientUser(u));
-  } catch (e) { next(e); }
+
+    return res.json(toClientUser(u));
+  } catch (e) {
+    next(e);
+  }
 };
 
 export const updateMe = async (req, res, next) => {

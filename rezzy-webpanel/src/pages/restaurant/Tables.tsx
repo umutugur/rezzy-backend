@@ -168,6 +168,26 @@ function printContent(title: string, html: string) {
             font-weight: bold;
             margin-bottom: 2px;
           }
+          .header-name {
+            font-weight: 700;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+          }
+          .header-sub {
+            font-size: 10px;
+            margin-bottom: 4px;
+          }
+          .tiny {
+            font-size: 9px;
+            opacity: 0.7;
+            margin-top: 4px;
+          }
+          .header-row {
+            font-weight: 600;
+            font-size: 10px;
+            margin-bottom: 2px;
+          }
         </style>
       </head>
       <body>
@@ -367,6 +387,12 @@ export default function TablesPage() {
   function handlePrintLastOrder(td: any) {
     if (!td || !Array.isArray(td.orders) || td.orders.length === 0) return;
 
+    const restaurantName =
+      td?.table?.restaurantName ||
+      td?.table?.restaurant?.name ||
+      td?.table?.name ||
+      "Restoran";
+
     const last = td.orders[td.orders.length - 1];
     const dateStr = new Date(last.createdAt).toLocaleString("tr-TR", {
       dateStyle: "short",
@@ -384,14 +410,18 @@ export default function TablesPage() {
         : `<div class="small">Ürün yok.</div>`;
 
     const html = `
-      <div class="center title">REZZY - SON SİPARİŞ</div>
-      <div class="center small">${dateStr}</div>
+      <div class="center header-name">${restaurantName}</div>
+      <div class="center header-sub">SON SİPARİŞ ÖZETİ</div>
       <div class="line"></div>
-      <div class="small">Masa: ${td.table?.name ?? "-"}</div>
+      <div class="row small"><span>Tarih</span><span>${dateStr}</span></div>
+      <div class="row small"><span>Masa</span><span>${td.table?.name ?? "-"}</span></div>
       <div class="line"></div>
+      <div class="row header-row"><span>Ürün</span><span>Tutar</span></div>
       ${itemsHtml}
       <div class="line"></div>
       <div class="row total"><span>Toplam</span><span>${Number(last.total || 0).toFixed(2)}₺</span></div>
+      <div class="line"></div>
+      <div class="center tiny">Bu fiş Rezzy masa yönetim sistemi ile oluşturulmuştur.</div>
     `;
 
     printContent("Son Sipariş", html);
@@ -399,6 +429,12 @@ export default function TablesPage() {
 
   function handlePrintFullBill(td: any) {
     if (!td) return;
+
+    const restaurantName =
+      td?.table?.restaurantName ||
+      td?.table?.restaurant?.name ||
+      td?.table?.name ||
+      "Restoran";
 
     const nowStr = new Date().toLocaleString("tr-TR", {
       dateStyle: "short",
@@ -448,15 +484,17 @@ export default function TablesPage() {
       <div class="row small"><span>Nakit / Mekanda</span><span>${payAtVenue.toFixed(2)}₺</span></div>
       <div class="row total"><span>Genel Toplam</span><span>${grand.toFixed(2)}₺</span></div>
       <div class="line"></div>
-      <div class="center small">Teşekkürler</div>
     `;
 
     const html = `
-      <div class="center title">REZZY - ADİSYON</div>
-      <div class="center small">${nowStr}</div>
-      <div class="small">Masa: ${td.table?.name ?? "-"}</div>
+      <div class="center header-name">${restaurantName}</div>
+      <div class="center header-sub">HESAP DÖKÜMÜ</div>
+      <div class="line"></div>
+      <div class="row small"><span>Tarih</span><span>${nowStr}</span></div>
+      <div class="row small"><span>Masa</span><span>${td.table?.name ?? "-"}</span></div>
       ${ordersHtml}
       ${footer}
+      <div class="center tiny">Rezervasyon ve masa yönetimi Rezzy ile sağlanmaktadır.</div>
     `;
 
     printContent("Adisyon", html);

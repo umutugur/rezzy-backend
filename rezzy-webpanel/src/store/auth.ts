@@ -7,6 +7,7 @@ export type MeUser = {
   phone?: string | null;
   role: Role;
   restaurantId?: string | null;  // normalize edilecek
+  restaurantName?: string | null;
   avatarUrl?: string | null;
 };
 
@@ -30,7 +31,14 @@ function extractObjectId(input: any): string | null {
 }
 
 function sanitizeUser(u: any): MeUser {
-  const rid = extractObjectId(u?.restaurantId);
+  // restaurantId hem doğrudan string/ObjectId, hem de populate edilmiş restaurant objesinden gelebilir
+  const rid = extractObjectId(u?.restaurantId ?? u?.restaurant);
+
+  const restaurantName: string | null =
+    (u?.restaurant && typeof u.restaurant === "object" && (u.restaurant as any).name)
+      ? String((u.restaurant as any).name)
+      : (u.restaurantName ? String(u.restaurantName) : null);
+
   return {
     id: String(u.id ?? u._id ?? ""),
     name: String(u.name ?? ""),
@@ -38,6 +46,7 @@ function sanitizeUser(u: any): MeUser {
     phone: u.phone ?? null,
     role: (u.role as Role) ?? "customer",
     restaurantId: rid,
+    restaurantName,
     avatarUrl: u.avatarUrl ?? null,
   };
 }
