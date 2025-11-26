@@ -119,6 +119,74 @@ function getTableStyle(status: LiveTable["status"], selected: boolean, alert: bo
   return [base, size, color, ring].join(" ");
 }
 
+// 80mm thermal printer content print helper
+function printContent(title: string, html: string) {
+  const printWindow = window.open("", "_blank", "width=400,height=800");
+
+  if (!printWindow) return;
+
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>${title}</title>
+        <style>
+          @page {
+            /* 80mm termal rulo */
+            size: 80mm auto;
+            margin: 4mm 2mm;
+          }
+          body {
+            font-family: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 11px;
+            margin: 0;
+            padding: 0;
+            width: 72mm;
+          }
+          .wrapper {
+            padding: 4px 6px;
+          }
+          .center {
+            text-align: center;
+          }
+          .small {
+            font-size: 10px;
+          }
+          .line {
+            border-top: 1px dashed #000;
+            margin: 4px 0;
+          }
+          .row {
+            display: flex;
+            justify-content: space-between;
+            margin: 2px 0;
+          }
+          .total {
+            font-weight: bold;
+            margin-top: 4px;
+          }
+          .title {
+            font-weight: bold;
+            margin-bottom: 2px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="wrapper">
+          ${html}
+        </div>
+      </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+  printWindow.focus();
+
+  setTimeout(() => {
+    printWindow.print();
+    printWindow.close();
+  }, 150);
+}
+
 function TableBox({
   table,
   selected,
@@ -294,6 +362,105 @@ export default function TablesPage() {
       restaurantUpdateTablesLayout(rid, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["live-tables", rid] }),
   });
+
+  // 80mm yazıcı: Son sipariş ve tam adisyon yazdırma
+  function handlePrintLastOrder(td: any) {
+    if (!td || !Array.isArray(td.orders) || td.orders.length === 0) return;
+
+    const last = td.orders[td.orders.length - 1];
+    const dateStr = new Date(last.createdAt).toLocaleString("tr-TR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+
+    const itemsHtml =
+      Array.isArray(last.items) && last.items.length > 0
+        ? last.items
+            .map(
+              (it: any) =>
+                `<div class="row"><span>${it.qty}× ${it.title}</span><span>${(Number(it.price || 0) * Number(it.qty || 1)).toFixed(2)}₺</span></div>`
+            )
+            .join("")
+        : `<div class="small">Ürün yok.</div>`;
+
+    const html = `
+      <div class="center title">REZZY - SON SİPARİŞ</div>
+      <div class="center small">${dateStr}</div>
+      <div class="line"></div>
+      <div class="small">Masa: ${td.table?.name ?? "-"}</div>
+      <div class="line"></div>
+      ${itemsHtml}
+      <div class="line"></div>
+      <div class="row total"><span>Toplam</span><span>${Number(last.total || 0).toFixed(2)}₺</span></div>
+    `;
+
+    printContent("Son Sipariş", html);
+  }
+
+  function handlePrintFullBill(td: any) {
+    if (!td) return;
+
+    const nowStr = new Date().toLocaleString("tr-TR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+
+    const orders = Array.isArray(td.orders) ? td.orders : [];
+
+    const ordersHtml =
+      orders.length === 0
+        ? `<div class="small">Henüz sipariş yok.</div>`
+        : orders
+            .map((o: any, index: number) => {
+              const timeStr = new Date(o.createdAt).toLocaleTimeString("tr-TR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+
+              const itemsHtml =
+                Array.isArray(o.items) && o.items.length > 0
+                  ? o.items
+                      .map(
+                        (it: any) =>
+                          `<div class="row small"><span>${it.qty}× ${it.title}</span><span>${(Number(it.price || 0) * Number(it.qty || 1)).toFixed(2)}₺</span></div>`
+                      )
+                      .join("")
+                  : `<div class="small">Ürün yok.</div>`;
+
+              return `
+                <div class="small">
+                  <div class="line"></div>
+                  <div class="row"><span>Sipariş ${index + 1}</span><span>${timeStr}</span></div>
+                  ${itemsHtml}
+                  <div class="row total"><span>Ara Toplam</span><span>${Number(o.total || 0).toFixed(2)}₺</span></div>
+                </div>
+              `;
+            })
+            .join("");
+
+    const card = Number(td.totals?.cardTotal || 0);
+    const payAtVenue = Number(td.totals?.payAtVenueTotal || 0);
+    const grand = Number(td.totals?.grandTotal || 0);
+
+    const footer = `
+      <div class="line"></div>
+      <div class="row small"><span>Kart</span><span>${card.toFixed(2)}₺</span></div>
+      <div class="row small"><span>Nakit / Mekanda</span><span>${payAtVenue.toFixed(2)}₺</span></div>
+      <div class="row total"><span>Genel Toplam</span><span>${grand.toFixed(2)}₺</span></div>
+      <div class="line"></div>
+      <div class="center small">Teşekkürler</div>
+    `;
+
+    const html = `
+      <div class="center title">REZZY - ADİSYON</div>
+      <div class="center small">${nowStr}</div>
+      <div class="small">Masa: ${td.table?.name ?? "-"}</div>
+      ${ordersHtml}
+      ${footer}
+    `;
+
+    printContent("Adisyon", html);
+  }
 
   // =======================
   // ESKİ MASA CRUD
@@ -779,22 +946,24 @@ export default function TablesPage() {
                       </button>
                       <button
                         type="button"
-                        className="rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-900"
+                        className="rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-900 disabled:opacity-60 disabled:cursor-not-allowed"
+                        disabled={!tableDetail || !tableDetail.orders || tableDetail.orders.length === 0}
                         onClick={() => {
-                          // Simule: Sipariş yazdır
-                          // eslint-disable-next-line no-console
-                          console.log("Sipariş Yazdır", tableDetail);
+                          if (tableDetail) {
+                            handlePrintLastOrder(tableDetail);
+                          }
                         }}
                       >
-                        Sipariş Yazdır
+                        Son Siparişi Yazdır
                       </button>
                       <button
                         type="button"
-                        className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-800"
+                        className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-800 disabled:opacity-60 disabled:cursor-not-allowed"
+                        disabled={!tableDetail}
                         onClick={() => {
-                          // Simule: Hesap yazdır
-                          // eslint-disable-next-line no-console
-                          console.log("Hesap Yazdır", tableDetail);
+                          if (tableDetail) {
+                            handlePrintFullBill(tableDetail);
+                          }
                         }}
                       >
                         Hesap Yazdır
