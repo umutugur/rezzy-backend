@@ -1,6 +1,6 @@
 // controllers/assistant.controller.js
-import { classifyIntent } from "../src/ai/intentClassifier.js";
-import { SUPPORTED_LANGUAGES } from "../src/ai/intentDataset.js";
+import { classifyIntent } from "../ai/intentClassifier.js";
+import { SUPPORTED_LANGUAGES } from "../ai/intentDataset.js";
 
 const FALLBACK_LANG = "tr";
 
