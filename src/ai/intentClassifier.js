@@ -157,7 +157,7 @@ export async function classifyIntent(message, lang = "tr") {
   const matchedExample = best.ex.text;
 
   // 🔻 Biraz düşürdüm: pseudo-embedding için 0.5 daha mantıklı
-  const THRESHOLD = 0.5;
+  const THRESHOLD = 0.45;
   if (confidence < THRESHOLD) {
     return {
       intent: "fallback",
