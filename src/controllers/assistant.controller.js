@@ -140,8 +140,10 @@ function buildReply(intentResult, lang, message) {
       reply = TEXT.filterExplain[L] || TEXT.filterExplain[FALLBACK_LANG];
       break;
 
+    // 🔻 make_reservation da burada aynı cevaba bağlanıyor
     case "reservation_help":
     case "modify_reservation":
+    case "make_reservation":
       reply = TEXT.reservationHelp[L] || TEXT.reservationHelp[FALLBACK_LANG];
       break;
 
