@@ -22,6 +22,7 @@ import { stripeWebhook } from "./controllers/stripe.webhook.controller.js"; // �
 // app.js içinde importlara ekle
 import ordersRoutes from "./routes/orders.routes.js";
 import tableServiceRoutes from "./routes/tableService.routes.js";
+import { initIntentEmbeddings } from "./src/ai/intentClassifier.js";
 
 dotenv.config();
 const app = express();
@@ -57,7 +58,14 @@ app.use(express.json({ limit: "12mb" }));
 app.use(express.urlencoded({ extended: true, limit:"12mb" }));
 app.use(cookieParser());
 app.use(morgan("dev"));
-
+// Sunucu ayağa kalkarken intent embeddingleri hazırla
+initIntentEmbeddings()
+  .then(() => {
+    console.log("[intent] hazır ✅");
+  })
+  .catch((err) => {
+    console.error("[intent] init hata:", err);
+  });
 
 // Rate limits
 const authLimiter = rateLimit({ windowMs: 10*60*1000, max: 100, standardHeaders: true, legacyHeaders: false });
