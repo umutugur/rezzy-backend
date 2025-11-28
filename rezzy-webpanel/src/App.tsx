@@ -25,6 +25,13 @@ import PhotosPage from "./pages/restaurant/Photos";
 import PoliciesPage from "./pages/restaurant/Policies";
 import MenuManagerPage from "./pages/restaurant/MenuManager"; 
 
+// Desktop mode
+import { LiveTablesPage } from "./desktop/pages/LiveTablesPage";
+import { KitchenBoardPage } from "./desktop/pages/KitchenBoardPage";
+import { RezzyOrdersPage } from "./desktop/pages/RezzyOrdersPage";
+import { ReportsPage } from "./desktop/pages/ReportsPage";
+import { SettingsPage } from "./desktop/pages/SettingsPage";
+
 
 // ---- Basit UI parçaları ----
 function Shell({ children }: { children: React.ReactNode }) {
@@ -181,7 +188,7 @@ export default function App() {
         <Route path="/admin/commissions" element={<Shell><AdminCommissionsPage /></Shell>} />
       </Route>
 
-      {/* Restoran alanı */}
+            {/* Restoran alanı */}
       <Route element={<PrivateRoute allow={["restaurant", "admin"]} />}>
         <Route path="/restaurant" element={<Shell><RestaurantDashboardPage /></Shell>} />
         <Route path="/restaurant/reservations" element={<Shell><RestaurantReservationsPage /></Shell>} />
@@ -198,9 +205,15 @@ export default function App() {
         {/* Yeni panel prefix'li menü rotaları (Sidebar bu yolu kullanıyor) */}
         <Route path="/panel/restaurant/menu" element={<Shell><MenuManagerPage /></Shell>} />
         <Route path="/panel/restaurant/menus" element={<Shell><MenusPage /></Shell>} />
-
         {/* Geriye dönük uyumluluk: eski /restaurant/* yollarını yeni prefix'e yönlendir */}
         <Route path="/panel/restaurant/menu-manager" element={<Navigate to="/panel/restaurant/menu" replace />} />
+
+        {/* 🔥 Restaurant Desktop Mode route'ları (Shell YOK, kendi layout'unu kullanıyor) */}
+        <Route path="/restaurant-desktop/tables" element={<LiveTablesPage />} />
+        <Route path="/restaurant-desktop/kitchen" element={<KitchenBoardPage />} />
+        <Route path="/restaurant-desktop/rezzy" element={<RezzyOrdersPage />} />
+        <Route path="/restaurant-desktop/reports" element={<ReportsPage />} />
+        <Route path="/restaurant-desktop/settings" element={<SettingsPage />} />
       </Route>
 
       {/* Kök rota */}
