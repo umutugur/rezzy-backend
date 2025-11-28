@@ -3,28 +3,29 @@
 /* ---------- Temel tema değişkenleri (Rezzy Classic - varsayılan) ---------- */
 
 :root {
-  /* Arka plan */
-  --rezzy-bg: #10131b;
-  --rezzy-bg-elevated: #181c26;
-  --rezzy-bg-soft: #1f232f;
+  /* Arka plan (light) */
+  --rezzy-bg: #f4f4f7;
+  --rezzy-bg-elevated: #ffffff;
+  --rezzy-bg-soft: #edeff5;
+  --rezzy-shell-grad-end: #d3d5e2; /* shell arka plan son tonu */
 
-  /* Brand */
-  --rezzy-primary: #7b2c2c; /* rezzy bordo */
-  --rezzy-primary-soft: rgba(123, 44, 44, 0.18);
+  /* Brand (bordo) */
+  --rezzy-primary: #7b2c2c;
+  --rezzy-primary-soft: rgba(123, 44, 44, 0.12);
   --rezzy-primary-strong: #9b3636;
 
-  /* Accent */
-  --rezzy-accent: #f3b36b;
-  --rezzy-accent-soft: rgba(243, 179, 107, 0.18);
+  /* Accent (altın ton) */
+  --rezzy-accent: #f0b366;
+  --rezzy-accent-soft: rgba(240, 179, 102, 0.18);
 
-  /* Metin */
-  --rezzy-text-main: #f7f7f8;
-  --rezzy-text-muted: #b5b9c7;
-  --rezzy-text-soft: #8c909e;
+  /* Metin (light mode için koyu tonlar) */
+  --rezzy-text-main: #1b1c22;
+  --rezzy-text-muted: #4f5563;
+  --rezzy-text-soft: #7b8191;
 
   /* Border */
-  --rezzy-border-subtle: rgba(255, 255, 255, 0.06);
-  --rezzy-border-strong: rgba(255, 255, 255, 0.12);
+  --rezzy-border-subtle: rgba(0, 0, 0, 0.06);
+  --rezzy-border-strong: rgba(0, 0, 0, 0.14);
 
   /* Durum renkleri */
   --rezzy-success: #2ecc71;
@@ -36,11 +37,11 @@
   --rezzy-radius-xl: 22px;
   --rezzy-radius-pill: 999px;
 
-  --rezzy-shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.45);
+  --rezzy-shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.16);
 }
 
 /* ---------- Genel iskelet ---------- */
- 
+
 .rezzy-desktop-shell {
   display: flex;
   min-height: 100vh;
@@ -48,7 +49,7 @@
       circle at top,
       var(--rezzy-bg-soft) 0,
       var(--rezzy-bg) 45%,
-      #030307 100%
+      var(--rezzy-shell-grad-end) 100%
     );
   color: var(--rezzy-text-main);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
@@ -66,14 +67,14 @@
   background: linear-gradient(
     180deg,
     var(--rezzy-bg-elevated) 0%,
-    #050509 100%
+    var(--rezzy-bg-soft) 100%
   );
   border-right: 1px solid var(--rezzy-border-subtle);
   padding: 18px 16px;
   display: flex;
   flex-direction: column;
   gap: 24px;
-  box-shadow: 12px 0 40px rgba(0, 0, 0, 0.7);
+  box-shadow: 12px 0 40px rgba(0, 0, 0, 0.12);
   position: relative;
   z-index: 5;
 }
@@ -98,7 +99,7 @@
   );
   box-shadow:
     0 0 0 1px rgba(243, 179, 107, 0.4),
-    0 10px 25px rgba(0, 0, 0, 0.8);
+    0 10px 25px rgba(0, 0, 0, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -117,6 +118,7 @@
   font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.04em;
+  color: var(--rezzy-text-main);
 }
 
 .rezzy-sidenav__title-sub {
@@ -159,7 +161,7 @@
 }
 
 .rezzy-sidenav__item:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(0, 0, 0, 0.03);
   border-color: var(--rezzy-border-subtle);
   transform: translateY(-1px);
 }
@@ -171,15 +173,15 @@
     transparent 52%
   );
   border-color: var(--rezzy-primary-soft);
-  color: #fdf9f5;
+  color: var(--rezzy-text-main);
 }
 
 .rezzy-sidenav__icon {
   width: 28px;
   height: 28px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -197,7 +199,7 @@
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.03);
   color: var(--rezzy-text-soft);
 }
 
@@ -207,16 +209,17 @@
   border-radius: 16px;
   background: radial-gradient(
     circle at 0 0,
-    rgba(243, 179, 107, 0.18),
+    rgba(243, 179, 107, 0.16),
     transparent 60%
   );
-  border: 1px solid rgba(243, 179, 107, 0.35);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.9);
+  border: 1px solid rgba(243, 179, 107, 0.4);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
 }
 
 .rezzy-sidenav__footer-title {
   font-size: 12px;
   font-weight: 500;
+  color: var(--rezzy-text-main);
 }
 
 .rezzy-sidenav__footer-sub {
@@ -240,9 +243,10 @@
   justify-content: space-between;
   margin-bottom: 18px;
   gap: 16px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(0, 0, 0, 0.03);
   border-radius: 14px;
   padding: 10px 14px;
+  border: 1px solid var(--rezzy-border-subtle);
 }
 
 .rezzy-topbar__left {
@@ -255,6 +259,7 @@
   font-size: 20px;
   font-weight: 600;
   letter-spacing: 0.01em;
+  color: var(--rezzy-text-main);
 }
 
 .rezzy-topbar__subtitle {
@@ -278,10 +283,11 @@
   padding: 5px 10px;
   border-radius: var(--rezzy-radius-pill);
   border: 1px solid var(--rezzy-border-subtle);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(0, 0, 0, 0.02);
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  color: var(--rezzy-text-muted);
 }
 
 .rezzy-chip__dot {
@@ -306,7 +312,7 @@
   padding: 6px 10px;
   border-radius: var(--rezzy-radius-pill);
   border: 1px solid var(--rezzy-border-subtle);
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .rezzy-topbar__avatar {
@@ -314,12 +320,13 @@
   height: 26px;
   border-radius: 999px;
   background: linear-gradient(135deg, #f3b36b, #7b2c2c);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.4);
   font-size: 13px;
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: #220c0c;
 }
 
 .rezzy-topbar__user-info {
@@ -329,6 +336,7 @@
 
 .rezzy-topbar__user-name {
   font-size: 12px;
+  color: var(--rezzy-text-main);
 }
 
 .rezzy-topbar__user-role {
@@ -342,10 +350,10 @@
   flex: 1;
   border-radius: 24px;
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.06), transparent 40%),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.7), transparent 45%),
     radial-gradient(circle at bottom right, var(--rezzy-accent-soft), transparent 60%),
     linear-gradient(135deg, var(--rezzy-bg-elevated), var(--rezzy-bg-soft));
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--rezzy-border-subtle);
   box-shadow: var(--rezzy-shadow-soft);
   padding: 18px 18px 16px;
   display: flex;
@@ -368,25 +376,26 @@
   padding: 12px 12px 10px;
   background:
     radial-gradient(circle at 0 0, var(--rezzy-accent-soft), transparent 55%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.6));
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.7);
+    linear-gradient(145deg, #ffffff, #edeff5);
+  border: 1px solid var(--rezzy-border-subtle);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.1);
   cursor: pointer;
   transition:
     transform 0.13s ease-out,
     box-shadow 0.13s ease-out,
     border-color 0.13s ease-out,
     background 0.16s ease-out;
+  color: var(--rezzy-text-main);
 }
 
 .rezzy-table-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.85);
-  border-color: rgba(243, 179, 107, 0.55);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+  border-color: var(--rezzy-primary-soft);
 }
 
 .rezzy-table-card--idle {
-  opacity: 0.9;
+  opacity: 0.95;
 }
 
 .rezzy-table-card__header {
@@ -405,9 +414,9 @@
   font-size: 11px;
   padding: 3px 8px;
   border-radius: var(--rezzy-radius-pill);
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.03);
   color: var(--rezzy-text-soft);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--rezzy-border-subtle);
 }
 
 .rezzy-table-card__meta {
@@ -426,7 +435,7 @@
   font-size: 11px;
   padding: 2px 7px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .rezzy-table-card__status-dot {
@@ -459,8 +468,9 @@
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--rezzy-border-subtle);
+  color: var(--rezzy-text-soft);
 }
 
 /* ---------- Board / Kitchen layout ---------- */
@@ -478,10 +488,10 @@
   border-radius: 18px;
   background: radial-gradient(
     circle at top,
-    rgba(255, 255, 255, 0.02),
+    rgba(255, 255, 255, 0.7),
     transparent 65%
   );
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--rezzy-border-subtle);
   padding: 10px;
   display: flex;
   flex-direction: column;
@@ -505,8 +515,8 @@
   font-size: 11px;
   border-radius: 999px;
   padding: 2px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--rezzy-border-subtle);
+  background: rgba(0, 0, 0, 0.03);
   color: var(--rezzy-text-soft);
 }
 
@@ -526,12 +536,13 @@
   padding: 10px 10px 8px;
   background: linear-gradient(
     145deg,
-    rgba(123, 44, 44, 0.16),
-    rgba(1, 1, 4, 0.96)
+    rgba(123, 44, 44, 0.12),
+    rgba(255, 255, 255, 0.96)
   );
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
+  border: 1px solid var(--rezzy-border-subtle);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
   font-size: 12px;
+  color: var(--rezzy-text-main);
 }
 
 .rezzy-kitchen-ticket__header {
@@ -572,7 +583,7 @@
 
 .rezzy-kitchen-ticket__note {
   font-size: 11px;
-  color: var(--rezzy-accent);
+  color: var(--rezzy-primary-strong);
   margin-top: 3px;
 }
 
@@ -589,10 +600,10 @@
 .rezzy-empty {
   flex: 1;
   border-radius: 18px;
-  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border: 1px dashed var(--rezzy-border-strong);
   background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.03), transparent 55%),
-    rgba(0, 0, 0, 0.6);
+    radial-gradient(circle at top, rgba(0, 0, 0, 0.03), transparent 55%),
+    rgba(255, 255, 255, 0.8);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -609,6 +620,7 @@
 .rezzy-empty__title {
   font-size: 15px;
   font-weight: 500;
+  color: var(--rezzy-text-main);
 }
 
 .rezzy-empty__text {
@@ -621,7 +633,7 @@
 .rezzy-board-column__body,
 .rezzy-tables-grid {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  scrollbar-color: rgba(0, 0, 0, 0.3) transparent;
 }
 
 .rezzy-desktop-content::-webkit-scrollbar,
@@ -633,27 +645,39 @@
 .rezzy-desktop-content::-webkit-scrollbar-thumb,
 .rezzy-board-column__body::-webkit-scrollbar-thumb,
 .rezzy-tables-grid::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.3);
   border-radius: 999px;
 }
 
 /* ---------- Tema varyantları ---------- */
 
-/* Rezzy Classic (varsayılan) */
+/* Rezzy Classic (varsayılan light) */
 .rezzy-theme-rezzy-classic {
-  --rezzy-theme-flag: classic; /* görsel etki yok, linter da susar */
+  --rezzy-theme-flag: classic;
 }
 
-/* A) Crystal Dark – daha koyu, cam efekti */
+/* A) Crystal Dark – koyu, cam efekti */
 .rezzy-theme-crystal-dark {
   --rezzy-bg: #07080d;
-  --rezzy-bg-elevated: #0f1017;
-  --rezzy-bg-soft: #151721;
+  --rezzy-bg-elevated: #101119;
+  --rezzy-bg-soft: #171823;
+  --rezzy-shell-grad-end: #030307;
+
   --rezzy-primary: #8d3434;
   --rezzy-primary-soft: rgba(141, 52, 52, 0.24);
   --rezzy-primary-strong: #b04444;
+
   --rezzy-accent: #f3c27c;
-  --rezzy-accent-soft: rgba(243, 194, 124, 0.18);
+  --rezzy-accent-soft: rgba(243, 194, 124, 0.22);
+
+  --rezzy-text-main: #f7f7f8;
+  --rezzy-text-muted: #b5b9c7;
+  --rezzy-text-soft: #8c909e;
+
+  --rezzy-border-subtle: rgba(255, 255, 255, 0.08);
+  --rezzy-border-strong: rgba(255, 255, 255, 0.16);
+
+  --rezzy-shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.55);
 }
 
 /* B) Dark Latte – orta koyu, daha ferah */
@@ -661,44 +685,69 @@
   --rezzy-bg: #18161a;
   --rezzy-bg-elevated: #222027;
   --rezzy-bg-soft: #27252d;
-  --rezzy-primary: #8b3b3b;
-  --rezzy-primary-soft: rgba(139, 59, 59, 0.2);
-  --rezzy-primary-strong: #a94747;
+  --rezzy-shell-grad-end: #050509;
+
+  --rezzy-primary: #c1673e;
+  --rezzy-primary-soft: rgba(193, 103, 62, 0.25);
+  --rezzy-primary-strong: #d8794c;
+
   --rezzy-accent: #f1c592;
-  --rezzy-accent-soft: rgba(241, 197, 146, 0.2);
+  --rezzy-accent-soft: rgba(241, 197, 146, 0.22);
+
+  --rezzy-text-main: #f8f6f4;
+  --rezzy-text-muted: #cbc3bd;
+  --rezzy-text-soft: #a79c96;
+
+  --rezzy-border-subtle: rgba(255, 255, 255, 0.08);
+  --rezzy-border-strong: rgba(255, 255, 255, 0.16);
+
+  --rezzy-shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.55);
 }
 
 /* C) Deep Bronze – sıcak, restoran ambiyansı */
 .rezzy-theme-deep-bronze {
-  --rezzy-bg: #18110b;
-  --rezzy-bg-elevated: #23150c;
-  --rezzy-bg-soft: #2b1a0e;
-  --rezzy-primary: #b35c2e;
-  --rezzy-primary-soft: rgba(179, 92, 46, 0.24);
-  --rezzy-primary-strong: #d06a35;
-  --rezzy-accent: #f3c47c;
-  --rezzy-accent-soft: rgba(243, 196, 124, 0.24);
+  --rezzy-bg: #1a130c;
+  --rezzy-bg-elevated: #25170d;
+  --rezzy-bg-soft: #2e1b0f;
+  --rezzy-shell-grad-end: #120b07;
+
+  --rezzy-primary: #e09a4a;
+  --rezzy-primary-soft: rgba(224, 154, 74, 0.26);
+  --rezzy-primary-strong: #f2b061;
+
+  --rezzy-accent: #f6c988;
+  --rezzy-accent-soft: rgba(246, 201, 136, 0.26);
+
+  --rezzy-text-main: #fff8f1;
+  --rezzy-text-muted: #e1cbb4;
+  --rezzy-text-soft: #bfa690;
+
+  --rezzy-border-subtle: rgba(255, 255, 255, 0.1);
+  --rezzy-border-strong: rgba(255, 255, 255, 0.2);
+
+  --rezzy-shadow-soft: 0 20px 48px rgba(0, 0, 0, 0.65);
 }
 
-/* D) Full Light Mode – iPad POS tarzı */
+/* D) Light POS – daha düz, iPad POS tarzı */
 .rezzy-theme-light-pos {
-  --rezzy-bg: #f3f4fb;
+  --rezzy-bg: #f5f5f7;
   --rezzy-bg-elevated: #ffffff;
-  --rezzy-bg-soft: #eceff8;
+  --rezzy-bg-soft: #eceef4;
+  --rezzy-shell-grad-end: #d2d4de;
 
-  --rezzy-primary: #7b2c2c;
-  --rezzy-primary-soft: rgba(123, 44, 44, 0.08);
-  --rezzy-primary-strong: #9b3636;
+  --rezzy-primary: #d6694b;
+  --rezzy-primary-soft: rgba(214, 105, 75, 0.16);
+  --rezzy-primary-strong: #e67b5c;
 
-  --rezzy-accent: #f1b87c;
-  --rezzy-accent-soft: rgba(241, 184, 124, 0.2);
+  --rezzy-accent: #b88345;
+  --rezzy-accent-soft: rgba(184, 131, 69, 0.15);
 
-  --rezzy-text-main: #171821;
-  --rezzy-text-muted: #4f5565;
-  --rezzy-text-soft: #777d91;
+  --rezzy-text-main: #1d1e23;
+  --rezzy-text-muted: #555a66;
+  --rezzy-text-soft: #858a97;
 
-  --rezzy-border-subtle: rgba(12, 18, 32, 0.12);
-  --rezzy-border-strong: rgba(12, 18, 32, 0.22);
+  --rezzy-border-subtle: rgba(0, 0, 0, 0.08);
+  --rezzy-border-strong: rgba(0, 0, 0, 0.18);
 
-  --rezzy-shadow-soft: 0 10px 26px rgba(15, 18, 30, 0.12);
+  --rezzy-shadow-soft: 0 10px 26px rgba(15, 18, 30, 0.14);
 }
