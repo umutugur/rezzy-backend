@@ -1,46 +1,93 @@
-import React, { PropsWithChildren, useEffect, useState } from "react";
-import "../styles/desktop.css";
-import { TopBar, SummaryChip } from "../components/TopBar";
+// desktop/layouts/RestaurantDesktopLayout.tsx
+import React from "react";
+import { useNavigate } from "react-router-dom";
 import { SideNav, DesktopNavKey } from "../components/SideNav";
-import {
-  DesktopThemeKey,
-  getInitialDesktopTheme,
-} from "../theme";
 
-export type RestaurantDesktopLayoutProps = PropsWithChildren<{
+type SummaryChipTone = "success" | "danger" | "warning" | "neutral";
+
+type SummaryChip = {
+  label: string;
+  value: string;
+  tone?: SummaryChipTone;
+};
+
+type Props = {
   activeNav: DesktopNavKey;
   title: string;
-  summaryChips?: SummaryChip[];
   subtitle?: string;
-}>;
+  summaryChips?: SummaryChip[];
+  children: React.ReactNode;
+};
 
-export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = ({
+export const RestaurantDesktopLayout: React.FC<Props> = ({
   activeNav,
   title,
   subtitle,
   summaryChips,
   children,
 }) => {
-  const [theme, setTheme] = useState<DesktopThemeKey>(() =>
-    getInitialDesktopTheme()
-  );
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const anyEvent = e as CustomEvent<{ theme?: DesktopThemeKey }>;
-      const next = anyEvent.detail?.theme;
-      if (next) setTheme(next);
-    };
-    window.addEventListener("rezzy-desktop-theme-changed", handler);
-    return () => window.removeEventListener("rezzy-desktop-theme-changed", handler);
-  }, []);
+  const handleNavigate = (key: DesktopNavKey) => {
+    switch (key) {
+      case "tables":
+        navigate("/restaurant-desktop/tables");
+        break;
+      case "kitchen":
+        navigate("/restaurant-desktop/kitchen");
+        break;
+      case "rezzy":
+        navigate("/restaurant-desktop/rezzy");
+        break;
+      case "reports":
+        navigate("/restaurant-desktop/reports");
+        break;
+      case "settings":
+        navigate("/restaurant-desktop/settings");
+        break;
+      default:
+        navigate("/restaurant-desktop/tables");
+    }
+  };
 
   return (
-    <div className={`rezzy-desktop-shell rezzy-theme-${theme}`}>
-      <SideNav active={activeNav} />
-      <div className="rezzy-desktop-main">
-        <TopBar title={title} subtitle={subtitle} summaryChips={summaryChips} />
-        <section className="rezzy-desktop-content">{children}</section>
+    <div className="rezzy-desktop">
+      {/* Sol taraf: SideNav */}
+      <SideNav active={activeNav} onNavigate={handleNavigate} />
+
+      {/* Sağ taraf: içerik */}
+      <div className="rezzy-desktop__main">
+        <header className="rezzy-desktop__header">
+          <div>
+            <h1 className="rezzy-desktop__title">{title}</h1>
+            {subtitle && (
+              <p className="rezzy-desktop__subtitle">{subtitle}</p>
+            )}
+          </div>
+
+          {summaryChips && summaryChips.length > 0 && (
+            <div className="rezzy-desktop__summary">
+              {summaryChips.map((chip) => (
+                <div
+                  key={chip.label}
+                  className={
+                    "rezzy-desktop__summary-chip " +
+                    (chip.tone ? `rezzy-desktop__summary-chip--${chip.tone}` : "")
+                  }
+                >
+                  <div className="rezzy-desktop__summary-label">
+                    {chip.label}
+                  </div>
+                  <div className="rezzy-desktop__summary-value">
+                    {chip.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </header>
+
+        <main className="rezzy-desktop__content">{children}</main>
       </div>
     </div>
   );
