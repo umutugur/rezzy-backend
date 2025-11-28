@@ -3,33 +3,40 @@
 /* ---------- Temel tema değişkenleri ---------- */
 
 :root {
-  --rezzy-bg: #070709;
-  --rezzy-bg-elevated: #0f1014;
-  --rezzy-bg-soft: #171821;
+  /* Arka plan */
+  --rezzy-bg: #0e1118;
+  --rezzy-bg-elevated: #161a22;
+  --rezzy-bg-soft: #1d222c;
 
-  --rezzy-primary: #7b2c2c;
-  --rezzy-primary-soft: rgba(123, 44, 44, 0.2);
-  --rezzy-primary-strong: #9b3636;
+  /* Brand */
+  --rezzy-primary: #9a3e3e; /* daha sıcak bordo */
+  --rezzy-primary-soft: rgba(154, 62, 62, 0.18);
+  --rezzy-primary-strong: #b34a4a;
 
-  --rezzy-accent: #f3b36b;
-  --rezzy-accent-soft: rgba(243, 179, 107, 0.12);
+  /* Accent */
+  --rezzy-accent: #efc48a; 
+  --rezzy-accent-soft: rgba(239, 196, 138, 0.18);
 
-  --rezzy-border-subtle: rgba(255, 255, 255, 0.08);
-  --rezzy-border-strong: rgba(255, 255, 255, 0.16);
+  /* Metin */
+  --rezzy-text-main: #f7f7f8;
+  --rezzy-text-muted: #b5b9c7;
+  --rezzy-text-soft: #8c909e;
 
-  --rezzy-text-main: #f5f5f7;
-  --rezzy-text-muted: #9ca0b0;
-  --rezzy-text-soft: #707486;
+  /* Border */
+  --rezzy-border-subtle: rgba(255, 255, 255, 0.06);
+  --rezzy-border-strong: rgba(255, 255, 255, 0.12);
 
-  --rezzy-success: #31c48d;
-  --rezzy-warning: #f6ad55;
-  --rezzy-danger: #f56565;
+  /* Durum renkleri */
+  --rezzy-success: #2ecc71;
+  --rezzy-warning: #f1c40f;
+  --rezzy-danger: #e74c3c;
 
+  /* Radius & Shadow */
   --rezzy-radius-lg: 18px;
   --rezzy-radius-xl: 22px;
   --rezzy-radius-pill: 999px;
 
-  --rezzy-shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.55);
+  --rezzy-shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.35);
 }
 
 /* ---------- Genel iskelet ---------- */
