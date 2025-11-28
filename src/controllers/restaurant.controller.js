@@ -68,10 +68,11 @@ export const listRestaurants = async (req, res, next) => {
   console.log("[listRestaurants] START", req.query);
 
   try {
-    const { city, query, region, lat, lng } = req.query || {};
+    const { city, query, region, lat, lng, people, date, timeRange, budget, style, fromAssistant } = req.query || {};
 
     // Her zaman: sadece aktif restoranlar
     const filter = { isActive: true };
+    const andClauses = [];
 
     if (region) filter.region = String(region).trim().toUpperCase();
     if (city) filter.city = String(city).trim();
@@ -82,6 +83,61 @@ export const listRestaurants = async (req, res, next) => {
       filter.name = { $regex: q, $options: "i" };
       // Büyük veri olursa text index'e geçebiliriz
       // filter.$text = { $search: q };
+    }
+
+    // --- Assistant tabanlı ek filtreler (people / budget / style) ---
+    let partySize = null;
+    if (people !== undefined) {
+      const n = Number(people);
+      if (Number.isFinite(n) && n > 0 && n <= 50) {
+        partySize = n;
+      }
+    }
+
+    // minPartySize / maxPartySize ile yaklaşık kişi sayısı filtresi
+    if (partySize !== null) {
+      andClauses.push({
+        $or: [
+          { minPartySize: { $lte: partySize } },
+          { minPartySize: { $exists: false } },
+        ],
+      });
+      andClauses.push({
+        $or: [
+          { maxPartySize: { $gte: partySize } },
+          { maxPartySize: { $exists: false } },
+        ],
+      });
+    }
+
+    // Bütçe → priceRange alanına bağla (ör: "₺", "₺₺"...)
+    if (budget && typeof budget === "string" && budget.trim()) {
+      filter.priceRange = budget.trim();
+    }
+
+    // Tarz / kategori → businessType + açıklama/isim üzerinden arama
+    if (style && typeof style === "string" && style.trim()) {
+      const sRaw = style.trim();
+      const sNorm = sRaw.replace(/\s+/g, "_"); // "fast food" → "fast_food"
+
+      andClauses.push({
+        $or: [
+          // Örn: "meyhane", "bar", "coffee shop" → businessType
+          { businessType: { $regex: sNorm, $options: "i" } },
+          // Metin bazlı eşleşme (daha doğal sorgular için)
+          { description: { $regex: sRaw, $options: "i" } },
+          { name: { $regex: sRaw, $options: "i" } },
+        ],
+      });
+    }
+
+    // Eğer ekstra AND şartları oluştuysa filter.$and içine ekle
+    if (andClauses.length) {
+      if (filter.$and) {
+        filter.$and = filter.$and.concat(andClauses);
+      } else {
+        filter.$and = andClauses;
+      }
     }
 
     const hasLat = lat !== undefined && lat !== null && !Number.isNaN(Number(lat));
