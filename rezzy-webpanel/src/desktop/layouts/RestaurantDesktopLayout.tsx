@@ -1,6 +1,6 @@
 import React, { PropsWithChildren, useEffect, useState } from "react";
 import "../styles/desktop.css";
-import { TopBar } from "../components/TopBar";
+import { TopBar, SummaryChip } from "../components/TopBar";
 import { SideNav, DesktopNavKey } from "../components/SideNav";
 import {
   DesktopThemeKey,
@@ -10,6 +10,7 @@ import {
 export type RestaurantDesktopLayoutProps = PropsWithChildren<{
   activeNav: DesktopNavKey;
   title: string;
+  summaryChips?: SummaryChip[];
   subtitle?: string;
 }>;
 
@@ -17,6 +18,7 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
   activeNav,
   title,
   subtitle,
+  summaryChips,
   children,
 }) => {
   const [theme, setTheme] = useState<DesktopThemeKey>(() =>
@@ -37,7 +39,7 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
     <div className={`rezzy-desktop-shell rezzy-theme-${theme}`}>
       <SideNav active={activeNav} />
       <div className="rezzy-desktop-main">
-        <TopBar title={title} subtitle={subtitle} />
+        <TopBar title={title} subtitle={subtitle} summaryChips={summaryChips} />
         <section className="rezzy-desktop-content">{children}</section>
       </div>
     </div>

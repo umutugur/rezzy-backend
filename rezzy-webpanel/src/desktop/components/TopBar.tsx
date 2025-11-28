@@ -1,11 +1,25 @@
 import React from "react";
 
+export type SummaryChipTone = "success" | "warning" | "danger" | "neutral";
+
+export type SummaryChip = {
+  label: string;
+  value: string;
+  tone?: SummaryChipTone;
+};
+
 export type TopBarProps = {
   title: string;
   subtitle?: string;
+  summaryChips?: SummaryChip[];
 };
 
-export const TopBar: React.FC<TopBarProps> = ({ title, subtitle }) => {
+export const TopBar: React.FC<TopBarProps> = ({
+  title,
+  subtitle,
+  summaryChips,
+}) => {
+  // Varsayılan mock özet (hiç summaryChips gelmezse)
   const todaySummary = {
     covers: 86,
     total: "24.380₺",
@@ -18,6 +32,34 @@ export const TopBar: React.FC<TopBarProps> = ({ title, subtitle }) => {
     role: "Servis",
   };
 
+  const hasCustomSummary = summaryChips && summaryChips.length > 0;
+
+  const chips: SummaryChip[] = hasCustomSummary
+    ? summaryChips!
+    : [
+        {
+          label: "Bugün kişi",
+          value: `${todaySummary.covers} kişi`,
+          tone: "success",
+        },
+        {
+          label: "Toplam hesap",
+          value: todaySummary.total,
+          tone: "warning",
+        },
+        {
+          label: "Rezzy oranı",
+          value: `%${todaySummary.rezzyRate}`,
+          tone: "danger",
+        },
+      ];
+
+  const dotClass = (tone?: SummaryChipTone) => {
+    if (tone === "warning") return "rezzy-chip__dot rezzy-chip__dot--warning";
+    if (tone === "danger") return "rezzy-chip__dot rezzy-chip__dot--danger";
+    return "rezzy-chip__dot"; // success + neutral
+  };
+
   return (
     <header className="rezzy-topbar">
       <div className="rezzy-topbar__left">
@@ -27,18 +69,15 @@ export const TopBar: React.FC<TopBarProps> = ({ title, subtitle }) => {
 
       <div className="rezzy-topbar__right">
         <div className="rezzy-topbar__summary">
-          <div className="rezzy-chip">
-            <span className="rezzy-chip__dot" />
-            <span>Bugün {todaySummary.covers} kişi</span>
-          </div>
-          <div className="rezzy-chip">
-            <span className="rezzy-chip__dot rezzy-chip__dot--warning" />
-            <span>Toplam {todaySummary.total}</span>
-          </div>
-          <div className="rezzy-chip">
-            <span className="rezzy-chip__dot rezzy-chip__dot--danger" />
-            <span>%{todaySummary.rezzyRate} Rezzy</span>
-          </div>
+          {chips.map((chip, idx) => (
+            <div key={idx} className="rezzy-chip">
+              <span className={dotClass(chip.tone)} />
+              {/* Label + value; istersen label'i sadeleştiririz */}
+              <span>
+                {chip.label ? `${chip.label}: ${chip.value}` : chip.value}
+              </span>
+            </div>
+          ))}
         </div>
 
         <div className="rezzy-topbar__user">

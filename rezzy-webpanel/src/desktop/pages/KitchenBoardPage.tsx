@@ -58,11 +58,30 @@ export const KitchenBoardPage: React.FC = () => {
   const ready = groupByStatus("READY");
   const served = groupByStatus("SERVED");
 
+  const totalTickets = mockKitchenTickets.length;
+
   return (
     <RestaurantDesktopLayout
       activeNav="kitchen"
       title="Mutfak Ekranı"
       subtitle="Yeni siparişler, hazırlananlar ve servise hazır tabaklar."
+      summaryChips={[
+        {
+          label: "Toplam fiş",
+          value: `${totalTickets} adet`,
+          tone: "success",
+        },
+        {
+          label: "Hazırlanan",
+          value: `${inProgress.length} adet`,
+          tone: "warning",
+        },
+        {
+          label: "Servise hazır",
+          value: `${ready.length} adet`,
+          tone: "neutral",
+        },
+      ]}
     >
       <div className="rezzy-board-layout">
         <div className="rezzy-board-column">
@@ -107,7 +126,17 @@ export const KitchenBoardPage: React.FC = () => {
             <div className="rezzy-board-column__count">{served.length}</div>
           </div>
           <div className="rezzy-board-column__body">
-            {/* Şimdilik boş */}
+            {served.length === 0 ? (
+              <div className="rezzy-empty">
+                <div className="rezzy-empty__icon">🍽️</div>
+                <div className="rezzy-empty__title">Teslim edilen sipariş yok</div>
+                <div className="rezzy-empty__text">
+                  Hazır tabaklar servis edildikçe burada listelenecek.
+                </div>
+              </div>
+            ) : (
+              served.map((t) => <KitchenTicket key={t.id} {...t} />)
+            )}
           </div>
         </div>
       </div>
