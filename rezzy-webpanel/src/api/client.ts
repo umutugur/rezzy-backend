@@ -643,6 +643,7 @@ export async function adminUpdateRestaurant(rid: string, payload: any) {
   const { data } = await api.put(`/restaurants/${rid}`, payload);
   return data;
 }
+
 // =========================
 // RESTAURANT — Live Tables & Orders
 // =========================
@@ -751,4 +752,29 @@ export async function restaurantResolveTableService(
     body ?? {}
   );
   return data as { ok: boolean };
+}
+
+/**
+ * ✅ WALK-IN sipariş oluşturma
+ * POST /api/orders/restaurants/:rid/tables/:tableKey/walk-in
+ */
+export async function restaurantCreateWalkInOrder(
+  rid: string,
+  tableKey: string,
+  input: {
+    guestName?: string;
+    items: Array<{
+      itemId: string;
+      title: string;
+      price: number;
+      qty: number;
+      note?: string;
+    }>;
+  }
+): Promise<{ order: any; sessionId: string; totals: any }> {
+  const { data } = await api.post(
+    `/orders/restaurants/${rid}/tables/${tableKey}/walk-in`,
+    input
+  );
+  return data as { order: any; sessionId: string; totals: any };
 }
