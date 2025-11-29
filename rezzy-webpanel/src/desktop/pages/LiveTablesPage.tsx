@@ -8,9 +8,12 @@ import {
   restaurantGetTableDetail,
   restaurantCloseTableSession,
   restaurantResolveTableService,
+  restaurantListItems,
+  restaurantCreateWalkInOrder,
   type LiveTable,
 } from "../../api/client";
 import { authStore } from "../../store/auth";
+import { showToast } from "../../ui/Toast";
 
 // =============== Tipler ===============
 type MockTableLike = {
@@ -20,6 +23,22 @@ type MockTableLike = {
   status: TableStatus;
   total?: number;
   sinceMinutes?: number;
+};
+
+type MenuItem = {
+  _id: string;
+  title: string;
+  price: number;
+  isAvailable?: boolean;
+  categoryId?: string;
+};
+
+type DraftOrderItem = {
+  itemId: string;
+  title: string;
+  price: number;
+  qty: number;
+  note?: string;
 };
 
 // =============== Yardımcılar ===============
@@ -175,12 +194,20 @@ export const LiveTablesPage: React.FC = () => {
   const soundRef = React.useRef<HTMLAudioElement | null>(null);
   const prevTablesRef = React.useRef<Record<string, LiveTable> | null>(null);
 
+  // 🔕 Son yapılan WALK-IN siparişleri tutan ref (masa bazlı)
+  const selfWalkInRef = React.useRef<Record<string, number>>({});
+
   React.useEffect(() => {
     soundRef.current = new Audio("/sounds/notify.mp3");
   }, []);
 
   // Seçili masa
   const [selectedTableId, setSelectedTableId] = React.useState<string | null>(null);
+
+  // Walk-in modal state
+  const [isOrderModalOpen, setIsOrderModalOpen] = React.useState(false);
+  const [guestName, setGuestName] = React.useState("");
+  const [draftItems, setDraftItems] = React.useState<Record<string, DraftOrderItem>>({});
 
   // Canlı masalar
   const { data, isLoading, isError } = useQuery({
@@ -211,7 +238,7 @@ export const LiveTablesPage: React.FC = () => {
       return;
     }
 
-    let shouldPlay = false;
+    const triggeredTables = new Set<string>();
 
     for (const id of Object.keys(currentById)) {
       const curr = currentById[id];
@@ -219,7 +246,7 @@ export const LiveTablesPage: React.FC = () => {
 
       if (!old) {
         if (curr.status !== "empty" || curr.hasActiveSession) {
-          shouldPlay = true;
+          triggeredTables.add(id);
           continue;
         }
       } else {
@@ -229,29 +256,60 @@ export const LiveTablesPage: React.FC = () => {
             curr.status === "waiter_call" ||
             curr.status === "bill_request"
           ) {
-            shouldPlay = true;
+            triggeredTables.add(id);
           }
         }
 
         const prevReq = old.openServiceRequests || 0;
         const nextReq = curr.openServiceRequests || 0;
         if (nextReq > prevReq) {
-          shouldPlay = true;
+          triggeredTables.add(id);
         }
 
         const prevTotal = old.totals?.grandTotal ?? 0;
         const nextTotal = curr.totals?.grandTotal ?? 0;
         if (nextTotal > prevTotal && curr.status === "order_active") {
-          shouldPlay = true;
+          triggeredTables.add(id);
         }
       }
     }
+
+    // Eski self-walk-in kayıtlarını temizle (10 saniyeden eski)
+    const now = Date.now();
+    Object.keys(selfWalkInRef.current).forEach((tid) => {
+      if (now - selfWalkInRef.current[tid] > 10_000) {
+        delete selfWalkInRef.current[tid];
+      }
+    });
+
+    let shouldPlay = false;
+
+    // Eğer tetikleyen masanın olayı "çok yakın zamanda bizim yaptığımız walk-in"
+    // ise bu masalar için ses çalma. Diğerleri için çal.
+    triggeredTables.forEach((tid) => {
+      if (shouldPlay) return;
+
+      const lastSelfTs = selfWalkInRef.current[tid];
+      if (!lastSelfTs) {
+        shouldPlay = true;
+        return;
+      }
+
+      // 3 saniyeden daha eskiyse normalde olduğu gibi ses çalsın
+      if (now - lastSelfTs > 3_000) {
+        shouldPlay = true;
+      }
+      // 3 saniye içinde ise (muhtemelen bu poll, bizim yaptığımız walk-in sonucu)
+      // => SES YOK, sadece highlight görünecek.
+    });
 
     if (shouldPlay && soundRef.current) {
       try {
         soundRef.current.currentTime = 0;
         soundRef.current.play().catch(() => {});
-      } catch {}
+      } catch {
+        // sessiz fail
+      }
     }
 
     prevTablesRef.current = currentById;
@@ -302,6 +360,84 @@ export const LiveTablesPage: React.FC = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
       refetchDetail();
+    },
+  });
+
+  // ================== MENÜ (Walk-in modal için) ==================
+  const {
+    data: menuItemsData,
+    isLoading: menuLoading,
+    error: menuError,
+  } = useQuery({
+    queryKey: ["restaurant-menu-items", rid],
+    queryFn: () => restaurantListItems(rid),
+    enabled: !!rid && isOrderModalOpen,
+  });
+
+  const menuItems: MenuItem[] = Array.isArray(menuItemsData)
+    ? (menuItemsData as MenuItem[])
+    : [];
+
+  React.useEffect(() => {
+    // Modal kapandığında taslağı temizle
+    if (!isOrderModalOpen) {
+      setDraftItems({});
+      setGuestName("");
+    }
+  }, [isOrderModalOpen]);
+
+  function handleChangeQty(item: MenuItem, value: number) {
+    const qty = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    setDraftItems((prev) => {
+      const next = { ...prev };
+      if (qty <= 0) {
+        delete next[item._id];
+      } else {
+        next[item._id] = {
+          itemId: item._id,
+          title: item.title,
+          price: item.price,
+          qty,
+        };
+      }
+      return next;
+    });
+  }
+
+  const createWalkInMut = useMutation({
+    mutationFn: async () => {
+      if (!rid || !selectedTableId) {
+        throw new Error("Masa veya restoran bilgisi eksik.");
+      }
+      const items = Object.values(draftItems).filter((it) => it.qty > 0);
+      if (items.length === 0) {
+        throw new Error("En az bir ürün seçmelisiniz.");
+      }
+
+      return restaurantCreateWalkInOrder(rid, selectedTableId, {
+        guestName: guestName.trim() || undefined,
+        items,
+      });
+    },
+    onSuccess: () => {
+      if (selectedTableId) {
+        // Bu masadaki değişiklik, bizim yaptığımız walk-in olsun → sesi bastırmak için işaretle
+        selfWalkInRef.current[selectedTableId] = Date.now();
+      }
+
+      showToast("Yeni sipariş eklendi.", "success");
+      setIsOrderModalOpen(false);
+      setDraftItems({});
+      setGuestName("");
+      qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
+      refetchDetail();
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Walk-in sipariş oluşturulamadı.";
+      showToast(msg, "error");
     },
   });
 
@@ -445,6 +581,8 @@ export const LiveTablesPage: React.FC = () => {
   const selectedTable = selectedTableId
     ? tables.find((t) => t.id === selectedTableId)
     : undefined;
+
+  const selectedTableName = selectedTable?.name ?? "";
 
   return (
     <RestaurantDesktopLayout
@@ -661,6 +799,20 @@ export const LiveTablesPage: React.FC = () => {
 
             {/* Aksiyon butonları */}
             <div className="flex flex-col items-stretch gap-2 mt-3">
+              {/* ✅ WALK-IN: Yeni Sipariş */}
+              <button
+                type="button"
+                disabled={!selectedTableId}
+                onClick={() => {
+                  if (!selectedTableId) return;
+                  setIsOrderModalOpen(true);
+                }}
+                className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:bg-purple-300"
+              >
+                Yeni Sipariş Ekle
+                {selectedTableName ? ` — ${selectedTableName}` : ""}
+              </button>
+
               <button
                 type="button"
                 disabled={
@@ -716,6 +868,123 @@ export const LiveTablesPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* ✅ WALK-IN MODAL */}
+      {isOrderModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-semibold">
+                Yeni Sipariş — {selectedTableName || "Seçili masa"}
+              </h4>
+              <button
+                type="button"
+                onClick={() => setIsOrderModalOpen(false)}
+                className="text-xs text-gray-400 hover:text-gray-700"
+              >
+                Kapat
+              </button>
+            </div>
+
+            <div className="space-y-2 mb-3">
+              <label className="block text-[11px] font-medium text-gray-700">
+                Müşteri / Not
+              </label>
+              <input
+                type="text"
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                placeholder="İsteğe bağlı; örn. 4 kişi, rezervasyonsuz masa"
+              />
+            </div>
+
+            <div className="border border-gray-100 rounded-xl max-h-64 overflow-y-auto mb-3">
+              {menuLoading && (
+                <div className="p-3 text-xs text-gray-500">Menü yükleniyor…</div>
+              )}
+              {menuError && (
+                <div className="p-3 text-xs text-red-600">
+                  Menü listesi getirilemedi.
+                </div>
+              )}
+              {!menuLoading && !menuError && menuItems.length === 0 && (
+                <div className="p-3 text-xs text-gray-500">
+                  Henüz menüde ürün yok.
+                </div>
+              )}
+              {!menuLoading && !menuError && menuItems.length > 0 && (
+                <div className="divide-y divide-gray-100">
+                  {menuItems.map((mi) => {
+                    const current = draftItems[mi._id]?.qty ?? 0;
+                    return (
+                      <div
+                        key={mi._id}
+                        className="flex items-center justify-between px-3 py-2"
+                      >
+                        <div className="flex-1 mr-2">
+                          <div className="text-xs font-medium text-gray-800">
+                            {mi.title}
+                          </div>
+                          <div className="text-[11px] text-gray-500">
+                            {mi.price.toFixed(2)}₺
+                            {mi.isAvailable === false && (
+                              <span className="ml-1 text-[10px] text-red-500">
+                                (Mevcut değil)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={current}
+                            onChange={(e) =>
+                              handleChangeQty(
+                                mi,
+                                Number(e.target.value || 0)
+                              )
+                            }
+                            className="w-16 rounded-md border border-gray-200 px-1 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-purple-500"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] text-gray-600">
+                Seçili ürün sayısı:{" "}
+                <span className="font-semibold">
+                  {Object.keys(draftItems).length}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsOrderModalOpen(false)}
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  disabled={createWalkInMut.isPending}
+                  onClick={() => createWalkInMut.mutate()}
+                  className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:bg-purple-300"
+                >
+                  {createWalkInMut.isPending ? "Kaydediliyor…" : "Siparişi Kaydet"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </RestaurantDesktopLayout>
   );
 };
