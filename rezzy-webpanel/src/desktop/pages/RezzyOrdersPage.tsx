@@ -129,14 +129,13 @@ export const RezzyOrdersPage: React.FC = () => {
     const dt = new Date(r.dateTimeUTC);
     const when = dt.toLocaleString("tr-TR");
 
-    const guestName =
+    const displayName =
       r.displayName ||
       r.guestName ||
       r.name ||
       r.user?.name ||
       r.user?.email ||
       "İsimsiz misafir";
-    const displayName = r.displayName;
     return (
       <article key={r._id} className="rezzy-kitchen-ticket">
         <div className="rezzy-kitchen-ticket__header">
