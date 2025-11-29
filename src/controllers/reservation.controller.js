@@ -1006,6 +1006,7 @@ export const listReservationsByRestaurant = async (req, res, next) => {
     const items = await Reservation.find(q)
       .sort({ _id: -1 })
       .limit(lim + 1)
+      .populate("userId", "_id name email phone")
       .lean();
 
     const nextCursor = items.length > lim ? String(items[lim - 1]?._id) : undefined;
@@ -1015,7 +1016,19 @@ export const listReservationsByRestaurant = async (req, res, next) => {
       items: sliced.map((r) => ({
         _id: r._id,
         restaurantId: r.restaurantId,
-        userId: r.userId,
+        // userId her zaman string olsun
+        userId: typeof r.userId === "object" && r.userId !== null ? r.userId._id : r.userId,
+        // frontend'deki isim alanları için
+        user: typeof r.userId === "object" && r.userId !== null
+          ? {
+              _id: r.userId._id,
+              name: r.userId.name || "",
+              email: r.userId.email || "",
+              phone: r.userId.phone || "",
+            }
+          : null,
+        guestName: r.guestName || null,
+        displayName: r.displayName || null,
         dateTimeUTC: r.dateTimeUTC,
         partySize: r.partySize,
         totalPrice: r.totalPrice,
