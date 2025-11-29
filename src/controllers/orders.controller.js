@@ -186,6 +186,7 @@ export async function createOrder(req, res) {
       currency,
       paymentMethod,
       paymentStatus: paymentMethod === "venue" ? "not_required" : "pending",
+      // createOrder mevcutta QR/Rezzy akışı için kullanılıyor → default "qr"
     });
 
     // MASAYI order_active yap
@@ -314,5 +315,110 @@ export async function createStripeIntent(req, res) {
   } catch (e) {
     console.error("[createStripeIntent] err", e);
     return res.status(500).json({ message: "Stripe intent oluşturulamadı." });
+  }
+}
+
+/**
+ * ✅ WALK-IN SİPARİŞ OLUŞTURMA
+ * Path: /api/orders/restaurants/:restaurantId/tables/:tableId/walk-in
+ * - Session yoksa açar
+ * - paymentMethod = "venue"
+ * - totals/payAtVenueTotal & grandTotal güncellenir
+ * - masa status = "order_active"
+ * - source = "walk_in"
+ */
+export async function createWalkInOrder(req, res) {
+  try {
+    const { restaurantId, tableId } = req.params;
+    const { items, guestName } = req.body || {};
+
+    if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+      return res.status(400).json({ message: "Geçersiz restaurantId." });
+    }
+    if (!tableId) {
+      return res.status(400).json({ message: "tableId zorunlu." });
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: "items zorunlu." });
+    }
+
+    const rid = String(restaurantId);
+    const table = String(tableId);
+
+    // 1) Açık session var mı?
+    let s = await OrderSession.findOne({
+      restaurantId: rid,
+      tableId: table,
+      status: "open",
+    });
+
+    // 2) Yoksa session aç
+    if (!s) {
+      const r = await Restaurant.findById(rid).lean();
+      const currency = currencyFromRegion(r?.region);
+
+      s = await OrderSession.create({
+        restaurantId: rid,
+        tableId: table,
+        reservationId: null,
+        currency,
+      });
+
+      await updateTable(rid, table, {
+        hasActiveSession: true,
+        sessionId: s._id,
+        status: "order_active",
+      });
+    }
+
+    const restaurant = await Restaurant.findById(rid).lean();
+    const currency = currencyFromRegion(restaurant?.region);
+
+    const calcItems = items.map((x) => ({
+      itemId: x.itemId,
+      title: x.title,
+      price: Number(x.price || 0),
+      qty: Math.max(1, Number(x.qty || 1)),
+      note: x.note || "",
+    }));
+
+    const total = calcItems.reduce((sum, it) => sum + it.price * it.qty, 0);
+
+    const order = await Order.create({
+      sessionId: s._id,
+      restaurantId: rid,
+      tableId: table,
+      userId: null,              // walk-in → masaya oturan fiziksel müşteri
+      isGuest: true,
+      guestName: guestName || "",
+      items: calcItems,
+      total,
+      currency,
+      paymentMethod: "venue",
+      paymentStatus: "not_required",
+      source: "walk_in",
+    });
+
+    // 3) Session totals güncelle
+    s.totals.payAtVenueTotal += total;
+    s.totals.grandTotal += total;
+    s.lastOrderAt = new Date();
+    await s.save();
+
+    // 4) Masa durumu
+    await updateTable(rid, table, {
+      hasActiveSession: true,
+      sessionId: s._id,
+      status: "order_active",
+    });
+
+    return res.json({
+      order,
+      sessionId: s._id,
+      totals: s.totals,
+    });
+  } catch (e) {
+    console.error("[createWalkInOrder] err", e);
+    return res.status(500).json({ message: "Walk-in sipariş oluşturulamadı." });
   }
 }

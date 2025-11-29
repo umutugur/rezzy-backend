@@ -27,6 +27,14 @@ const OrderSchema = new mongoose.Schema(
     currency: { type: String, default: "TRY" },
     total: { type: Number, min: 0, default: 0 },
 
+    // ✅ Sipariş kaynağı (qr, rezzy, walk_in vs.)
+    source: {
+      type: String,
+      enum: ["qr", "rezzy", "walk_in"],
+      default: "qr",
+      index: true,
+    },
+
     paymentMethod: { type: String, enum: ["card", "venue"], required: true }, 
     paymentStatus: { type: String, enum: ["pending", "paid", "failed", "not_required"], default: "pending" },
     stripePaymentIntentId: { type: String, default: null },

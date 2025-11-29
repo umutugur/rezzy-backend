@@ -1,4 +1,4 @@
-// desktop/pages/LiveTablesPage.tsx
+// src/desktop/pages/LiveTablesPage.tsx
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { RestaurantDesktopLayout } from "../layouts/RestaurantDesktopLayout";
@@ -9,6 +9,7 @@ import {
   restaurantCloseTableSession,
   restaurantResolveTableService,
   restaurantListItems,
+  restaurantListCategories,
   restaurantCreateWalkInOrder,
   type LiveTable,
 } from "../../api/client";
@@ -23,6 +24,13 @@ type MockTableLike = {
   status: TableStatus;
   total?: number;
   sinceMinutes?: number;
+};
+
+type MenuCategory = {
+  _id: string;
+  title: string;
+  order?: number;
+  isActive?: boolean;
 };
 
 type MenuItem = {
@@ -208,6 +216,7 @@ export const LiveTablesPage: React.FC = () => {
   const [isOrderModalOpen, setIsOrderModalOpen] = React.useState(false);
   const [guestName, setGuestName] = React.useState("");
   const [draftItems, setDraftItems] = React.useState<Record<string, DraftOrderItem>>({});
+  const [activeCategoryId, setActiveCategoryId] = React.useState<string | "all">("all");
 
   // Canlı masalar
   const { data, isLoading, isError } = useQuery({
@@ -284,8 +293,6 @@ export const LiveTablesPage: React.FC = () => {
 
     let shouldPlay = false;
 
-    // Eğer tetikleyen masanın olayı "çok yakın zamanda bizim yaptığımız walk-in"
-    // ise bu masalar için ses çalma. Diğerleri için çal.
     triggeredTables.forEach((tid) => {
       if (shouldPlay) return;
 
@@ -295,21 +302,16 @@ export const LiveTablesPage: React.FC = () => {
         return;
       }
 
-      // 3 saniyeden daha eskiyse normalde olduğu gibi ses çalsın
       if (now - lastSelfTs > 3_000) {
         shouldPlay = true;
       }
-      // 3 saniye içinde ise (muhtemelen bu poll, bizim yaptığımız walk-in sonucu)
-      // => SES YOK, sadece highlight görünecek.
     });
 
     if (shouldPlay && soundRef.current) {
       try {
         soundRef.current.currentTime = 0;
         soundRef.current.play().catch(() => {});
-      } catch {
-        // sessiz fail
-      }
+      } catch {}
     }
 
     prevTablesRef.current = currentById;
@@ -339,15 +341,13 @@ export const LiveTablesPage: React.FC = () => {
     refetch: refetchDetail,
   } = useQuery({
     queryKey: ["desktop-table-detail", rid, selectedTableId],
-    queryFn: () =>
-      restaurantGetTableDetail(rid, selectedTableId as string),
+    queryFn: () => restaurantGetTableDetail(rid, selectedTableId as string),
     enabled: !!rid && !!selectedTableId,
-    refetchInterval: 5000, // detay da canlı aksın
+    refetchInterval: 5000,
   });
 
   const closeSessionMut = useMutation({
-    mutationFn: () =>
-      restaurantCloseTableSession(rid, selectedTableId as string),
+    mutationFn: () => restaurantCloseTableSession(rid, selectedTableId as string),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
       refetchDetail();
@@ -355,8 +355,7 @@ export const LiveTablesPage: React.FC = () => {
   });
 
   const resolveServiceMut = useMutation({
-    mutationFn: () =>
-      restaurantResolveTableService(rid, selectedTableId as string),
+    mutationFn: () => restaurantResolveTableService(rid, selectedTableId as string),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
       refetchDetail();
@@ -364,6 +363,16 @@ export const LiveTablesPage: React.FC = () => {
   });
 
   // ================== MENÜ (Walk-in modal için) ==================
+  const {
+    data: categoriesData,
+    isLoading: categoriesLoading,
+    error: categoriesError,
+  } = useQuery({
+    queryKey: ["restaurant-menu-categories", rid],
+    queryFn: () => restaurantListCategories(rid),
+    enabled: !!rid && isOrderModalOpen,
+  });
+
   const {
     data: menuItemsData,
     isLoading: menuLoading,
@@ -374,35 +383,59 @@ export const LiveTablesPage: React.FC = () => {
     enabled: !!rid && isOrderModalOpen,
   });
 
+  const categories: MenuCategory[] = Array.isArray(categoriesData)
+    ? (categoriesData as MenuCategory[])
+    : [];
+
   const menuItems: MenuItem[] = Array.isArray(menuItemsData)
     ? (menuItemsData as MenuItem[])
     : [];
+
+  // İlk açılışta aktif kategori
+  React.useEffect(() => {
+    if (!isOrderModalOpen) return;
+    if (activeCategoryId !== "all") return;
+    if (categories.length === 0) return;
+
+    const firstActive =
+      categories.find((c) => c.isActive !== false) ?? categories[0];
+    if (firstActive?._id) {
+      setActiveCategoryId(firstActive._id);
+    }
+  }, [isOrderModalOpen, categories, activeCategoryId]);
 
   React.useEffect(() => {
     // Modal kapandığında taslağı temizle
     if (!isOrderModalOpen) {
       setDraftItems({});
       setGuestName("");
+      setActiveCategoryId("all");
     }
   }, [isOrderModalOpen]);
 
-  function handleChangeQty(item: MenuItem, value: number) {
-    const qty = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  function handleChangeQty(item: MenuItem, delta: number) {
     setDraftItems((prev) => {
+      const current = prev[item._id]?.qty ?? 0;
+      const nextQty = Math.max(0, current + delta);
       const next = { ...prev };
-      if (qty <= 0) {
+      if (nextQty <= 0) {
         delete next[item._id];
       } else {
         next[item._id] = {
           itemId: item._id,
           title: item.title,
           price: item.price,
-          qty,
+          qty: nextQty,
         };
       }
       return next;
     });
   }
+
+  const visibleItems =
+    activeCategoryId === "all"
+      ? menuItems
+      : menuItems.filter((mi) => mi.categoryId === activeCategoryId);
 
   const createWalkInMut = useMutation({
     mutationFn: async () => {
@@ -421,7 +454,6 @@ export const LiveTablesPage: React.FC = () => {
     },
     onSuccess: () => {
       if (selectedTableId) {
-        // Bu masadaki değişiklik, bizim yaptığımız walk-in olsun → sesi bastırmak için işaretle
         selfWalkInRef.current[selectedTableId] = Date.now();
       }
 
@@ -512,10 +544,13 @@ export const LiveTablesPage: React.FC = () => {
         ? `<div class="small">Henüz sipariş yok.</div>`
         : orders
             .map((o: any, index: number) => {
-              const timeStr = new Date(o.createdAt).toLocaleTimeString("tr-TR", {
-                hour: "2-digit",
-                minute: "2-digit",
-              });
+              const timeStr = new Date(o.createdAt).toLocaleTimeString(
+                "tr-TR",
+                {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }
+              );
 
               const itemsHtml =
                 Array.isArray(o.items) && o.items.length > 0
@@ -552,7 +587,9 @@ export const LiveTablesPage: React.FC = () => {
 
     const footer = `
       <div class="line"></div>
-      <div class="row small"><span>Kart</span><span>${card.toFixed(2)}₺</span></div>
+      <div class="row small"><span>Kart</span><span>${card.toFixed(
+        2
+      )}₺</span></div>
       <div class="row small"><span>Nakit / Mekanda</span><span>${payAtVenue.toFixed(
         2
       )}₺</span></div>
@@ -583,6 +620,16 @@ export const LiveTablesPage: React.FC = () => {
     : undefined;
 
   const selectedTableName = selectedTable?.name ?? "";
+
+  const selectedItemCount = Object.values(draftItems).reduce(
+    (sum, it) => sum + it.qty,
+    0
+  );
+
+  const selectedTotal = Object.values(draftItems).reduce(
+    (sum, it) => sum + it.qty * it.price,
+    0
+  );
 
   return (
     <RestaurantDesktopLayout
@@ -626,8 +673,8 @@ export const LiveTablesPage: React.FC = () => {
               <div className="rezzy-empty__icon">⚠️</div>
               <div className="rezzy-empty__title">Masalar yüklenemedi</div>
               <div className="rezzy-empty__text">
-                Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı
-                kontrol edin.
+                Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse
+                bağlantınızı kontrol edin.
               </div>
             </div>
           )}
@@ -637,7 +684,8 @@ export const LiveTablesPage: React.FC = () => {
               <div className="rezzy-empty__icon">🪑</div>
               <div className="rezzy-empty__title">Tanımlı masa bulunamadı</div>
               <div className="rezzy-empty__text">
-                Masa planı oluşturulduğunda, canlı masa durumu burada görünecek.
+                Masa planı oluşturulduğunda, canlı masa durumu burada
+                görünecek.
               </div>
             </div>
           )}
@@ -670,7 +718,11 @@ export const LiveTablesPage: React.FC = () => {
               <h3 className="text-sm font-semibold">
                 Masa Detayı
                 {selectedTable && (
-                  <> — {selectedTable.name} ({selectedTable.capacity || 2} kişilik)</>
+                  <>
+                    {" "}
+                    — {selectedTable.name} ({selectedTable.capacity || 2}{" "}
+                    kişilik)
+                  </>
                 )}
               </h3>
               <button
@@ -869,14 +921,20 @@ export const LiveTablesPage: React.FC = () => {
         )}
       </div>
 
-      {/* ✅ WALK-IN MODAL */}
+      {/* ✅ WALK-IN MODAL (kategori → ürün, dokunmatik uyumlu) */}
       {isOrderModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-2xl">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl border border-gray-100 p-5">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-semibold">
-                Yeni Sipariş — {selectedTableName || "Seçili masa"}
-              </h4>
+              <div>
+                <h4 className="text-sm font-semibold">
+                  Yeni Sipariş — {selectedTableName || "Seçili masa"}
+                </h4>
+                <p className="text-[11px] text-gray-500">
+                  Dokunmatik ekran için uygun; ürünlere dokunarak adet
+                  artırabilirsiniz.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsOrderModalOpen(false)}
@@ -886,6 +944,7 @@ export const LiveTablesPage: React.FC = () => {
               </button>
             </div>
 
+            {/* Üst: müşteri / not */}
             <div className="space-y-2 mb-3">
               <label className="block text-[11px] font-medium text-gray-700">
                 Müşteri / Not
@@ -894,36 +953,89 @@ export const LiveTablesPage: React.FC = () => {
                 type="text"
                 value={guestName}
                 onChange={(e) => setGuestName(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/70"
                 placeholder="İsteğe bağlı; örn. 4 kişi, rezervasyonsuz masa"
               />
             </div>
 
-            <div className="border border-gray-100 rounded-xl max-h-64 overflow-y-auto mb-3">
+            {/* Kategoriler */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] font-medium text-gray-700">
+                  Kategoriler
+                </span>
+                {categoriesLoading && (
+                  <span className="text-[10px] text-gray-400">
+                    Yükleniyor…
+                  </span>
+                )}
+                {categoriesError && (
+                  <span className="text-[10px] text-red-500">
+                    Kategoriler alınamadı.
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-1 overflow-x-auto pb-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveCategoryId("all")}
+                  className={`whitespace-nowrap rounded-full px-3 py-1 text-[11px] border ${
+                    activeCategoryId === "all"
+                      ? "bg-purple-600 text-white border-purple-600"
+                      : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                  }`}
+                >
+                  Tümü
+                </button>
+                {categories.map((c) => (
+                  <button
+                    key={c._id}
+                    type="button"
+                    onClick={() => setActiveCategoryId(c._id)}
+                    className={`whitespace-nowrap rounded-full px-3 py-1 text-[11px] border ${
+                      activeCategoryId === c._id
+                        ? "bg-purple-600 text-white border-purple-600"
+                        : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                    }`}
+                  >
+                    {c.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Ürün listesi */}
+            <div className="border border-gray-100 rounded-2xl max-h-72 overflow-y-auto mb-4 bg-gray-50/60">
               {menuLoading && (
-                <div className="p-3 text-xs text-gray-500">Menü yükleniyor…</div>
+                <div className="p-4 text-xs text-gray-500">
+                  Menü yükleniyor…
+                </div>
               )}
               {menuError && (
-                <div className="p-3 text-xs text-red-600">
+                <div className="p-4 text-xs text-red-600">
                   Menü listesi getirilemedi.
                 </div>
               )}
-              {!menuLoading && !menuError && menuItems.length === 0 && (
-                <div className="p-3 text-xs text-gray-500">
-                  Henüz menüde ürün yok.
-                </div>
-              )}
-              {!menuLoading && !menuError && menuItems.length > 0 && (
+              {!menuLoading &&
+                !menuError &&
+                visibleItems.length === 0 && (
+                  <div className="p-4 text-xs text-gray-500">
+                    Bu kategoride ürün yok.
+                  </div>
+                )}
+              {!menuLoading && !menuError && visibleItems.length > 0 && (
                 <div className="divide-y divide-gray-100">
-                  {menuItems.map((mi) => {
+                  {visibleItems.map((mi) => {
                     const current = draftItems[mi._id]?.qty ?? 0;
                     return (
-                      <div
+                      <button
                         key={mi._id}
-                        className="flex items-center justify-between px-3 py-2"
+                        type="button"
+                        onClick={() => handleChangeQty(mi, 1)}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-white/70 hover:bg-purple-50/80 text-left"
                       >
-                        <div className="flex-1 mr-2">
-                          <div className="text-xs font-medium text-gray-800">
+                        <div className="flex-1 mr-3">
+                          <div className="text-xs font-medium text-gray-900">
                             {mi.title}
                           </div>
                           <div className="text-[11px] text-gray-500">
@@ -935,40 +1047,54 @@ export const LiveTablesPage: React.FC = () => {
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            value={current}
-                            onChange={(e) =>
-                              handleChangeQty(
-                                mi,
-                                Number(e.target.value || 0)
-                              )
-                            }
-                            className="w-16 rounded-md border border-gray-200 px-1 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-purple-500"
-                          />
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleChangeQty(mi, -1);
+                            }}
+                            className="h-8 w-8 rounded-full border border-gray-200 flex items-center justify-center text-xs text-gray-700 bg-white hover:bg-gray-100"
+                          >
+                            −
+                          </button>
+                          <span className="min-w-[1.5rem] text-center text-xs font-semibold">
+                            {current}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleChangeQty(mi, 1);
+                            }}
+                            className="h-8 w-8 rounded-full bg-purple-600 text-white text-xs flex items-center justify-center hover:bg-purple-700"
+                          >
+                            +
+                          </button>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
               )}
             </div>
 
+            {/* Alt bar: özet + aksiyonlar */}
             <div className="flex items-center justify-between">
               <div className="text-[11px] text-gray-600">
-                Seçili ürün sayısı:{" "}
+                Seçili ürün:{" "}
+                <span className="font-semibold">{selectedItemCount}</span> adet •{" "}
+                Toplam{" "}
                 <span className="font-semibold">
-                  {Object.keys(draftItems).length}
+                  {selectedTotal.toFixed(2)}₺
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setIsOrderModalOpen(false)}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                  className="rounded-full border border-gray-200 px-4 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
                 >
                   Vazgeç
                 </button>
@@ -976,9 +1102,11 @@ export const LiveTablesPage: React.FC = () => {
                   type="button"
                   disabled={createWalkInMut.isPending}
                   onClick={() => createWalkInMut.mutate()}
-                  className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:bg-purple-300"
+                  className="rounded-full bg-purple-600 px-5 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:bg-purple-300"
                 >
-                  {createWalkInMut.isPending ? "Kaydediliyor…" : "Siparişi Kaydet"}
+                  {createWalkInMut.isPending
+                    ? "Kaydediliyor…"
+                    : "Siparişi Kaydet"}
                 </button>
               </div>
             </div>
