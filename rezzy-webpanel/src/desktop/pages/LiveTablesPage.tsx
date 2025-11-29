@@ -391,18 +391,38 @@ export const LiveTablesPage: React.FC = () => {
     ? (menuItemsData as MenuItem[])
     : [];
 
-  // İlk açılışta aktif kategori
+  // Sadece ürünü olan kategoriler (ve aktif olanlar)
+  const categoriesWithItems: MenuCategory[] = React.useMemo(() => {
+    if (!categories.length || !menuItems.length) return [];
+
+    const idsWithItems = new Set(
+      menuItems
+        .filter((mi) => mi.categoryId)
+        .map((mi) => String(mi.categoryId))
+    );
+
+    return categories
+      .filter(
+        (c) =>
+          idsWithItems.has(String(c._id)) &&
+          c.isActive !== false
+      )
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }, [categories, menuItems]);
+
+  // İlk açılışta aktif kategori (sadece ürünü olan kategorilerden)
   React.useEffect(() => {
     if (!isOrderModalOpen) return;
     if (activeCategoryId !== "all") return;
-    if (categories.length === 0) return;
+    if (categoriesWithItems.length === 0) return;
 
     const firstActive =
-      categories.find((c) => c.isActive !== false) ?? categories[0];
+      categoriesWithItems.find((c) => c.isActive !== false) ??
+      categoriesWithItems[0];
     if (firstActive?._id) {
       setActiveCategoryId(firstActive._id);
     }
-  }, [isOrderModalOpen, categories, activeCategoryId]);
+  }, [isOrderModalOpen, categoriesWithItems, activeCategoryId]);
 
   React.useEffect(() => {
     // Modal kapandığında taslağı temizle
@@ -921,188 +941,202 @@ export const LiveTablesPage: React.FC = () => {
         )}
       </div>
 
-      {/* ✅ WALK-IN MODAL (kategori → ürün, dokunmatik uyumlu) */}
+      {/* ✅ WALK-IN MODAL (Rezzy POS tarzı, kategori → ürün) */}
       {isOrderModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl border border-gray-100 p-5">
-            <div className="flex items-center justify-between mb-3">
+        <div className="rezzy-modal-backdrop">
+          <div className="rezzy-modal-order">
+            {/* Başlık */}
+            <div className="rezzy-modal-order__header">
               <div>
-                <h4 className="text-sm font-semibold">
+                <div className="rezzy-modal-order__title">
                   Yeni Sipariş — {selectedTableName || "Seçili masa"}
-                </h4>
-                <p className="text-[11px] text-gray-500">
-                  Dokunmatik ekran için uygun; ürünlere dokunarak adet
-                  artırabilirsiniz.
-                </p>
+                </div>
+                <div className="rezzy-modal-order__subtitle">
+                  Dokunmatik ekran için uygun; ürünlere dokunarak adet artırabilirsiniz.
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsOrderModalOpen(false)}
-                className="text-xs text-gray-400 hover:text-gray-700"
+                className="rezzy-modal-order__close"
               >
                 Kapat
               </button>
             </div>
 
-            {/* Üst: müşteri / not */}
-            <div className="space-y-2 mb-3">
-              <label className="block text-[11px] font-medium text-gray-700">
-                Müşteri / Not
-              </label>
+            {/* Müşteri / Not */}
+            <div style={{ marginBottom: 8 }}>
+              <div className="rezzy-modal-order__field-label">Müşteri / Not</div>
               <input
                 type="text"
                 value={guestName}
                 onChange={(e) => setGuestName(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/70"
+                className="rezzy-modal-order__input"
                 placeholder="İsteğe bağlı; örn. 4 kişi, rezervasyonsuz masa"
               />
             </div>
 
             {/* Kategoriler */}
-            <div className="mb-3">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] font-medium text-gray-700">
-                  Kategoriler
-                </span>
+            <div>
+              <div className="rezzy-modal-order__field-label">Kategoriler</div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 4,
+                }}
+              >
                 {categoriesLoading && (
-                  <span className="text-[10px] text-gray-400">
-                    Yükleniyor…
+                  <span
+                    className="rezzy-modal-order__summary"
+                    style={{ fontSize: 10 }}
+                  >
+                    Kategoriler yükleniyor…
                   </span>
                 )}
                 {categoriesError && (
-                  <span className="text-[10px] text-red-500">
+                  <span
+                    className="rezzy-modal-order__summary"
+                    style={{ fontSize: 10, color: "var(--rezzy-danger)" }}
+                  >
                     Kategoriler alınamadı.
                   </span>
                 )}
               </div>
-              <div className="flex gap-1 overflow-x-auto pb-1">
+
+              <div className="rezzy-modal-order__categories">
                 <button
                   type="button"
                   onClick={() => setActiveCategoryId("all")}
-                  className={`whitespace-nowrap rounded-full px-3 py-1 text-[11px] border ${
-                    activeCategoryId === "all"
-                      ? "bg-purple-600 text-white border-purple-600"
-                      : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
-                  }`}
+                  className={
+                    "rezzy-category-chip" +
+                    (activeCategoryId === "all"
+                      ? " rezzy-category-chip--active"
+                      : "")
+                  }
                 >
                   Tümü
                 </button>
-                {categories.map((c) => (
+
+                {categoriesWithItems.map((cat) => (
                   <button
-                    key={c._id}
+                    key={cat._id}
                     type="button"
-                    onClick={() => setActiveCategoryId(c._id)}
-                    className={`whitespace-nowrap rounded-full px-3 py-1 text-[11px] border ${
-                      activeCategoryId === c._id
-                        ? "bg-purple-600 text-white border-purple-600"
-                        : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
-                    }`}
+                    onClick={() => setActiveCategoryId(cat._id)}
+                    className={
+                      "rezzy-category-chip" +
+                      (activeCategoryId === cat._id
+                        ? " rezzy-category-chip--active"
+                        : "")
+                    }
                   >
-                    {c.title}
+                    {cat.title}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Ürün listesi */}
-            <div className="border border-gray-100 rounded-2xl max-h-72 overflow-y-auto mb-4 bg-gray-50/60">
+            {/* Menü listesi */}
+            <div className="rezzy-modal-order__menu">
               {menuLoading && (
-                <div className="p-4 text-xs text-gray-500">
+                <div className="rezzy-modal-order__menu-empty">
                   Menü yükleniyor…
                 </div>
               )}
-              {menuError && (
-                <div className="p-4 text-xs text-red-600">
+
+              {menuError && !menuLoading && (
+                <div
+                  className="rezzy-modal-order__menu-empty"
+                  style={{ color: "var(--rezzy-danger)" }}
+                >
                   Menü listesi getirilemedi.
                 </div>
               )}
-              {!menuLoading &&
-                !menuError &&
-                visibleItems.length === 0 && (
-                  <div className="p-4 text-xs text-gray-500">
-                    Bu kategoride ürün yok.
-                  </div>
-                )}
-              {!menuLoading && !menuError && visibleItems.length > 0 && (
-                <div className="divide-y divide-gray-100">
-                  {visibleItems.map((mi) => {
-                    const current = draftItems[mi._id]?.qty ?? 0;
-                    return (
-                      <button
-                        key={mi._id}
-                        type="button"
-                        onClick={() => handleChangeQty(mi, 1)}
-                        className="w-full flex items-center justify-between px-4 py-3 bg-white/70 hover:bg-purple-50/80 text-left"
-                      >
-                        <div className="flex-1 mr-3">
-                          <div className="text-xs font-medium text-gray-900">
-                            {mi.title}
-                          </div>
-                          <div className="text-[11px] text-gray-500">
-                            {mi.price.toFixed(2)}₺
-                            {mi.isAvailable === false && (
-                              <span className="ml-1 text-[10px] text-red-500">
-                                (Mevcut değil)
-                              </span>
-                            )}
-                          </div>
-                        </div>
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleChangeQty(mi, -1);
-                            }}
-                            className="h-8 w-8 rounded-full border border-gray-200 flex items-center justify-center text-xs text-gray-700 bg-white hover:bg-gray-100"
-                          >
-                            −
-                          </button>
-                          <span className="min-w-[1.5rem] text-center text-xs font-semibold">
-                            {current}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleChangeQty(mi, 1);
-                            }}
-                            className="h-8 w-8 rounded-full bg-purple-600 text-white text-xs flex items-center justify-center hover:bg-purple-700"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </button>
-                    );
-                  })}
+              {!menuLoading && !menuError && visibleItems.length === 0 && (
+                <div className="rezzy-modal-order__menu-empty">
+                  Bu kategori için henüz ürün yok.
                 </div>
               )}
+
+              {!menuLoading &&
+                !menuError &&
+                visibleItems.length > 0 &&
+                visibleItems.map((mi) => {
+                  const current = draftItems[mi._id]?.qty ?? 0;
+                  const isUnavailable = mi.isAvailable === false;
+
+                  const handleInc = () => handleChangeQty(mi, 1);
+                  const handleDec = () => handleChangeQty(mi, -1);
+
+                  return (
+                    <div
+                      key={mi._id}
+                      className="rezzy-modal-order__menu-row"
+                    >
+                      <div className="rezzy-modal-order__menu-info">
+                        <div className="rezzy-modal-order__menu-title">
+                          {mi.title}
+                        </div>
+                        <div className="rezzy-modal-order__menu-price">
+                          <span>{mi.price.toFixed(2)}₺</span>
+                          {isUnavailable && (
+                            <span className="rezzy-modal-order__unavailable">
+                              {" "}
+                              · Şu anda servis dışı
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rezzy-modal-order__qty">
+                        <button
+                          type="button"
+                          className="rezzy-modal-order__qty-btn"
+                          onClick={handleDec}
+                          disabled={current <= 0}
+                        >
+                          –
+                        </button>
+                        <div className="rezzy-modal-order__qty-value">
+                          {current}
+                        </div>
+                        <button
+                          type="button"
+                          className="rezzy-modal-order__qty-btn"
+                          onClick={handleInc}
+                          disabled={isUnavailable}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
 
-            {/* Alt bar: özet + aksiyonlar */}
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] text-gray-600">
-                Seçili ürün:{" "}
-                <span className="font-semibold">{selectedItemCount}</span> adet •{" "}
-                Toplam{" "}
-                <span className="font-semibold">
-                  {selectedTotal.toFixed(2)}₺
-                </span>
+            {/* Footer / Özet */}
+            <div className="rezzy-modal-order__footer">
+              <div className="rezzy-modal-order__summary">
+                Seçili ürün:&nbsp;
+                <span>{selectedItemCount} adet</span>
+                &nbsp; · Toplam:&nbsp;
+                <span>{selectedTotal.toFixed(2)}₺</span>
               </div>
-              <div className="flex items-center gap-2">
+
+              <div className="rezzy-modal-order__actions">
                 <button
                   type="button"
                   onClick={() => setIsOrderModalOpen(false)}
-                  className="rounded-full border border-gray-200 px-4 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                  className="rezzy-modal-order__btn rezzy-modal-order__btn--ghost"
                 >
                   Vazgeç
                 </button>
                 <button
                   type="button"
-                  disabled={createWalkInMut.isPending}
+                  disabled={createWalkInMut.isPending || selectedItemCount === 0}
                   onClick={() => createWalkInMut.mutate()}
-                  className="rounded-full bg-purple-600 px-5 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:bg-purple-300"
+                  className="rezzy-modal-order__btn rezzy-modal-order__btn--primary"
                 >
                   {createWalkInMut.isPending
                     ? "Kaydediliyor…"
