@@ -55,6 +55,25 @@ const deriveTableStatus = (table, session, requests = []) => {
   return status;
 };
 
+const resolveDisplayNameForRestaurantPanel = (r, user) => {
+  // 1) Rezervasyon dokümanındaki doğrudan isim alanları
+  const directName =
+    (r.displayName && String(r.displayName).trim()) ||
+    (r.guestName && String(r.guestName).trim()) ||
+    (r.customerName && String(r.customerName).trim()) ||
+    (r.contactName && String(r.contactName).trim()) ||
+    (r.name && String(r.name).trim());
+
+  if (directName) return directName;
+
+  // 2) user objesinden gelen isim / e-posta
+  if (user?.name && String(user.name).trim()) return String(user.name).trim();
+  if (user?.email && String(user.email).trim()) return String(user.email).trim();
+
+  // 3) Son çare
+  return "İsimsiz misafir";
+};
+
 /** GET /api/panel/restaurants/:rid/reservations */
 export const listReservationsForRestaurant = async (req, res, next) => {
   try {
@@ -81,6 +100,7 @@ export const listReservationsForRestaurant = async (req, res, next) => {
         .sort({ dateTimeUTC: -1 })
         .skip(skip)
         .limit(Number(limit))
+        // İstersen burada "phone" da ekleyebiliriz, şimdilik gerek yok:
         .populate({ path: "userId", select: "name email" })
         .lean(),
       Reservation.countDocuments(q),
@@ -109,17 +129,34 @@ export const listReservationsForRestaurant = async (req, res, next) => {
       return null;
     };
 
-    const items = docs.map((r) => ({
-      _id: r._id,
-      dateTimeUTC: r.dateTimeUTC,
-      partySize: r.partySize,
-      totalPrice: r.totalPrice,
-      depositAmount: r.depositAmount,
-      status: r.status,
-      receiptUrl: r.receiptUrl || null,
-      userId: r.userId?._id?.toString() ?? null,
-      user: pickUser(r) || undefined,
-    }));
+    const items = docs.map((r) => {
+      const user = pickUser(r);
+
+      // displayName ve guestName'i burada normalleştiriyoruz
+      const displayName = resolveDisplayNameForRestaurantPanel(r, user);
+      const guestName =
+        (r.guestName && String(r.guestName).trim()) ||
+        (r.customerName && String(r.customerName).trim()) ||
+        (r.contactName && String(r.contactName).trim()) ||
+        null;
+
+      return {
+        _id: r._id,
+        dateTimeUTC: r.dateTimeUTC,
+        partySize: r.partySize,
+        totalPrice: r.totalPrice,
+        depositAmount: r.depositAmount,
+        status: r.status,
+        receiptUrl: r.receiptUrl || null,
+
+        userId: r.userId?._id?.toString() ?? null,
+        user: user || undefined,
+
+        // 🔑 RezzyOrdersPage Row tipiyle uyumlu yeni alanlar:
+        displayName,
+        guestName,
+      };
+    });
 
     res.json({
       items,
@@ -131,7 +168,6 @@ export const listReservationsForRestaurant = async (req, res, next) => {
     next(e);
   }
 };
-
 /** GET /api/panel/restaurants/:rid/insights
  *  Tarih aralığına göre sayılar/toplamlar
  */
