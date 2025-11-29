@@ -203,6 +203,23 @@ export const createReservation = async (req, res, next) => {
 
     const depositAmount = computeDeposit(restaurant, totalPrice);
 
+    // 👉 Kullanıcıdan displayName üret
+    const userDoc = await User.findById(req.user.id)
+      .select("name fullName displayName email phone")
+      .lean();
+
+    const displayName =
+      [
+        userDoc?.name,
+        userDoc?.fullName,
+        userDoc?.displayName,
+        userDoc?.email,
+        userDoc?.phone,
+      ]
+        .filter(Boolean)
+        .map((x) => String(x).trim())
+        .find((x) => x.length > 0) || "-";
+
     const r = await Reservation.create({
       restaurantId,
       userId: req.user.id,
@@ -213,6 +230,10 @@ export const createReservation = async (req, res, next) => {
       depositAmount,
       status: "pending",
 
+      // 👇 Panel için isim
+      displayName,
+
+      // ✅ Stripe alanları başlangıç değeri
       paymentProvider: null,
       paymentIntentId: null,
       depositPaid: false,
@@ -972,7 +993,22 @@ export const updateArrivedCount = async (req, res, next) => {
     next(e);
   }
 };
+function resolveDisplayNameFromUser(userDoc) {
+  if (!userDoc) return "-";
 
+  const candidates = [
+    userDoc.name,
+    userDoc.fullName,
+    userDoc.displayName,
+    userDoc.email,
+    userDoc.phone,
+  ]
+    .filter(Boolean)
+    .map((x) => String(x).trim())
+    .filter((x) => x.length > 0);
+
+  return candidates[0] || "-";
+}
 export const listReservationsByRestaurant = async (req, res, next) => {
   try {
     const { rid } = req.params;
@@ -993,67 +1029,83 @@ export const listReservationsByRestaurant = async (req, res, next) => {
 
     if (debug) {
       const anyOne = await Reservation.findOne(q).lean();
-      console.log("[RES-LIST][debug] sample:", anyOne
-        ? {
-            _id: anyOne._id,
-            restaurantId: anyOne.restaurantId,
-            status: anyOne.status,
-            dateTimeUTC: anyOne.dateTimeUTC,
-          }
-        : "none");
+      console.log(
+        "[RES-LIST][debug] sample:",
+        anyOne
+          ? {
+              _id: anyOne._id,
+              restaurantId: anyOne.restaurantId,
+              status: anyOne.status,
+              dateTimeUTC: anyOne.dateTimeUTC,
+            }
+          : "none"
+      );
     }
 
     const items = await Reservation.find(q)
       .sort({ _id: -1 })
       .limit(lim + 1)
-      .populate("userId", "_id name email phone")
+      .populate("userId", "_id name fullName displayName email phone")
       .lean();
 
     const nextCursor = items.length > lim ? String(items[lim - 1]?._id) : undefined;
     const sliced = items.slice(0, lim);
 
     res.json({
-      items: sliced.map((r) => ({
-        _id: r._id,
-        restaurantId: r.restaurantId,
-        // userId her zaman string olsun
-        userId: typeof r.userId === "object" && r.userId !== null ? r.userId._id : r.userId,
-        // frontend'deki isim alanları için
-        user: typeof r.userId === "object" && r.userId !== null
-          ? {
-              _id: r.userId._id,
-              name: r.userId.name || "",
-              email: r.userId.email || "",
-              phone: r.userId.phone || "",
-            }
-          : null,
-        guestName: r.guestName || null,
-        displayName: r.displayName || null,
-        dateTimeUTC: r.dateTimeUTC,
-        partySize: r.partySize,
-        totalPrice: r.totalPrice,
-        depositAmount: r.depositAmount,
-        receiptUrl: r.receiptUrl,
-        status: r.status,
-        createdAt: r.createdAt,
-        updatedAt: r.updatedAt,
-        underattended: !!r.underattended,
+      items: sliced.map((r) => {
+        const userDoc =
+          typeof r.userId === "object" && r.userId !== null ? r.userId : null;
 
-        // ✅ Stripe alanları
-        paymentProvider: r.paymentProvider || null,
-        paymentIntentId: r.paymentIntentId || null,
-        depositPaid: !!r.depositPaid,
-        depositStatus: r.depositStatus || "pending",
-        paidCurrency: r.paidCurrency || null,
-        paidAmount: r.paidAmount || 0,
-      })),
+        const displayName =
+          r.displayName && String(r.displayName).trim().length > 0
+            ? String(r.displayName).trim()
+            : resolveDisplayNameFromUser(userDoc);
+
+        return {
+          _id: r._id,
+          restaurantId: r.restaurantId,
+
+          // userId her zaman string olsun
+          userId: userDoc ? userDoc._id : r.userId,
+
+          // frontend'deki isim alanları için
+          user: userDoc
+            ? {
+                _id: userDoc._id,
+                name: userDoc.name || "",
+                email: userDoc.email || "",
+                phone: userDoc.phone || "",
+              }
+            : null,
+
+          // 👇 guest yok, tek isim kaynağı bu
+          displayName,
+
+          dateTimeUTC: r.dateTimeUTC,
+          partySize: r.partySize,
+          totalPrice: r.totalPrice,
+          depositAmount: r.depositAmount,
+          receiptUrl: r.receiptUrl,
+          status: r.status,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt,
+          underattended: !!r.underattended,
+
+          // ✅ Stripe alanları
+          paymentProvider: r.paymentProvider || null,
+          paymentIntentId: r.paymentIntentId || null,
+          depositPaid: !!r.depositPaid,
+          depositStatus: r.depositStatus || "pending",
+          paidCurrency: r.paidCurrency || null,
+          paidAmount: r.paidAmount || 0,
+        };
+      }),
       nextCursor,
     });
   } catch (e) {
     next(e);
   }
 };
-
 // controllers/reservation.controller.js
 
 export const reservationStatsByRestaurant = async (req, res, next) => {
