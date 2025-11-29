@@ -951,9 +951,6 @@ export const LiveTablesPage: React.FC = () => {
                 <div className="text-[16px] font-semibold text-slate-900">
                   Yeni Sipariş — {selectedTableName || "Seçili masa"}
                 </div>
-                <div className="text-[12px] text-slate-500">
-                  Dokunmatik ekran için uygun; ürünlere dokunarak adet artırabilirsiniz.
-                </div>
               </div>
               <button
                 type="button"

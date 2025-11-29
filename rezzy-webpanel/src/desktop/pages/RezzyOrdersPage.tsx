@@ -1,9 +1,10 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { RestaurantDesktopLayout } from "../layouts/RestaurantDesktopLayout";
 import { EmptyState } from "../components/EmptyState";
-import { api } from "../../api/client";
+import { api, restaurantUpdateReservationStatus } from "../../api/client";
 import { authStore } from "../../store/auth";
+import { showToast } from "../../ui/Toast";
 
 // ---- Türler (RestaurantReservationsPage ile aynı model) ----
 type Row = {
@@ -20,6 +21,9 @@ type Row = {
     | "no_show"
     | string;
   receiptUrl?: string;
+  guestName?: string;
+  displayName?: string;
+  name?: string;
   user?: { name?: string; email?: string };
 };
 
@@ -59,11 +63,47 @@ export const RezzyOrdersPage: React.FC = () => {
   const user = authStore.getUser();
   const rid = user?.restaurantId || "";
 
+  const queryClient = useQueryClient();
+
+  const confirmMutation = useMutation({
+    mutationFn: (resId: string) =>
+      restaurantUpdateReservationStatus(resId, "confirmed"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["desktop-rezzy-orders", rid] });
+      showToast("Rezervasyon onaylandı.", "success");
+    },
+    onError: () => {
+      showToast("Rezervasyon onaylanamadı.", "error");
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (resId: string) =>
+      restaurantUpdateReservationStatus(resId, "cancelled"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["desktop-rezzy-orders", rid] });
+      showToast("Rezervasyon iptal edildi.", "success");
+    },
+    onError: () => {
+      showToast("Rezervasyon iptal edilemedi.", "error");
+    },
+  });
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ["desktop-rezzy-orders", rid],
     queryFn: () => fetchRezzyOrders(rid),
     enabled: !!rid,
   });
+
+  const handleApprove = (id: string) => {
+    if (!id || confirmMutation.isPending || cancelMutation.isPending) return;
+    confirmMutation.mutate(id);
+  };
+
+  const handleCancel = (id: string) => {
+    if (!id || confirmMutation.isPending || cancelMutation.isPending) return;
+    cancelMutation.mutate(id);
+  };
 
   const rows: Row[] = data?.items ?? [];
 
@@ -85,16 +125,22 @@ export const RezzyOrdersPage: React.FC = () => {
 
   const hasData = totalOrders > 0;
 
-  const renderCard = (r: Row) => {
+  const renderCard = (r: Row, bucket: "pending" | "active" | "problematic") => {
     const dt = new Date(r.dateTimeUTC);
     const when = dt.toLocaleString("tr-TR");
+
+    const guestName =
+      r.displayName ||
+      r.guestName ||
+      r.name ||
+      r.user?.name ||
+      r.user?.email ||
+      "İsimsiz misafir";
 
     return (
       <article key={r._id} className="rezzy-kitchen-ticket">
         <div className="rezzy-kitchen-ticket__header">
-          <div className="rezzy-kitchen-ticket__title">
-            {r.user?.name || "İsimsiz misafir"}
-          </div>
+          <div className="rezzy-kitchen-ticket__title">{guestName}</div>
           <div className="rezzy-kitchen-ticket__meta">{when}</div>
         </div>
 
@@ -108,7 +154,7 @@ export const RezzyOrdersPage: React.FC = () => {
             </span>
           </li>
           <li className="rezzy-kitchen-ticket__item">
-            <span className="rezzy-kitchen-ticket__name">Toplam</span>
+            <span className="rezzy-kitchen-ticket__name">Beklenen harcama</span>
             <span className="rezzy-kitchen-ticket__qty">
               {r.totalPrice != null
                 ? `${r.totalPrice.toLocaleString("tr-TR")}₺`
@@ -125,11 +171,92 @@ export const RezzyOrdersPage: React.FC = () => {
           </li>
         </ul>
 
-        {r.user?.email && (
-          <div className="rezzy-kitchen-ticket__footer">
-            <span>{r.user.email}</span>
+        <div
+          className="rezzy-kitchen-ticket__footer"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+          }}
+        >
+          <span style={{ fontSize: 11, color: "var(--rezzy-text-soft)" }}>
+            {r.user?.email || fmtStatus(r.status)}
+          </span>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {r.receiptUrl && (
+              <button
+                type="button"
+                onClick={() => window.open(r.receiptUrl!, "_blank")}
+                style={{
+                  borderRadius: 999,
+                  padding: "5px 12px",
+                  fontSize: 11,
+                  border: "1px solid var(--rezzy-border-subtle)",
+                  background: "#ffffff",
+                  cursor: "pointer",
+                  color: "var(--rezzy-text-muted)",
+                }}
+              >
+                Dekontu Gör
+              </button>
+            )}
+
+            {bucket === "pending" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleCancel(r._id)}
+                  disabled={confirmMutation.isPending || cancelMutation.isPending}
+                  style={{
+                    borderRadius: 999,
+                    padding: "5px 12px",
+                    fontSize: 11,
+                    border: "1px solid var(--rezzy-border-subtle)",
+                    background: "#ffffff",
+                    cursor:
+                      confirmMutation.isPending || cancelMutation.isPending
+                        ? "default"
+                        : "pointer",
+                    color: "var(--rezzy-danger)",
+                    opacity:
+                      confirmMutation.isPending || cancelMutation.isPending
+                        ? 0.6
+                        : 1,
+                  }}
+                >
+                  Reddet
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApprove(r._id)}
+                  disabled={confirmMutation.isPending || cancelMutation.isPending}
+                  style={{
+                    borderRadius: 999,
+                    padding: "5px 14px",
+                    fontSize: 11,
+                    border: "none",
+                    background: "var(--rezzy-success)",
+                    color: "#ffffff",
+                    cursor:
+                      confirmMutation.isPending || cancelMutation.isPending
+                        ? "default"
+                        : "pointer",
+                    boxShadow: "0 10px 20px rgba(0,0,0,0.25)",
+                    opacity:
+                      confirmMutation.isPending || cancelMutation.isPending
+                        ? 0.7
+                        : 1,
+                  }}
+                >
+                  Onayla
+                </button>
+              </>
+            )}
           </div>
-        )}
+        </div>
       </article>
     );
   };
@@ -191,12 +318,10 @@ export const RezzyOrdersPage: React.FC = () => {
           <div className="rezzy-board-column">
             <div className="rezzy-board-column__header">
               <div className="rezzy-board-column__title">Bekleyen</div>
-              <div className="rezzy-board-column__count">
-                {pending.length}
-              </div>
+              <div className="rezzy-board-column__count">{pending.length}</div>
             </div>
             <div className="rezzy-board-column__body">
-              {pending.map(renderCard)}
+              {pending.map((r) => renderCard(r, "pending"))}
             </div>
           </div>
 
@@ -206,19 +331,17 @@ export const RezzyOrdersPage: React.FC = () => {
               <div className="rezzy-board-column__count">{active.length}</div>
             </div>
             <div className="rezzy-board-column__body">
-              {active.map(renderCard)}
+              {active.map((r) => renderCard(r, "active"))}
             </div>
           </div>
 
           <div className="rezzy-board-column">
             <div className="rezzy-board-column__header">
               <div className="rezzy-board-column__title">Sorunlu</div>
-              <div className="rezzy-board-column__count">
-                {problematic.length}
-              </div>
+              <div className="rezzy-board-column__count">{problematic.length}</div>
             </div>
             <div className="rezzy-board-column__body">
-              {problematic.map(renderCard)}
+              {problematic.map((r) => renderCard(r, "problematic"))}
             </div>
           </div>
         </div>
