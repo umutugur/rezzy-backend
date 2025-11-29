@@ -943,76 +943,68 @@ export const LiveTablesPage: React.FC = () => {
 
       {/* ✅ WALK-IN MODAL (Rezzy POS tarzı, kategori → ürün) */}
       {isOrderModalOpen && (
-        <div className="rezzy-modal-backdrop">
-          <div className="rezzy-modal-order">
+        <div className="rezzy-modal-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(7,9,20,0.46)] backdrop-blur-md">
+          <div className="rezzy-modal-order w-[min(980px,100%-80px)] max-h-[90vh] rounded-[26px] bg-white/95 shadow-2xl border border-black/5 px-6 py-5 flex flex-col gap-3">
             {/* Başlık */}
-            <div className="rezzy-modal-order__header">
+            <div className="flex items-start justify-between gap-3 mb-1">
               <div>
-                <div className="rezzy-modal-order__title">
+                <div className="text-[16px] font-semibold text-slate-900">
                   Yeni Sipariş — {selectedTableName || "Seçili masa"}
                 </div>
-                <div className="rezzy-modal-order__subtitle">
+                <div className="text-[12px] text-slate-500">
                   Dokunmatik ekran için uygun; ürünlere dokunarak adet artırabilirsiniz.
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsOrderModalOpen(false)}
-                className="rezzy-modal-order__close"
+                className="px-3 py-1 text-[11px] rounded-full border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
               >
                 Kapat
               </button>
             </div>
 
             {/* Müşteri / Not */}
-            <div style={{ marginBottom: 8 }}>
-              <div className="rezzy-modal-order__field-label">Müşteri / Not</div>
+            <div className="mb-1">
+              <div className="text-[11px] font-medium text-slate-600 mb-1">
+                Müşteri / Not
+              </div>
               <input
                 type="text"
                 value={guestName}
                 onChange={(e) => setGuestName(e.target.value)}
-                className="rezzy-modal-order__input"
+                className="w-full rounded-full border border-slate-200 bg-white px-4 py-2 text-[12px] text-slate-900 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-200 transition"
                 placeholder="İsteğe bağlı; örn. 4 kişi, rezervasyonsuz masa"
               />
             </div>
 
             {/* Kategoriler */}
-            <div>
-              <div className="rezzy-modal-order__field-label">Kategoriler</div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: 4,
-                }}
-              >
+            <div className="mt-1">
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-[11px] font-medium text-slate-600">
+                  Kategoriler
+                </div>
                 {categoriesLoading && (
-                  <span
-                    className="rezzy-modal-order__summary"
-                    style={{ fontSize: 10 }}
-                  >
+                  <span className="text-[10px] text-slate-500">
                     Kategoriler yükleniyor…
                   </span>
                 )}
                 {categoriesError && (
-                  <span
-                    className="rezzy-modal-order__summary"
-                    style={{ fontSize: 10, color: "var(--rezzy-danger)" }}
-                  >
+                  <span className="text-[10px] text-red-500">
                     Kategoriler alınamadı.
                   </span>
                 )}
               </div>
 
-              <div className="rezzy-modal-order__categories">
+              <div className="rezzy-modal-order__categories flex gap-2 overflow-x-auto pb-1">
                 <button
                   type="button"
                   onClick={() => setActiveCategoryId("all")}
                   className={
-                    "rezzy-category-chip" +
+                    "min-w-[110px] h-11 px-4 rounded-full border text-[12px] font-medium flex items-center justify-center select-none " +
                     (activeCategoryId === "all"
-                      ? " rezzy-category-chip--active"
-                      : "")
+                      ? "bg-purple-600 text-white border-purple-600 shadow-lg shadow-purple-600/30"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")
                   }
                 >
                   Tümü
@@ -1024,10 +1016,10 @@ export const LiveTablesPage: React.FC = () => {
                     type="button"
                     onClick={() => setActiveCategoryId(cat._id)}
                     className={
-                      "rezzy-category-chip" +
+                      "min-w-[110px] h-11 px-4 rounded-full border text-[12px] font-medium flex items-center justify-center select-none " +
                       (activeCategoryId === cat._id
-                        ? " rezzy-category-chip--active"
-                        : "")
+                        ? "bg-purple-600 text-white border-purple-600 shadow-lg shadow-purple-600/30"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")
                     }
                   >
                     {cat.title}
@@ -1037,98 +1029,102 @@ export const LiveTablesPage: React.FC = () => {
             </div>
 
             {/* Menü listesi */}
-            <div className="rezzy-modal-order__menu">
-              {menuLoading && (
-                <div className="rezzy-modal-order__menu-empty">
-                  Menü yükleniyor…
-                </div>
-              )}
+            <div className="mt-1 flex-1 min-h-0">
+              <div className="rezzy-modal-order__menu rounded-2xl border border-slate-200 bg-white/95 max-h-[320px] overflow-y-auto">
+                {menuLoading && (
+                  <div className="px-4 py-3 text-[12px] text-slate-500">
+                    Menü yükleniyor…
+                  </div>
+                )}
 
-              {menuError && !menuLoading && (
-                <div
-                  className="rezzy-modal-order__menu-empty"
-                  style={{ color: "var(--rezzy-danger)" }}
-                >
-                  Menü listesi getirilemedi.
-                </div>
-              )}
+                {menuError && !menuLoading && (
+                  <div className="px-4 py-3 text-[12px] text-red-500">
+                    Menü listesi getirilemedi.
+                  </div>
+                )}
 
-              {!menuLoading && !menuError && visibleItems.length === 0 && (
-                <div className="rezzy-modal-order__menu-empty">
-                  Bu kategori için henüz ürün yok.
-                </div>
-              )}
+                {!menuLoading && !menuError && visibleItems.length === 0 && (
+                  <div className="px-4 py-3 text-[12px] text-slate-500">
+                    Bu kategori için henüz ürün yok.
+                  </div>
+                )}
 
-              {!menuLoading &&
-                !menuError &&
-                visibleItems.length > 0 &&
-                visibleItems.map((mi) => {
-                  const current = draftItems[mi._id]?.qty ?? 0;
-                  const isUnavailable = mi.isAvailable === false;
+                {!menuLoading &&
+                  !menuError &&
+                  visibleItems.length > 0 &&
+                  visibleItems.map((mi) => {
+                    const current = draftItems[mi._id]?.qty ?? 0;
+                    const isUnavailable = mi.isAvailable === false;
 
-                  const handleInc = () => handleChangeQty(mi, 1);
-                  const handleDec = () => handleChangeQty(mi, -1);
+                    const handleInc = () => handleChangeQty(mi, 1);
+                    const handleDec = () => handleChangeQty(mi, -1);
 
-                  return (
-                    <div
-                      key={mi._id}
-                      className="rezzy-modal-order__menu-row"
-                    >
-                      <div className="rezzy-modal-order__menu-info">
-                        <div className="rezzy-modal-order__menu-title">
-                          {mi.title}
-                        </div>
-                        <div className="rezzy-modal-order__menu-price">
-                          <span>{mi.price.toFixed(2)}₺</span>
-                          {isUnavailable && (
-                            <span className="rezzy-modal-order__unavailable">
-                              {" "}
-                              · Şu anda servis dışı
+                    return (
+                      <div
+                        key={mi._id}
+                        className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 last:border-b-0"
+                      >
+                        <div className="flex-1 mr-4">
+                          <div className="text-[13px] font-medium text-slate-900">
+                            {mi.title}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            <span className="font-semibold">
+                              {mi.price.toFixed(2)}₺
                             </span>
-                          )}
+                            {isUnavailable && (
+                              <span className="ml-1 text-[10px] text-red-500">
+                                · Şu anda servis dışı
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="rezzy-modal-order__qty">
-                        <button
-                          type="button"
-                          className="rezzy-modal-order__qty-btn"
-                          onClick={handleDec}
-                          disabled={current <= 0}
-                        >
-                          –
-                        </button>
-                        <div className="rezzy-modal-order__qty-value">
-                          {current}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="w-10 h-10 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center text-[18px] font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition"
+                            onClick={handleDec}
+                            disabled={current <= 0}
+                          >
+                            –
+                          </button>
+                          <div className="min-w-[26px] text-center text-[13px] font-semibold text-slate-900">
+                            {current}
+                          </div>
+                          <button
+                            type="button"
+                            className="w-10 h-10 rounded-full border border-purple-500 bg-purple-600 text-white flex items-center justify-center text-[18px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-purple-700 transition"
+                            onClick={handleInc}
+                            disabled={isUnavailable}
+                          >
+                            +
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          className="rezzy-modal-order__qty-btn"
-                          onClick={handleInc}
-                          disabled={isUnavailable}
-                        >
-                          +
-                        </button>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+              </div>
             </div>
 
             {/* Footer / Özet */}
-            <div className="rezzy-modal-order__footer">
-              <div className="rezzy-modal-order__summary">
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <div className="text-[11px] text-slate-500">
                 Seçili ürün:&nbsp;
-                <span>{selectedItemCount} adet</span>
+                <span className="font-semibold text-slate-900">
+                  {selectedItemCount} adet
+                </span>
                 &nbsp; · Toplam:&nbsp;
-                <span>{selectedTotal.toFixed(2)}₺</span>
+                <span className="font-semibold text-slate-900">
+                  {selectedTotal.toFixed(2)}₺
+                </span>
               </div>
 
-              <div className="rezzy-modal-order__actions">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setIsOrderModalOpen(false)}
-                  className="rezzy-modal-order__btn rezzy-modal-order__btn--ghost"
+                  className="px-4 py-2 rounded-full border border-slate-200 bg-white text-[12px] font-medium text-slate-600 hover:bg-slate-50 transition"
                 >
                   Vazgeç
                 </button>
@@ -1136,11 +1132,9 @@ export const LiveTablesPage: React.FC = () => {
                   type="button"
                   disabled={createWalkInMut.isPending || selectedItemCount === 0}
                   onClick={() => createWalkInMut.mutate()}
-                  className="rezzy-modal-order__btn rezzy-modal-order__btn--primary"
+                  className="px-5 py-2 rounded-full bg-gradient-to-r from-purple-600 to-purple-500 text-[12px] font-semibold text-white shadow-lg shadow-purple-600/30 hover:shadow-purple-600/40 hover:translate-y-[-1px] transition disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
                 >
-                  {createWalkInMut.isPending
-                    ? "Kaydediliyor…"
-                    : "Siparişi Kaydet"}
+                  {createWalkInMut.isPending ? "Kaydediliyor…" : "Siparişi Kaydet"}
                 </button>
               </div>
             </div>
