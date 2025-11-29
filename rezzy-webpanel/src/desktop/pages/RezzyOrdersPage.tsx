@@ -136,11 +136,11 @@ export const RezzyOrdersPage: React.FC = () => {
       r.user?.name ||
       r.user?.email ||
       "İsimsiz misafir";
-
+    const displayName = r.displayName;
     return (
       <article key={r._id} className="rezzy-kitchen-ticket">
         <div className="rezzy-kitchen-ticket__header">
-          <div className="rezzy-kitchen-ticket__title">{guestName}</div>
+          <div className="rezzy-kitchen-ticket__title">{displayName}</div>
           <div className="rezzy-kitchen-ticket__meta">{when}</div>
         </div>
 

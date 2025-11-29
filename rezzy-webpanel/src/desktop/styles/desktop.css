@@ -751,3 +751,313 @@
 
   --rezzy-shadow-soft: 0 10px 26px rgba(15, 18, 30, 0.14);
 }
+/* ---------- Walk-in Sipariş Modalı (Canlı Masalar) ---------- */
+
+.rezzy-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(7, 9, 20, 0.46);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rezzy-modal-order {
+  width: min(980px, 100% - 80px);
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.82), transparent 55%),
+    radial-gradient(circle at bottom right, var(--rezzy-accent-soft), transparent 65%),
+    linear-gradient(135deg, var(--rezzy-bg-elevated), var(--rezzy-bg-soft));
+  box-shadow: var(--rezzy-shadow-soft);
+  border: 1px solid var(--rezzy-border-subtle);
+  padding: 18px 22px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rezzy-modal-order__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.rezzy-modal-order__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--rezzy-text-main);
+}
+
+.rezzy-modal-order__subtitle {
+  font-size: 12px;
+  color: var(--rezzy-text-soft);
+}
+
+.rezzy-modal-order__close {
+  font-size: 11px;
+  color: var(--rezzy-text-soft);
+  border-radius: var(--rezzy-radius-pill);
+  border: 1px solid transparent;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.03);
+  cursor: pointer;
+  transition: background 0.15s ease-out, border-color 0.15s ease-out;
+}
+
+.rezzy-modal-order__close:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: var(--rezzy-border-subtle);
+}
+
+/* Input alanı */
+
+.rezzy-modal-order__field-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--rezzy-text-muted);
+  margin-bottom: 3px;
+}
+
+.rezzy-modal-order__input {
+  width: 100%;
+  border-radius: 999px;
+  border: 1px solid var(--rezzy-border-subtle);
+  background: rgba(255, 255, 255, 0.96);
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--rezzy-text-main);
+  outline: none;
+  transition: border-color 0.16s ease-out, box-shadow 0.16s ease-out,
+    background 0.16s ease-out;
+}
+
+.rezzy-modal-order__input::placeholder {
+  color: var(--rezzy-text-soft);
+}
+
+.rezzy-modal-order__input:focus {
+  border-color: var(--rezzy-primary-soft);
+  box-shadow: 0 0 0 1px var(--rezzy-primary-soft);
+  background: #ffffff;
+}
+
+/* Kategori şeridi */
+
+.rezzy-modal-order__categories {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin: 4px 0 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.rezzy-modal-order__categories::-webkit-scrollbar {
+  height: 6px;
+}
+
+.rezzy-modal-order__categories::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 999px;
+}
+
+.rezzy-category-chip {
+  flex: 0 0 auto;
+  min-width: 96px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: var(--rezzy-radius-pill);
+  border: 1px solid var(--rezzy-border-subtle);
+  background: rgba(255, 255, 255, 0.96);
+  font-size: 12px;
+  color: var(--rezzy-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.16s ease-out, border-color 0.16s ease-out,
+    color 0.16s ease-out, transform 0.1s ease-out;
+}
+
+.rezzy-category-chip:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 1);
+}
+
+.rezzy-category-chip--active {
+  background: radial-gradient(
+    circle at 0 0,
+    var(--rezzy-primary-soft),
+    transparent 60%
+  );
+  border-color: var(--rezzy-primary);
+  color: var(--rezzy-text-main);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+}
+
+/* Menü listesi */
+
+.rezzy-modal-order__menu {
+  border-radius: 18px;
+  border: 1px solid var(--rezzy-border-subtle);
+  background: rgba(255, 255, 255, 0.9);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.rezzy-modal-order__menu-empty {
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--rezzy-text-soft);
+}
+
+.rezzy-modal-order__menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.rezzy-modal-order__menu-row:last-child {
+  border-bottom: none;
+}
+
+.rezzy-modal-order__menu-info {
+  flex: 1;
+  margin-right: 12px;
+}
+
+.rezzy-modal-order__menu-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--rezzy-text-main);
+}
+
+.rezzy-modal-order__menu-price {
+  font-size: 11px;
+  color: var(--rezzy-text-soft);
+}
+
+.rezzy-modal-order__menu-price span {
+  font-weight: 500;
+}
+
+.rezzy-modal-order__unavailable {
+  font-size: 10px;
+  color: var(--rezzy-danger);
+  margin-left: 4px;
+}
+
+/* Adet buton grubu (dokunmatik için büyük) */
+
+.rezzy-modal-order__qty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rezzy-modal-order__qty-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--rezzy-border-subtle);
+  background: rgba(0, 0, 0, 0.02);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--rezzy-text-main);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease-out, border-color 0.15s ease-out,
+    transform 0.08s ease-out, box-shadow 0.1s ease-out;
+}
+
+.rezzy-modal-order__qty-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.rezzy-modal-order__qty-btn:active {
+  transform: scale(0.96);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08) inset;
+}
+
+.rezzy-modal-order__qty-value {
+  min-width: 22px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Footer */
+
+.rezzy-modal-order__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  gap: 8px;
+}
+
+.rezzy-modal-order__summary {
+  font-size: 11px;
+  color: var(--rezzy-text-soft);
+}
+
+.rezzy-modal-order__summary span {
+  font-weight: 600;
+  color: var(--rezzy-text-main);
+}
+
+.rezzy-modal-order__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rezzy-modal-order__btn {
+  border-radius: var(--rezzy-radius-pill);
+  padding: 8px 18px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.16s ease-out, border-color 0.16s ease-out,
+    transform 0.08s ease-out, box-shadow 0.12s ease-out, color 0.16s ease-out;
+}
+
+.rezzy-modal-order__btn--ghost {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--rezzy-border-subtle);
+  color: var(--rezzy-text-muted);
+}
+
+.rezzy-modal-order__btn--ghost:hover {
+  background: #ffffff;
+}
+
+.rezzy-modal-order__btn--primary {
+  background: linear-gradient(135deg, var(--rezzy-primary), var(--rezzy-primary-strong));
+  color: #fff7f3;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+}
+
+.rezzy-modal-order__btn--primary:hover {
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
+}
+
+.rezzy-modal-order__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
