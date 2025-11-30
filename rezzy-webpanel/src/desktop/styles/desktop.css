@@ -1061,3 +1061,21 @@
   box-shadow: none;
   transform: none;
 }
+.rezzy-table-card--rezzy {
+  box-shadow: 0 18px 45px rgba(88, 57, 255, 0.25);
+  border: 1px solid rgba(88, 57, 255, 0.45);
+  background: radial-gradient(circle at top left, #f5f0ff, #ffffff);
+}
+
+.rezzy-table-card--qr {
+  box-shadow: 0 14px 32px rgba(0, 181, 173, 0.25);
+  border: 1px solid rgba(0, 181, 173, 0.35);
+  background: radial-gradient(circle at top left, #e9fffb, #ffffff);
+}
+
+.rezzy-table-card__channel {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  background: rgba(15, 23, 42, 0.04);
+}

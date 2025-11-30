@@ -6,6 +6,7 @@ import Restaurant from "../models/Restaurant.js";
 import Order from "../models/Order.js";
 import OrderSession from "../models/OrderSession.js";
 import TableServiceRequest from "../models/TableServiceRequest.js";
+import Order from "../models/Order.js";
 
 /** Yardımcı: param string’ini ObjectId yap */
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
@@ -273,16 +274,53 @@ export const getTablesLive = async (req, res, next) => {
       return next({ status: 404, message: "Restoran bulunamadı" });
     }
 
-    const [sessions, requests] = await Promise.all([
-      OrderSession.find({
-        restaurantId: toObjectId(rid),
-        status: "open",
-      }).lean(),
-      TableServiceRequest.find({
-        restaurantId: toObjectId(rid),
-        status: "open",
-      }).lean(),
-    ]);
+   const [sessions, requests] = await Promise.all([
+  OrderSession.find({
+    restaurantId: toObjectId(rid),
+    status: "open",
+  }).lean(),
+  TableServiceRequest.find({
+    restaurantId: toObjectId(rid),
+    status: "open",
+  }).lean(),
+]);
+
+let sessionChannelMap = new Map(); // sessionId -> "WALK_IN" | "REZZY" | "QR"
+
+if (sessions.length > 0) {
+  const sessionIds = sessions.map((s) => s._id);
+
+  const orders = await Order.find({
+    sessionId: { $in: sessionIds },
+  })
+    .select("sessionId source")
+    .lean();
+
+  // 1) Rezervasyon bağlı session → REZZY
+  for (const s of sessions) {
+    if (s.reservationId) {
+      sessionChannelMap.set(String(s._id), "REZZY");
+    }
+  }
+
+  // 2) Sipariş kaynağına göre WALK_IN / QR
+  for (const o of orders) {
+    const sid = String(o.sessionId);
+    if (!sid) continue;
+
+    // Eğer zaten REZZY işaretlendiyse dokunma
+    if (sessionChannelMap.get(sid) === "REZZY") continue;
+
+    if (o.source === "walk_in") {
+      sessionChannelMap.set(sid, "WALK_IN");
+    } else {
+      // createOrder tarafında source set edilmemiş → default QR sayalım
+      if (!sessionChannelMap.has(sid)) {
+        sessionChannelMap.set(sid, "QR");
+      }
+    }
+  }
+}
 
     const tables = (restaurant.tables || []).map((t) => {
       const session = findSessionForTable(sessions, t);
@@ -308,6 +346,7 @@ export const getTablesLive = async (req, res, next) => {
           payAtVenueTotal: 0,
           grandTotal: 0,
         },
+        channel,
       };
     });
 

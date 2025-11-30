@@ -674,6 +674,8 @@ export interface LiveTable {
     payAtVenueTotal: number;
     grandTotal: number;
   };
+    channel?: "WALK_IN" | "REZZY" | "QR";
+
 }
 
 /**

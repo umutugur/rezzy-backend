@@ -42,15 +42,30 @@ export const TableCard: React.FC<TableCardProps> = ({
       ? " rezzy-table-card__status-dot--warning"
       : " rezzy-table-card__status-dot--danger";
 
-  const channelLabel =
-    channel === "WALK_IN" ? "Lokal" : channel === "REZZY" ? "Rezzy" : channel === "QR" ? "QR Menü" : "";
+    const channelLabel =
+    channel === "WALK_IN"
+      ? "Lokal"
+      : channel === "REZZY"
+      ? "Rezzy"
+      : channel === "QR"
+      ? "QR Menü"
+      : "";
 
   const isIdle = status === "IDLE";
+
+  const channelClass =
+    channel === "REZZY"
+      ? " rezzy-table-card--rezzy"
+      : channel === "QR"
+      ? " rezzy-table-card--qr"
+      : "";
 
   return (
     <article
       className={
-        "rezzy-table-card" + (isIdle ? " rezzy-table-card--idle" : "")
+        "rezzy-table-card" +
+        (isIdle ? " rezzy-table-card--idle" : "") +
+        channelClass
       }
       onClick={onClick}
     >
@@ -76,9 +91,11 @@ export const TableCard: React.FC<TableCardProps> = ({
         <div className="rezzy-table-card__total">
           {total != null ? `${total.toLocaleString("tr-TR")}₺` : "—"}
         </div>
-        {channel && (
-          <div className="rezzy-table-card__channel">{channelLabel}</div>
-        )}
+       {channel && (
+  <div className="rezzy-table-card__channel">
+    {channel === "REZZY" ? "⭐ Rezzy Rezervasyon" : channelLabel}
+  </div>
+)}
       </div>
     </article>
   );

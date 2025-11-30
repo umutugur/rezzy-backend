@@ -2,7 +2,7 @@
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { RestaurantDesktopLayout } from "../layouts/RestaurantDesktopLayout";
-import { TableCard, TableStatus } from "../components/TableCard";
+import { TableCard, TableStatus, TableChannel } from "../components/TableCard";
 import {
   restaurantGetLiveTables,
   restaurantGetTableDetail,
@@ -24,6 +24,7 @@ type MockTableLike = {
   status: TableStatus;
   total?: number;
   sinceMinutes?: number;
+  channel?: TableChannel;
 };
 
 type MenuCategory = {
@@ -329,6 +330,8 @@ export const LiveTablesPage: React.FC = () => {
     status: mapStatus(t.status),
     total: t.totals?.grandTotal ?? undefined,
     sinceMinutes: minutesSince(t.lastOrderAt),
+    channel: t.channel as TableChannel | undefined,
+
   }));
 
   const hasData = mapped.length > 0;
@@ -724,6 +727,7 @@ export const LiveTablesPage: React.FC = () => {
                     status={t.status}
                     total={t.total}
                     sinceMinutes={t.sinceMinutes}
+                    channel={t.channel}
                   />
                 </div>
               ))}
