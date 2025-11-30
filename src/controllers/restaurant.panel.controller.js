@@ -254,7 +254,6 @@ export const getInsightsForRestaurant = async (req, res, next) => {
     next(e);
   }
 };
-
 /**
  * GET /api/panel/restaurants/:rid/tables/live
  * - Masaları, kat/pozisyon + anlık status ile döner
@@ -273,58 +272,68 @@ export const getTablesLive = async (req, res, next) => {
       return next({ status: 404, message: "Restoran bulunamadı" });
     }
 
-   const [sessions, requests] = await Promise.all([
-  OrderSession.find({
-    restaurantId: toObjectId(rid),
-    status: "open",
-  }).lean(),
-  TableServiceRequest.find({
-    restaurantId: toObjectId(rid),
-    status: "open",
-  }).lean(),
-]);
+    const [sessions, requests] = await Promise.all([
+      OrderSession.find({
+        restaurantId: toObjectId(rid),
+        status: "open",
+      }).lean(),
+      TableServiceRequest.find({
+        restaurantId: toObjectId(rid),
+        status: "open",
+      }).lean(),
+    ]);
 
-let sessionChannelMap = new Map(); // sessionId -> "WALK_IN" | "REZZY" | "QR"
+    // 🔎 sessionId -> "WALK_IN" | "REZZY" | "QR"
+    const sessionChannelMap = new Map();
 
-if (sessions.length > 0) {
-  const sessionIds = sessions.map((s) => s._id);
+    if (sessions.length > 0) {
+      const sessionIds = sessions.map((s) => s._id);
 
-  const orders = await Order.find({
-    sessionId: { $in: sessionIds },
-  })
-    .select("sessionId source")
-    .lean();
+      const orders = await Order.find({
+        sessionId: { $in: sessionIds },
+      })
+        .select("sessionId source")
+        .lean();
 
-  // 1) Rezervasyon bağlı session → REZZY
-  for (const s of sessions) {
-    if (s.reservationId) {
-      sessionChannelMap.set(String(s._id), "REZZY");
-    }
-  }
+      // 1) Rezervasyon bağlı session → REZZY
+      for (const s of sessions) {
+        if (s.reservationId) {
+          sessionChannelMap.set(String(s._id), "REZZY");
+        }
+      }
 
-  // 2) Sipariş kaynağına göre WALK_IN / QR
-  for (const o of orders) {
-    const sid = String(o.sessionId);
-    if (!sid) continue;
+      // 2) Sipariş kaynağına göre WALK_IN / QR
+      for (const o of orders) {
+        const sid = String(o.sessionId);
+        if (!sid) continue;
 
-    // Eğer zaten REZZY işaretlendiyse dokunma
-    if (sessionChannelMap.get(sid) === "REZZY") continue;
+        // Eğer zaten REZZY işaretlendiyse dokunma
+        if (sessionChannelMap.get(sid) === "REZZY") continue;
 
-    if (o.source === "walk_in") {
-      sessionChannelMap.set(sid, "WALK_IN");
-    } else {
-      // createOrder tarafında source set edilmemiş → default QR sayalım
-      if (!sessionChannelMap.has(sid)) {
-        sessionChannelMap.set(sid, "QR");
+        if (o.source === "walk_in") {
+          sessionChannelMap.set(sid, "WALK_IN");
+        } else {
+          // createOrder tarafında source set edilmemiş → default QR sayalım
+          if (!sessionChannelMap.has(sid)) {
+            sessionChannelMap.set(sid, "QR");
+          }
+        }
       }
     }
-  }
-}
 
     const tables = (restaurant.tables || []).map((t) => {
       const session = findSessionForTable(sessions, t);
       const reqs = findRequestsForTable(requests, t);
       const status = deriveTableStatus(t, session, reqs);
+
+      // 🔐 Bu masaya ait session varsa channel’ı çek
+      let channel = null;
+      if (session) {
+        const ch = sessionChannelMap.get(String(session._id));
+        if (ch === "WALK_IN" || ch === "REZZY" || ch === "QR") {
+          channel = ch;
+        }
+      }
 
       return {
         id: t._id,
@@ -345,7 +354,8 @@ if (sessions.length > 0) {
           payAtVenueTotal: 0,
           grandTotal: 0,
         },
-        channel,
+        // 💜 live tables için kaynak bilgi
+        channel, // null | "WALK_IN" | "REZZY" | "QR"
       };
     });
 
