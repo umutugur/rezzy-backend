@@ -678,7 +678,7 @@ export const LiveTablesPage: React.FC = () => {
       ]}
     >
       {/* Sol: masa grid, Sağ: detay panel */}
-      <div className="flex gap-4 items-start">
+      <div className="flex gap-4 items-start"></div>
         {/* SOL TARAF */}
         <div className="flex-1">
           {isLoading && (
@@ -735,135 +735,270 @@ export const LiveTablesPage: React.FC = () => {
           )}
         </div>
 
-        {/* SAĞ DETAY PANELİ */}
-        {selectedTableId && (
-          <div className="w-[340px] max-w-xs flex-shrink-0 bg-white rounded-2xl shadow-soft border border-gray-100 p-3 sticky top-4">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold">
-                Masa Detayı
-                {selectedTable && (
-                  <>
-                    {" "}
-                    — {selectedTable.name} ({selectedTable.capacity || 2}{" "}
-                    kişilik)
-                  </>
-                )}
-              </h3>
+            {/* SAĞ DETAY PANELİ */}
+      {selectedTableId && (
+        <div className="w-[360px] max-w-xs flex-shrink-0 sticky top-4">
+          <div className="rounded-2xl border border-slate-200/70 bg-white/80 backdrop-blur-md shadow-[0_18px_45px_rgba(15,23,42,0.22)] p-4 space-y-3">
+            {/* ÜST BAŞLIK + KANAL + DURUM */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-1">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
+                  Masa Detayı
+                </div>
+                <div className="text-sm font-semibold text-slate-900 flex items-center gap-1 flex-wrap">
+                  {selectedTable ? (
+                    <>
+                      <span className="inline-flex items-center justify-center rounded-full bg-slate-900 text-white text-[11px] px-2 py-0.5">
+                        {selectedTable.name}
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        ({selectedTable.capacity || 2} kişilik)
+                      </span>
+                    </>
+                  ) : (
+                    "Seçili masa"
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {/* Kat */}
+                  {tableDetail && (
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                      Kat&nbsp;
+                      <span className="font-semibold">
+                        {tableDetail.table.floor ?? 1}
+                      </span>
+                    </span>
+                  )}
+
+                  {/* Kanal */}
+                  {selectedTable?.channel && (
+                    <span
+                      className={
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium " +
+                        (selectedTable.channel === "REZZY"
+                          ? "bg-gradient-to-r from-purple-600 to-indigo-500 text-white shadow-md shadow-purple-500/40"
+                          : selectedTable.channel === "QR"
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : "bg-amber-50 text-amber-700 border border-amber-200")
+                      }
+                    >
+                      {selectedTable.channel === "REZZY" && "Rezzy Rezervasyon"}
+                      {selectedTable.channel === "QR" && "QR Menü Siparişi"}
+                      {selectedTable.channel === "WALK_IN" && "Walk-in Sipariş"}
+                    </span>
+                  )}
+
+                  {/* Durum */}
+                  {tableDetail && (
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                      Durum:
+                      <span className="ml-1 font-semibold">
+                        {statusLabel(tableDetail.table.status)}
+                      </span>
+                    </span>
+                  )}
+
+                  {/* Açık adisyon */}
+                  {tableDetail && (
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                      Adisyon:
+                      <span className="ml-1 font-semibold">
+                        {tableDetail.session ? "Açık" : "Yok"}
+                      </span>
+                    </span>
+                  )}
+
+                  {/* Kaç dakikadır açık */}
+                  {selectedTable?.lastOrderAt && (
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                      Son hareket:
+                      <span className="ml-1 font-semibold">
+                        {minutesSince(selectedTable.lastOrderAt) ?? 0} dk
+                      </span>
+                    </span>
+                  )}
+                </div>
+              </div>
+
               <button
                 type="button"
                 onClick={() => setSelectedTableId(null)}
-                className="text-xs text-gray-400 hover:text-gray-700"
+                className="text-[11px] text-slate-400 hover:text-slate-700 px-2 py-1 rounded-full border border-transparent hover:border-slate-200 bg-slate-50/60"
               >
                 Kapat
               </button>
             </div>
 
+            {/* REZZY REZERVASYON ŞERİDİ (şimdilik basic, backend’e rezervasyon detayını ekleyince doldururuz) */}
+            {selectedTable?.channel === "REZZY" && tableDetail?.session && (
+              <div className="rounded-2xl border border-purple-300/70 bg-gradient-to-r from-purple-600/90 via-purple-500/90 to-indigo-500/90 text-white px-3 py-2.5 shadow-[0_12px_32px_rgba(79,70,229,0.55)]">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-purple-100/90">
+                    Rezzy Rezervasyon
+                  </div>
+                  <div className="text-[10px] bg-white/10 rounded-full px-2 py-0.5">
+                    ID:{" "}
+                    <span className="font-mono">
+                      {String(tableDetail.session._id).slice(-6)}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <div>
+                    <div className="font-semibold">
+                      Misafir:{" "}
+                      <span className="font-normal opacity-90">
+                        Bilgi eklenecek
+                      </span>
+                    </div>
+                    <div className="opacity-85">
+                      Parti:&nbsp;
+                      <span className="font-semibold">
+                        {selectedTable.capacity || 2} kişi
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right text-[10px] opacity-85">
+                    Rezervasyon ID
+                    <div className="font-mono text-[10px]">
+                      {String(tableDetail.session.reservationId || "").slice(
+                        -8
+                      ) || "—"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* LOADING / ERROR */}
             {detailLoading && (
-              <div className="text-xs text-gray-500">Detay yükleniyor…</div>
+              <div className="text-[11px] text-slate-500">
+                Detay yükleniyor…
+              </div>
             )}
             {detailError && (
-              <div className="text-xs text-red-600">
+              <div className="text-[11px] text-red-600">
                 Masa detayı getirilemedi.
               </div>
             )}
 
+            {/* ANA DETAY İÇERİĞİ */}
             {tableDetail && (
-              <div className="space-y-3 text-xs max-h-[420px] overflow-y-auto pr-1">
-                <div className="flex flex-wrap gap-2 mb-1">
-                  <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1">
-                    Durum:
-                    <span className="ml-1 font-medium">
-                      {statusLabel(tableDetail.table.status)}
-                    </span>
-                  </span>
-                  <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1">
-                    Kat: {tableDetail.table.floor ?? 1}
-                  </span>
-                  <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1">
-                    Adisyon: {tableDetail.session ? "Açık" : "Yok"}
-                  </span>
-                </div>
-
+              <div className="space-y-3 text-[11px] max-h-[420px] overflow-y-auto pr-1">
+                {/* TOPLAM ÖZETİ */}
                 {tableDetail.totals && (
-                  <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="flex items-center justify-between">
-                      <span>Kart</span>
-                      <span className="font-semibold">
-                        {tableDetail.totals.cardTotal.toFixed(2)}₺
+                  <div className="rounded-2xl bg-slate-900 text-slate-50 px-3 py-2.5 shadow-[0_12px_30px_rgba(15,23,42,0.6)]">
+                    <div className="flex items-center justify-between text-[10px] mb-1.5 opacity-80">
+                      <span>Adisyon Özeti</span>
+                      <span>
+                        Açılış:{" "}
+                        {tableDetail.session?.openedAt
+                          ? formatTime(tableDetail.session.openedAt)
+                          : "-"}
                       </span>
                     </div>
-                    <div className="mt-1 flex items-center justify-between">
-                      <span>Nakit / Mekanda</span>
-                      <span className="font-semibold">
-                        {tableDetail.totals.payAtVenueTotal.toFixed(2)}₺
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between">
-                      <span className="font-semibold">Toplam</span>
-                      <span className="font-semibold">
-                        {tableDetail.totals.grandTotal.toFixed(2)}₺
-                      </span>
+                    <div className="space-y-1.5 text-[11px]">
+                      <div className="flex items-center justify-between">
+                        <span className="opacity-85">Kart</span>
+                        <span className="font-semibold">
+                          {tableDetail.totals.cardTotal.toFixed(2)}₺
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="opacity-85">Nakit / Mekanda</span>
+                        <span className="font-semibold">
+                          {tableDetail.totals.payAtVenueTotal.toFixed(2)}₺
+                        </span>
+                      </div>
+                      <div className="border-t border-slate-700/60 pt-1.5 mt-0.5 flex items-center justify-between">
+                        <span className="font-semibold">Genel Toplam</span>
+                        <span className="font-semibold text-amber-300">
+                          {tableDetail.totals.grandTotal.toFixed(2)}₺
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* Siparişler */}
-                <div className="space-y-1">
-                  <div className="text-[11px] font-semibold text-gray-700">
-                    Siparişler
+                {/* SİPARİŞLER */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[11px] font-semibold text-slate-700">
+                      Siparişler
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      {tableDetail.orders.length} kayıt
+                    </div>
                   </div>
+
                   {tableDetail.orders.length === 0 && (
-                    <div className="text-[11px] text-gray-500">
+                    <div className="text-[11px] text-slate-500">
                       Henüz sipariş yok.
                     </div>
                   )}
-                  {tableDetail.orders.map((o: any) => (
+
+                  {tableDetail.orders.map((o: any, idx: number) => (
                     <div
                       key={o._id}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-2"
+                      className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 shadow-sm"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">
-                          {formatTime(o.createdAt)}
-                        </span>
-                        <span className="font-semibold">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[10px] font-semibold">
+                            {idx + 1}
+                          </span>
+                          <span className="text-[11px] font-medium text-slate-900">
+                            {formatTime(o.createdAt)}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-semibold text-slate-900">
                           {o.total.toFixed(2)}₺
                         </span>
                       </div>
-                      <div className="mt-1 text-[11px] text-gray-600">
+                      <div className="mt-1 text-[10px] text-slate-600 leading-snug">
                         {o.items
                           .map(
                             (it: any) =>
                               `${it.qty}× ${it.title} (${it.price}₺)`
                           )
-                          .join(", ")}
+                          .join(" · ")}
                       </div>
                     </div>
                   ))}
                 </div>
 
-                {/* Servis istekleri */}
-                <div className="space-y-1">
-                  <div className="text-[11px] font-semibold text-gray-700">
-                    Garson / Hesap İstekleri
+                {/* SERVİS İSTEKLERİ */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[11px] font-semibold text-slate-700">
+                      Garson / Hesap İstekleri
+                    </div>
+                    {tableDetail.serviceRequests.length > 0 && (
+                      <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] text-amber-700 border border-amber-200">
+                        {tableDetail.serviceRequests.length} açık istek
+                      </span>
+                    )}
                   </div>
+
                   {tableDetail.serviceRequests.length === 0 && (
-                    <div className="text-[11px] text-gray-500">
+                    <div className="text-[11px] text-slate-500">
                       Açık servis isteği yok.
                     </div>
                   )}
+
                   {tableDetail.serviceRequests.map((r: any) => (
                     <div
                       key={r._id}
-                      className="flex items-center justify-between rounded-lg bg-yellow-50 px-3 py-1.5"
+                      className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-1.5"
                     >
                       <div>
-                        <div className="font-medium">
+                        <div className="text-[11px] font-semibold text-amber-900">
                           {r.type === "waiter"
                             ? "Garson çağrısı"
                             : "Hesap istendi"}
                         </div>
-                        <div className="text-[10px] text-gray-600">
+                        <div className="text-[10px] text-amber-800/80">
                           {formatTime(r.createdAt)}
                         </div>
                       </div>
@@ -873,9 +1008,8 @@ export const LiveTablesPage: React.FC = () => {
               </div>
             )}
 
-            {/* Aksiyon butonları */}
-            <div className="flex flex-col items-stretch gap-2 mt-3">
-              {/* ✅ WALK-IN: Yeni Sipariş */}
+            {/* AKSİYON BUTONLARI */}
+            <div className="flex flex-col items-stretch gap-2 pt-1 border-t border-slate-100 mt-2">
               <button
                 type="button"
                 disabled={!selectedTableId}
@@ -883,7 +1017,7 @@ export const LiveTablesPage: React.FC = () => {
                   if (!selectedTableId) return;
                   setIsOrderModalOpen(true);
                 }}
-                className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:bg-purple-300"
+                className="rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 px-3 py-1.5 text-[11px] font-medium text-white shadow-md shadow-purple-500/40 hover:shadow-purple-500/60 hover:translate-y-[-1px] transition disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none"
               >
                 Yeni Sipariş Ekle
                 {selectedTableName ? ` — ${selectedTableName}` : ""}
@@ -897,7 +1031,7 @@ export const LiveTablesPage: React.FC = () => {
                   tableDetail.serviceRequests.length === 0
                 }
                 onClick={() => resolveServiceMut.mutate()}
-                className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                className="rounded-xl bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300"
               >
                 {resolveServiceMut.isPending
                   ? "İşleniyor…"
@@ -912,7 +1046,7 @@ export const LiveTablesPage: React.FC = () => {
                   !tableDetail.session
                 }
                 onClick={() => closeSessionMut.mutate()}
-                className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
+                className="rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
               >
                 {closeSessionMut.isPending
                   ? "Adisyon Kapatılıyor…"
@@ -921,7 +1055,7 @@ export const LiveTablesPage: React.FC = () => {
 
               <button
                 type="button"
-                className="rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-900 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="rounded-xl bg-slate-800 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-slate-900 disabled:opacity-60 disabled:cursor-not-allowed"
                 disabled={
                   !tableDetail ||
                   !tableDetail.orders ||
@@ -934,7 +1068,7 @@ export const LiveTablesPage: React.FC = () => {
 
               <button
                 type="button"
-                className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-800 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="rounded-xl bg-red-700 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-red-800 disabled:opacity-60 disabled:cursor-not-allowed"
                 disabled={!tableDetail}
                 onClick={() => tableDetail && handlePrintFullBill(tableDetail)}
               >
@@ -942,8 +1076,8 @@ export const LiveTablesPage: React.FC = () => {
               </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ✅ WALK-IN MODAL (Rezzy POS tarzı, kategori → ürün) */}
       {isOrderModalOpen && (
