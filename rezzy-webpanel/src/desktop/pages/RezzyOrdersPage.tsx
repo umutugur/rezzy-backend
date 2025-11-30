@@ -95,6 +95,7 @@ export const RezzyOrdersPage: React.FC = () => {
     enabled: !!rid,
   });
 
+  console.log("[RezzyOrdersPage:data]", data);
   const handleApprove = (id: string) => {
     if (!id || confirmMutation.isPending || cancelMutation.isPending) return;
     confirmMutation.mutate(id);
