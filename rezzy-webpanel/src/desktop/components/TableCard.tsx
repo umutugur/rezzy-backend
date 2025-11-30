@@ -14,6 +14,56 @@ export type TableCardProps = {
   onClick?: () => void;
 };
 
+function getStatusLabel(status: TableStatus): string {
+  switch (status) {
+    case "IDLE":
+      return "Boş";
+    case "OPEN":
+      return "Dolu / Sipariş Var";
+    case "PAYING":
+      return "Hesap İstiyor";
+    case "NEED_HELP":
+      return "Garson Çağırıyor";
+    default:
+      return status;
+  }
+}
+
+function getStatusDotClass(status: TableStatus): string {
+  if (status === "PAYING") return " rezzy-table-card__status-dot--warning";
+  if (status === "NEED_HELP") return " rezzy-table-card__status-dot--danger";
+  return "";
+}
+
+/** Kartın arka plan / border rengini statüye göre belirleyen class */
+function getStatusClass(status: TableStatus): string {
+  switch (status) {
+    case "IDLE":
+      return " rezzy-table-card--idle";
+    case "OPEN":
+      return " rezzy-table-card--open";
+    case "PAYING":
+      return " rezzy-table-card--paying";
+    case "NEED_HELP":
+      return " rezzy-table-card--need-help";
+    default:
+      return "";
+  }
+}
+
+function getChannelLabel(channel?: TableChannel): string {
+  if (channel === "WALK_IN") return "Lokal";
+  if (channel === "REZZY") return "Rezzy";
+  if (channel === "QR") return "QR Menü";
+  return "";
+}
+
+function getChannelClass(channel?: TableChannel): string {
+  if (channel === "REZZY") return " rezzy-table-card--rezzy";
+  if (channel === "QR") return " rezzy-table-card--qr";
+  return "";
+}
+
 export const TableCard: React.FC<TableCardProps> = ({
   name,
   location,
@@ -24,51 +74,29 @@ export const TableCard: React.FC<TableCardProps> = ({
   sinceMinutes,
   onClick,
 }) => {
-  const statusLabel =
-    status === "IDLE"
-      ? "Boş"
-      : status === "OPEN"
-      ? "Açık"
-      : status === "PAYING"
-      ? "Hesap İstiyor"
-      : "Garson Çağırıyor";
+  const statusLabel = getStatusLabel(status);
+  const statusDotClass = getStatusDotClass(status);
+  const channelLabel = getChannelLabel(channel);
+  const statusClass = getStatusClass(status);
+  const channelClass = getChannelClass(channel);
 
-  const statusDotClass =
-    status === "IDLE"
-      ? ""
-      : status === "OPEN"
-      ? ""
-      : status === "PAYING"
-      ? " rezzy-table-card__status-dot--warning"
-      : " rezzy-table-card__status-dot--danger";
+  const rootClass =
+    "rezzy-table-card" + statusClass + channelClass;
 
-    const channelLabel =
-    channel === "WALK_IN"
-      ? "Lokal"
-      : channel === "REZZY"
-      ? "Rezzy"
-      : channel === "QR"
-      ? "QR Menü"
-      : "";
+  const guestText =
+    typeof guestCount === "number" && guestCount > 0
+      ? `${guestCount} kişi`
+      : "—";
 
-  const isIdle = status === "IDLE";
-
-  const channelClass =
-    channel === "REZZY"
-      ? " rezzy-table-card--rezzy"
-      : channel === "QR"
-      ? " rezzy-table-card--qr"
-      : "";
+  const sinceText =
+    typeof sinceMinutes === "number"
+      ? sinceMinutes === 0
+        ? "Şimdi"
+        : `+${sinceMinutes} dk`
+      : "Beklemede";
 
   return (
-    <article
-      className={
-        "rezzy-table-card" +
-        (isIdle ? " rezzy-table-card--idle" : "") +
-        channelClass
-      }
-      onClick={onClick}
-    >
+    <article className={rootClass} onClick={onClick}>
       <div className="rezzy-table-card__header">
         <div className="rezzy-table-card__title">{name}</div>
         <div className="rezzy-table-card__pill">{location}</div>
@@ -82,8 +110,7 @@ export const TableCard: React.FC<TableCardProps> = ({
           <span>{statusLabel}</span>
         </div>
         <div>
-          {guestCount ? `${guestCount} kişi` : "—"} ·{" "}
-          {sinceMinutes ? `+${sinceMinutes} dk` : "Beklemede"}
+          {guestText} · {sinceText}
         </div>
       </div>
 
@@ -91,11 +118,14 @@ export const TableCard: React.FC<TableCardProps> = ({
         <div className="rezzy-table-card__total">
           {total != null ? `${total.toLocaleString("tr-TR")}₺` : "—"}
         </div>
-       {channel && (
-  <div className="rezzy-table-card__channel">
-    {channel === "REZZY" ? "⭐ Rezzy Rezervasyon" : channelLabel}
-  </div>
-)}
+
+        {channel && (
+          <div className="rezzy-table-card__channel">
+            {channel === "REZZY"
+              ? "⭐ Rezzy Rezervasyon"
+              : channelLabel}
+          </div>
+        )}
       </div>
     </article>
   );
