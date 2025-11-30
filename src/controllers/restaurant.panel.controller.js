@@ -6,7 +6,6 @@ import Restaurant from "../models/Restaurant.js";
 import Order from "../models/Order.js";
 import OrderSession from "../models/OrderSession.js";
 import TableServiceRequest from "../models/TableServiceRequest.js";
-import Order from "../models/Order.js";
 
 /** Yardımcı: param string’ini ObjectId yap */
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
