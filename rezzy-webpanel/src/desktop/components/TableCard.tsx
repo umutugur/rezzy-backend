@@ -40,8 +40,6 @@ function getStatusClass(status: TableStatus): string {
   switch (status) {
     case "IDLE":
       return " rezzy-table-card--idle";
-    case "OPEN":
-      return " rezzy-table-card--open";
     case "PAYING":
       return " rezzy-table-card--paying";
     case "NEED_HELP":
@@ -80,8 +78,18 @@ export const TableCard: React.FC<TableCardProps> = ({
   const statusClass = getStatusClass(status);
   const channelClass = getChannelClass(channel);
 
-  const rootClass =
-    "rezzy-table-card" + statusClass + channelClass;
+  // PAYING / NEED_HELP acil durum: status rengi öncelikli
+// Diğer durumlarda (IDLE / OPEN) channel rengi öncelikli
+let rootClass = "rezzy-table-card";
+
+if (status === "PAYING" || status === "NEED_HELP") {
+  rootClass += statusClass;          // turuncu / kırmızı arkaplan
+} else {
+  if (status === "IDLE") {
+    rootClass += statusClass;        // istersen hafif gri/nötr stil
+  }
+  rootClass += channelClass;         // QR / Rezzy / Lokal renkleri
+}
 
   const guestText =
     typeof guestCount === "number" && guestCount > 0
