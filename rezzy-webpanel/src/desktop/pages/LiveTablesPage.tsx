@@ -15,6 +15,7 @@ import {
 } from "../../api/client";
 import { authStore } from "../../store/auth";
 import { showToast } from "../../ui/Toast";
+import { TableDetailModal } from "../components/TableDetailModal";
 
 // =============== Tipler ===============
 type MockTableLike = {
@@ -219,6 +220,7 @@ export const LiveTablesPage: React.FC = () => {
   const [draftItems, setDraftItems] = React.useState<Record<string, DraftOrderItem>>({});
   const [activeCategoryId, setActiveCategoryId] = React.useState<string | "all">("all");
 
+  const [isDetailModalOpen, setIsDetailModalOpen] = React.useState(false);
   // Canlı masalar
   const { data, isLoading, isError } = useQuery({
     queryKey: ["restaurant-live-tables", rid],
@@ -227,7 +229,7 @@ export const LiveTablesPage: React.FC = () => {
     refetchInterval: 5000,
     refetchIntervalInBackground: true,
   });
-
+  
   const tables: LiveTable[] = data?.tables ?? [];
 
   // Değişiklik + ses
@@ -338,17 +340,16 @@ export const LiveTablesPage: React.FC = () => {
 
   // ================== MASA DETAYI ==================
   const {
-    data: tableDetail,
-    isLoading: detailLoading,
-    error: detailError,
-    refetch: refetchDetail,
-  } = useQuery({
-    queryKey: ["desktop-table-detail", rid, selectedTableId],
-    queryFn: () => restaurantGetTableDetail(rid, selectedTableId as string),
-    enabled: !!rid && !!selectedTableId,
-    refetchInterval: 5000,
-  });
-
+  data: tableDetail,
+  isLoading: detailLoading,
+  error: detailError,
+  refetch: refetchDetail,
+} = useQuery({
+  queryKey: ["desktop-table-detail", rid, selectedTableId],
+  queryFn: () => restaurantGetTableDetail(rid, selectedTableId as string),
+  enabled: !!rid && !!selectedTableId && isDetailModalOpen,
+  refetchInterval: isDetailModalOpen ? 5000 : false,
+});
   const closeSessionMut = useMutation({
     mutationFn: () => restaurantCloseTableSession(rid, selectedTableId as string),
     onSuccess: () => {
@@ -716,368 +717,63 @@ export const LiveTablesPage: React.FC = () => {
           {!isLoading && !isError && hasData && (
             <div className="rezzy-tables-grid">
               {mapped.map((t) => (
-                <div
-                  key={t.id}
-                  onClick={() => setSelectedTableId(t.id)}
-                  className="cursor-pointer"
-                >
-                  <TableCard
-                    name={t.name}
-                    location={t.location}
-                    status={t.status}
-                    total={t.total}
-                    sinceMinutes={t.sinceMinutes}
-                    channel={t.channel}
-                  />
-                </div>
-              ))}
+  <div
+    key={t.id}
+    onClick={() => {
+      setSelectedTableId(t.id);
+      setIsDetailModalOpen(true);
+    }}
+    className="cursor-pointer"
+  >
+    <TableCard
+      name={t.name}
+      location={t.location}
+      status={t.status}
+      total={t.total}
+      sinceMinutes={t.sinceMinutes}
+      channel={t.channel}
+    />
+  </div>
+))}
             </div>
           )}
         </div>
 
-            {/* SAĞ DETAY PANELİ */}
-      {selectedTableId && (
-        <div className="w-[360px] max-w-xs flex-shrink-0 sticky top-4">
-          <div className="rounded-2xl border border-slate-200/70 bg-white/80 backdrop-blur-md shadow-[0_18px_45px_rgba(15,23,42,0.22)] p-4 space-y-3">
-            {/* ÜST BAŞLIK + KANAL + DURUM */}
-            <div className="flex items-start justify-between gap-2">
-              <div className="space-y-1">
-                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                  Masa Detayı
-                </div>
-                <div className="text-sm font-semibold text-slate-900 flex items-center gap-1 flex-wrap">
-                  {selectedTable ? (
-                    <>
-                      <span className="inline-flex items-center justify-center rounded-full bg-slate-900 text-white text-[11px] px-2 py-0.5">
-                        {selectedTable.name}
-                      </span>
-                      <span className="text-[11px] text-slate-500">
-                        ({selectedTable.capacity || 2} kişilik)
-                      </span>
-                    </>
-                  ) : (
-                    "Seçili masa"
-                  )}
-                </div>
+      {/* MASA DETAY MODALI */}
+    <TableDetailModal
+      open={isDetailModalOpen && !!selectedTableId}
+      table={selectedTable}
+      tableDetail={tableDetail as any}
+      isLoading={detailLoading}
+      error={detailError}
+      onClose={() => {
+        setIsDetailModalOpen(false);
+        setSelectedTableId(null);
+      }}
+      onOpenWalkInModal={() => {
+        if (!selectedTableId) return;
+        setIsOrderModalOpen(true);
+      }}
+      onResolveService={() => {
+        if (!selectedTableId || !tableDetail) return;
+        resolveServiceMut.mutate();
+      }}
+      resolveServicePending={resolveServiceMut.isPending}
+      onCloseSession={() => {
+        if (!selectedTableId || !tableDetail?.session) return;
+        closeSessionMut.mutate();
+      }}
+      closeSessionPending={closeSessionMut.isPending}
+      onPrintLastOrder={() => {
+        if (!tableDetail) return;
+        handlePrintLastOrder(tableDetail);
+      }}
+      onPrintFullBill={() => {
+        if (!tableDetail) return;
+        handlePrintFullBill(tableDetail);
+      }}
+    />
 
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {/* Kat */}
-                  {tableDetail && (
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                      Kat&nbsp;
-                      <span className="font-semibold">
-                        {tableDetail.table.floor ?? 1}
-                      </span>
-                    </span>
-                  )}
-
-                  {/* Kanal */}
-                  {selectedTable?.channel && (
-                    <span
-                      className={
-                        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium " +
-                        (selectedTable.channel === "REZZY"
-                          ? "bg-gradient-to-r from-purple-600 to-indigo-500 text-white shadow-md shadow-purple-500/40"
-                          : selectedTable.channel === "QR"
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-amber-50 text-amber-700 border border-amber-200")
-                      }
-                    >
-                      {selectedTable.channel === "REZZY" && "Rezzy Rezervasyon"}
-                      {selectedTable.channel === "QR" && "QR Menü Siparişi"}
-                      {selectedTable.channel === "WALK_IN" && "Walk-in Sipariş"}
-                    </span>
-                  )}
-
-                  {/* Durum */}
-                  {tableDetail && (
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                      Durum:
-                      <span className="ml-1 font-semibold">
-                        {statusLabel(tableDetail.table.status)}
-                      </span>
-                    </span>
-                  )}
-
-                  {/* Açık adisyon */}
-                  {tableDetail && (
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                      Adisyon:
-                      <span className="ml-1 font-semibold">
-                        {tableDetail.session ? "Açık" : "Yok"}
-                      </span>
-                    </span>
-                  )}
-
-                  {/* Kaç dakikadır açık */}
-                  {selectedTable?.lastOrderAt && (
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                      Son hareket:
-                      <span className="ml-1 font-semibold">
-                        {minutesSince(selectedTable.lastOrderAt) ?? 0} dk
-                      </span>
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setSelectedTableId(null)}
-                className="text-[11px] text-slate-400 hover:text-slate-700 px-2 py-1 rounded-full border border-transparent hover:border-slate-200 bg-slate-50/60"
-              >
-                Kapat
-              </button>
-            </div>
-
-            {/* REZZY REZERVASYON ŞERİDİ (şimdilik basic, backend’e rezervasyon detayını ekleyince doldururuz) */}
-            {selectedTable?.channel === "REZZY" && tableDetail?.session && (
-              <div className="rounded-2xl border border-purple-300/70 bg-gradient-to-r from-purple-600/90 via-purple-500/90 to-indigo-500/90 text-white px-3 py-2.5 shadow-[0_12px_32px_rgba(79,70,229,0.55)]">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <div className="text-[11px] uppercase tracking-[0.16em] text-purple-100/90">
-                    Rezzy Rezervasyon
-                  </div>
-                  <div className="text-[10px] bg-white/10 rounded-full px-2 py-0.5">
-                    ID:{" "}
-                    <span className="font-mono">
-                      {String(tableDetail.session._id).slice(-6)}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <div>
-                    <div className="font-semibold">
-                      Misafir:{" "}
-                      <span className="font-normal opacity-90">
-                        Bilgi eklenecek
-                      </span>
-                    </div>
-                    <div className="opacity-85">
-                      Parti:&nbsp;
-                      <span className="font-semibold">
-                        {selectedTable.capacity || 2} kişi
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right text-[10px] opacity-85">
-                    Rezervasyon ID
-                    <div className="font-mono text-[10px]">
-                      {String(tableDetail.session.reservationId || "").slice(
-                        -8
-                      ) || "—"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* LOADING / ERROR */}
-            {detailLoading && (
-              <div className="text-[11px] text-slate-500">
-                Detay yükleniyor…
-              </div>
-            )}
-            {detailError && (
-              <div className="text-[11px] text-red-600">
-                Masa detayı getirilemedi.
-              </div>
-            )}
-
-            {/* ANA DETAY İÇERİĞİ */}
-            {tableDetail && (
-              <div className="space-y-3 text-[11px] max-h-[420px] overflow-y-auto pr-1">
-                {/* TOPLAM ÖZETİ */}
-                {tableDetail.totals && (
-                  <div className="rounded-2xl bg-slate-900 text-slate-50 px-3 py-2.5 shadow-[0_12px_30px_rgba(15,23,42,0.6)]">
-                    <div className="flex items-center justify-between text-[10px] mb-1.5 opacity-80">
-                      <span>Adisyon Özeti</span>
-                      <span>
-                        Açılış:{" "}
-                        {tableDetail.session?.openedAt
-                          ? formatTime(tableDetail.session.openedAt)
-                          : "-"}
-                      </span>
-                    </div>
-                    <div className="space-y-1.5 text-[11px]">
-                      <div className="flex items-center justify-between">
-                        <span className="opacity-85">Kart</span>
-                        <span className="font-semibold">
-                          {tableDetail.totals.cardTotal.toFixed(2)}₺
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="opacity-85">Nakit / Mekanda</span>
-                        <span className="font-semibold">
-                          {tableDetail.totals.payAtVenueTotal.toFixed(2)}₺
-                        </span>
-                      </div>
-                      <div className="border-t border-slate-700/60 pt-1.5 mt-0.5 flex items-center justify-between">
-                        <span className="font-semibold">Genel Toplam</span>
-                        <span className="font-semibold text-amber-300">
-                          {tableDetail.totals.grandTotal.toFixed(2)}₺
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* SİPARİŞLER */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div className="text-[11px] font-semibold text-slate-700">
-                      Siparişler
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      {tableDetail.orders.length} kayıt
-                    </div>
-                  </div>
-
-                  {tableDetail.orders.length === 0 && (
-                    <div className="text-[11px] text-slate-500">
-                      Henüz sipariş yok.
-                    </div>
-                  )}
-
-                  {tableDetail.orders.map((o: any, idx: number) => (
-                    <div
-                      key={o._id}
-                      className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 shadow-sm"
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[10px] font-semibold">
-                            {idx + 1}
-                          </span>
-                          <span className="text-[11px] font-medium text-slate-900">
-                            {formatTime(o.createdAt)}
-                          </span>
-                        </div>
-                        <span className="text-[11px] font-semibold text-slate-900">
-                          {o.total.toFixed(2)}₺
-                        </span>
-                      </div>
-                      <div className="mt-1 text-[10px] text-slate-600 leading-snug">
-                        {o.items
-                          .map(
-                            (it: any) =>
-                              `${it.qty}× ${it.title} (${it.price}₺)`
-                          )
-                          .join(" · ")}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* SERVİS İSTEKLERİ */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div className="text-[11px] font-semibold text-slate-700">
-                      Garson / Hesap İstekleri
-                    </div>
-                    {tableDetail.serviceRequests.length > 0 && (
-                      <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] text-amber-700 border border-amber-200">
-                        {tableDetail.serviceRequests.length} açık istek
-                      </span>
-                    )}
-                  </div>
-
-                  {tableDetail.serviceRequests.length === 0 && (
-                    <div className="text-[11px] text-slate-500">
-                      Açık servis isteği yok.
-                    </div>
-                  )}
-
-                  {tableDetail.serviceRequests.map((r: any) => (
-                    <div
-                      key={r._id}
-                      className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-1.5"
-                    >
-                      <div>
-                        <div className="text-[11px] font-semibold text-amber-900">
-                          {r.type === "waiter"
-                            ? "Garson çağrısı"
-                            : "Hesap istendi"}
-                        </div>
-                        <div className="text-[10px] text-amber-800/80">
-                          {formatTime(r.createdAt)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* AKSİYON BUTONLARI */}
-            <div className="flex flex-col items-stretch gap-2 pt-1 border-t border-slate-100 mt-2">
-              <button
-                type="button"
-                disabled={!selectedTableId}
-                onClick={() => {
-                  if (!selectedTableId) return;
-                  setIsOrderModalOpen(true);
-                }}
-                className="rounded-xl bg-gradient-to-r from-purple-600 to-purple-500 px-3 py-1.5 text-[11px] font-medium text-white shadow-md shadow-purple-500/40 hover:shadow-purple-500/60 hover:translate-y-[-1px] transition disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none"
-              >
-                Yeni Sipariş Ekle
-                {selectedTableName ? ` — ${selectedTableName}` : ""}
-              </button>
-
-              <button
-                type="button"
-                disabled={
-                  resolveServiceMut.isPending ||
-                  !tableDetail ||
-                  tableDetail.serviceRequests.length === 0
-                }
-                onClick={() => resolveServiceMut.mutate()}
-                className="rounded-xl bg-sky-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300"
-              >
-                {resolveServiceMut.isPending
-                  ? "İşleniyor…"
-                  : "Çağrı / Hesap Çözüldü"}
-              </button>
-
-              <button
-                type="button"
-                disabled={
-                  closeSessionMut.isPending ||
-                  !tableDetail ||
-                  !tableDetail.session
-                }
-                onClick={() => closeSessionMut.mutate()}
-                className="rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
-              >
-                {closeSessionMut.isPending
-                  ? "Adisyon Kapatılıyor…"
-                  : "Adisyonu Kapat"}
-              </button>
-
-              <button
-                type="button"
-                className="rounded-xl bg-slate-800 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-slate-900 disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={
-                  !tableDetail ||
-                  !tableDetail.orders ||
-                  tableDetail.orders.length === 0
-                }
-                onClick={() => tableDetail && handlePrintLastOrder(tableDetail)}
-              >
-                Son Siparişi Yazdır
-              </button>
-
-              <button
-                type="button"
-                className="rounded-xl bg-red-700 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-red-800 disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={!tableDetail}
-                onClick={() => tableDetail && handlePrintFullBill(tableDetail)}
-              >
-                Hesap Yazdır
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ✅ WALK-IN MODAL (Rezzy POS tarzı, kategori → ürün) */}
       {isOrderModalOpen && (
