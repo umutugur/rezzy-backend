@@ -27,10 +27,10 @@
   --rezzy-border-subtle: rgba(0, 0, 0, 0.06);
   --rezzy-border-strong: rgba(0, 0, 0, 0.14);
 
-  /* Durum renkleri */
-  --rezzy-success: #2ecc71;
-  --rezzy-warning: #f1c40f;
-  --rezzy-danger: #e74c3c;
+  /* Durum renkleri – biraz daha doğal tonlar */
+   --rezzy-success: #16a34a; /* yeşil */
+  --rezzy-warning: #f59e0b; /* amber */
+  --rezzy-danger:  #dc2626; /* kırmızı */
 
   /* Radius & Shadow */
   --rezzy-radius-lg: 18px;
@@ -466,9 +466,9 @@
 
 .rezzy-table-card__channel {
   font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.03);
+  padding: 3px 9px;
+  border-radius: var(--rezzy-radius-pill);
+  background: rgba(0, 0, 0, 0.02);
   border: 1px solid var(--rezzy-border-subtle);
   color: var(--rezzy-text-soft);
 }
@@ -1061,21 +1061,50 @@
   box-shadow: none;
   transform: none;
 }
-.rezzy-table-card--rezzy {
-  box-shadow: 0 18px 45px rgba(88, 57, 255, 0.25);
-  border: 1px solid rgba(88, 57, 255, 0.45);
-  background: radial-gradient(circle at top left, #f5f0ff, #ffffff);
-}
+/* -------- Masa Kartı Kanal Renkleri (Rezzy & QR) -------- */
 
-.rezzy-table-card--qr {
-  box-shadow: 0 14px 32px rgba(0, 181, 173, 0.25);
-  border: 1px solid rgba(0, 181, 173, 0.35);
-  background: radial-gradient(circle at top left, #e9fffb, #ffffff);
-}
-
+/* Kanal etiketi (tüm kartlar) */
 .rezzy-table-card__channel {
-  border-radius: 999px;
-  padding: 4px 10px;
   font-size: 11px;
-  background: rgba(15, 23, 42, 0.04);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--rezzy-border-subtle);
+  color: var(--rezzy-text-soft);
+}
+
+
+/* -------- Rezzy Rezervasyon Kartı -------- */
+.rezzy-table-card--rezzy {
+  background:
+    radial-gradient(circle at top left, rgba(123, 44, 44, 0.14), transparent 60%),
+    linear-gradient(145deg, #fff7f3, #ffffff);
+  border: 1px solid rgba(123, 44, 44, 0.42);
+  box-shadow:
+    0 16px 34px rgba(75, 27, 27, 0.28),
+    0 0 0 1px rgba(240, 179, 102, 0.30);
+}
+
+.rezzy-table-card--rezzy .rezzy-table-card__channel {
+  background: rgba(123, 44, 44, 0.10);
+  border-color: rgba(123, 44, 44, 0.45);
+  color: #551919;
+}
+
+
+/* -------- QR Menü Kartı -------- */
+.rezzy-table-card--qr {
+  background:
+    radial-gradient(circle at top left, rgba(20, 184, 166, 0.16), transparent 60%),
+    linear-gradient(145deg, #f4fffd, #ffffff);
+  border: 1px solid rgba(20, 184, 166, 0.38);
+  box-shadow:
+    0 14px 32px rgba(15, 118, 110, 0.22),
+    0 0 0 1px rgba(148, 163, 184, 0.28);
+}
+
+.rezzy-table-card--qr .rezzy-table-card__channel {
+  background: rgba(20, 184, 166, 0.10);
+  border-color: rgba(20, 184, 166, 0.45);
+  color: #0f5249;
 }
