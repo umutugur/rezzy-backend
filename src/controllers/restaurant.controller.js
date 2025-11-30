@@ -713,11 +713,7 @@ export const removePhoto = async (req, res, next) => {
 /*
  * Panel rezervasyon listesi
  */
-export const fetchReservationsByRestaurant = async (
-  req,
-  res,
-  next
-) => {
+export const fetchReservationsByRestaurant = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { status, limit = 30, cursor } = req.query;
@@ -744,10 +740,71 @@ export const fetchReservationsByRestaurant = async (
       };
     }
 
-    const items = await Reservation.find(q)
+    // 🔹 Eski: lean ham doküman
+    // const items = await Reservation.find(q)
+    //   .sort({ _id: -1 })
+    //   .limit(lim)
+    //   .lean();
+
+    // 🔹 Yeni: userId populate + map ile displayName / guestName / user ekleme
+    const docs = await Reservation.find(q)
       .sort({ _id: -1 })
       .limit(lim)
+      .populate("userId", "_id name fullName displayName email phone")
       .lean();
+
+    const items = docs.map((r) => {
+      // user dokümanını çek
+      const userDoc =
+        r.userId && typeof r.userId === "object" ? r.userId : null;
+
+      // Kullanıcı objesi (Row.user ile uyumlu)
+      const user = userDoc
+        ? {
+            _id: userDoc._id,
+            name:
+              userDoc.name ||
+              userDoc.fullName ||
+              userDoc.displayName ||
+              "",
+            email: userDoc.email || "",
+            phone: userDoc.phone || "",
+          }
+        : null;
+
+      // Guest / müşteri isimlerini toparla
+      const guestName =
+        (r.guestName && String(r.guestName).trim()) ||
+        (r.customerName && String(r.customerName).trim()) ||
+        (r.contactName && String(r.contactName).trim()) ||
+        (r.name && String(r.name).trim()) ||
+        null;
+
+      // displayName öncelik sırası:
+      // 1) r.displayName
+      // 2) guest/cust/contact/name
+      // 3) userDoc.displayName / fullName / name
+      // 4) userDoc.email
+      // 5) fallback
+      const displayName =
+        (r.displayName && String(r.displayName).trim()) ||
+        guestName ||
+        (userDoc?.displayName &&
+          String(userDoc.displayName).trim()) ||
+        (userDoc?.fullName && String(userDoc.fullName).trim()) ||
+        (userDoc?.name && String(userDoc.name).trim()) ||
+        (userDoc?.email && String(userDoc.email).trim()) ||
+        "İsimsiz misafir";
+
+      return {
+        ...r,
+        // userId tarafını stringe normalize et (populate sonrası object gelebilir)
+        userId: userDoc ? String(userDoc._id) : r.userId,
+        user,
+        displayName,
+        guestName,
+      };
+    });
 
     res.json({ items });
   } catch (e) {
