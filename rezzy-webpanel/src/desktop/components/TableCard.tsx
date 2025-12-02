@@ -1,6 +1,6 @@
 import React from "react";
 
-export type TableChannel = "WALK_IN" | "REZZY" | "QR";
+export type TableChannel = "WALK_IN" | "REZVIX" | "QR";
 export type TableStatus = "IDLE" | "OPEN" | "PAYING" | "NEED_HELP";
 
 export type TableCardProps = {
@@ -30,8 +30,8 @@ function getStatusLabel(status: TableStatus): string {
 }
 
 function getStatusDotClass(status: TableStatus): string {
-  if (status === "PAYING") return " rezzy-table-card__status-dot--warning";
-  if (status === "NEED_HELP") return " rezzy-table-card__status-dot--danger";
+  if (status === "PAYING") return " rezvix-table-card__status-dot--warning";
+  if (status === "NEED_HELP") return " rezvix-table-card__status-dot--danger";
   return "";
 }
 
@@ -39,11 +39,11 @@ function getStatusDotClass(status: TableStatus): string {
 function getStatusClass(status: TableStatus): string {
   switch (status) {
     case "IDLE":
-      return " rezzy-table-card--idle";
+      return " rezvix-table-card--idle";
     case "PAYING":
-      return " rezzy-table-card--paying";
+      return " rezvix-table-card--paying";
     case "NEED_HELP":
-      return " rezzy-table-card--need-help";
+      return " rezvix-table-card--need-help";
     default:
       return "";
   }
@@ -51,14 +51,14 @@ function getStatusClass(status: TableStatus): string {
 
 function getChannelLabel(channel?: TableChannel): string {
   if (channel === "WALK_IN") return "Lokal";
-  if (channel === "REZZY") return "Rezzy";
+  if (channel === "REZVIX") return "Rezvix";
   if (channel === "QR") return "QR Menü";
   return "";
 }
 
 function getChannelClass(channel?: TableChannel): string {
-  if (channel === "REZZY") return " rezzy-table-card--rezzy";
-  if (channel === "QR") return " rezzy-table-card--qr";
+  if (channel === "REZVIX") return " rezvix-table-card--rezvix";
+  if (channel === "QR") return " rezvix-table-card--qr";
   return "";
 }
 
@@ -80,7 +80,7 @@ export const TableCard: React.FC<TableCardProps> = ({
 
   // PAYING / NEED_HELP acil durum: status rengi öncelikli
 // Diğer durumlarda (IDLE / OPEN) channel rengi öncelikli
-let rootClass = "rezzy-table-card";
+let rootClass = "rezvix-table-card";
 
 if (status === "PAYING" || status === "NEED_HELP") {
   rootClass += statusClass;          // turuncu / kırmızı arkaplan
@@ -88,7 +88,7 @@ if (status === "PAYING" || status === "NEED_HELP") {
   if (status === "IDLE") {
     rootClass += statusClass;        // istersen hafif gri/nötr stil
   }
-  rootClass += channelClass;         // QR / Rezzy / Lokal renkleri
+  rootClass += channelClass;         // QR / Rezvix / Lokal renkleri
 }
 
   const guestText =
@@ -105,15 +105,15 @@ if (status === "PAYING" || status === "NEED_HELP") {
 
   return (
     <article className={rootClass} onClick={onClick}>
-      <div className="rezzy-table-card__header">
-        <div className="rezzy-table-card__title">{name}</div>
-        <div className="rezzy-table-card__pill">{location}</div>
+      <div className="rezvix-table-card__header">
+        <div className="rezvix-table-card__title">{name}</div>
+        <div className="rezvix-table-card__pill">{location}</div>
       </div>
 
-      <div className="rezzy-table-card__meta">
-        <div className="rezzy-table-card__status">
+      <div className="rezvix-table-card__meta">
+        <div className="rezvix-table-card__status">
           <span
-            className={"rezzy-table-card__status-dot" + statusDotClass}
+            className={"rezvix-table-card__status-dot" + statusDotClass}
           />
           <span>{statusLabel}</span>
         </div>
@@ -122,15 +122,15 @@ if (status === "PAYING" || status === "NEED_HELP") {
         </div>
       </div>
 
-      <div className="rezzy-table-card__footer">
-        <div className="rezzy-table-card__total">
+      <div className="rezvix-table-card__footer">
+        <div className="rezvix-table-card__total">
           {total != null ? `${total.toLocaleString("tr-TR")}₺` : "—"}
         </div>
 
         {channel && (
-          <div className="rezzy-table-card__channel">
-            {channel === "REZZY"
-              ? "⭐ Rezzy Rezervasyon"
+          <div className="rezvix-table-card__channel">
+            {channel === "REZVIX"
+              ? "⭐ Rezvix Rezervasyon"
               : channelLabel}
           </div>
         )}

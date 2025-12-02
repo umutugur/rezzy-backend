@@ -23,7 +23,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   const todaySummary = {
     covers: 86,
     total: "24.380₺",
-    rezzyRate: 38,
+    rezvixRate: 38,
   };
 
   const user = {
@@ -48,29 +48,29 @@ export const TopBar: React.FC<TopBarProps> = ({
           tone: "warning",
         },
         {
-          label: "Rezzy oranı",
-          value: `%${todaySummary.rezzyRate}`,
+          label: "Rezvix oranı",
+          value: `%${todaySummary.rezvixRate}`,
           tone: "danger",
         },
       ];
 
   const dotClass = (tone?: SummaryChipTone) => {
-    if (tone === "warning") return "rezzy-chip__dot rezzy-chip__dot--warning";
-    if (tone === "danger") return "rezzy-chip__dot rezzy-chip__dot--danger";
-    return "rezzy-chip__dot"; // success + neutral
+    if (tone === "warning") return "rezvix-chip__dot rezvix-chip__dot--warning";
+    if (tone === "danger") return "rezvix-chip__dot rezvix-chip__dot--danger";
+    return "rezvix-chip__dot"; // success + neutral
   };
 
   return (
-    <header className="rezzy-topbar">
-      <div className="rezzy-topbar__left">
-        <h1 className="rezzy-topbar__title">{title}</h1>
-        {subtitle && <p className="rezzy-topbar__subtitle">{subtitle}</p>}
+    <header className="rezvix-topbar">
+      <div className="rezvix-topbar__left">
+        <h1 className="rezvix-topbar__title">{title}</h1>
+        {subtitle && <p className="rezvix-topbar__subtitle">{subtitle}</p>}
       </div>
 
-      <div className="rezzy-topbar__right">
-        <div className="rezzy-topbar__summary">
+      <div className="rezvix-topbar__right">
+        <div className="rezvix-topbar__summary">
           {chips.map((chip, idx) => (
-            <div key={idx} className="rezzy-chip">
+            <div key={idx} className="rezvix-chip">
               <span className={dotClass(chip.tone)} />
               {/* Label + value; istersen label'i sadeleştiririz */}
               <span>
@@ -80,11 +80,11 @@ export const TopBar: React.FC<TopBarProps> = ({
           ))}
         </div>
 
-        <div className="rezzy-topbar__user">
-          <div className="rezzy-topbar__avatar">{user.initials}</div>
-          <div className="rezzy-topbar__user-info">
-            <span className="rezzy-topbar__user-name">{user.name}</span>
-            <span className="rezzy-topbar__user-role">{user.role}</span>
+        <div className="rezvix-topbar__user">
+          <div className="rezvix-topbar__avatar">{user.initials}</div>
+          <div className="rezvix-topbar__user-info">
+            <span className="rezvix-topbar__user-name">{user.name}</span>
+            <span className="rezvix-topbar__user-role">{user.role}</span>
           </div>
         </div>
       </div>

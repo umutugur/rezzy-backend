@@ -8,10 +8,10 @@ export type EmptyStateProps = {
 
 export const EmptyState: React.FC<EmptyStateProps> = ({ icon = "✨", title, text }) => {
   return (
-    <div className="rezzy-empty">
-      <div className="rezzy-empty__icon">{icon}</div>
-      <div className="rezzy-empty__title">{title}</div>
-      {text && <div className="rezzy-empty__text">{text}</div>}
+    <div className="rezvix-empty">
+      <div className="rezvix-empty__icon">{icon}</div>
+      <div className="rezvix-empty__title">{title}</div>
+      {text && <div className="rezvix-empty__text">{text}</div>}
     </div>
   );
 };

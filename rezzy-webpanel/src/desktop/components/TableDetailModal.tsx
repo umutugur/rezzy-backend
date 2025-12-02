@@ -68,14 +68,14 @@ function statusLabel(status: LiveTable["status"]): string {
 function channelLabel(ch?: string | null): string {
   if (!ch) return "Lokal Adisyon";
   if (ch === "QR") return "QR Menü";
-  if (ch === "REZZY") return "Rezzy Rezervasyon";
+  if (ch === "REZVIX") return "Rezvix Rezervasyon";
   if (ch === "WALK_IN") return "Walk-in Sipariş";
   return ch;
 }
 
 function channelClass(ch?: string | null): string {
-  if (ch === "REZZY") {
-    // Rezzy rezervasyon: daha premium mor ton
+  if (ch === "REZVIX") {
+    // Rezvix rezervasyon: daha premium mor ton
     return "bg-[#ede9ff] text-[#4c1d95] border border-[#a78bfa]";
   }
   if (ch === "QR") {
@@ -174,12 +174,12 @@ export const TableDetailModal: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Rezervasyon şeridi (REZZY için) */}
-        {table.channel === "REZZY" && tableDetail?.reservation && (
+        {/* Rezervasyon şeridi (REZVIX için) */}
+        {table.channel === "REZVIX" && tableDetail?.reservation && (
           <div className="rounded-2xl bg-gradient-to-r from-[#312e81] via-[#1f2937] to-[#111827] text-[11px] text-slate-100 px-4 py-3 flex flex-col gap-1 shadow-[0_16px_40px_rgba(15,23,42,0.65)] border border-indigo-500/40">
             <div className="flex items-center justify-between">
               <span className="font-medium text-indigo-100">
-                Rezzy rezervasyonu
+                Rezvix rezervasyonu
               </span>
               <span className="text-[10px] text-indigo-200">
                 {formatTime(tableDetail.reservation.dateTimeUTC)}

@@ -184,30 +184,30 @@ export const ReportsPage: React.FC = () => {
       subtitle="Ciro, depozito ve durum bazlı özetler."
     >
       {!rid && (
-        <div className="rezzy-empty">
-          <div className="rezzy-empty__icon">⚠️</div>
-          <div className="rezzy-empty__title">Restoran bulunamadı</div>
-          <div className="rezzy-empty__text">
+        <div className="rezvix-empty">
+          <div className="rezvix-empty__icon">⚠️</div>
+          <div className="rezvix-empty__title">Restoran bulunamadı</div>
+          <div className="rezvix-empty__text">
             Bu ekranı kullanmak için oturum açmış bir restoran hesabı gerekir.
           </div>
         </div>
       )}
 
       {rid && isLoading && (
-        <div className="rezzy-empty">
-          <div className="rezzy-empty__icon">⏳</div>
-          <div className="rezzy-empty__title">Raporlar getiriliyor…</div>
-          <div className="rezzy-empty__text">
+        <div className="rezvix-empty">
+          <div className="rezvix-empty__icon">⏳</div>
+          <div className="rezvix-empty__title">Raporlar getiriliyor…</div>
+          <div className="rezvix-empty__text">
             Seçili tarih aralığındaki rezervasyonlar analiz ediliyor.
           </div>
         </div>
       )}
 
       {rid && summary.error && !isLoading && (
-        <div className="rezzy-empty">
-          <div className="rezzy-empty__icon">⚠️</div>
-          <div className="rezzy-empty__title">Raporlar yüklenemedi</div>
-          <div className="rezzy-empty__text">
+        <div className="rezvix-empty">
+          <div className="rezvix-empty__icon">⚠️</div>
+          <div className="rezvix-empty__title">Raporlar yüklenemedi</div>
+          <div className="rezvix-empty__text">
             Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı
             kontrol edin.
           </div>
@@ -215,12 +215,12 @@ export const ReportsPage: React.FC = () => {
       )}
 
       {rid && !isLoading && !summary.error && !hasAnyData && (
-        <div className="rezzy-empty">
-          <div className="rezzy-empty__icon">📊</div>
-          <div className="rezzy-empty__title">
+        <div className="rezvix-empty">
+          <div className="rezvix-empty__icon">📊</div>
+          <div className="rezvix-empty__title">
             Seçili tarih aralığında rezervasyon yok
           </div>
-          <div className="rezzy-empty__text">
+          <div className="rezvix-empty__text">
             Üstten tarih aralığını değiştirerek farklı bir dönem
             görüntüleyebilirsiniz.
           </div>
@@ -228,17 +228,17 @@ export const ReportsPage: React.FC = () => {
       )}
 
       {rid && !isLoading && !summary.error && hasAnyData && (
-        <div className="rezzy-board-layout">
+        <div className="rezvix-board-layout">
           {/* Sol kolon: özet kartlar */}
-          <div className="rezzy-board-column">
-            <div className="rezzy-board-column__header">
-              <div className="rezzy-board-column__title">Özet</div>
-              <div className="rezzy-board-column__count">
+          <div className="rezvix-board-column">
+            <div className="rezvix-board-column__header">
+              <div className="rezvix-board-column__title">Özet</div>
+              <div className="rezvix-board-column__count">
                 {totalReservations || 0} rezervasyon
               </div>
             </div>
 
-            <div className="rezzy-board-column__body" style={{ gap: 10 }}>
+            <div className="rezvix-board-column__body" style={{ gap: 10 }}>
               {/* Tarih aralığı seçici */}
               <div
                 style={{
@@ -256,7 +256,7 @@ export const ReportsPage: React.FC = () => {
                   style={{
                     padding: "6px 10px",
                     borderRadius: 12,
-                    border: "1px solid var(--rezzy-border-subtle)",
+                    border: "1px solid var(--rezvix-border-subtle)",
                     fontSize: 12,
                   }}
                 >
@@ -275,9 +275,9 @@ export const ReportsPage: React.FC = () => {
                   gap: 8,
                 }}
               >
-                <div className="rezzy-kitchen-ticket">
-                  <div className="rezzy-kitchen-ticket__header">
-                    <span className="rezzy-kitchen-ticket__title">
+                <div className="rezvix-kitchen-ticket">
+                  <div className="rezvix-kitchen-ticket__header">
+                    <span className="rezvix-kitchen-ticket__title">
                       Toplam Rezervasyon
                     </span>
                   </div>
@@ -292,9 +292,9 @@ export const ReportsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rezzy-kitchen-ticket">
-                  <div className="rezzy-kitchen-ticket__header">
-                    <span className="rezzy-kitchen-ticket__title">
+                <div className="rezvix-kitchen-ticket">
+                  <div className="rezvix-kitchen-ticket__header">
+                    <span className="rezvix-kitchen-ticket__title">
                       Onaylı
                     </span>
                   </div>
@@ -309,9 +309,9 @@ export const ReportsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rezzy-kitchen-ticket">
-                  <div className="rezzy-kitchen-ticket__header">
-                    <span className="rezzy-kitchen-ticket__title">
+                <div className="rezvix-kitchen-ticket">
+                  <div className="rezvix-kitchen-ticket__header">
+                    <span className="rezvix-kitchen-ticket__title">
                       Gelen (Arrived)
                     </span>
                   </div>
@@ -326,9 +326,9 @@ export const ReportsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rezzy-kitchen-ticket">
-                  <div className="rezzy-kitchen-ticket__header">
-                    <span className="rezzy-kitchen-ticket__title">
+                <div className="rezvix-kitchen-ticket">
+                  <div className="rezvix-kitchen-ticket__header">
+                    <span className="rezvix-kitchen-ticket__title">
                       İptal
                     </span>
                   </div>
@@ -353,13 +353,13 @@ export const ReportsPage: React.FC = () => {
                   marginTop: 8,
                 }}
               >
-                <div className="rezzy-kitchen-ticket">
-                  <div className="rezzy-kitchen-ticket__header">
-                    <span className="rezzy-kitchen-ticket__title">
+                <div className="rezvix-kitchen-ticket">
+                  <div className="rezvix-kitchen-ticket__header">
+                    <span className="rezvix-kitchen-ticket__title">
                       Toplam Ciro (₺)
                     </span>
                   </div>
-                  <div className="rezzy-kitchen-ticket__meta">
+                  <div className="rezvix-kitchen-ticket__meta">
                     Sadece <strong>Geldi (arrived)</strong> rezervasyonların{" "}
                     <code>totalPrice</code> tutarı.
                   </div>
@@ -374,13 +374,13 @@ export const ReportsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rezzy-kitchen-ticket">
-                  <div className="rezzy-kitchen-ticket__header">
-                    <span className="rezzy-kitchen-ticket__title">
+                <div className="rezvix-kitchen-ticket">
+                  <div className="rezvix-kitchen-ticket__header">
+                    <span className="rezvix-kitchen-ticket__title">
                       Toplam Depozito (₺)
                     </span>
                   </div>
-                  <div className="rezzy-kitchen-ticket__meta">
+                  <div className="rezvix-kitchen-ticket__meta">
                     <strong>Onaylı</strong> ve <strong>Gelmedi</strong>{" "}
                     rezervasyonların <code>depositAmount</code> toplamı.
                   </div>
@@ -401,23 +401,23 @@ export const ReportsPage: React.FC = () => {
           </div>
 
           {/* Sağ kolon: seçili aralıktaki son rezervasyonlar */}
-          <div className="rezzy-board-column">
-            <div className="rezzy-board-column__header">
-              <div className="rezzy-board-column__title">
+          <div className="rezvix-board-column">
+            <div className="rezvix-board-column__header">
+              <div className="rezvix-board-column__title">
                 Son Rezervasyonlar
               </div>
-              <div className="rezzy-board-column__count">
+              <div className="rezvix-board-column__count">
                 {recent.data?.length ?? 0} kayıt
               </div>
             </div>
-            <div className="rezzy-board-column__body">
+            <div className="rezvix-board-column__body">
               {recent.isLoading && <div>Yükleniyor…</div>}
               {!recent.isLoading &&
                 (recent.data?.length ?? 0) === 0 && (
-                  <div className="rezzy-empty" style={{ minHeight: 120 }}>
-                    <div className="rezzy-empty__icon">📭</div>
-                    <div className="rezzy-empty__title">Kayıt yok</div>
-                    <div className="rezzy-empty__text">
+                  <div className="rezvix-empty" style={{ minHeight: 120 }}>
+                    <div className="rezvix-empty__icon">📭</div>
+                    <div className="rezvix-empty__title">Kayıt yok</div>
+                    <div className="rezvix-empty__text">
                       Seçili tarih aralığında gösterilecek rezervasyon
                       bulunamadı.
                     </div>
@@ -427,7 +427,7 @@ export const ReportsPage: React.FC = () => {
                 <div
                   style={{
                     borderRadius: 14,
-                    border: "1px solid var(--rezzy-border-subtle)",
+                    border: "1px solid var(--rezvix-border-subtle)",
                     background: "rgba(255,255,255,0.85)",
                     overflow: "hidden",
                   }}
@@ -443,7 +443,7 @@ export const ReportsPage: React.FC = () => {
                       <tr
                         style={{
                           textAlign: "left",
-                          color: "var(--rezzy-text-soft)",
+                          color: "var(--rezvix-text-soft)",
                         }}
                       >
                         <th style={{ padding: "6px 10px" }}>Tarih</th>

@@ -8,7 +8,7 @@ type KitchenTicketWithStatus = {
   id: string;
   status: KitchenTicketStatus;
   tableLabel: string;
-  source: "WALK_IN" | "QR" | "REZZY";
+  source: "WALK_IN" | "QR" | "REZVIX";
   minutesAgo: number;
   items: KitchenTicketItem[];
   note?: string;
@@ -19,7 +19,7 @@ const mockKitchenTickets: KitchenTicketWithStatus[] = [
     id: "k1",
     status: "NEW",
     tableLabel: "Masa 4 · Teras",
-    source: "REZZY",
+    source: "REZVIX",
     minutesAgo: 3,
     items: [
       { name: "Rakılı Meze Tabağı", quantity: 1 },
@@ -83,54 +83,54 @@ export const KitchenBoardPage: React.FC = () => {
         },
       ]}
     >
-      <div className="rezzy-board-layout">
-        <div className="rezzy-board-column">
-          <div className="rezzy-board-column__header">
-            <div className="rezzy-board-column__title">Yeni</div>
-            <div className="rezzy-board-column__count">{newOrders.length}</div>
+      <div className="rezvix-board-layout">
+        <div className="rezvix-board-column">
+          <div className="rezvix-board-column__header">
+            <div className="rezvix-board-column__title">Yeni</div>
+            <div className="rezvix-board-column__count">{newOrders.length}</div>
           </div>
-          <div className="rezzy-board-column__body">
+          <div className="rezvix-board-column__body">
             {newOrders.map((t) => (
               <KitchenTicket key={t.id} {...t} />
             ))}
           </div>
         </div>
 
-        <div className="rezzy-board-column">
-          <div className="rezzy-board-column__header">
-            <div className="rezzy-board-column__title">Hazırlanıyor</div>
-            <div className="rezzy-board-column__count">{inProgress.length}</div>
+        <div className="rezvix-board-column">
+          <div className="rezvix-board-column__header">
+            <div className="rezvix-board-column__title">Hazırlanıyor</div>
+            <div className="rezvix-board-column__count">{inProgress.length}</div>
           </div>
-          <div className="rezzy-board-column__body">
+          <div className="rezvix-board-column__body">
             {inProgress.map((t) => (
               <KitchenTicket key={t.id} {...t} />
             ))}
           </div>
         </div>
 
-        <div className="rezzy-board-column">
-          <div className="rezzy-board-column__header">
-            <div className="rezzy-board-column__title">Hazır</div>
-            <div className="rezzy-board-column__count">{ready.length}</div>
+        <div className="rezvix-board-column">
+          <div className="rezvix-board-column__header">
+            <div className="rezvix-board-column__title">Hazır</div>
+            <div className="rezvix-board-column__count">{ready.length}</div>
           </div>
-          <div className="rezzy-board-column__body">
+          <div className="rezvix-board-column__body">
             {ready.map((t) => (
               <KitchenTicket key={t.id} {...t} />
             ))}
           </div>
         </div>
 
-        <div className="rezzy-board-column">
-          <div className="rezzy-board-column__header">
-            <div className="rezzy-board-column__title">Teslim edildi</div>
-            <div className="rezzy-board-column__count">{served.length}</div>
+        <div className="rezvix-board-column">
+          <div className="rezvix-board-column__header">
+            <div className="rezvix-board-column__title">Teslim edildi</div>
+            <div className="rezvix-board-column__count">{served.length}</div>
           </div>
-          <div className="rezzy-board-column__body">
+          <div className="rezvix-board-column__body">
             {served.length === 0 ? (
-              <div className="rezzy-empty">
-                <div className="rezzy-empty__icon">🍽️</div>
-                <div className="rezzy-empty__title">Teslim edilen sipariş yok</div>
-                <div className="rezzy-empty__text">
+              <div className="rezvix-empty">
+                <div className="rezvix-empty__icon">🍽️</div>
+                <div className="rezvix-empty__title">Teslim edilen sipariş yok</div>
+                <div className="rezvix-empty__text">
                   Hazır tabaklar servis edildikçe burada listelenecek.
                 </div>
               </div>

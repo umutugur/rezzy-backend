@@ -114,9 +114,9 @@ type SettingsForm = Partial<
 
 const THEME_OPTIONS: { key: DesktopThemeKey; label: string; description: string }[] = [
   {
-    key: "rezzy-classic",
-    label: "Rezzy Classic",
-    description: "Rezzy’nin bordo kimliğiyle uyumlu, dengeli koyu tema.",
+    key: "rezvix-classic",
+    label: "Rezvix Classic",
+    description: "Rezvix’nin bordo kimliğiyle uyumlu, dengeli koyu tema.",
   },
   {
     key: "crystal-dark",
@@ -1286,10 +1286,10 @@ export const SettingsPage: React.FC = () => {
                       borderRadius: 16,
                       padding: 12,
                       border: isActive
-                        ? "1px solid var(--rezzy-primary-strong)"
-                        : "1px solid var(--rezzy-border-subtle)",
+                        ? "1px solid var(--rezvix-primary-strong)"
+                        : "1px solid var(--rezvix-border-subtle)",
                       background: isActive
-                        ? "radial-gradient(circle at top left, var(--rezzy-primary-soft), transparent 60%), rgba(0,0,0,0.55)"
+                        ? "radial-gradient(circle at top left, var(--rezvix-primary-soft), transparent 60%), rgba(0,0,0,0.55)"
                         : "rgba(0,0,0,0.45)",
                       boxShadow: isActive
                         ? "0 14px 32px rgba(0,0,0,0.7)"
@@ -1309,7 +1309,7 @@ export const SettingsPage: React.FC = () => {
                     <div
                       style={{
                         fontSize: 12,
-                        color: "var(--rezzy-text-soft)",
+                        color: "var(--rezvix-text-soft)",
                         marginBottom: 8,
                       }}
                     >
@@ -1319,8 +1319,8 @@ export const SettingsPage: React.FC = () => {
                       style={{
                         fontSize: 11,
                         color: isActive
-                          ? "var(--rezzy-accent)"
-                          : "var(--rezzy-text-muted)",
+                          ? "var(--rezvix-accent)"
+                          : "var(--rezvix-text-muted)",
                       }}
                     >
                       {isActive ? "Seçili tema" : "Temayı uygula"}

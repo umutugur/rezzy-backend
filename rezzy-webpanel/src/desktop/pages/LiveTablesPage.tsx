@@ -542,7 +542,7 @@ export const LiveTablesPage: React.FC = () => {
         last.total || 0
       ).toFixed(2)}₺</span></div>
       <div class="line"></div>
-      <div class="center tiny">Bu fiş Rezzy masa yönetim sistemi ile oluşturulmuştur.</div>
+      <div class="center tiny">Bu fiş Rezvix masa yönetim sistemi ile oluşturulmuştur.</div>
     `;
 
     printContent("Son Sipariş", html);
@@ -634,7 +634,7 @@ export const LiveTablesPage: React.FC = () => {
       }</span></div>
       ${ordersHtml}
       ${footer}
-      <div class="center tiny">Rezervasyon ve masa yönetimi Rezzy ile sağlanmaktadır.</div>
+      <div class="center tiny">Rezervasyon ve masa yönetimi Rezvix ile sağlanmaktadır.</div>
     `;
 
     printContent("Adisyon", html);
@@ -660,7 +660,7 @@ export const LiveTablesPage: React.FC = () => {
     <RestaurantDesktopLayout
       activeNav="tables"
       title="Canlı Masalar"
-      subtitle="Lokal adisyonlar, Rezzy ve QR siparişleri tek ekranda."
+      subtitle="Lokal adisyonlar, Rezvix ve QR siparişleri tek ekranda."
       summaryChips={[
         {
           label: "Dolu masa",
@@ -684,20 +684,20 @@ export const LiveTablesPage: React.FC = () => {
         {/* SOL TARAF */}
         <div className="flex-1">
           {isLoading && (
-            <div className="rezzy-empty">
-              <div className="rezzy-empty__icon">⏳</div>
-              <div className="rezzy-empty__title">Masalar getiriliyor…</div>
-              <div className="rezzy-empty__text">
+            <div className="rezvix-empty">
+              <div className="rezvix-empty__icon">⏳</div>
+              <div className="rezvix-empty__title">Masalar getiriliyor…</div>
+              <div className="rezvix-empty__text">
                 Canlı masa durumları birkaç saniye içinde yüklenecek.
               </div>
             </div>
           )}
 
           {isError && !isLoading && (
-            <div className="rezzy-empty">
-              <div className="rezzy-empty__icon">⚠️</div>
-              <div className="rezzy-empty__title">Masalar yüklenemedi</div>
-              <div className="rezzy-empty__text">
+            <div className="rezvix-empty">
+              <div className="rezvix-empty__icon">⚠️</div>
+              <div className="rezvix-empty__title">Masalar yüklenemedi</div>
+              <div className="rezvix-empty__text">
                 Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse
                 bağlantınızı kontrol edin.
               </div>
@@ -705,10 +705,10 @@ export const LiveTablesPage: React.FC = () => {
           )}
 
           {!isLoading && !isError && !hasData && (
-            <div className="rezzy-empty">
-              <div className="rezzy-empty__icon">🪑</div>
-              <div className="rezzy-empty__title">Tanımlı masa bulunamadı</div>
-              <div className="rezzy-empty__text">
+            <div className="rezvix-empty">
+              <div className="rezvix-empty__icon">🪑</div>
+              <div className="rezvix-empty__title">Tanımlı masa bulunamadı</div>
+              <div className="rezvix-empty__text">
                 Masa planı oluşturulduğunda, canlı masa durumu burada
                 görünecek.
               </div>
@@ -716,7 +716,7 @@ export const LiveTablesPage: React.FC = () => {
           )}
 
           {!isLoading && !isError && hasData && (
-            <div className="rezzy-tables-grid">
+            <div className="rezvix-tables-grid">
               {mapped.map((t) => (
   <div
     key={t.id}
@@ -776,7 +776,7 @@ export const LiveTablesPage: React.FC = () => {
     />
 
 
-      {/* ✅ WALK-IN MODAL (Rezzy POS tarzı, kategori → ürün) */}
+      {/* ✅ WALK-IN MODAL (Rezvix POS tarzı, kategori → ürün) */}
             <WalkInOrderModal
         open={isOrderModalOpen}
         tableName={selectedTableName || "Seçili masa"}

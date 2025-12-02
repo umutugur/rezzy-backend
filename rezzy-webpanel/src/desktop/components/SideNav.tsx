@@ -1,6 +1,6 @@
 import React from "react";
 
-export type DesktopNavKey = "tables" | "kitchen" | "rezzy" | "reports" | "settings";
+export type DesktopNavKey = "tables" | "kitchen" | "rezvix" | "reports" | "settings";
 
 export type SideNavProps = {
   active: DesktopNavKey;
@@ -14,96 +14,96 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate }) => {
   };
 
   return (
-    <aside className="rezzy-sidenav">
-      <div className="rezzy-sidenav__brand">
-        <div className="rezzy-sidenav__logo">Rz</div>
-        <div className="rezzy-sidenav__title">
-          <span className="rezzy-sidenav__title-main">Rezzy</span>
-          <span className="rezzy-sidenav__title-sub">Restaurant Desktop</span>
+    <aside className="rezvix-sidenav">
+      <div className="rezvix-sidenav__brand">
+        <div className="rezvix-sidenav__logo">Rz</div>
+        <div className="rezvix-sidenav__title">
+          <span className="rezvix-sidenav__title-main">Rezvix</span>
+          <span className="rezvix-sidenav__title-sub">Restaurant Desktop</span>
         </div>
       </div>
 
-      <nav className="rezzy-sidenav__nav">
+      <nav className="rezvix-sidenav__nav">
         <div>
-          <div className="rezzy-sidenav__group-label">Servis</div>
+          <div className="rezvix-sidenav__group-label">Servis</div>
           <button
             type="button"
             className={
-              "rezzy-sidenav__item" + (active === "tables" ? " rezzy-sidenav__item--active" : "")
+              "rezvix-sidenav__item" + (active === "tables" ? " rezvix-sidenav__item--active" : "")
             }
             onClick={() => handleClick("tables")}
           >
-            <div className="rezzy-sidenav__icon">🍽️</div>
-            <div className="rezzy-sidenav__label">
+            <div className="rezvix-sidenav__icon">🍽️</div>
+            <div className="rezvix-sidenav__label">
               <span>Masalar</span>
-              <span className="rezzy-sidenav__badge">Canlı</span>
+              <span className="rezvix-sidenav__badge">Canlı</span>
             </div>
           </button>
 
           <button
             type="button"
             className={
-              "rezzy-sidenav__item" + (active === "kitchen" ? " rezzy-sidenav__item--active" : "")
+              "rezvix-sidenav__item" + (active === "kitchen" ? " rezvix-sidenav__item--active" : "")
             }
             onClick={() => handleClick("kitchen")}
           >
-            <div className="rezzy-sidenav__icon">👨‍🍳</div>
-            <div className="rezzy-sidenav__label">
+            <div className="rezvix-sidenav__icon">👨‍🍳</div>
+            <div className="rezvix-sidenav__label">
               <span>Mutfak</span>
             </div>
           </button>
         </div>
 
         <div style={{ marginTop: 10 }}>
-          <div className="rezzy-sidenav__group-label">Rezzy</div>
+          <div className="rezvix-sidenav__group-label">Rezvix</div>
           <button
             type="button"
             className={
-              "rezzy-sidenav__item" + (active === "rezzy" ? " rezzy-sidenav__item--active" : "")
+              "rezvix-sidenav__item" + (active === "rezvix" ? " rezvix-sidenav__item--active" : "")
             }
-            onClick={() => handleClick("rezzy")}
+            onClick={() => handleClick("rezvix")}
           >
-            <div className="rezzy-sidenav__icon">📲</div>
-            <div className="rezzy-sidenav__label">
-              <span>Rezzy &amp; QR</span>
+            <div className="rezvix-sidenav__icon">📲</div>
+            <div className="rezvix-sidenav__label">
+              <span>Rezvix &amp; QR</span>
             </div>
           </button>
 
           <button
             type="button"
             className={
-              "rezzy-sidenav__item" + (active === "reports" ? " rezzy-sidenav__item--active" : "")
+              "rezvix-sidenav__item" + (active === "reports" ? " rezvix-sidenav__item--active" : "")
             }
             onClick={() => handleClick("reports")}
           >
-            <div className="rezzy-sidenav__icon">📊</div>
-            <div className="rezzy-sidenav__label">
+            <div className="rezvix-sidenav__icon">📊</div>
+            <div className="rezvix-sidenav__label">
               <span>Raporlar</span>
             </div>
           </button>
         </div>
 
         <div style={{ marginTop: 10 }}>
-          <div className="rezzy-sidenav__group-label">Sistem</div>
+          <div className="rezvix-sidenav__group-label">Sistem</div>
           <button
             type="button"
             className={
-              "rezzy-sidenav__item" + (active === "settings" ? " rezzy-sidenav__item--active" : "")
+              "rezvix-sidenav__item" + (active === "settings" ? " rezvix-sidenav__item--active" : "")
             }
             onClick={() => handleClick("settings")}
           >
-            <div className="rezzy-sidenav__icon">⚙️</div>
-            <div className="rezzy-sidenav__label">
+            <div className="rezvix-sidenav__icon">⚙️</div>
+            <div className="rezvix-sidenav__label">
               <span>Ayarlar</span>
             </div>
           </button>
         </div>
       </nav>
 
-      <div className="rezzy-sidenav__footer">
-        <div className="rezzy-sidenav__footer-title">Servis Modu</div>
-        <div className="rezzy-sidenav__footer-sub">
-          Masa, mutfak ve Rezzy siparişlerini tek ekrandan yönetin.
+      <div className="rezvix-sidenav__footer">
+        <div className="rezvix-sidenav__footer-title">Servis Modu</div>
+        <div className="rezvix-sidenav__footer-sub">
+          Masa, mutfak ve Rezvix siparişlerini tek ekrandan yönetin.
         </div>
       </div>
     </aside>

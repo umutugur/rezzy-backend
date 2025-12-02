@@ -37,8 +37,8 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
       case "kitchen":
         navigate("/restaurant-desktop/kitchen");
         break;
-      case "rezzy":
-        navigate("/restaurant-desktop/rezzy");
+      case "rezvix":
+        navigate("/restaurant-desktop/rezvix");
         break;
       case "reports":
         navigate("/restaurant-desktop/reports");
@@ -57,21 +57,21 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
       const next = anyEvent.detail?.theme;
       if (next) setTheme(next);
     };
-    window.addEventListener("rezzy-desktop-theme-changed", handler);
+    window.addEventListener("rezvix-desktop-theme-changed", handler);
     return () =>
-      window.removeEventListener("rezzy-desktop-theme-changed", handler);
+      window.removeEventListener("rezvix-desktop-theme-changed", handler);
   }, []);
 
   return (
-    <div className={`rezzy-desktop-shell rezzy-theme-${theme}`}>
+    <div className={`rezvix-desktop-shell rezvix-theme-${theme}`}>
       <SideNav active={activeNav} onNavigate={handleNavigate} />
-      <div className="rezzy-desktop-main">
+      <div className="rezvix-desktop-main">
         <TopBar
           title={title}
           subtitle={subtitle}
           summaryChips={summaryChips}
         />
-        <section className="rezzy-desktop-content">{children}</section>
+        <section className="rezvix-desktop-content">{children}</section>
       </div>
     </div>
   );

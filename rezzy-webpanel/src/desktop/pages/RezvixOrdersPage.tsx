@@ -46,7 +46,7 @@ function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-async function fetchRezzyOrders(rid: string): Promise<Resp> {
+async function fetchRezvixOrders(rid: string): Promise<Resp> {
   const today = new Date();
   const params = {
     from: ymd(today),
@@ -59,7 +59,7 @@ async function fetchRezzyOrders(rid: string): Promise<Resp> {
   return data as Resp;
 }
 
-export const RezzyOrdersPage: React.FC = () => {
+export const RezvixOrdersPage: React.FC = () => {
   const user = authStore.getUser();
   const rid = user?.restaurantId || "";
 
@@ -69,7 +69,7 @@ export const RezzyOrdersPage: React.FC = () => {
     mutationFn: (resId: string) =>
       restaurantUpdateReservationStatus(resId, "confirmed"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["desktop-rezzy-orders", rid] });
+      queryClient.invalidateQueries({ queryKey: ["desktop-rezvix-orders", rid] });
       showToast("Rezervasyon onaylandı.", "success");
     },
     onError: () => {
@@ -81,7 +81,7 @@ export const RezzyOrdersPage: React.FC = () => {
     mutationFn: (resId: string) =>
       restaurantUpdateReservationStatus(resId, "cancelled"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["desktop-rezzy-orders", rid] });
+      queryClient.invalidateQueries({ queryKey: ["desktop-rezvix-orders", rid] });
       showToast("Rezervasyon iptal edildi.", "success");
     },
     onError: () => {
@@ -90,12 +90,12 @@ export const RezzyOrdersPage: React.FC = () => {
   });
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["desktop-rezzy-orders", rid],
-    queryFn: () => fetchRezzyOrders(rid),
+    queryKey: ["desktop-rezvix-orders", rid],
+    queryFn: () => fetchRezvixOrders(rid),
     enabled: !!rid,
   });
 
-  console.log("[RezzyOrdersPage:data]", data);
+  console.log("[RezvixOrdersPage:data]", data);
   const handleApprove = (id: string) => {
     if (!id || confirmMutation.isPending || cancelMutation.isPending) return;
     confirmMutation.mutate(id);
@@ -138,32 +138,32 @@ export const RezzyOrdersPage: React.FC = () => {
       r.user?.email ||
       "İsimsiz misafir";
     return (
-      <article key={r._id} className="rezzy-kitchen-ticket">
-        <div className="rezzy-kitchen-ticket__header">
-          <div className="rezzy-kitchen-ticket__title">{displayName}</div>
-          <div className="rezzy-kitchen-ticket__meta">{when}</div>
+      <article key={r._id} className="rezvix-kitchen-ticket">
+        <div className="rezvix-kitchen-ticket__header">
+          <div className="rezvix-kitchen-ticket__title">{displayName}</div>
+          <div className="rezvix-kitchen-ticket__meta">{when}</div>
         </div>
 
-        <ul className="rezzy-kitchen-ticket__items">
-          <li className="rezzy-kitchen-ticket__item">
-            <span className="rezzy-kitchen-ticket__name">
+        <ul className="rezvix-kitchen-ticket__items">
+          <li className="rezvix-kitchen-ticket__item">
+            <span className="rezvix-kitchen-ticket__name">
               {r.partySize} kişi
             </span>
-            <span className="rezzy-kitchen-ticket__qty">
+            <span className="rezvix-kitchen-ticket__qty">
               {fmtStatus(r.status)}
             </span>
           </li>
-          <li className="rezzy-kitchen-ticket__item">
-            <span className="rezzy-kitchen-ticket__name">Beklenen harcama</span>
-            <span className="rezzy-kitchen-ticket__qty">
+          <li className="rezvix-kitchen-ticket__item">
+            <span className="rezvix-kitchen-ticket__name">Beklenen harcama</span>
+            <span className="rezvix-kitchen-ticket__qty">
               {r.totalPrice != null
                 ? `${r.totalPrice.toLocaleString("tr-TR")}₺`
                 : "—"}
             </span>
           </li>
-          <li className="rezzy-kitchen-ticket__item">
-            <span className="rezzy-kitchen-ticket__name">Depozito</span>
-            <span className="rezzy-kitchen-ticket__qty">
+          <li className="rezvix-kitchen-ticket__item">
+            <span className="rezvix-kitchen-ticket__name">Depozito</span>
+            <span className="rezvix-kitchen-ticket__qty">
               {r.depositAmount != null
                 ? `${r.depositAmount.toLocaleString("tr-TR")}₺`
                 : "—"}
@@ -172,7 +172,7 @@ export const RezzyOrdersPage: React.FC = () => {
         </ul>
 
         <div
-          className="rezzy-kitchen-ticket__footer"
+          className="rezvix-kitchen-ticket__footer"
           style={{
             display: "flex",
             alignItems: "center",
@@ -180,7 +180,7 @@ export const RezzyOrdersPage: React.FC = () => {
             gap: 8,
           }}
         >
-          <span style={{ fontSize: 11, color: "var(--rezzy-text-soft)" }}>
+          <span style={{ fontSize: 11, color: "var(--rezvix-text-soft)" }}>
             {r.user?.email || fmtStatus(r.status)}
           </span>
 
@@ -193,10 +193,10 @@ export const RezzyOrdersPage: React.FC = () => {
                   borderRadius: 999,
                   padding: "5px 12px",
                   fontSize: 11,
-                  border: "1px solid var(--rezzy-border-subtle)",
+                  border: "1px solid var(--rezvix-border-subtle)",
                   background: "#ffffff",
                   cursor: "pointer",
-                  color: "var(--rezzy-text-muted)",
+                  color: "var(--rezvix-text-muted)",
                 }}
               >
                 Dekontu Gör
@@ -213,13 +213,13 @@ export const RezzyOrdersPage: React.FC = () => {
                     borderRadius: 999,
                     padding: "5px 12px",
                     fontSize: 11,
-                    border: "1px solid var(--rezzy-border-subtle)",
+                    border: "1px solid var(--rezvix-border-subtle)",
                     background: "#ffffff",
                     cursor:
                       confirmMutation.isPending || cancelMutation.isPending
                         ? "default"
                         : "pointer",
-                    color: "var(--rezzy-danger)",
+                    color: "var(--rezvix-danger)",
                     opacity:
                       confirmMutation.isPending || cancelMutation.isPending
                         ? 0.6
@@ -238,7 +238,7 @@ export const RezzyOrdersPage: React.FC = () => {
                     padding: "5px 14px",
                     fontSize: 11,
                     border: "none",
-                    background: "var(--rezzy-success)",
+                    background: "var(--rezvix-success)",
                     color: "#ffffff",
                     cursor:
                       confirmMutation.isPending || cancelMutation.isPending
@@ -263,9 +263,9 @@ export const RezzyOrdersPage: React.FC = () => {
 
   return (
     <RestaurantDesktopLayout
-      activeNav="rezzy"
-      title="Rezzy & QR Siparişleri"
-      subtitle="Rezzy rezervasyonlarından ve QR menüden gelen siparişleri buradan yönetin."
+      activeNav="rezvix"
+      title="Rezvix & QR Siparişleri"
+      subtitle="Rezvix rezervasyonlarından ve QR menüden gelen siparişleri buradan yönetin."
       summaryChips={[
         {
           label: "Toplam sipariş",
@@ -285,20 +285,20 @@ export const RezzyOrdersPage: React.FC = () => {
       ]}
     >
       {isLoading && (
-        <div className="rezzy-empty">
-          <div className="rezzy-empty__icon">⏳</div>
-          <div className="rezzy-empty__title">Siparişler getiriliyor…</div>
-          <div className="rezzy-empty__text">
-            Rezzy ve QR siparişleri birkaç saniye içinde yüklenecek.
+        <div className="rezvix-empty">
+          <div className="rezvix-empty__icon">⏳</div>
+          <div className="rezvix-empty__title">Siparişler getiriliyor…</div>
+          <div className="rezvix-empty__text">
+            Rezvix ve QR siparişleri birkaç saniye içinde yüklenecek.
           </div>
         </div>
       )}
 
       {isError && !isLoading && (
-        <div className="rezzy-empty">
-          <div className="rezzy-empty__icon">⚠️</div>
-          <div className="rezzy-empty__title">Siparişler yüklenemedi</div>
-          <div className="rezzy-empty__text">
+        <div className="rezvix-empty">
+          <div className="rezvix-empty__icon">⚠️</div>
+          <div className="rezvix-empty__title">Siparişler yüklenemedi</div>
+          <div className="rezvix-empty__text">
             Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı
             kontrol edin.
           </div>
@@ -308,39 +308,39 @@ export const RezzyOrdersPage: React.FC = () => {
       {!isLoading && !isError && !hasData && (
         <EmptyState
           icon="📲"
-          title="Henüz aktif Rezzy / QR siparişi yok"
-          text="Rezzy rezervasyonları ve QR menü siparişleri burada listelenecek."
+          title="Henüz aktif Rezvix / QR siparişi yok"
+          text="Rezvix rezervasyonları ve QR menü siparişleri burada listelenecek."
         />
       )}
 
       {!isLoading && !isError && hasData && (
-        <div className="rezzy-board-layout">
-          <div className="rezzy-board-column">
-            <div className="rezzy-board-column__header">
-              <div className="rezzy-board-column__title">Bekleyen</div>
-              <div className="rezzy-board-column__count">{pending.length}</div>
+        <div className="rezvix-board-layout">
+          <div className="rezvix-board-column">
+            <div className="rezvix-board-column__header">
+              <div className="rezvix-board-column__title">Bekleyen</div>
+              <div className="rezvix-board-column__count">{pending.length}</div>
             </div>
-            <div className="rezzy-board-column__body">
+            <div className="rezvix-board-column__body">
               {pending.map((r) => renderCard(r, "pending"))}
             </div>
           </div>
 
-          <div className="rezzy-board-column">
-            <div className="rezzy-board-column__header">
-              <div className="rezzy-board-column__title">Aktif</div>
-              <div className="rezzy-board-column__count">{active.length}</div>
+          <div className="rezvix-board-column">
+            <div className="rezvix-board-column__header">
+              <div className="rezvix-board-column__title">Aktif</div>
+              <div className="rezvix-board-column__count">{active.length}</div>
             </div>
-            <div className="rezzy-board-column__body">
+            <div className="rezvix-board-column__body">
               {active.map((r) => renderCard(r, "active"))}
             </div>
           </div>
 
-          <div className="rezzy-board-column">
-            <div className="rezzy-board-column__header">
-              <div className="rezzy-board-column__title">Sorunlu</div>
-              <div className="rezzy-board-column__count">{problematic.length}</div>
+          <div className="rezvix-board-column">
+            <div className="rezvix-board-column__header">
+              <div className="rezvix-board-column__title">Sorunlu</div>
+              <div className="rezvix-board-column__count">{problematic.length}</div>
             </div>
-            <div className="rezzy-board-column__body">
+            <div className="rezvix-board-column__body">
               {problematic.map((r) => renderCard(r, "problematic"))}
             </div>
           </div>
