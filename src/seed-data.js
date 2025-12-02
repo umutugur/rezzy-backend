@@ -10,25 +10,25 @@ await connectDB(process.env.MONGO_URI);
 
 // kullanıcılar
 const admin = await User.create({
-  name: "Rezzy Admin",
-  email: "admin@rezzy.app",
+  name: "Rezvix Admin",
+  email: "admin@rezvix.app",
   password: "123456",
   role: "admin",
-  providers: [{ name: "password", sub: "admin@rezzy.app" }],
+  providers: [{ name: "password", sub: "admin@rezvix.app" }],
 });
 const owner = await User.create({
   name: "Mekan Sahibi",
-  email: "owner@rezzy.app",
+  email: "owner@rezvix.app",
   password: "123456",
   role: "restaurant",
-  providers: [{ name: "password", sub: "owner@rezzy.app" }],
+  providers: [{ name: "password", sub: "owner@rezvix.app" }],
 });
 const customer = await User.create({
   name: "Demo Müşteri",
-  email: "demo@rezzy.app",
+  email: "demo@rezvix.app",
   password: "123456",
   role: "customer",
-  providers: [{ name: "password", sub: "demo@rezzy.app" }],
+  providers: [{ name: "password", sub: "demo@rezvix.app" }],
 });
 
 // restoranlar

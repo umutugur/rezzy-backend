@@ -189,7 +189,7 @@ export const commissionsExport = async (req, res, next) => {
 
     // Excel
     const wb = new ExcelJS.Workbook();
-    wb.creator = "Rezzy";
+    wb.creator = "Rezvix";
     wb.created = new Date();
 
     // 1) Özet sayfası
@@ -276,7 +276,7 @@ export const commissionsExport = async (req, res, next) => {
     }
 
     // Response
-    const filename = `rezzy-komisyon-${label}.xlsx`;
+    const filename = `rezvix-komisyon-${label}.xlsx`;
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

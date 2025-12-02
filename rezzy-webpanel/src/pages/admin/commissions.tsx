@@ -29,7 +29,7 @@ export default function AdminCommissionsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `rezzy-komisyon-${month}.xlsx`;
+      a.download = `rezvix-komisyon-${month}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e: any) {

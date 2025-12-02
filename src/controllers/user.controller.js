@@ -118,7 +118,7 @@ export const uploadAvatar = async (req,res,next)=>{
     if (!f || !f.buffer) return res.status(400).json({ message: "Dosya yüklenmedi" });
 
     const up = await uploadBufferToCloudinary(f.buffer, {
-      folder: process.env.CLOUDINARY_FOLDER ? `${process.env.CLOUDINARY_FOLDER}/avatars` : "rezzy/avatars",
+      folder: process.env.CLOUDINARY_FOLDER ? `${process.env.CLOUDINARY_FOLDER}/avatars` : "rezvix/avatars",
       resource_type: "image",
     });
 

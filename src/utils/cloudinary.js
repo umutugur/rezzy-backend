@@ -22,7 +22,7 @@ if (missing.length) {
 
 // Buffer'ı stream ile Cloudinary'e yükler
 export function uploadBufferToCloudinary(buffer, opts = {}) {
-  const { folder = process.env.CLOUDINARY_FOLDER || "rezzy/receipts",
+  const { folder = process.env.CLOUDINARY_FOLDER || "rezvix/receipts",
           resource_type = "auto" } = opts;
 
   return new Promise((resolve, reject) => {

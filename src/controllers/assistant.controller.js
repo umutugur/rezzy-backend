@@ -35,10 +35,10 @@ function buildRuleBasedReply(intentResult, lang, message) {
   // Ortak bazı textler (TR/EN/RU/EL)
   const TEXT = {
     greeting: {
-      tr: "Merhaba! Ben Rezzy Asistan. Mekan bulmana, rezervasyonlarını yönetmene ve uygulama ile ilgili sorularına yardımcı olabilirim.",
-      en: "Hi! I’m the Rezzy Assistant. I can help you find venues, manage your reservations and answer questions about the app.",
-      ru: "Привет! Я ассистент Rezzy. Помогу найти заведение, управлять бронями и отвечу на вопросы о приложении.",
-      el: "Γεια σου! Είμαι ο βοηθός του Rezzy. Μπορώ να σε βοηθήσω να βρεις μαγαζιά, να διαχειριστείς κρατήσεις και να λύσω απορίες για την εφαρμογή."
+      tr: "Merhaba! Ben Rezvix Asistan. Mekan bulmana, rezervasyonlarını yönetmene ve uygulama ile ilgili sorularına yardımcı olabilirim.",
+      en: "Hi! I’m the Rezvix Assistant. I can help you find venues, manage your reservations and answer questions about the app.",
+      ru: "Привет! Я ассистент Rezvix. Помогу найти заведение, управлять бронями и отвечу на вопросы о приложении.",
+      el: "Γεια σου! Είμαι ο βοηθός του Rezvix. Μπορώ να σε βοηθήσω να βρεις μαγαζιά, να διαχειριστείς κρατήσεις και να λύσω απορίες για την εφαρμογή."
     },
     findRestaurantAskFilters: {
       tr: people
@@ -67,10 +67,10 @@ function buildRuleBasedReply(intentResult, lang, message) {
       el: "Μπορώ να σε βοηθήσω με την κράτησή σου. Αν θέλεις να δημιουργήσεις, να αλλάξεις ή να ακυρώσεις μια κράτηση, γράψε μου για ποια ημερομηνία ή ποια κράτηση."
     },
     noShow: {
-      tr: "No-show durumunda (rezervasyona gitmediğinde) mekanın kendi politikası geçerlidir. Rezzy, mekanın belirlediği iptal ve no-show şartlarını uygular. Detaylı politikayı rezervasyon özetinde görebilirsin.",
-      en: "In case of a no-show, the venue’s own policy applies. Rezzy follows the venue’s cancellation and no-show rules. You can see the details in your reservation summary.",
-      ru: "В случае неявки действует политика заведения. Rezzy следует правилам отмены и no-show, которые установлены самим рестораном. Подробности смотри в своём бронировании.",
-      el: "Σε περίπτωση μη εμφάνισης (no-show), ισχύει η πολιτική του μαγαζιού. Το Rezzy ακολουθεί τους κανόνες ακύρωσης και no-show που ορίζει το κατάστημα. Δες τις λεπτομέρειες στην περίληψη της κράτησής σου."
+      tr: "No-show durumunda (rezervasyona gitmediğinde) mekanın kendi politikası geçerlidir. Rezvix, mekanın belirlediği iptal ve no-show şartlarını uygular. Detaylı politikayı rezervasyon özetinde görebilirsin.",
+      en: "In case of a no-show, the venue’s own policy applies. Rezvix follows the venue’s cancellation and no-show rules. You can see the details in your reservation summary.",
+      ru: "В случае неявки действует политика заведения. Rezvix следует правилам отмены и no-show, которые установлены самим рестораном. Подробности смотри в своём бронировании.",
+      el: "Σε περίπτωση μη εμφάνισης (no-show), ισχύει η πολιτική του μαγαζιού. Το Rezvix ακολουθεί τους κανόνες ακύρωσης και no-show που ορίζει το κατάστημα. Δες τις λεπτομέρειες στην περίληψη της κράτησής σου."
     },
     payment: {
       tr: "Ödeme yöntemleri, seçtiğin mekana ve rezervasyon tipine göre değişebilir. Bazı mekanlar sadece kart, bazıları ise nakit veya havale/dekont ile çalışır. Rezervasyon adımlarında kabul edilen ödeme yöntemlerini görebilirsin.",
@@ -79,10 +79,10 @@ function buildRuleBasedReply(intentResult, lang, message) {
       el: "Οι τρόποι πληρωμής εξαρτώνται από το μαγαζί και το είδος της κράτησης. Κάποια δέχονται μόνο κάρτα, άλλα δέχονται μετρητά ή έμβασμα/ανέβασμα αποδεικτικού. Θα δεις τις διαθέσιμες επιλογές στα βήματα της κράτησης."
     },
     faq: {
-      tr: "Rezzy, mekanlara güvenli ve şeffaf rezervasyon sistemi sunar. Kullanıcılar kolayca mekan keşfedip depozitolu veya normal rezervasyon yapabilir, işletmeler de doluluklarını daha iyi yönetir. Verilerin güvenli olarak saklanır ve sadece gerekli bilgiler mekanla paylaşılır.",
-      en: "Rezzy offers venues a safe and transparent reservation system. Guests can discover places and make normal or deposit-based reservations, while venues manage capacity more efficiently. Your data is stored securely and only necessary info is shared with the venue.",
-      ru: "Rezzy — это безопасная и прозрачная система бронирования. Гости находят заведения и делают обычные или депозитные брони, а рестораны лучше управляют заполняемостью. Данные хранятся безопасно, и заведению передаётся только необходимая информация.",
-      el: "Το Rezzy προσφέρει στα μαγαζιά ένα ασφαλές και διαφανές σύστημα κρατήσεων. Οι πελάτες βρίσκουν εύκολα νέα μέρη και κάνουν απλές ή με προκαταβολή κρατήσεις, ενώ τα μαγαζιά διαχειρίζονται καλύτερα τη διαθεσιμότητα. Τα δεδομένα σου φυλάσσονται με ασφάλεια και μοιραζόμαστε μόνο ό,τι χρειάζεται με το κατάστημα."
+      tr: "Rezvix, mekanlara güvenli ve şeffaf rezervasyon sistemi sunar. Kullanıcılar kolayca mekan keşfedip depozitolu veya normal rezervasyon yapabilir, işletmeler de doluluklarını daha iyi yönetir. Verilerin güvenli olarak saklanır ve sadece gerekli bilgiler mekanla paylaşılır.",
+      en: "Rezvix offers venues a safe and transparent reservation system. Guests can discover places and make normal or deposit-based reservations, while venues manage capacity more efficiently. Your data is stored securely and only necessary info is shared with the venue.",
+      ru: "Rezvix — это безопасная и прозрачная система бронирования. Гости находят заведения и делают обычные или депозитные брони, а рестораны лучше управляют заполняемостью. Данные хранятся безопасно, и заведению передаётся только необходимая информация.",
+      el: "Το Rezvix προσφέρει στα μαγαζιά ένα ασφαλές και διαφανές σύστημα κρατήσεων. Οι πελάτες βρίσκουν εύκολα νέα μέρη και κάνουν απλές ή με προκαταβολή κρατήσεις, ενώ τα μαγαζιά διαχειρίζονται καλύτερα τη διαθεσιμότητα. Τα δεδομένα σου φυλάσσονται με ασφάλεια και μοιραζόμαστε μόνο ό,τι χρειάζεται με το κατάστημα."
     },
     complaint: {
       tr: "Yaşadığın sorun için üzgünüm. Lütfen kısaca ne yaşadığını, hangi mekanda ve mümkünse hangi rezervasyon ile ilgili olduğunu yaz. Gerekirse ekibimiz seninle iletişime geçsin diye iletişim bilgilerini de ekleyebilirsin.",
@@ -91,10 +91,10 @@ function buildRuleBasedReply(intentResult, lang, message) {
       el: "Λυπάμαι που αντιμετώπισες πρόβλημα. Γράψε μου σύντομα τι έγινε, σε ποιο μαγαζί και, αν γίνεται, για ποια κράτηση. Μπορείς επίσης να αφήσεις στοιχεία επικοινωνίας για να σε βοηθήσει η ομάδα μας."
     },
     fallback: {
-      tr: "Tam olarak ne yapmak istediğini anlayamadım. Sana mekan mı bulayım, mevcut rezervasyonlarınla mı ilgilenelim yoksa Rezzy hakkında genel bilgi mi istersin?",
-      en: "I’m not sure I understood what you want. Should I help you find a place, check your reservations, or give you general info about Rezzy?",
-      ru: "Я не до конца понял, что ты хочешь сделать. Помочь найти заведение, разобраться с бронями или рассказать подробнее о Rezzy?",
-      el: "Δεν είμαι σίγουρος ότι κατάλαβα τι θέλεις να κάνεις. Να σε βοηθήσω να βρεις μαγαζί, να δούμε τις κρατήσεις σου ή θέλεις γενικές πληροφορίες για το Rezzy;"
+      tr: "Tam olarak ne yapmak istediğini anlayamadım. Sana mekan mı bulayım, mevcut rezervasyonlarınla mı ilgilenelim yoksa Rezvix hakkında genel bilgi mi istersin?",
+      en: "I’m not sure I understood what you want. Should I help you find a place, check your reservations, or give you general info about Rezvix?",
+      ru: "Я не до конца понял, что ты хочешь сделать. Помочь найти заведение, разобраться с бронями или рассказать подробнее о Rezvix?",
+      el: "Δεν είμαι σίγουρος ότι κατάλαβα τι θέλεις να κάνεις. Να σε βοηθήσω να βρεις μαγαζί, να δούμε τις κρατήσεις σου ή θέλεις γενικές πληροφορίες για το Rezvix;"
     },
     goodbye: {
       tr: "Görüşürüz! İstediğinde tekrar yazabilirsin.",
@@ -121,7 +121,7 @@ function buildRuleBasedReply(intentResult, lang, message) {
           ? [
               { label: "Mekan bul", message: "Mekan bulmak istiyorum" },
               { label: "Rezervasyonlarım", message: "Rezervasyonlarıma bak" },
-              { label: "Rezzy nedir?", message: "Rezzy nasıl çalışıyor" }
+              { label: "Rezvix nedir?", message: "Rezvix nasıl çalışıyor" }
             ]
           : [];
       break;

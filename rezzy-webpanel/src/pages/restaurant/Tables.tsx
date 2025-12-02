@@ -421,7 +421,7 @@ export default function TablesPage() {
       <div class="line"></div>
       <div class="row total"><span>Toplam</span><span>${Number(last.total || 0).toFixed(2)}₺</span></div>
       <div class="line"></div>
-      <div class="center tiny">Bu fiş Rezzy masa yönetim sistemi ile oluşturulmuştur.</div>
+      <div class="center tiny">Bu fiş Rezvix masa yönetim sistemi ile oluşturulmuştur.</div>
     `;
 
     printContent("Son Sipariş", html);
@@ -494,7 +494,7 @@ export default function TablesPage() {
       <div class="row small"><span>Masa</span><span>${td.table?.name ?? "-"}</span></div>
       ${ordersHtml}
       ${footer}
-      <div class="center tiny">Rezervasyon ve masa yönetimi Rezzy ile sağlanmaktadır.</div>
+      <div class="center tiny">Rezervasyon ve masa yönetimi Rezvix ile sağlanmaktadır.</div>
     `;
 
     printContent("Adisyon", html);

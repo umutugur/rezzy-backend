@@ -34,7 +34,7 @@ async function run() {
         const base64 = m[2];
         const buffer = Buffer.from(base64, "base64");
         const up = await uploadBufferToCloudinary(buffer, {
-          folder: "rezzy/restaurants",
+          folder: "rezvix/restaurants",
           resource_type: "image",
         });
         newPhotos.push(up.secure_url);

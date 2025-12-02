@@ -186,7 +186,7 @@ export async function createOrder(req, res) {
       currency,
       paymentMethod,
       paymentStatus: paymentMethod === "venue" ? "not_required" : "pending",
-      // createOrder mevcutta QR/Rezzy akışı için kullanılıyor → default "qr"
+      // createOrder mevcutta QR/Rezvix akışı için kullanılıyor → default "qr"
     });
 
     // MASAYI order_active yap

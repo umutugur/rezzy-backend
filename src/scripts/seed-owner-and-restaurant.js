@@ -11,7 +11,7 @@ async function main() {
   await connectDB(process.env.MONGO_URI);
 
   // 1) Yeni restoran sahibi kullanıcı
-  const ownerEmail = "new-owner@rezzy.app";
+  const ownerEmail = "new-owner@rezvix.app";
   const existing = await User.findOne({ email: ownerEmail });
   if (existing) {
     console.log("⚠️ Bu email ile bir kullanıcı zaten var:", existing._id.toString());

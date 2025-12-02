@@ -11,8 +11,8 @@ export type MeUser = {
   avatarUrl?: string | null;
 };
 
-const TOKEN_KEY = "rezzy_token";
-const USER_KEY  = "rezzy_user";
+const TOKEN_KEY = "rezvix_token";
+const USER_KEY  = "rezvix_user";
 
 function extractObjectId(input: any): string | null {
   if (!input) return null;

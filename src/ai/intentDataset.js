@@ -318,14 +318,14 @@ export const INTENT_DATASET = {
 
     faq: {
       tr: [
-        "rezzy nasıl çalışıyor",
+        "rezvix nasıl çalışıyor",
         "uygulama güvenli mi",
         "neden telefon numarası gerekiyor",
         "depozito ne için alınıyor",
         "komisyon nedir"
       ],
       en: [
-        "how does rezzy work",
+        "how does rezvix work",
         "is the app safe",
         "why do you need my phone number",
         "what is the deposit for"

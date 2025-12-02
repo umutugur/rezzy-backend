@@ -28,7 +28,7 @@ import MenuManagerPage from "./pages/restaurant/MenuManager";
 // Desktop mode
 import { LiveTablesPage } from "./desktop/pages/LiveTablesPage";
 import { KitchenBoardPage } from "./desktop/pages/KitchenBoardPage";
-import { RezzyOrdersPage } from "./desktop/pages/RezzyOrdersPage";
+import { RezvixOrdersPage } from "./desktop/pages/RezvixOrdersPage";
 import { ReportsPage } from "./desktop/pages/ReportsPage";
 import { SettingsPage } from "./desktop/pages/SettingsPage";
 
@@ -41,7 +41,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-full">
       <header className="bg-white shadow-sm">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-semibold">Rezzy Web Panel</h1>
+          <h1 className="text-lg font-semibold">Rezvix Web Panel</h1>
           <div className="flex items-center gap-3">
             {u?.role === "admin" && (
               <button
@@ -211,7 +211,7 @@ export default function App() {
         {/* 🔥 Restaurant Desktop Mode route'ları (Shell YOK, kendi layout'unu kullanıyor) */}
         <Route path="/restaurant-desktop/tables" element={<LiveTablesPage />} />
         <Route path="/restaurant-desktop/kitchen" element={<KitchenBoardPage />} />
-        <Route path="/restaurant-desktop/rezzy" element={<RezzyOrdersPage />} />
+        <Route path="/restaurant-desktop/rezvix" element={<RezvixOrdersPage />} />
         <Route path="/restaurant-desktop/reports" element={<ReportsPage />} />
         <Route path="/restaurant-desktop/settings" element={<SettingsPage />} />
       </Route>

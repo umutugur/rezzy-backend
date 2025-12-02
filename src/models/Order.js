@@ -27,10 +27,10 @@ const OrderSchema = new mongoose.Schema(
     currency: { type: String, default: "TRY" },
     total: { type: Number, min: 0, default: 0 },
 
-    // ✅ Sipariş kaynağı (qr, rezzy, walk_in vs.)
+    // ✅ Sipariş kaynağı (qr, rezvix, walk_in vs.)
     source: {
       type: String,
-      enum: ["qr", "rezzy", "walk_in"],
+      enum: ["qr", "rezvix", "walk_in"],
       default: "qr",
       index: true,
     },

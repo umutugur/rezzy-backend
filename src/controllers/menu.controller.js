@@ -246,7 +246,7 @@ export const createItem = async (req, res, next) => {
 
     if (f?.buffer) {
       const up = await uploadBufferToCloudinary(f.buffer, {
-        folder: process.env.CLOUDINARY_FOLDER || "rezzy/menu",
+        folder: process.env.CLOUDINARY_FOLDER || "rezvix/menu",
         resource_type: "auto",
       });
       photoUrl = up.secure_url;
@@ -310,7 +310,7 @@ export const updateItem = async (req, res, next) => {
 
       if (f?.buffer) {
         const up = await uploadBufferToCloudinary(f.buffer, {
-          folder: process.env.CLOUDINARY_FOLDER || "rezzy/menu",
+          folder: process.env.CLOUDINARY_FOLDER || "rezvix/menu",
           resource_type: "auto",
         });
         patch.photoUrl = up.secure_url;

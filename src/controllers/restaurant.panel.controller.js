@@ -152,7 +152,7 @@ export const listReservationsForRestaurant = async (req, res, next) => {
         userId: r.userId?._id?.toString() ?? null,
         user: user || undefined,
 
-        // 🔑 RezzyOrdersPage Row tipiyle uyumlu yeni alanlar:
+        // 🔑 RezvixOrdersPage Row tipiyle uyumlu yeni alanlar:
         displayName,
         guestName,
       };
@@ -283,7 +283,7 @@ export const getTablesLive = async (req, res, next) => {
       }).lean(),
     ]);
 
-    // 🔎 sessionId -> "WALK_IN" | "REZZY" | "QR"
+    // 🔎 sessionId -> "WALK_IN" | "REZVIX" | "QR"
     const sessionChannelMap = new Map();
 
     if (sessions.length > 0) {
@@ -295,10 +295,10 @@ export const getTablesLive = async (req, res, next) => {
         .select("sessionId source")
         .lean();
 
-      // 1) Rezervasyon bağlı session → REZZY
+      // 1) Rezervasyon bağlı session → REZVIX
       for (const s of sessions) {
         if (s.reservationId) {
-          sessionChannelMap.set(String(s._id), "REZZY");
+          sessionChannelMap.set(String(s._id), "REZVIX");
         }
       }
 
@@ -307,8 +307,8 @@ export const getTablesLive = async (req, res, next) => {
         const sid = String(o.sessionId);
         if (!sid) continue;
 
-        // Eğer zaten REZZY işaretlendiyse dokunma
-        if (sessionChannelMap.get(sid) === "REZZY") continue;
+        // Eğer zaten REZVIX işaretlendiyse dokunma
+        if (sessionChannelMap.get(sid) === "REZVIX") continue;
 
         if (o.source === "walk_in") {
           sessionChannelMap.set(sid, "WALK_IN");
@@ -330,7 +330,7 @@ export const getTablesLive = async (req, res, next) => {
       let channel = null;
       if (session) {
         const ch = sessionChannelMap.get(String(session._id));
-        if (ch === "WALK_IN" || ch === "REZZY" || ch === "QR") {
+        if (ch === "WALK_IN" || ch === "REZVIX" || ch === "QR") {
           channel = ch;
         }
       }
@@ -355,7 +355,7 @@ export const getTablesLive = async (req, res, next) => {
           grandTotal: 0,
         },
         // 💜 live tables için kaynak bilgi
-        channel, // null | "WALK_IN" | "REZZY" | "QR"
+        channel, // null | "WALK_IN" | "REZVIX" | "QR"
       };
     });
 

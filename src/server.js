@@ -28,7 +28,7 @@ const HOST = "0.0.0.0";
 
 app.set("trust proxy", 1);
 app.listen(PORT, HOST, () => {
-  console.log(`🚀 Rezzy API dinlemede: http://${HOST}:${PORT}`);
+  console.log(`🚀 Rezvix API dinlemede: http://${HOST}:${PORT}`);
 });
 
 // graceful shutdown

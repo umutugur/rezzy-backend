@@ -637,7 +637,7 @@ export const addPhoto = async (req, res, next) => {
       const uploadResult = await uploadBufferToCloudinary(f.buffer, {
         folder:
           process.env.CLOUDINARY_FOLDER_RESTAURANTS ||
-          "rezzy/restaurants",                    // ⬅️ restoranlar için ayrı klasör
+          "rezvix/restaurants",                    // ⬅️ restoranlar için ayrı klasör
         resource_type: "image",
       });
       finalUrl = uploadResult.secure_url;
@@ -656,7 +656,7 @@ export const addPhoto = async (req, res, next) => {
       const uploadResult = await uploadBufferToCloudinary(buffer, {
         folder:
           process.env.CLOUDINARY_FOLDER_RESTAURANTS ||
-          "rezzy/restaurants",
+          "rezvix/restaurants",
         resource_type: "image",
       });
       finalUrl = uploadResult.secure_url;

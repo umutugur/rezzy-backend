@@ -372,7 +372,7 @@ export const createStripePaymentIntentForReservation = async (req, res, next) =>
     })();
 
     const metadata = {
-      app: "rezzy",
+      app: "rezvix",
       type: "reservation_deposit",
       reservationId: String(reservation._id),
       restaurantId: restaurantIdForMeta,
@@ -703,7 +703,7 @@ export const approveReservation = async (req, res, next) => {
     try {
       await notifyUser(r.userId, {
         title: "Rezervasyonun onaylandı 🎉",
-        body: `${fmtTR(r.dateTimeUTC)} • QR kodun hazır. Rezzy > Rezervasyonlarım üzerinden erişebilirsin.`,
+        body: `${fmtTR(r.dateTimeUTC)} • QR kodun hazır. Rezvix > Rezervasyonlarım üzerinden erişebilirsin.`,
         data: { type: "reservation_approved", rid: String(r._id), section: "qrcode" },
         key: `cust:approved:${r._id}`,
         type: "reservation_approved",
