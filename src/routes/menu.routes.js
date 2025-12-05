@@ -50,7 +50,7 @@ r.use(express.json());
 r.get(
   "/:rid/menu/categories",
   auth(),
-  allow("restaurant", "admin"),
+  allow("restaurant", "admin","customer"),
   listCategories
 );
 
@@ -81,7 +81,7 @@ r.delete(
 r.get(
   "/:rid/menu/items",
   auth(),
-  allow("restaurant", "admin"),
+  allow("restaurant", "admin","customer"),
   listItems           // ❗ Query validation yok — controller kendisi validate ediyor
 );
 
