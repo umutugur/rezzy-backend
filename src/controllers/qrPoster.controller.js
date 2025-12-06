@@ -2,7 +2,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
 import QRCode from "qrcode";
 import JSZip from "jszip";
 import axios from "axios";
@@ -15,6 +15,7 @@ const __dirname = path.dirname(__filename);
 // Dikkat: senin projede klasör adı "assests"
 const POSTER_TEMPLATE_PATH = path.join(__dirname, "../assets/qr-poster-a5.png");
 const APP_LINK_ICON_PATH   = path.join(__dirname, "../assets/qr-app-link.png");
+const FONT_PATH = path.join(__dirname, "../assets/fonts/NotoSans-Regular.ttf");
 // ---------------- Yardımcılar ----------------
 
 function buildTableQrUrl(restaurantId, tableKey) {
@@ -50,10 +51,11 @@ async function fetchLogoBuffer(restaurant) {
  * Geriye { filename, buffer } döner.
  */
 async function generatePosterPdf(restaurant, table) {
-  const [posterBytes, appLinkBytes, logoBytes] = await Promise.all([
+  const [posterBytes, appLinkBytes, logoBytes, fontBytes] = await Promise.all([
     fs.readFile(POSTER_TEMPLATE_PATH),
     fs.readFile(APP_LINK_ICON_PATH),
     fetchLogoBuffer(restaurant),
+    fs.readFile(FONT_PATH),
   ]);
 
   const pdfDoc = await PDFDocument.create();
@@ -73,8 +75,8 @@ async function generatePosterPdf(restaurant, table) {
     height: bgHeight,
   });
 
-  const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const fontLight = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const font = await pdfDoc.embedFont(fontBytes);
+  const fontLight = font; // aynı fontu hafif metinlerde de kullanıyoruz
 
   // ---------- QR alanı (ortadaki büyük kutu) ----------
   // Bu koordinatlar, senin verdiğin 832x1248 posterden otomatik olarak çıkardığım değerler
