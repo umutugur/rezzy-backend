@@ -94,7 +94,7 @@ app.use("/api/notifications", notificationsRouter);
 app.use("/api/me/favorites", favoritesRoutes);
 app.use("/api/table-service", tableServiceRoutes);
 app.use("/api/assistant", assistantRoutes);
-app.use(require("./routes/qrPoster.routes"));
+app.use("/api", qrPosterRoutes);
 // 404 & error aynı kalsın
 app.use((req, res) => res.status(404).json({ message: "Not found" }));
 app.use(errorHandler);
