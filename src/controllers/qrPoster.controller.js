@@ -13,9 +13,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Dikkat: senin projede klasör adı "assests"
-const POSTER_TEMPLATE_PATH = path.join(__dirname, "..", "assests", "qr-poster-a5.png");
-const APP_LINK_ICON_PATH = path.join(__dirname, "..", "assests", "qr-app-link.png");
-
+const POSTER_TEMPLATE_PATH = path.join(__dirname, "../assets/qr-poster-a5.png");
+const APP_LINK_ICON_PATH   = path.join(__dirname, "../assets/qr-app-link.png");
 // ---------------- Yardımcılar ----------------
 
 function buildTableQrUrl(restaurantId, tableKey) {
