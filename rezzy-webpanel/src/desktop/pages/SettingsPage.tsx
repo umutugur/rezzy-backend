@@ -23,7 +23,7 @@ import { Card } from "../../components/Card";
 // === Tipler ===
 type OpeningHour = { day: number; open: string; close: string; isClosed?: boolean };
 type MenuItem = { name: string; price: number; description?: string; isActive?: boolean };
-type TableItem = { name: string; capacity: number; isActive?: boolean };
+type TableItem = { _id?: string; name: string; capacity: number; isActive?: boolean };
 type Policies = {
   minPartySize: number;
   maxPartySize: number;
@@ -164,6 +164,10 @@ export const SettingsPage: React.FC = () => {
   const [policies, setPolicies] = React.useState<Policies>(DEFAULT_POLICIES);
   const [newBlackout, setNewBlackout] = React.useState("");
 
+  // 🔹 QR poster indirme durumları
+  const [isDownloadingAllPosters, setIsDownloadingAllPosters] = React.useState(false);
+  const [downloadingTableKey, setDownloadingTableKey] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     if (!data) return;
 
@@ -230,6 +234,98 @@ export const SettingsPage: React.FC = () => {
           : DEFAULT_POLICIES.checkinWindowAfterMinutes,
     });
   }, [data]);
+
+  // === Yardımcı: Content-Disposition başlığından dosya adı çek ===
+  const getFilenameFromContentDisposition = (header?: string | null) => {
+    if (!header) return null;
+    const match = /filename="?([^"]+)"?/i.exec(header);
+    return match?.[1] || null;
+  };
+
+  // === Yardımcı: Blob indir ===
+  const triggerDownload = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  // === Tek masa için A5 QR poster indir ===
+  const downloadPosterForTable = async (table: TableItem) => {
+    try {
+      const tableKey = table._id || table.name;
+      if (!tableKey) {
+        showToast("Bu masa için geçerli bir anahtar bulunamadı", "error");
+        return;
+      }
+
+      setDownloadingTableKey(String(tableKey));
+
+      const res = await api.get(
+        `/qr/poster/${rid}/${encodeURIComponent(String(tableKey))}`,
+        {
+          responseType: "blob",
+        }
+      );
+
+      const cd = getFilenameFromContentDisposition(
+        (res as any).headers?.["content-disposition"] ||
+          (res as any).headers?.["Content-Disposition"]
+      );
+
+      const filename =
+        cd ||
+        `Rezvix-QR-Poster-${
+          (data?.name || "Restaurant").replace(/[^\w\-]+/g, "_") || "Restaurant"
+        }-${(table.name || "Table").replace(/[^\w\-]+/g, "_")}.pdf`;
+
+      triggerDownload(res.data as Blob, filename);
+    } catch (e: any) {
+      showToast(
+        e?.response?.data?.message || e?.message || "QR posteri indirilemedi",
+        "error"
+      );
+    } finally {
+      setDownloadingTableKey(null);
+    }
+  };
+
+  // === Tüm masalar için ZIP indir ===
+  const downloadAllPostersZip = async () => {
+    try {
+      setIsDownloadingAllPosters(true);
+
+      const res = await api.get(`/qr/posters/${rid}`, {
+        responseType: "blob",
+      });
+
+      const cd = getFilenameFromContentDisposition(
+        (res as any).headers?.["content-disposition"] ||
+          (res as any).headers?.["Content-Disposition"]
+      );
+
+      const safeRestaurant =
+        (data?.name || "Restaurant").replace(/[^\w\-]+/g, "_") ||
+        "Restaurant";
+
+      const filename = cd || `Rezvix-Table-Posters-${safeRestaurant}.zip`;
+
+      triggerDownload(res.data as Blob, filename);
+    } catch (e: any) {
+      showToast(
+        e?.response?.data?.message ||
+          e?.message ||
+          "QR poster paketi indirilemedi",
+        "error"
+      );
+    } finally {
+      setIsDownloadingAllPosters(false);
+    }
+  };
 
   // === Mutations ===
 
@@ -870,70 +966,104 @@ export const SettingsPage: React.FC = () => {
 
         {/* === MASALAR === */}
         {tab === "tables" && (
-          <Card title="Masalar">
-            <div className="space-y-3">
-              {tables.map((t, idx) => (
-                <div
-                  key={idx}
-                  className="grid grid-cols-1 md:grid-cols-5 gap-3 items-center"
+          <Card
+            title={
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <span>Masalar</span>
+                <button
+                  type="button"
+                  onClick={downloadAllPostersZip}
+                  disabled={isDownloadingAllPosters}
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 text-sm disabled:opacity-60"
                 >
-                  <input
-                    className="border rounded-lg px-3 py-2"
-                    placeholder="Ad"
-                    value={t.name}
-                    onChange={(e) =>
-                      setTables((prev) =>
-                        prev.map((x, i) =>
-                          i === idx ? { ...x, name: e.target.value } : x
-                        )
-                      )
-                    }
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    className="border rounded-lg px-3 py-2"
-                    placeholder="Kapasite"
-                    value={String(t.capacity)}
-                    onChange={(e) =>
-                      setTables((prev) =>
-                        prev.map((x, i) =>
-                          i === idx
-                            ? {
-                                ...x,
-                                capacity: Number(e.target.value) || 1,
-                              }
-                            : x
-                        )
-                      )
-                    }
-                  />
-                  <label className="flex items-center gap-2 text-sm">
-                    <span className="text-gray-600">Aktif</span>
+                  {isDownloadingAllPosters
+                    ? "Hazırlanıyor…"
+                    : "Tüm QR posterlerini indir (ZIP)"}
+                </button>
+              </div>
+            }
+          >
+            <div className="space-y-3">
+              {tables.map((t, idx) => {
+                const tableKey = t._id || t.name;
+                const isDownloadingThis =
+                  downloadingTableKey !== null &&
+                  downloadingTableKey === String(tableKey);
+
+                return (
+                  <div
+                    key={idx}
+                    className="grid grid-cols-1 md:grid-cols-6 gap-3 items-center"
+                  >
                     <input
-                      type="checkbox"
-                      checked={t.isActive ?? true}
+                      className="border rounded-lg px-3 py-2"
+                      placeholder="Ad"
+                      value={t.name}
+                      onChange={(e) =>
+                        setTables((prev) =>
+                          prev.map((x, i) =>
+                            i === idx ? { ...x, name: e.target.value } : x
+                          )
+                        )
+                      }
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      className="border rounded-lg px-3 py-2"
+                      placeholder="Kapasite"
+                      value={String(t.capacity)}
                       onChange={(e) =>
                         setTables((prev) =>
                           prev.map((x, i) =>
                             i === idx
-                              ? { ...x, isActive: e.target.checked }
+                              ? {
+                                  ...x,
+                                  capacity: Number(e.target.value) || 1,
+                                }
                               : x
                           )
                         )
                       }
                     />
-                  </label>
-                  <button
-                    className="rounded-lg bg-gray-100 hover:bg-gray-200 px-3 py-2"
-                    onClick={() =>
-                      setTables((prev) => prev.filter((_, i) => i !== idx))
-                    }
-                  >
-                    Sil
-                  </button>
-                </div>
-              ))}
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-600">Aktif</span>
+                      <input
+                        type="checkbox"
+                        checked={t.isActive ?? true}
+                        onChange={(e) =>
+                          setTables((prev) =>
+                            prev.map((x, i) =>
+                              i === idx
+                                ? { ...x, isActive: e.target.checked }
+                                : x
+                            )
+                          )
+                        }
+                      />
+                    </label>
+
+                    {/* Tek masa QR posteri indir */}
+                    <button
+                      type="button"
+                      onClick={() => downloadPosterForTable(t)}
+                      disabled={isDownloadingThis}
+                      className="rounded-lg bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-2 text-sm disabled:opacity-60"
+                    >
+                      {isDownloadingThis ? "İndiriliyor…" : "QR poster (A5)"}
+                    </button>
+
+                    <button
+                      className="rounded-lg bg-gray-100 hover:bg-gray-200 px-3 py-2"
+                      onClick={() =>
+                        setTables((prev) => prev.filter((_, i) => i !== idx))
+                      }
+                    >
+                      Sil
+                    </button>
+                  </div>
+                );
+              })}
               {tables.length === 0 && (
                 <div className="text-sm text-gray-500">Kayıt yok</div>
               )}

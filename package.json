@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "apple-signin-auth": "^2.0.0",
+    "archiver": "^7.0.1",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
@@ -33,6 +34,7 @@
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
+    "pdfkit": "^0.17.2",
     "qrcode": "^1.5.4",
     "stripe": "^20.0.0",
     "zod": "^4.1.4"

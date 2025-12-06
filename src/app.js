@@ -19,11 +19,12 @@ import jobsRouter from "./routes/jobs.js";
 import notificationsRouter from "./routes/notifications.js";
 import favoritesRoutes from "./routes/favorites.routes.js";
 import { stripeWebhook } from "./controllers/stripe.webhook.controller.js"; // ✅ Stripe webhook controller
-// app.js içinde importlara ekle
 import ordersRoutes from "./routes/orders.routes.js";
 import tableServiceRoutes from "./routes/tableService.routes.js";
 import { initIntentEmbeddings } from "./ai/intentClassifier.js";
 import assistantRoutes from "./routes/assistant.routes.js";
+import qrPosterRoutes from "./routes/qrPoster.routes.js";
+
 dotenv.config();
 const app = express();
 
@@ -93,7 +94,7 @@ app.use("/api/notifications", notificationsRouter);
 app.use("/api/me/favorites", favoritesRoutes);
 app.use("/api/table-service", tableServiceRoutes);
 app.use("/api/assistant", assistantRoutes);
-
+app.use(require("./routes/qrPoster.routes"));
 // 404 & error aynı kalsın
 app.use((req, res) => res.status(404).json({ message: "Not found" }));
 app.use(errorHandler);
