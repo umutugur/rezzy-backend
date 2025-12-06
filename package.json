@@ -12,6 +12,7 @@
     "migrate:photos": "node src/scripts/migrate-restaurant-photos.js"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
     "apple-signin-auth": "^2.0.0",
     "archiver": "^7.0.1",
     "axios": "^1.13.2",

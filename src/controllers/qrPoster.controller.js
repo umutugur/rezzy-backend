@@ -3,6 +3,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { PDFDocument, rgb } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import QRCode from "qrcode";
 import JSZip from "jszip";
 import axios from "axios";
@@ -59,6 +60,7 @@ async function generatePosterPdf(restaurant, table) {
   ]);
 
   const pdfDoc = await PDFDocument.create();
+  pdfDoc.registerFontkit(fontkit);
   const page = pdfDoc.addPage();
   const posterImage = await pdfDoc.embedPng(posterBytes);
 
