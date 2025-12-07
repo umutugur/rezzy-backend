@@ -120,6 +120,7 @@ async function generatePosterPdf(restaurant, table) {
   const qrPngBuffer = await QRCode.toBuffer(qrUrl, {
     margin: 1,
     width: Math.round(qrSize),
+    errorCorrectionLevel:"H",
   });
 
   const qrImage = await pdfDoc.embedPng(qrPngBuffer);
@@ -155,7 +156,7 @@ async function generatePosterPdf(restaurant, table) {
         const logoY = qrCenterY - logoSize / 2;
 
         // 🔲 QR orta alanında beyaz bir patch çiz (şeffaf PNG'lerde arka plan kaybolmasın)
-        const bgPadding = logoSize * 0.35; // logodan biraz daha büyük beyaz kare
+        const bgPadding = logoSize * 0.30; // logodan biraz daha büyük beyaz kare
         const bgSize = logoSize + bgPadding;
         const bgX = qrCenterX - bgSize / 2;
         const bgY = qrCenterY - bgSize / 2;
