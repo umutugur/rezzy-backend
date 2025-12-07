@@ -48,8 +48,14 @@ const deriveTableStatus = (table, session, requests = []) => {
   if (requests.length > 0) {
     const hasBill = requests.some((r) => r.type === "bill");
     const hasWaiter = requests.some((r) => r.type === "waiter");
-    if (hasBill) status = "bill_request";
-    else if (hasWaiter) status = "waiter_call";
+    const hasOrderReady = requests.some((r) => r.type === "order_ready");
+
+    if (hasBill) {
+      status = "bill_request";
+    } else if (hasOrderReady || hasWaiter) {
+      // 🔔 order_ready de garson çağrısı gibi görünür
+      status = "waiter_call";
+    }
   }
 
   return status;
@@ -594,9 +600,19 @@ export const closeTableSessionForRestaurant = async (req, res, next) => {
       return next({ status: 404, message: "Açık adisyon bulunamadı" });
     }
 
-    session.status = "closed";
+        session.status = "closed";
     session.closedAt = new Date();
     await session.save();
+
+    // 🔁 Bu adisyona ait mutfak siparişlerini SERVED (delivered) yap
+    await Order.updateMany(
+      {
+        restaurantId: toObjectId(rid),
+        sessionId: session._id,
+        kitchenStatus: { $ne: "delivered" },
+      },
+      { $set: { kitchenStatus: "delivered" } }
+    );
 
     await TableServiceRequest.updateMany(
       {

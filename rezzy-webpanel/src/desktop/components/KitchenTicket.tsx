@@ -16,9 +16,7 @@ export type KitchenTicketProps = {
   items: KitchenTicketItem[];
   note?: string;
 
-  // kolon tarafında kullanmak istersen:
   status: KitchenTicketStatus;
-  // (şu an bu dosyada kullanmıyorum, ama parent rahatça prop geçebilsin diye tanımlı)
   onStart?: (id: string) => void;
   onReady?: (id: string) => void;
   onServe?: (id: string) => void;
@@ -88,9 +86,7 @@ export const KitchenTicket: React.FC<KitchenTicketProps> = ({
         {items.map((item, idx) => (
           <li key={idx} className="rezvix-kitchen-ticket__item">
             <span className="rezvix-kitchen-ticket__name">{item.name}</span>
-            <span className="rezvix-kitchen-ticket__qty">
-              ×{item.quantity}
-            </span>
+            <span className="rezvix-kitchen-ticket__qty">×{item.quantity}</span>
           </li>
         ))}
       </ul>
@@ -99,8 +95,12 @@ export const KitchenTicket: React.FC<KitchenTicketProps> = ({
 
       <footer className="rezvix-kitchen-ticket__footer">
         <div className="rezvix-kitchen-ticket__footer-text">
-          <span>{footer.primary}</span>
-          <span>{footer.secondary}</span>
+          <div className="rezvix-kitchen-ticket__footer-primary">
+            {footer.primary}
+          </div>
+          <div className="rezvix-kitchen-ticket__footer-secondary">
+            {footer.secondary}
+          </div>
         </div>
 
         <div className="rezvix-kitchen-ticket__footer-actions">

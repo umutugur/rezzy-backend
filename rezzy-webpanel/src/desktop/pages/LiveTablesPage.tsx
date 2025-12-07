@@ -360,10 +360,15 @@ export const LiveTablesPage: React.FC = () => {
   enabled: !!rid && !!selectedTableId && isDetailModalOpen,
   refetchInterval: isDetailModalOpen ? 5000 : false,
 });
-  const closeSessionMut = useMutation({
-    mutationFn: () => restaurantCloseTableSession(rid, selectedTableId as string),
+    const closeSessionMut = useMutation({
+    mutationFn: () =>
+      restaurantCloseTableSession(rid, selectedTableId as string),
     onSuccess: () => {
+      // 🟢 Canlı masalar
       qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
+      // 🟢 Mutfak ekranı
+      qc.invalidateQueries({ queryKey: ["kitchen-tickets", rid] });
+      // Detay modalini taze tut
       refetchDetail();
     },
   });
