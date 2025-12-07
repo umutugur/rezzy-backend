@@ -108,7 +108,7 @@ async function generatePosterPdf(restaurant, table) {
   const qrAreaHeightPx = (qrBottomCm - qrTopCm) * pxPerCmY;
 
   // QR, alanın biraz içinde dursun diye %90 oranında kullanıyoruz
-  const qrSize = Math.min(qrAreaWidthPx, qrAreaHeightPx) * 0.9;
+  const qrSize = Math.min(qrAreaWidthPx, qrAreaHeightPx) * 1.0;
 
   const qrCenterX = qrCenterXCm * pxPerCmX;
   const qrCenterY = centerYFromTopCm(qrCenterYFromTopCm);
@@ -149,10 +149,26 @@ async function generatePosterPdf(restaurant, table) {
       }
 
       if (logoImage) {
+        // Logo boyutu (QR karesinin ortasında)
         const logoSize = qrSize * 0.28; // QR'in yaklaşık %30'u kadar
         const logoX = qrCenterX - logoSize / 2;
         const logoY = qrCenterY - logoSize / 2;
 
+        // 🔲 QR orta alanında beyaz bir patch çiz (şeffaf PNG'lerde arka plan kaybolmasın)
+        const bgPadding = logoSize * 0.35; // logodan biraz daha büyük beyaz kare
+        const bgSize = logoSize + bgPadding;
+        const bgX = qrCenterX - bgSize / 2;
+        const bgY = qrCenterY - bgSize / 2;
+
+        page.drawRectangle({
+          x: bgX,
+          y: bgY,
+          width: bgSize,
+          height: bgSize,
+          color: rgb(1, 1, 1), // tam beyaz
+        });
+
+        // Logo'yu beyaz patch'in ortasına çiz
         page.drawImage(logoImage, {
           x: logoX,
           y: logoY,
