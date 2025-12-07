@@ -38,6 +38,7 @@ const findRequestsForTable = (requests, table) => {
 const deriveTableStatus = (table, session, requests = []) => {
   let status = table?.status || "empty";
 
+  // 🔹 Önce temel state: boş / dolu / sipariş var
   if (!session) {
     status = "empty";
   } else {
@@ -45,22 +46,26 @@ const deriveTableStatus = (table, session, requests = []) => {
     status = grand > 0 ? "order_active" : "occupied";
   }
 
+  // 🔹 Servis istekleri varsa override et
   if (requests.length > 0) {
     const hasBill = requests.some((r) => r.type === "bill");
     const hasWaiter = requests.some((r) => r.type === "waiter");
     const hasOrderReady = requests.some((r) => r.type === "order_ready");
 
     if (hasBill) {
+      // 🧾 Hesap istendi → en yüksek öncelik
       status = "bill_request";
-    } else if (hasOrderReady || hasWaiter) {
-      // 🔔 order_ready de garson çağrısı gibi görünür
+    } else if (hasWaiter) {
+      // 🧑‍🍳 Garson çağrısı
       status = "waiter_call";
+    } else if (hasOrderReady) {
+      // 🟡 Sadece sipariş hazır ise ayrı state
+      status = "order_ready";
     }
   }
 
   return status;
 };
-
 const resolveDisplayNameForRestaurantPanel = (r, user) => {
   // 1) Rezervasyon dokümanındaki doğrudan isim alanları
   const directName =

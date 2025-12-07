@@ -57,9 +57,10 @@ type DraftOrderItem = {
 // READY → TableServiceRequest (order_ready) geldiğinde table.status "order_active" kalıyor,
 // ama openServiceRequests artıyor. Burada onu "NEED_HELP" görünümüne çekiyoruz.
 function mapStatusForTable(t: LiveTable): TableStatus {
-  const hasOpenReq = (t as any).openServiceRequests != null
-    ? Number((t as any).openServiceRequests) > 0
-    : false;
+  const hasOpenReq =
+    (t as any).openServiceRequests != null
+      ? Number((t as any).openServiceRequests) > 0
+      : false;
 
   switch (t.status) {
     case "empty":
@@ -95,6 +96,7 @@ function minutesSince(iso: string | null): number | undefined {
   return Math.round(diffMs / 60000);
 }
 
+// Şimdilik kullanılmıyor ama dursun
 function statusLabel(status: LiveTable["status"]): string {
   switch (status) {
     case "empty":
@@ -223,15 +225,21 @@ export const LiveTablesPage: React.FC = () => {
   }, []);
 
   // Seçili masa
-  const [selectedTableId, setSelectedTableId] = React.useState<string | null>(null);
+  const [selectedTableId, setSelectedTableId] = React.useState<string | null>(
+    null
+  );
 
   // Walk-in modal state
   const [isOrderModalOpen, setIsOrderModalOpen] = React.useState(false);
   const [guestName, setGuestName] = React.useState("");
-  const [draftItems, setDraftItems] = React.useState<Record<string, DraftOrderItem>>({});
-  const [activeCategoryId, setActiveCategoryId] = React.useState<string | "all">("all");
+  const [draftItems, setDraftItems] = React.useState<
+    Record<string, DraftOrderItem>
+  >({});
+  const [activeCategoryId, setActiveCategoryId] =
+    React.useState<string | "all">("all");
 
   const [isDetailModalOpen, setIsDetailModalOpen] = React.useState(false);
+
   // Canlı masalar
   const { data, isLoading, isError } = useQuery({
     queryKey: ["restaurant-live-tables", rid],
@@ -240,7 +248,7 @@ export const LiveTablesPage: React.FC = () => {
     refetchInterval: 5000,
     refetchIntervalInBackground: true,
   });
-  
+
   const tables: LiveTable[] = data?.tables ?? [];
 
   // Değişiklik + ses
@@ -333,8 +341,19 @@ export const LiveTablesPage: React.FC = () => {
 
   // Özetler
   const occupiedCount = tables.filter((t) => t.status !== "empty").length;
-  const waiterCallCount = tables.filter((t) => t.status === "waiter_call").length;
-  const billRequestCount = tables.filter((t) => t.status === "bill_request").length;
+
+  // 🆕 Garson çağrısı sayısı: waiter_call + açık servis isteği olan masalar
+  const waiterCallCount = tables.filter((t) => {
+    const hasOpenReq =
+      (t as any).openServiceRequests != null
+        ? Number((t as any).openServiceRequests) > 0
+        : false;
+    return t.status === "waiter_call" || hasOpenReq;
+  }).length;
+
+  const billRequestCount = tables.filter(
+    (t) => t.status === "bill_request"
+  ).length;
 
   const mapped: MockTableLike[] = tables.map((t) => ({
     id: t.id,
@@ -350,19 +369,19 @@ export const LiveTablesPage: React.FC = () => {
 
   // ================== MASA DETAYI ==================
   const {
-  data: tableDetail,
-  isLoading: detailLoading,
-  error: detailError,
-  refetch: refetchDetail,
-} = useQuery({
-  queryKey: ["desktop-table-detail", rid, selectedTableId],
-  queryFn: () => restaurantGetTableDetail(rid, selectedTableId as string),
-  enabled: !!rid && !!selectedTableId && isDetailModalOpen,
-  refetchInterval: isDetailModalOpen ? 5000 : false,
-});
-    const closeSessionMut = useMutation({
-    mutationFn: () =>
-      restaurantCloseTableSession(rid, selectedTableId as string),
+    data: tableDetail,
+    isLoading: detailLoading,
+    error: detailError,
+    refetch: refetchDetail,
+  } = useQuery({
+    queryKey: ["desktop-table-detail", rid, selectedTableId],
+    queryFn: () => restaurantGetTableDetail(rid, selectedTableId as string),
+    enabled: !!rid && !!selectedTableId && isDetailModalOpen,
+    refetchInterval: isDetailModalOpen ? 5000 : false,
+  });
+
+  const closeSessionMut = useMutation({
+    mutationFn: () => restaurantCloseTableSession(rid, selectedTableId as string),
     onSuccess: () => {
       // 🟢 Canlı masalar
       qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
@@ -374,7 +393,8 @@ export const LiveTablesPage: React.FC = () => {
   });
 
   const resolveServiceMut = useMutation({
-    mutationFn: () => restaurantResolveTableService(rid, selectedTableId as string),
+    mutationFn: () =>
+      restaurantResolveTableService(rid, selectedTableId as string),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
       refetchDetail();
@@ -422,9 +442,7 @@ export const LiveTablesPage: React.FC = () => {
 
     return categories
       .filter(
-        (c) =>
-          idsWithItems.has(String(c._id)) &&
-          c.isActive !== false
+        (c) => idsWithItems.has(String(c._id)) && c.isActive !== false
       )
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [categories, menuItems]);
@@ -694,7 +712,7 @@ export const LiveTablesPage: React.FC = () => {
       ]}
     >
       {/* Sol: masa grid, Sağ: detay panel */}
-      <div className="flex gap-4 items-start"></div>
+      <div className="flex gap-4 items-start">
         {/* SOL TARAF */}
         <div className="flex-1">
           {isLoading && (
@@ -732,66 +750,66 @@ export const LiveTablesPage: React.FC = () => {
           {!isLoading && !isError && hasData && (
             <div className="rezvix-tables-grid">
               {mapped.map((t) => (
-  <div
-    key={t.id}
-    onClick={() => {
-      setSelectedTableId(t.id);
-      setIsDetailModalOpen(true);
-    }}
-    className="cursor-pointer"
-  >
-    <TableCard
-      name={t.name}
-      location={t.location}
-      status={t.status}
-      total={t.total}
-      sinceMinutes={t.sinceMinutes}
-      channel={t.channel}
-    />
-  </div>
-))}
+                <div
+                  key={t.id}
+                  onClick={() => {
+                    setSelectedTableId(t.id);
+                    setIsDetailModalOpen(true);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <TableCard
+                    name={t.name}
+                    location={t.location}
+                    status={t.status}
+                    total={t.total}
+                    sinceMinutes={t.sinceMinutes}
+                    channel={t.channel}
+                  />
+                </div>
+              ))}
             </div>
           )}
         </div>
+      </div>
 
       {/* MASA DETAY MODALI */}
-    <TableDetailModal
-      open={isDetailModalOpen && !!selectedTableId}
-      table={selectedTable}
-      tableDetail={tableDetail as any}
-      isLoading={detailLoading}
-      error={detailError}
-      onClose={() => {
-        setIsDetailModalOpen(false);
-        setSelectedTableId(null);
-      }}
-      onOpenWalkInModal={() => {
-        if (!selectedTableId) return;
-        setIsOrderModalOpen(true);
-      }}
-      onResolveService={() => {
-        if (!selectedTableId || !tableDetail) return;
-        resolveServiceMut.mutate();
-      }}
-      resolveServicePending={resolveServiceMut.isPending}
-      onCloseSession={() => {
-        if (!selectedTableId || !tableDetail?.session) return;
-        closeSessionMut.mutate();
-      }}
-      closeSessionPending={closeSessionMut.isPending}
-      onPrintLastOrder={() => {
-        if (!tableDetail) return;
-        handlePrintLastOrder(tableDetail);
-      }}
-      onPrintFullBill={() => {
-        if (!tableDetail) return;
-        handlePrintFullBill(tableDetail);
-      }}
-    />
-
+      <TableDetailModal
+        open={isDetailModalOpen && !!selectedTableId}
+        table={selectedTable}
+        tableDetail={tableDetail as any}
+        isLoading={detailLoading}
+        error={detailError}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setSelectedTableId(null);
+        }}
+        onOpenWalkInModal={() => {
+          if (!selectedTableId) return;
+          setIsOrderModalOpen(true);
+        }}
+        onResolveService={() => {
+          if (!selectedTableId || !tableDetail) return;
+          resolveServiceMut.mutate();
+        }}
+        resolveServicePending={resolveServiceMut.isPending}
+        onCloseSession={() => {
+          if (!selectedTableId || !tableDetail?.session) return;
+          closeSessionMut.mutate();
+        }}
+        closeSessionPending={closeSessionMut.isPending}
+        onPrintLastOrder={() => {
+          if (!tableDetail) return;
+          handlePrintLastOrder(tableDetail);
+        }}
+        onPrintFullBill={() => {
+          if (!tableDetail) return;
+          handlePrintFullBill(tableDetail);
+        }}
+      />
 
       {/* ✅ WALK-IN MODAL (Rezvix POS tarzı, kategori → ürün) */}
-            <WalkInOrderModal
+      <WalkInOrderModal
         open={isOrderModalOpen}
         tableName={selectedTableName || "Seçili masa"}
         guestName={guestName}
@@ -812,7 +830,6 @@ export const LiveTablesPage: React.FC = () => {
         onSubmit={() => createWalkInMut.mutate()}
         submitPending={createWalkInMut.isPending}
       />
-      
     </RestaurantDesktopLayout>
   );
 };

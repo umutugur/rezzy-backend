@@ -75,18 +75,23 @@ function channelLabel(ch?: string | null): string {
 
 function channelClass(ch?: string | null): string {
   if (ch === "REZVIX") {
-    // Rezvix rezervasyon: daha premium mor ton
     return "bg-[#ede9ff] text-[#4c1d95] border border-[#a78bfa]";
   }
   if (ch === "QR") {
-    // QR: hafif turkuaz/yeşil
     return "bg-[#e0fdf7] text-[#036c5f] border border-[#34d399]";
   }
   if (ch === "WALK_IN") {
-    // Walk-in: sıcak amber
     return "bg-[#fff4e5] text-[#92400e] border border-[#fdba74]";
   }
   return "bg-slate-100 text-slate-600 border border-slate-200";
+}
+
+// 🆕 Servis isteği tipine göre etiket
+function serviceRequestLabel(type: string): string {
+  if (type === "waiter") return "Garson çağrısı";
+  if (type === "bill") return "Hesap istendi";
+  if (type === "order_ready") return "Sipariş hazır";
+  return "Servis isteği";
 }
 
 export const TableDetailModal: React.FC<Props> = ({
@@ -309,7 +314,7 @@ export const TableDetailModal: React.FC<Props> = ({
               {/* Servis istekleri */}
               <div className="space-y-1">
                 <div className="text-[11px] font-semibold text-slate-700">
-                  Garson / Hesap İstekleri
+                  Garson / Servis İstekleri
                 </div>
 
                 {!hasRequests && (
@@ -325,9 +330,7 @@ export const TableDetailModal: React.FC<Props> = ({
                   >
                     <div>
                       <div className="text-[11px] font-medium text-amber-900">
-                        {r.type === "waiter"
-                          ? "Garson çağrısı"
-                          : "Hesap istendi"}
+                        {serviceRequestLabel(r.type)}
                       </div>
                       <div className="text-[10px] text-amber-800/80">
                         {formatTime(r.createdAt)}
