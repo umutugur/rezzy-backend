@@ -59,6 +59,10 @@ async function generatePosterPdf(restaurant, table) {
 
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
+
+  const font = await pdfDoc.embedFont(fontBytes);
+  const fontLight = font; // şimdilik aynı fontu kullanıyoruz
+
   const page = pdfDoc.addPage();
   const posterImage = await pdfDoc.embedPng(posterBytes);
 
