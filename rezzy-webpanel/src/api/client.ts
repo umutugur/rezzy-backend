@@ -653,7 +653,9 @@ export type TableLiveStatus =
   | "occupied"
   | "order_active"
   | "waiter_call"
-  | "bill_request";
+  | "bill_request"
+  | "order_ready"
+  ;
 
 export interface LiveTable {
   id: string;
