@@ -110,13 +110,16 @@ export const KitchenBoardPage: React.FC = () => {
   const totalTickets = tickets.length;
 
   // 🔹 Durum güncelleme (Yeni → Hazırlanıyor → Hazır → Teslim edildi)
-  const updateStatusMut = useMutation({
+    const updateStatusMut = useMutation({
     mutationFn: async (params: { orderId: string; nextStatus: KitchenStatusPayload }) => {
       const { orderId, nextStatus } = params;
       await api.patch(`/orders/${orderId}/kitchen-status`, { status: nextStatus });
     },
     onSuccess: () => {
+      // 🔁 Mutfak fişlerini yenile
       qc.invalidateQueries({ queryKey: ["kitchen-tickets", rid] });
+      // 🔔 Canlı masaları da yenile (order_ready → waiter_call / NEED_HELP)
+      qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
     },
     onError: (e: any) => {
       showToast(

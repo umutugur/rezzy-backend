@@ -30,7 +30,7 @@ function getSourceLabel(source: "WALK_IN" | "QR" | "REZVIX") {
 
 function getFooterTexts(status: KitchenTicketStatus): {
   primary: string;
-  secondary: string;
+  secondary?: string;
 } {
   switch (status) {
     case "NEW":
@@ -42,7 +42,7 @@ function getFooterTexts(status: KitchenTicketStatus): {
     case "SERVED":
       return { primary: "Teslim edildi", secondary: "Servis tamamlandı" };
     default:
-      return { primary: "", secondary: "" };
+      return { primary: "" };
   }
 }
 
@@ -61,17 +61,9 @@ export const KitchenTicket: React.FC<KitchenTicketProps> = ({
   const sourceLabel = getSourceLabel(source);
   const footer = getFooterTexts(status);
 
-  const handleStart = () => {
-    if (onStart) onStart(id);
-  };
-
-  const handleReady = () => {
-    if (onReady) onReady(id);
-  };
-
-  const handleServe = () => {
-    if (onServe) onServe(id);
-  };
+  const handleStart = () => onStart?.(id);
+  const handleReady = () => onReady?.(id);
+  const handleServe = () => onServe?.(id);
 
   return (
     <article className="rezvix-kitchen-ticket">
@@ -98,37 +90,42 @@ export const KitchenTicket: React.FC<KitchenTicketProps> = ({
           <div className="rezvix-kitchen-ticket__footer-primary">
             {footer.primary}
           </div>
-          <div className="rezvix-kitchen-ticket__footer-secondary">
-            {footer.secondary}
-          </div>
+          {footer.secondary && (
+            <div className="rezvix-kitchen-ticket__footer-secondary">
+              {footer.secondary}
+            </div>
+          )}
         </div>
 
         <div className="rezvix-kitchen-ticket__footer-actions">
-          {status === "NEW" && onStart && (
+          {status === "NEW" && (
             <button
               type="button"
-              className="rezvix-kitchen-ticket__button rezvix-kitchen-ticket__button--primary"
+              className="rezvix-btn rezvix-btn--primary rezvix-btn--xs"
               onClick={handleStart}
+              disabled={!onStart}
             >
               Hazırlamaya al
             </button>
           )}
 
-          {status === "IN_PROGRESS" && onReady && (
+          {status === "IN_PROGRESS" && (
             <button
               type="button"
-              className="rezvix-kitchen-ticket__button rezvix-kitchen-ticket__button--primary"
+              className="rezvix-btn rezvix-btn--primary rezvix-btn--xs"
               onClick={handleReady}
+              disabled={!onReady}
             >
               Hazır
             </button>
           )}
 
-          {status === "READY" && onServe && (
+          {status === "READY" && (
             <button
               type="button"
-              className="rezvix-kitchen-ticket__button rezvix-kitchen-ticket__button--primary"
+              className="rezvix-btn rezvix-btn--primary rezvix-btn--xs"
               onClick={handleServe}
+              disabled={!onServe}
             >
               Teslim edildi
             </button>
