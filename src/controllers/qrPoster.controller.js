@@ -88,15 +88,17 @@ async function generatePosterPdf(restaurant, table) {
   // ---------- QR alanı (ortadaki büyük kutu) ----------
   // Tasarımda büyük beyaz kutunun koordinatları (px)
   const qrContainerDesign = {
-    left: 120,
-    right: 709,
-    bottom: 260,
-    top: 696,
+    // Canva ölçülerinden (cm) px'e çevrilmiş hali
+    // left: 4.7cm, right: 10.1cm, top: 5.9cm, bottom: 11.3cm
+    left: 264,
+    right: 567,
+    bottom: 350,
+    top: 671,
   };
 
   // Kutunun içinde bırakmak istediğimiz boşluk (px)
-  const qrMarginX = 80;
-  const qrMarginY = 80;
+  const qrMarginX = 130;
+  const qrMarginY = 130;
 
   const qrAvailWidthDesign =
     qrContainerDesign.right - qrContainerDesign.left - 2 * qrMarginX;
@@ -153,10 +155,10 @@ async function generatePosterPdf(restaurant, table) {
 
   // ---------- Restoran adı (QR altındaki 1. beyaz bar) ----------
   const restaurantName = restaurant.name || "Restoran";
-  const restaurantTextSize = 26;
+  const restaurantTextSize = 30;
 
-  // Tasarım koordinatları: 1. bar (y: 360..479, x: 231..602)
-  const firstBarCenterYDesign = (360 + 479) / 2; // ~419.5
+  // Tasarım koordinatları: 1. bar (y: 748..820 px)
+  const firstBarCenterYDesign = (748 + 820) / 2; // Canva'dan çevrilmiş ~784 px
   const firstBarCenterY = firstBarCenterYDesign * scaleY;
 
   const restTextWidth = font.widthOfTextAtSize(
@@ -174,10 +176,10 @@ async function generatePosterPdf(restaurant, table) {
 
   // ---------- Masa adı (QR altındaki 2. beyaz bar) ----------
   const tableName = table.name || "Masa";
-  const tableTextSize = 22;
+  const tableTextSize = 26;
 
-  // Tasarım koordinatları: 2. bar (y: 300..359, x: 189..669)
-  const secondBarCenterYDesign = (300 + 359) / 2; // ~329.5
+  // Tasarım koordinatları: 2. bar (y: 850..914 px)
+  const secondBarCenterYDesign = (850 + 914) / 2; // Canva'dan çevrilmiş ~882 px
   const secondBarCenterY = secondBarCenterYDesign * scaleY;
 
   const tableTextWidth = fontLight.widthOfTextAtSize(
@@ -196,15 +198,15 @@ async function generatePosterPdf(restaurant, table) {
   // ---------- En alttaki kutuya app-link QR ikonu ----------
   const appIcon = await pdfDoc.embedPng(appLinkBytes);
 
-  // Tasarım koordinatları: alt kare (y: 40..199, x: 280..559)
-  const bottomSquare = { bottom: 40, top: 199, left: 280, right: 559 };
+  // Tasarım koordinatları: alt kare (y: 1087..1229 px, x: 348..483 px)
+  const bottomSquare = { bottom: 1087, top: 1229, left: 348, right: 483 };
   const bottomCenterXDesign = (bottomSquare.left + bottomSquare.right) / 2;
   const bottomCenterYDesign = (bottomSquare.bottom + bottomSquare.top) / 2;
 
   const bottomCenterX = bottomCenterXDesign * scaleX;
   const bottomCenterY = bottomCenterYDesign * scaleY;
 
-  const appSizeDesign = 110;
+  const appSizeDesign = 135;
   const appSize = appSizeDesign * scale;
 
   const appX = bottomCenterX - appSize / 2;
