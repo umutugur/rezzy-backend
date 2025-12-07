@@ -60,6 +60,8 @@ function statusLabel(status: LiveTable["status"]): string {
       return "Garson Çağrısı";
     case "bill_request":
       return "Hesap İstendi";
+    case "order_ready":
+      return "Sipariş Hazır";
     default:
       return status;
   }
