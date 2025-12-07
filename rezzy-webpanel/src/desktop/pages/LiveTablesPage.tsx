@@ -53,9 +53,7 @@ type DraftOrderItem = {
 };
 
 // =============== Yardımcılar ===============
-// 🆕 Artık sadece status değil, openServiceRequests bilgisine de bakıyoruz.
-// READY → TableServiceRequest (order_ready) geldiğinde table.status "order_active" kalıyor,
-// ama openServiceRequests artıyor. Burada onu "NEED_HELP" görünümüne çekiyoruz.
+// TableLiveStatus → TableStatus map’i
 function mapStatusForTable(t: LiveTable): TableStatus {
   const hasOpenReq =
     (t as any).openServiceRequests != null
@@ -69,11 +67,13 @@ function mapStatusForTable(t: LiveTable): TableStatus {
       return "NEED_HELP";
     case "bill_request":
       return "PAYING";
+    case "order_ready":
+      // 🟡 Mutfak "order_ready" → kartta "Sipariş Hazır" ve HAZIR etiketi
+      return "ORDER_READY";
     case "occupied":
     case "order_active":
     default:
-      // masa sipariş aktif ama açık TableServiceRequest varsa (garson/bill/order_ready),
-      // kartı uyarı moduna al
+      // sipariş aktif ama herhangi bir açık servis isteği varsa
       if (hasOpenReq) return "NEED_HELP";
       return "OPEN";
   }
@@ -110,7 +110,7 @@ function statusLabel(status: LiveTable["status"]): string {
     case "bill_request":
       return "Hesap İstendi";
     case "order_ready":
-      return "Sipariş İstendi"
+      return "Sipariş Hazır";
     default:
       return status;
   }
@@ -287,7 +287,8 @@ export const LiveTablesPage: React.FC = () => {
           if (
             curr.status === "order_active" ||
             curr.status === "waiter_call" ||
-            curr.status === "bill_request"
+            curr.status === "bill_request" ||
+            curr.status === "order_ready"
           ) {
             triggeredTables.add(id);
           }
@@ -344,14 +345,9 @@ export const LiveTablesPage: React.FC = () => {
   // Özetler
   const occupiedCount = tables.filter((t) => t.status !== "empty").length;
 
-  // 🆕 Garson çağrısı sayısı: waiter_call + açık servis isteği olan masalar
-  const waiterCallCount = tables.filter((t) => {
-    const hasOpenReq =
-      (t as any).openServiceRequests != null
-        ? Number((t as any).openServiceRequests) > 0
-        : false;
-    return t.status === "waiter_call" || hasOpenReq;
-  }).length;
+  // 🔁 Artık sadece gerçek waiter_call sayılıyor
+  const waiterCallCount = tables.filter((t) => t.status === "waiter_call")
+    .length;
 
   const billRequestCount = tables.filter(
     (t) => t.status === "bill_request"
@@ -361,7 +357,7 @@ export const LiveTablesPage: React.FC = () => {
     id: t.id,
     name: t.name,
     location: formatLocation(t),
-    status: mapStatusForTable(t), // 🆕 status hesaplaması burada değişti
+    status: mapStatusForTable(t),
     total: t.totals?.grandTotal ?? undefined,
     sinceMinutes: minutesSince(t.lastOrderAt),
     channel: t.channel as TableChannel | undefined,
