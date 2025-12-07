@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import OrderSession from "../models/OrderSession.js";
 import Order from "../models/Order.js";
 import Restaurant from "../models/Restaurant.js";
+import TableServiceRequest from "../models/TableServiceRequest.js"; // 🆕 eklendi
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecret
@@ -120,7 +121,7 @@ export async function closeSession(req, res) {
       },
       { arrayFilters: [{ "t.sessionId": id }] }
     );
-        // ✅ Bu session'a ait tüm siparişleri mutfak açısından "teslim edildi" yap
+    // ✅ Bu session'a ait tüm siparişleri mutfak açısından "teslim edildi" yap
     await Order.updateMany(
       { sessionId: id, kitchenStatus: { $ne: "delivered" } },
       { $set: { kitchenStatus: "delivered" } }
@@ -193,7 +194,6 @@ export async function createOrder(req, res) {
       paymentStatus: paymentMethod === "venue" ? "not_required" : "pending",
       // createOrder mevcutta QR/Rezvix akışı için kullanılıyor → default "qr"
       kitchenStatus: "new",
-
     });
 
     // MASAYI order_active yap
@@ -395,7 +395,7 @@ export async function createWalkInOrder(req, res) {
       sessionId: s._id,
       restaurantId: rid,
       tableId: table,
-      userId: null,              // walk-in → masaya oturan fiziksel müşteri
+      userId: null, // walk-in → masaya oturan fiziksel müşteri
       isGuest: true,
       guestName: guestName || "",
       items: calcItems,
@@ -403,9 +403,8 @@ export async function createWalkInOrder(req, res) {
       currency,
       paymentMethod: "venue",
       paymentStatus: "not_required",
-      source: "walk_in",  
+      source: "walk_in",
       kitchenStatus: "new",
-
     });
 
     // 3) Session totals güncelle
@@ -428,7 +427,9 @@ export async function createWalkInOrder(req, res) {
     });
   } catch (e) {
     console.error("[createWalkInOrder] err", e);
-    return res.status(500).json({ message: "Walk-in sipariş oluşturulamadı." });
+    return res
+      .status(500)
+      .json({ message: "Walk-in sipariş oluşturulamadı." });
   }
 }
 /**
@@ -497,9 +498,7 @@ export async function listKitchenTickets(req, res) {
     return res.json({ tickets });
   } catch (e) {
     console.error("[listKitchenTickets] err", e);
-    return res
-      .status(500)
-      .json({ message: "Mutfak fişleri alınamadı." });
+    return res.status(500).json({ message: "Mutfak fişleri alınamadı." });
   }
 }
 /**
@@ -531,8 +530,55 @@ export async function updateKitchenStatus(req, res) {
       return res.status(404).json({ message: "Sipariş bulunamadı." });
     }
 
-    // TODO: status === "ready" olduğunda canlı masalar ekranına push / websocket event’i at.
-    // Şimdilik sadece güncelliyoruz.
+    // 🆕 READY → TableServiceRequest üret (canlı masalarda uyarı için)
+    if (status === "ready") {
+      try {
+        if (order.restaurantId && order.tableId) {
+          // Aynı masa + session için açık "order_ready" isteği zaten varsa yenisini açma
+          const hasOpenReady = await TableServiceRequest.exists({
+            restaurantId: order.restaurantId,
+            tableId: order.tableId,
+            sessionId: order.sessionId || null,
+            type: "order_ready",
+            status: "open",
+          });
+
+          if (!hasOpenReady) {
+            await TableServiceRequest.create({
+              restaurantId: order.restaurantId,
+              tableId: order.tableId,
+              sessionId: order.sessionId || null,
+              type: "order_ready", // UI bunu ses/flash için kullanabilir
+            });
+          }
+        }
+      } catch (err) {
+        console.error("[updateKitchenStatus] create order_ready TSR err", err);
+      }
+    }
+
+    // 🆕 SERVED (delivered) → ilgili order_ready isteklerini otomatik kapat
+    if (status === "delivered") {
+      try {
+        if (order.restaurantId && order.tableId) {
+          await TableServiceRequest.updateMany(
+            {
+              restaurantId: order.restaurantId,
+              tableId: order.tableId,
+              sessionId: order.sessionId || null,
+              type: "order_ready",
+              status: "open",
+            },
+            { $set: { status: "handled" } }
+          );
+        }
+      } catch (err) {
+        console.error("[updateKitchenStatus] close order_ready TSR err", err);
+      }
+    }
+
+    // TODO (eski not): status === "ready" olduğunda canlı masalar ekranına push / websocket event’i at.
+    // Şu an için sadece TableServiceRequest üretip/güncelliyoruz.
 
     return res.json({ order });
   } catch (e) {

@@ -1224,3 +1224,37 @@
   font-size: 11px;
   color: #6b7280;
 }
+.rezvix-ticket__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.rezvix-ticket__status {
+  color: rgba(0,0,0,0.55);
+}
+
+.rezvix-ticket__action-btn {
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.7);
+  background: rgba(255,255,255,0.2);
+  padding: 4px 10px;
+  font-size: 11px;
+  line-height: 1;
+  color: #ffffff;
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  white-space: nowrap;
+}
+
+.rezvix-ticket__action-btn:hover {
+  background: rgba(255,255,255,0.32);
+  transform: translateY(-0.5px);
+}
+
+.rezvix-ticket__action-btn:active {
+  transform: translateY(0.5px);
+}

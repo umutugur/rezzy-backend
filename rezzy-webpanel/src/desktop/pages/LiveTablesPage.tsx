@@ -53,8 +53,15 @@ type DraftOrderItem = {
 };
 
 // =============== Yardımcılar ===============
-function mapStatus(status: LiveTable["status"]): TableStatus {
-  switch (status) {
+// 🆕 Artık sadece status değil, openServiceRequests bilgisine de bakıyoruz.
+// READY → TableServiceRequest (order_ready) geldiğinde table.status "order_active" kalıyor,
+// ama openServiceRequests artıyor. Burada onu "NEED_HELP" görünümüne çekiyoruz.
+function mapStatusForTable(t: LiveTable): TableStatus {
+  const hasOpenReq = (t as any).openServiceRequests != null
+    ? Number((t as any).openServiceRequests) > 0
+    : false;
+
+  switch (t.status) {
     case "empty":
       return "IDLE";
     case "waiter_call":
@@ -64,6 +71,9 @@ function mapStatus(status: LiveTable["status"]): TableStatus {
     case "occupied":
     case "order_active":
     default:
+      // masa sipariş aktif ama açık TableServiceRequest varsa (garson/bill/order_ready),
+      // kartı uyarı moduna al
+      if (hasOpenReq) return "NEED_HELP";
       return "OPEN";
   }
 }
@@ -273,8 +283,8 @@ export const LiveTablesPage: React.FC = () => {
           }
         }
 
-        const prevReq = old.openServiceRequests || 0;
-        const nextReq = curr.openServiceRequests || 0;
+        const prevReq = (old as any).openServiceRequests || 0;
+        const nextReq = (curr as any).openServiceRequests || 0;
         if (nextReq > prevReq) {
           triggeredTables.add(id);
         }
@@ -330,11 +340,10 @@ export const LiveTablesPage: React.FC = () => {
     id: t.id,
     name: t.name,
     location: formatLocation(t),
-    status: mapStatus(t.status),
+    status: mapStatusForTable(t), // 🆕 status hesaplaması burada değişti
     total: t.totals?.grandTotal ?? undefined,
     sinceMinutes: minutesSince(t.lastOrderAt),
     channel: t.channel as TableChannel | undefined,
-
   }));
 
   const hasData = mapped.length > 0;

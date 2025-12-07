@@ -79,17 +79,17 @@ export const TableCard: React.FC<TableCardProps> = ({
   const channelClass = getChannelClass(channel);
 
   // PAYING / NEED_HELP acil durum: status rengi öncelikli
-// Diğer durumlarda (IDLE / OPEN) channel rengi öncelikli
-let rootClass = "rezvix-table-card";
+  // Diğer durumlarda (IDLE / OPEN) channel rengi öncelikli
+  let rootClass = "rezvix-table-card";
 
-if (status === "PAYING" || status === "NEED_HELP") {
-  rootClass += statusClass;          // turuncu / kırmızı arkaplan
-} else {
-  if (status === "IDLE") {
-    rootClass += statusClass;        // istersen hafif gri/nötr stil
+  if (status === "PAYING" || status === "NEED_HELP") {
+    rootClass += statusClass;          // turuncu / kırmızı arkaplan
+  } else {
+    if (status === "IDLE") {
+      rootClass += statusClass;        // istersen hafif gri/nötr stil
+    }
+    rootClass += channelClass;         // QR / Rezvix / Lokal renkleri
   }
-  rootClass += channelClass;         // QR / Rezvix / Lokal renkleri
-}
 
   const guestText =
     typeof guestCount === "number" && guestCount > 0
@@ -103,11 +103,36 @@ if (status === "PAYING" || status === "NEED_HELP") {
         : `+${sinceMinutes} dk`
       : "Beklemede";
 
+  const showAlertBadge = status === "NEED_HELP";
+
   return (
     <article className={rootClass} onClick={onClick}>
-      <div className="rezvix-table-card__header">
+      <div
+        className="rezvix-table-card__header"
+        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}
+      >
         <div className="rezvix-table-card__title">{name}</div>
-        <div className="rezvix-table-card__pill">{location}</div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div className="rezvix-table-card__pill">{location}</div>
+          {showAlertBadge && (
+            <div
+              style={{
+                backgroundColor: "#ff3b30",
+                color: "#ffffff",
+                borderRadius: 999,
+                padding: "2px 8px",
+                fontSize: 11,
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: 0.4,
+                boxShadow: "0 0 0 1px rgba(0,0,0,0.08)",
+              }}
+            >
+              UYARI
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="rezvix-table-card__meta">
