@@ -395,7 +395,7 @@ export async function createWalkInOrder(req, res) {
       sessionId: s._id,
       restaurantId: rid,
       tableId: table,
-      userId: null, // walk-in → masaya oturan fiziksel müşteri
+      userId: null,              // walk-in → masaya oturan fiziksel müşteri
       isGuest: true,
       guestName: guestName || "",
       items: calcItems,
@@ -427,9 +427,7 @@ export async function createWalkInOrder(req, res) {
     });
   } catch (e) {
     console.error("[createWalkInOrder] err", e);
-    return res
-      .status(500)
-      .json({ message: "Walk-in sipariş oluşturulamadı." });
+    return res.status(500).json({ message: "Walk-in sipariş oluşturulamadı." });
   }
 }
 /**
@@ -498,7 +496,9 @@ export async function listKitchenTickets(req, res) {
     return res.json({ tickets });
   } catch (e) {
     console.error("[listKitchenTickets] err", e);
-    return res.status(500).json({ message: "Mutfak fişleri alınamadı." });
+    return res
+      .status(500)
+      .json({ message: "Mutfak fişleri alınamadı." });
   }
 }
 /**
@@ -520,56 +520,76 @@ export async function updateKitchenStatus(req, res) {
       return res.status(400).json({ message: "Geçersiz mutfak durumu." });
     }
 
-    const order = await Order.findByIdAndUpdate(
-      orderId,
-      { $set: { kitchenStatus: status } },
-      { new: true }
-    ).lean();
-
+    // Önce siparişi bul, sonra kitchenStatus'ü güncelle
+    const order = await Order.findById(orderId);
     if (!order) {
       return res.status(404).json({ message: "Sipariş bulunamadı." });
     }
 
-    // 🆕 READY → TableServiceRequest üret (canlı masalarda uyarı için)
-    if (status === "ready") {
+    order.kitchenStatus = status;
+    await order.save();
+
+    const rid = order.restaurantId ? String(order.restaurantId) : null;
+    const tableId = order.tableId ? String(order.tableId) : null;
+    const sessionId = order.sessionId ? String(order.sessionId) : null;
+
+    // READY → TableServiceRequest (order_ready) oluştur + masayı waiter_call yap
+    if (status === "ready" && rid && tableId) {
       try {
-        if (order.restaurantId && order.tableId) {
-          // Aynı masa + session için açık "order_ready" isteği zaten varsa yenisini açma
-          const hasOpenReady = await TableServiceRequest.exists({
-            restaurantId: order.restaurantId,
-            tableId: order.tableId,
-            sessionId: order.sessionId || null,
+        const hasOpenReady = await TableServiceRequest.exists({
+          restaurantId: rid,
+          tableId,
+          sessionId,
+          type: "order_ready",
+          status: "open",
+        });
+
+        if (!hasOpenReady) {
+          await TableServiceRequest.create({
+            restaurantId: rid,
+            tableId,
+            sessionId,
             type: "order_ready",
-            status: "open",
           });
 
-          if (!hasOpenReady) {
-            await TableServiceRequest.create({
-              restaurantId: order.restaurantId,
-              tableId: order.tableId,
-              sessionId: order.sessionId || null,
-              type: "order_ready", // UI bunu ses/flash için kullanabilir
-            });
-          }
+          // diğer tiplerle aynı şekilde masa statüsünü uyarı moduna çek
+          await Restaurant.updateOne(
+            { _id: rid, "tables._id": tableId },
+            { $set: { "tables.$.status": "waiter_call" } }
+          );
         }
       } catch (err) {
         console.error("[updateKitchenStatus] create order_ready TSR err", err);
       }
     }
 
-    // 🆕 SERVED (delivered) → ilgili order_ready isteklerini otomatik kapat
-    if (status === "delivered") {
+    // DELIVERED → ilgili order_ready isteklerini kapat + gerekiyorsa masayı normale döndür
+    if (status === "delivered" && rid && tableId) {
       try {
-        if (order.restaurantId && order.tableId) {
-          await TableServiceRequest.updateMany(
-            {
-              restaurantId: order.restaurantId,
-              tableId: order.tableId,
-              sessionId: order.sessionId || null,
-              type: "order_ready",
-              status: "open",
-            },
-            { $set: { status: "handled" } }
+        // Bu masa+session için açık order_ready isteklerini handled yap
+        await TableServiceRequest.updateMany(
+          {
+            restaurantId: rid,
+            tableId,
+            sessionId,
+            type: "order_ready",
+            status: "open",
+          },
+          { $set: { status: "handled" } }
+        );
+
+        // Hâlâ açık başka istek var mı? (garson / hesap / başka ready)
+        const stillOpen = await TableServiceRequest.exists({
+          restaurantId: rid,
+          tableId,
+          status: "open",
+        });
+
+        // Yoksa masayı tekrar order_active'e al
+        if (!stillOpen) {
+          await Restaurant.updateOne(
+            { _id: rid, "tables._id": tableId },
+            { $set: { "tables.$.status": "order_active" } }
           );
         }
       } catch (err) {
@@ -577,10 +597,8 @@ export async function updateKitchenStatus(req, res) {
       }
     }
 
-    // TODO (eski not): status === "ready" olduğunda canlı masalar ekranına push / websocket event’i at.
-    // Şu an için sadece TableServiceRequest üretip/güncelliyoruz.
-
-    return res.json({ order });
+    // frontend şu yapıyı beklediği için siparişi geri gönderiyoruz
+    return res.json({ order: order.toObject() });
   } catch (e) {
     console.error("[updateKitchenStatus] err", e);
     return res

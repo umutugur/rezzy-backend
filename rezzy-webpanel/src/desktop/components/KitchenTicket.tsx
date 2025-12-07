@@ -10,112 +10,81 @@ export type KitchenTicketItem = {
 
 export type KitchenTicketProps = {
   id: string;
-  status: KitchenTicketStatus;
   tableLabel: string;
   source: "WALK_IN" | "QR" | "REZVIX";
   minutesAgo: number;
   items: KitchenTicketItem[];
   note?: string;
 
-  // mutfak kolon geçişleri için callback’ler
-  onStart?: (id: string) => void;      // NEW → IN_PROGRESS
-  onReady?: (id: string) => void;      // IN_PROGRESS → READY
-  onServe?: (id: string) => void;      // READY → SERVED
+  // kolon tarafında kullanmak istersen:
+  status: KitchenTicketStatus;
+  // (şu an bu dosyada kullanmıyorum, ama parent rahatça prop geçebilsin diye tanımlı)
+  onStart?: (id: string) => void;
+  onReady?: (id: string) => void;
+  onServe?: (id: string) => void;
 };
 
-function statusLabel(status: KitchenTicketStatus) {
+function getSourceLabel(source: "WALK_IN" | "QR" | "REZVIX") {
+  if (source === "WALK_IN") return "Lokal";
+  if (source === "QR") return "QR Menü";
+  return "Rezvix";
+}
+
+function getFooterTexts(status: KitchenTicketStatus): {
+  primary: string;
+  secondary: string;
+} {
   switch (status) {
     case "NEW":
-      return "Yeni sipariş";
+      return { primary: "Yeni sipariş", secondary: "Hazırlamaya alınacak" };
     case "IN_PROGRESS":
-      return "Hazırlanıyor";
+      return { primary: "Hazırlanıyor", secondary: "Servis • Sıcak" };
     case "READY":
-      return "Servise hazır";
+      return { primary: "Servise hazır", secondary: "Servise çıkmayı bekliyor" };
     case "SERVED":
-      return "Teslim edildi";
+      return { primary: "Teslim edildi", secondary: "Servis tamamlandı" };
     default:
-      return "";
+      return { primary: "", secondary: "" };
   }
 }
 
-function sourceLabel(source: "WALK_IN" | "QR" | "REZVIX") {
-  if (source === "QR") return "Qr Menü";
-  if (source === "REZVIX") return "Rezvix";
-  return "Lokal";
-}
-
-export const KitchenTicket: React.FC<KitchenTicketProps> = (props) => {
-  const {
-    id,
-    status,
-    tableLabel,
-    source,
-    minutesAgo,
-    items,
-    note,
-    onStart,
-    onReady,
-    onServe,
-  } = props;
-
-  let actionLabel: string | null = null;
-  let actionHandler: (() => void) | null = null;
-
-  if (status === "NEW" && onStart) {
-    actionLabel = "Hazırlamaya al";
-    actionHandler = () => onStart(id);
-  } else if (status === "IN_PROGRESS" && onReady) {
-    actionLabel = "Hazır";
-    actionHandler = () => onReady(id);
-  } else if (status === "READY" && onServe) {
-    actionLabel = "Teslim edildi";
-    actionHandler = () => onServe(id);
-  }
+export const KitchenTicket: React.FC<KitchenTicketProps> = ({
+  tableLabel,
+  source,
+  minutesAgo,
+  items,
+  note,
+  status,
+}) => {
+  const sourceLabel = getSourceLabel(source);
+  const footer = getFooterTexts(status);
 
   return (
-    <div className="rezvix-ticket">
-      {/* Üst kısım: masa + meta */}
-      <div className="rezvix-ticket__header">
-        <div className="rezvix-ticket__title">{tableLabel}</div>
-        <div className="rezvix-ticket__meta">
-          <span className="rezvix-ticket__meta-pill">
-            {sourceLabel(source)}
-          </span>
-          <span className="rezvix-ticket__meta-time">
-            {minutesAgo >= 0 ? `+${minutesAgo} dk` : ""}
-          </span>
+    <article className="rezvix-kitchen-ticket">
+      <header className="rezvix-kitchen-ticket__header">
+        <div className="rezvix-kitchen-ticket__title">{tableLabel}</div>
+        <div className="rezvix-kitchen-ticket__meta">
+          {sourceLabel} · +{minutesAgo} dk
         </div>
-      </div>
+      </header>
 
-      {/* Ürün listesi */}
-      <div className="rezvix-ticket__body">
-        {items.map((it, idx) => (
-          <div key={idx} className="rezvix-ticket__item">
-            <span>{it.name}</span>
-            <span className="rezvix-ticket__item-qty">×{it.quantity}</span>
-          </div>
+      <ul className="rezvix-kitchen-ticket__items">
+        {items.map((item, idx) => (
+          <li key={idx} className="rezvix-kitchen-ticket__item">
+            <span className="rezvix-kitchen-ticket__name">{item.name}</span>
+            <span className="rezvix-kitchen-ticket__qty">
+              ×{item.quantity}
+            </span>
+          </li>
         ))}
-        {note && (
-          <div className="rezvix-ticket__note">
-            <span>{note}</span>
-          </div>
-        )}
-      </div>
+      </ul>
 
-      {/* Alt kısım: status + action button */}
-      <div className="rezvix-ticket__footer">
-        <div className="rezvix-ticket__status">{statusLabel(status)}</div>
+      {note && <div className="rezvix-kitchen-ticket__note">{note}</div>}
 
-        {actionLabel && actionHandler && (
-          <button
-            type="button"
-            onClick={actionHandler}
-            className="rezvix-ticket__action-btn"
-          >
-            {actionLabel}
-          </button>
-        )}
-      </div>
-    </div>
+      <footer className="rezvix-kitchen-ticket__footer">
+        <span>{footer.primary}</span>
+        <span>{footer.secondary}</span>
+      </footer>
+    </article>
   );
 };
