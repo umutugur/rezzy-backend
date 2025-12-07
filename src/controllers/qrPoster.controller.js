@@ -67,13 +67,6 @@ async function generatePosterPdf(restaurant, table) {
   const bgHeight = posterImage.height;
   page.setSize(bgWidth, bgHeight);
 
-  // Tasarım sabitleri ve ölçek faktörleri
-  const DESIGN_WIDTH = 832;
-  const DESIGN_HEIGHT = 1248;
-  const scaleX = bgWidth / DESIGN_WIDTH;
-  const scaleY = bgHeight / DESIGN_HEIGHT;
-  const scale = Math.min(scaleX, scaleY);
-
   // Arka plan görseli tam sayfa
   page.drawImage(posterImage, {
     x: 0,
@@ -82,39 +75,39 @@ async function generatePosterPdf(restaurant, table) {
     height: bgHeight,
   });
 
-  const font = await pdfDoc.embedFont(fontBytes);
-  const fontLight = font; // aynı fontu hafif metinlerde de kullanıyoruz
+  // Canva tasarımı A5: 14.8cm x 21cm
+  const CANVA_WIDTH_CM = 14.8;
+  const CANVA_HEIGHT_CM = 21;
 
-  // ---------- QR alanı (ortadaki büyük kutu) ----------
-  // Tasarımda büyük beyaz kutunun koordinatları (px)
-  const qrContainerDesign = {
-    // Canva ölçülerinden (cm) px'e çevrilmiş hali
-    // left: 4.7cm, right: 10.1cm, top: 5.9cm, bottom: 11.3cm
-    left: 264,
-    right: 567,
-    bottom: 350,
-    top: 671,
+  // cm -> px çevirimi (X ve Y ayrı)
+  const pxPerCmX = bgWidth / CANVA_WIDTH_CM;
+  const pxPerCmY = bgHeight / CANVA_HEIGHT_CM;
+
+  // Üstten ölçülen cm değerini, PDF koordinatlarında (alt referanslı) merkeze çeviren helper
+  const centerYFromTopCm = (centerFromTopCm) => {
+    const centerFromBottomCm = CANVA_HEIGHT_CM - centerFromTopCm;
+    return centerFromBottomCm * pxPerCmY;
   };
 
-  // Kutunun içinde bırakmak istediğimiz boşluk (px)
-  const qrMarginX = 130;
-  const qrMarginY = 130;
+  // ---------- QR alanı (ortadaki büyük kutu) ----------
+  // Kullanıcının Canva ölçüleri (cm):
+  // büyük QR alanı: left 4.7, right 10.1, top 5.9, bottom 11.3
+  const qrLeftCm = 4.7;
+  const qrRightCm = 10.1;
+  const qrTopCm = 5.9;
+  const qrBottomCm = 11.3;
 
-  const qrAvailWidthDesign =
-    qrContainerDesign.right - qrContainerDesign.left - 2 * qrMarginX;
-  const qrAvailHeightDesign =
-    qrContainerDesign.top - qrContainerDesign.bottom - 2 * qrMarginY;
+  const qrCenterXCm = (qrLeftCm + qrRightCm) / 2; // 7.4
+  const qrCenterYFromTopCm = (qrTopCm + qrBottomCm) / 2; // 8.6
 
-  const qrSizeDesign = Math.min(qrAvailWidthDesign, qrAvailHeightDesign);
-  const qrSize = qrSizeDesign * scale;
+  const qrAreaWidthPx = (qrRightCm - qrLeftCm) * pxPerCmX;
+  const qrAreaHeightPx = (qrBottomCm - qrTopCm) * pxPerCmY;
 
-  const qrCenterXDesign =
-    (qrContainerDesign.left + qrContainerDesign.right) / 2;
-  const qrCenterYDesign =
-    (qrContainerDesign.bottom + qrContainerDesign.top) / 2;
+  // QR, alanın biraz içinde dursun diye %90 oranında kullanıyoruz
+  const qrSize = Math.min(qrAreaWidthPx, qrAreaHeightPx) * 0.9;
 
-  const qrCenterX = qrCenterXDesign * scaleX;
-  const qrCenterY = qrCenterYDesign * scaleY;
+  const qrCenterX = qrCenterXCm * pxPerCmX;
+  const qrCenterY = centerYFromTopCm(qrCenterYFromTopCm);
 
   const qrX = qrCenterX - qrSize / 2;
   const qrY = qrCenterY - qrSize / 2;
@@ -155,11 +148,11 @@ async function generatePosterPdf(restaurant, table) {
 
   // ---------- Restoran adı (QR altındaki 1. beyaz bar) ----------
   const restaurantName = restaurant.name || "Restoran";
-  const restaurantTextSize = 30;
+  const restaurantTextSize = 32;
 
-  // Tasarım koordinatları: 1. bar (y: 748..820 px)
-  const firstBarCenterYDesign = (748 + 820) / 2; // Canva'dan çevrilmiş ~784 px
-  const firstBarCenterY = firstBarCenterYDesign * scaleY;
+  // Canva: restoran adı barı -> left 4.5, right 10.3, top 12.6, bottom 13.8
+  const nameBarCenterFromTopCm = (12.6 + 13.8) / 2; // 13.2 cm
+  const nameCenterY = centerYFromTopCm(nameBarCenterFromTopCm);
 
   const restTextWidth = font.widthOfTextAtSize(
     restaurantName,
@@ -168,7 +161,7 @@ async function generatePosterPdf(restaurant, table) {
 
   page.drawText(restaurantName, {
     x: bgWidth / 2 - restTextWidth / 2,
-    y: firstBarCenterY - restaurantTextSize / 2,
+    y: nameCenterY - restaurantTextSize / 2,
     size: restaurantTextSize,
     font,
     color: rgb(0.15, 0.15, 0.15),
@@ -176,11 +169,11 @@ async function generatePosterPdf(restaurant, table) {
 
   // ---------- Masa adı (QR altındaki 2. beyaz bar) ----------
   const tableName = table.name || "Masa";
-  const tableTextSize = 26;
+  const tableTextSize = 30;
 
-  // Tasarım koordinatları: 2. bar (y: 850..914 px)
-  const secondBarCenterYDesign = (850 + 914) / 2; // Canva'dan çevrilmiş ~882 px
-  const secondBarCenterY = secondBarCenterYDesign * scaleY;
+  // Canva: masa adı barı -> left 4.5, right 10.3, top 14.3, bottom 15.4
+  const tableBarCenterFromTopCm = (14.3 + 15.4) / 2; // 14.85 cm
+  const tableCenterY = centerYFromTopCm(tableBarCenterFromTopCm);
 
   const tableTextWidth = fontLight.widthOfTextAtSize(
     tableName,
@@ -189,7 +182,7 @@ async function generatePosterPdf(restaurant, table) {
 
   page.drawText(tableName, {
     x: bgWidth / 2 - tableTextWidth / 2,
-    y: secondBarCenterY - tableTextSize / 2,
+    y: tableCenterY - tableTextSize / 2,
     size: tableTextSize,
     font: fontLight,
     color: rgb(0.2, 0.2, 0.2),
@@ -198,19 +191,24 @@ async function generatePosterPdf(restaurant, table) {
   // ---------- En alttaki kutuya app-link QR ikonu ----------
   const appIcon = await pdfDoc.embedPng(appLinkBytes);
 
-  // Tasarım koordinatları: alt kare (y: 1087..1229 px, x: 348..483 px)
-  const bottomSquare = { bottom: 1087, top: 1229, left: 348, right: 483 };
-  const bottomCenterXDesign = (bottomSquare.left + bottomSquare.right) / 2;
-  const bottomCenterYDesign = (bottomSquare.bottom + bottomSquare.top) / 2;
+  // Canva: alt kare -> left 6.2, right 8.6, top 18.3, bottom 20.7
+  const appLeftCm = 6.2;
+  const appRightCm = 8.6;
+  const appTopCm = 18.3;
+  const appBottomCm = 20.7;
 
-  const bottomCenterX = bottomCenterXDesign * scaleX;
-  const bottomCenterY = bottomCenterYDesign * scaleY;
+  const appCenterXCm = (appLeftCm + appRightCm) / 2; // 7.4
+  const appCenterFromTopCm = (appTopCm + appBottomCm) / 2; // 19.5
 
-  const appSizeDesign = 135;
-  const appSize = appSizeDesign * scale;
+  const appAreaWidthPx = (appRightCm - appLeftCm) * pxPerCmX;
+  const appAreaHeightPx = (appBottomCm - appTopCm) * pxPerCmY;
+  const appSize = Math.min(appAreaWidthPx, appAreaHeightPx) * 0.9;
 
-  const appX = bottomCenterX - appSize / 2;
-  const appY = bottomCenterY - appSize / 2;
+  const appCenterX = appCenterXCm * pxPerCmX;
+  const appCenterY = centerYFromTopCm(appCenterFromTopCm);
+
+  const appX = appCenterX - appSize / 2;
+  const appY = appCenterY - appSize / 2;
 
   page.drawImage(appIcon, {
     x: appX,
