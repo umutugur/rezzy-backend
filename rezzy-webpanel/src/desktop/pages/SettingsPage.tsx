@@ -46,6 +46,7 @@ type Restaurant = {
   address?: string;
   description?: string;
   photos?: string[];
+  logo?: string;
 
   iban?: string;
   ibanName?: string;
@@ -387,6 +388,15 @@ export const SettingsPage: React.FC = () => {
         e?.response?.data?.message || e?.message || "Silinemedi",
         "error"
       ),
+  });
+
+  const uploadLogoMut = useMutation({
+    mutationFn: (file: File) => api.postForm(`/restaurants/${rid}/logo`, { file }),
+    onSuccess: ()=>{
+      showToast("Logo yüklendi","success");
+      qc.invalidateQueries({queryKey:["restaurant-detail",rid]});
+    },
+    onError:(e:any)=> showToast(e?.response?.data?.message||"Logo yüklenemedi","error")
   });
 
   const saveMenusMut = useMutation({
@@ -811,6 +821,18 @@ export const SettingsPage: React.FC = () => {
               <input type="file" accept="image/*" onChange={onFile} />
               {uploadMut.isPending && (
                 <span className="text-sm text-gray-500">Yükleniyor…</span>
+              )}
+            </div>
+
+            {/* === Logo Yükleme Alanı === */}
+            <div className="mb-4 border p-3 rounded-lg bg-gray-50">
+              <div className="mb-2 font-medium">Restoran Logosu</div>
+              <input type="file" accept="image/*" onChange={(e)=> uploadLogoMut.mutate(e.target.files?.[0] as File)} />
+              {uploadLogoMut.isPending && <span className="text-sm text-gray-500 ml-2">Yükleniyor…</span>}
+              {data?.logo && (
+                <div className="mt-3">
+                  <img src={data.logo} alt="logo" className="h-20 object-contain border rounded-md p-2 bg-white" />
+                </div>
               )}
             </div>
 

@@ -184,6 +184,7 @@ export const listRestaurants = async (req, res, next) => {
             location: 1,
             mapAddress: 1,
             photos: { $slice: ["$photos", 1] },
+            logoUrl: 1,
             distance: 1,
           },
         },
@@ -201,6 +202,7 @@ export const listRestaurants = async (req, res, next) => {
         location: d.location,
         mapAddress: d.mapAddress,
         photos: sanitizePhotos(d.photos),
+        logoUrl: d.logoUrl || null,
         // distance’ı şimdilik göndermiyoruz; gerekirse eklenir
       }));
 
@@ -224,7 +226,7 @@ export const listRestaurants = async (req, res, next) => {
     const qStart = Date.now();
 
     const baseQuery = Restaurant.find(filter)
-      .select("name city region priceRange rating location mapAddress photos")
+      .select("name city region priceRange rating location mapAddress photos logoUrl")
       .slice("photos", 1)               // Mongo’dan yalnızca ilk foto
       .sort({ rating: -1, name: 1 })
       .lean();
@@ -248,6 +250,7 @@ export const listRestaurants = async (req, res, next) => {
       location: d.location,
       mapAddress: d.mapAddress,
       photos: sanitizePhotos(d.photos),
+      logoUrl: d.logoUrl || null,
     }));
 
     const size = JSON.stringify(data).length;
@@ -676,6 +679,85 @@ export const addPhoto = async (req, res, next) => {
     if (!updated) return res.status(404).json({ message: "Restaurant not found" });
 
     return res.json({ ok: true, photos: updated.photos || [] });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/*
+ * Logo ekle / değiştir
+ */
+export const uploadLogo = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    let { fileUrl } = req.body || {};
+    const f = req.file;
+
+    if (!id) {
+      return res.status(400).json({ message: "Restaurant id required" });
+    }
+
+    // Yetki kontrolü
+    if (req.user.role !== "admin") {
+      const rest = await Restaurant.findById(id).select("owner");
+      if (!rest || String(rest.owner) !== String(req.user.id)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+    }
+
+    let finalUrl = null;
+
+    // 0) Multipart file (tercih edilen)
+    if (f?.buffer) {
+      const uploadResult = await uploadBufferToCloudinary(f.buffer, {
+        folder:
+          process.env.CLOUDINARY_FOLDER_RESTAURANT_LOGOS ||
+          process.env.CLOUDINARY_FOLDER_RESTAURANTS ||
+          "rezvix/restaurants/logos",
+        resource_type: "image",
+      });
+      finalUrl = uploadResult.secure_url;
+    }
+    // 1) Direkt http/https URL
+    else if (
+      fileUrl &&
+      (fileUrl.startsWith("http://") || fileUrl.startsWith("https://"))
+    ) {
+      finalUrl = fileUrl.trim();
+    }
+    // 2) data URL (base64) fallback
+    else if (fileUrl && fileUrl.startsWith("data:")) {
+      const match = fileUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+      if (!match) {
+        return res.status(400).json({ message: "Invalid data URL format" });
+      }
+      const buffer = Buffer.from(match[2], "base64");
+      const uploadResult = await uploadBufferToCloudinary(buffer, {
+        folder:
+          process.env.CLOUDINARY_FOLDER_RESTAURANT_LOGOS ||
+          process.env.CLOUDINARY_FOLDER_RESTAURANTS ||
+          "rezvix/restaurants/logos",
+        resource_type: "image",
+      });
+      finalUrl = uploadResult.secure_url;
+    } else {
+      return res.status(400).json({
+        message:
+          "Logo bulunamadı. Multipart 'file' alanı gönderin ya da 'fileUrl' olarak http/https veya data URL verin.",
+      });
+    }
+
+    const updated = await Restaurant.findByIdAndUpdate(
+      id,
+      { $set: { logoUrl: finalUrl } },
+      { new: true }
+    ).select("_id name logoUrl");
+
+    if (!updated) {
+      return res.status(404).json({ message: "Restaurant not found" });
+    }
+
+    return res.json({ ok: true, logoUrl: updated.logoUrl });
   } catch (e) {
     next(e);
   }

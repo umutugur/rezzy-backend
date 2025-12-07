@@ -40,6 +40,7 @@ import {
   fetchReservationsByRestaurant,
   updateReservationStatus,
   getReservationQR,
+  uploadLogo,
 } from "../controllers/restaurant.controller.js";
 
 const r = Router();
@@ -127,6 +128,15 @@ r.post(
   imageUpload.single("file"),              // ⬅️ burada
   validate(addPhotoSchema),
   addPhoto
+);
+
+// Logo ekle/güncelle
+r.post(
+  "/:id/logo",
+  auth(),
+  allow("restaurant", "admin"),
+  imageUpload.single("file"),
+  uploadLogo
 );
 
 // Fotoğraf sil

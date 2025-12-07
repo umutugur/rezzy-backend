@@ -134,17 +134,32 @@ async function generatePosterPdf(restaurant, table) {
   // ---------- QR içinde logo ----------
   if (logoBytes) {
     try {
-      const logoImage = await pdfDoc.embedPng(logoBytes);
-      const logoSize = qrSize * 0.28; // QR'in yaklaşık %30'u kadar
-      const logoX = qrCenterX - logoSize / 2;
-      const logoY = qrCenterY - logoSize / 2;
+      let logoImage;
 
-      page.drawImage(logoImage, {
-        x: logoX,
-        y: logoY,
-        width: logoSize,
-        height: logoSize,
-      });
+      // Önce PNG olarak dene, hata alırsak JPG olarak tekrar dene
+      try {
+        logoImage = await pdfDoc.embedPng(logoBytes);
+      } catch (pngErr) {
+        try {
+          logoImage = await pdfDoc.embedJpg(logoBytes);
+        } catch (jpgErr) {
+          console.error("Logo hem PNG hem JPG olarak gömülemedi:", jpgErr?.message || pngErr?.message);
+          logoImage = null;
+        }
+      }
+
+      if (logoImage) {
+        const logoSize = qrSize * 0.28; // QR'in yaklaşık %30'u kadar
+        const logoX = qrCenterX - logoSize / 2;
+        const logoY = qrCenterY - logoSize / 2;
+
+        page.drawImage(logoImage, {
+          x: logoX,
+          y: logoY,
+          width: logoSize,
+          height: logoSize,
+        });
+      }
     } catch (e) {
       console.error("QR içine logo gömülemedi:", e?.message);
     }

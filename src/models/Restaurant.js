@@ -51,6 +51,9 @@ const RestaurantSchema = new mongoose.Schema(
     phone: String,
     email: String,
 
+    // ✅ QR poster ve panel için logo
+    logoUrl: String,
+
     // ✅ İşletme tipi (core kategoriler için şart)
     businessType: {
       type: String,
