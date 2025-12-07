@@ -49,15 +49,31 @@ function getFooterTexts(status: KitchenTicketStatus): {
 }
 
 export const KitchenTicket: React.FC<KitchenTicketProps> = ({
+  id,
   tableLabel,
   source,
   minutesAgo,
   items,
   note,
   status,
+  onStart,
+  onReady,
+  onServe,
 }) => {
   const sourceLabel = getSourceLabel(source);
   const footer = getFooterTexts(status);
+
+  const handleStart = () => {
+    if (onStart) onStart(id);
+  };
+
+  const handleReady = () => {
+    if (onReady) onReady(id);
+  };
+
+  const handleServe = () => {
+    if (onServe) onServe(id);
+  };
 
   return (
     <article className="rezvix-kitchen-ticket">
@@ -82,8 +98,42 @@ export const KitchenTicket: React.FC<KitchenTicketProps> = ({
       {note && <div className="rezvix-kitchen-ticket__note">{note}</div>}
 
       <footer className="rezvix-kitchen-ticket__footer">
-        <span>{footer.primary}</span>
-        <span>{footer.secondary}</span>
+        <div className="rezvix-kitchen-ticket__footer-text">
+          <span>{footer.primary}</span>
+          <span>{footer.secondary}</span>
+        </div>
+
+        <div className="rezvix-kitchen-ticket__footer-actions">
+          {status === "NEW" && onStart && (
+            <button
+              type="button"
+              className="rezvix-kitchen-ticket__button rezvix-kitchen-ticket__button--primary"
+              onClick={handleStart}
+            >
+              Hazırlamaya al
+            </button>
+          )}
+
+          {status === "IN_PROGRESS" && onReady && (
+            <button
+              type="button"
+              className="rezvix-kitchen-ticket__button rezvix-kitchen-ticket__button--primary"
+              onClick={handleReady}
+            >
+              Hazır
+            </button>
+          )}
+
+          {status === "READY" && onServe && (
+            <button
+              type="button"
+              className="rezvix-kitchen-ticket__button rezvix-kitchen-ticket__button--primary"
+              onClick={handleServe}
+            >
+              Teslim edildi
+            </button>
+          )}
+        </div>
       </footer>
     </article>
   );

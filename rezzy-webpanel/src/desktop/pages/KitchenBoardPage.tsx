@@ -1,3 +1,4 @@
+// src/desktop/pages/KitchenBoardPage.tsx
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { RestaurantDesktopLayout } from "../layouts/RestaurantDesktopLayout";
@@ -94,8 +95,10 @@ export const KitchenBoardPage: React.FC = () => {
       items: t.items.map((it) => ({
         name: it.title,
         quantity: it.qty,
-        note: it.note,
       })),
+      note: t.items.some((it) => it.note)
+        ? t.items.map((it) => it.note).join(" • ")
+        : undefined,
     }));
   }, [data]);
 
@@ -110,7 +113,6 @@ export const KitchenBoardPage: React.FC = () => {
   const updateStatusMut = useMutation({
     mutationFn: async (params: { orderId: string; nextStatus: KitchenStatusPayload }) => {
       const { orderId, nextStatus } = params;
-      // ⬇️ Eğer sen backend'de farklı bir path kullandıysan sadece burayı değiştirmen yeter
       await api.patch(`/orders/${orderId}/kitchen-status`, { status: nextStatus });
     },
     onSuccess: () => {
@@ -192,17 +194,13 @@ export const KitchenBoardPage: React.FC = () => {
             ) : (
               newOrders.map((t) => (
                 <div key={t.id} className="rezvix-kitchen-card-wrapper">
-                  <KitchenTicket {...t} />
-                  <div className="rezvix-kitchen-card__actions">
-                    <button
-                      type="button"
-                      onClick={() => handleAdvanceStatus(t)}
-                      disabled={isUpdating}
-                      className="rezvix-btn rezvix-btn--primary rezvix-btn--xs"
-                    >
-                      {isUpdating ? "Güncelleniyor…" : "Hazırlamaya al"}
-                    </button>
-                  </div>
+                  <KitchenTicket
+                    {...t}
+                    onStart={() => {
+                      if (isUpdating) return;
+                      handleAdvanceStatus(t);
+                    }}
+                  />
                 </div>
               ))
             )}
@@ -223,17 +221,13 @@ export const KitchenBoardPage: React.FC = () => {
             ) : (
               inProgress.map((t) => (
                 <div key={t.id} className="rezvix-kitchen-card-wrapper">
-                  <KitchenTicket {...t} />
-                  <div className="rezvix-kitchen-card__actions">
-                    <button
-                      type="button"
-                      onClick={() => handleAdvanceStatus(t)}
-                      disabled={isUpdating}
-                      className="rezvix-btn rezvix-btn--primary rezvix-btn--xs"
-                    >
-                      {isUpdating ? "Güncelleniyor…" : "Hazır"}
-                    </button>
-                  </div>
+                  <KitchenTicket
+                    {...t}
+                    onReady={() => {
+                      if (isUpdating) return;
+                      handleAdvanceStatus(t);
+                    }}
+                  />
                 </div>
               ))
             )}
@@ -252,17 +246,13 @@ export const KitchenBoardPage: React.FC = () => {
             ) : (
               ready.map((t) => (
                 <div key={t.id} className="rezvix-kitchen-card-wrapper">
-                  <KitchenTicket {...t} />
-                  <div className="rezvix-kitchen-card__actions">
-                    <button
-                      type="button"
-                      onClick={() => handleAdvanceStatus(t)}
-                      disabled={isUpdating}
-                      className="rezvix-btn rezvix-btn--secondary rezvix-btn--xs"
-                    >
-                      {isUpdating ? "Güncelleniyor…" : "Teslim edildi"}
-                    </button>
-                  </div>
+                  <KitchenTicket
+                    {...t}
+                    onServe={() => {
+                      if (isUpdating) return;
+                      handleAdvanceStatus(t);
+                    }}
+                  />
                 </div>
               ))
             )}
@@ -289,7 +279,11 @@ export const KitchenBoardPage: React.FC = () => {
                 </div>
               </div>
             ) : (
-              served.map((t) => <KitchenTicket key={t.id} {...t} />)
+              served.map((t) => (
+                <div key={t.id} className="rezvix-kitchen-card-wrapper">
+                  <KitchenTicket {...t} />
+                </div>
+              ))
             )}
           </div>
         </div>
