@@ -45,6 +45,13 @@ const OrderSchema = new mongoose.Schema(
       default: "new",
       index: true,
     },
+     // ✅ Mutfak akışı için ayrı durum alanı
+    kitchenStatus: {
+      type: String,
+      enum: ["new", "preparing", "ready", "delivered"],
+      default: "new",
+      index: true,
+    },
   },
   { timestamps: true }
 );

@@ -8,6 +8,8 @@ import {
   listSessionOrders,
   createStripeIntent,
   createWalkInOrder,
+  listKitchenTickets,
+  updateKitchenStatus
 } from "../controllers/orders.controller.js";
 
 const router = Router();
@@ -33,5 +35,8 @@ router.post(
   "/restaurants/:restaurantId/tables/:tableId/walk-in",
   createWalkInOrder
 );
+router.get("/restaurants/:restaurantId/kitchen-tickets",listKitchenTickets);
+
+router.patch("/:orderId/kitchen-status",updateKitchenStatus);
 
 export default router;

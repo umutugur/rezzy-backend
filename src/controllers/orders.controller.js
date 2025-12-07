@@ -120,6 +120,11 @@ export async function closeSession(req, res) {
       },
       { arrayFilters: [{ "t.sessionId": id }] }
     );
+        // ✅ Bu session'a ait tüm siparişleri mutfak açısından "teslim edildi" yap
+    await Order.updateMany(
+      { sessionId: id, kitchenStatus: { $ne: "delivered" } },
+      { $set: { kitchenStatus: "delivered" } }
+    );
 
     return res.json(s);
   } catch (e) {
@@ -187,6 +192,8 @@ export async function createOrder(req, res) {
       paymentMethod,
       paymentStatus: paymentMethod === "venue" ? "not_required" : "pending",
       // createOrder mevcutta QR/Rezvix akışı için kullanılıyor → default "qr"
+      kitchenStatus: "new",
+
     });
 
     // MASAYI order_active yap
@@ -396,7 +403,9 @@ export async function createWalkInOrder(req, res) {
       currency,
       paymentMethod: "venue",
       paymentStatus: "not_required",
-      source: "walk_in",
+      source: "walk_in",  
+      kitchenStatus: "new",
+
     });
 
     // 3) Session totals güncelle
@@ -420,5 +429,116 @@ export async function createWalkInOrder(req, res) {
   } catch (e) {
     console.error("[createWalkInOrder] err", e);
     return res.status(500).json({ message: "Walk-in sipariş oluşturulamadı." });
+  }
+}
+/**
+ * ✅ Mutfak ekranı için fiş listesi
+ * GET /api/orders/restaurants/:restaurantId/kitchen-tickets
+ */
+export async function listKitchenTickets(req, res) {
+  try {
+    const { restaurantId } = req.params;
+    if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+      return res.status(400).json({ message: "Geçersiz restaurantId." });
+    }
+
+    const rid = String(restaurantId);
+
+    // Restoranın masalarını tek seferde çekip map'leyelim → tableLabel için
+    const restaurant = await Restaurant.findById(rid).lean();
+    if (!restaurant) {
+      return res.status(404).json({ message: "Restoran bulunamadı." });
+    }
+
+    const tableMap = new Map();
+    (restaurant.tables || []).forEach((t) => {
+      if (!t) return;
+      const key = String(t._id || t.name);
+      const label = t.displayName || t.label || t.name || key;
+      tableMap.set(key, label);
+    });
+
+    // Mutfakta gösterilecek siparişler
+    const orders = await Order.find({
+      restaurantId: rid,
+      status: { $ne: "cancelled" },
+      kitchenStatus: { $in: ["new", "preparing", "ready", "delivered"] },
+    })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    const now = Date.now();
+
+    const tickets = orders.map((o) => {
+      const tableKey = String(o.tableId);
+      const tableLabel = tableMap.get(tableKey) || tableKey;
+
+      const createdAtMs = o.createdAt ? new Date(o.createdAt).getTime() : now;
+      const minutesAgo = Math.max(
+        0,
+        Math.floor((now - createdAtMs) / (60 * 1000))
+      );
+
+      return {
+        id: String(o._id),
+        kitchenStatus: o.kitchenStatus || "new",
+        tableId: tableKey,
+        tableLabel,
+        source: o.source || "qr",
+        minutesAgo,
+        items: (o.items || []).map((it) => ({
+          title: it.title,
+          qty: it.qty,
+          note: it.note || "",
+        })),
+      };
+    });
+
+    return res.json({ tickets });
+  } catch (e) {
+    console.error("[listKitchenTickets] err", e);
+    return res
+      .status(500)
+      .json({ message: "Mutfak fişleri alınamadı." });
+  }
+}
+/**
+ * ✅ Tek bir siparişin mutfak durumunu güncelle
+ * PATCH /api/orders/:orderId/kitchen-status
+ * body: { status: "new" | "preparing" | "ready" | "delivered" }
+ */
+export async function updateKitchenStatus(req, res) {
+  try {
+    const { orderId } = req.params;
+    const { status } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ message: "Geçersiz orderId." });
+    }
+
+    const allowed = ["new", "preparing", "ready", "delivered"];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ message: "Geçersiz mutfak durumu." });
+    }
+
+    const order = await Order.findByIdAndUpdate(
+      orderId,
+      { $set: { kitchenStatus: status } },
+      { new: true }
+    ).lean();
+
+    if (!order) {
+      return res.status(404).json({ message: "Sipariş bulunamadı." });
+    }
+
+    // TODO: status === "ready" olduğunda canlı masalar ekranına push / websocket event’i at.
+    // Şimdilik sadece güncelliyoruz.
+
+    return res.json({ order });
+  } catch (e) {
+    console.error("[updateKitchenStatus] err", e);
+    return res
+      .status(500)
+      .json({ message: "Mutfak durumu güncellenemedi." });
   }
 }

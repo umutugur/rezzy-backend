@@ -184,11 +184,35 @@ async function generatePosterPdf(restaurant, table) {
 
   // ---------- Restoran adı (QR altındaki 1. beyaz bar) ----------
   const restaurantName = restaurant.name || "Restoran";
-  const restaurantTextSize = 32;
 
   // Canva: restoran adı barı -> left 4.5, right 10.3, top 12.6, bottom 13.8
+  const nameBarLeftCm = 4.5;
+  const nameBarRightCm = 10.3;
   const nameBarCenterFromTopCm = (12.6 + 13.8) / 2; // 13.2 cm
+
+  const nameBarWidthPx = (nameBarRightCm - nameBarLeftCm) * pxPerCmX;
   const nameCenterY = centerYFromTopCm(nameBarCenterFromTopCm);
+
+  // Temel font boyutu ve maksimum genişlik (biraz iç boşluk bırakarak)
+  const baseRestaurantTextSize = 32;
+  const nameMaxWidthPx = nameBarWidthPx * 0.9;
+
+  // Metnin temel boyuttaki genişliği
+  const baseNameWidth = font.widthOfTextAtSize(
+    restaurantName,
+    baseRestaurantTextSize
+  );
+
+  // Genişliği kutuya sığacak şekilde ölçekle
+  let restaurantTextSize = baseRestaurantTextSize;
+  if (baseNameWidth > nameMaxWidthPx) {
+    const scale = nameMaxWidthPx / baseNameWidth;
+    restaurantTextSize = baseRestaurantTextSize * scale;
+    // Çok aşırı küçülmeyi engellemek için alt sınır
+    if (restaurantTextSize < 14) {
+      restaurantTextSize = 14;
+    }
+  }
 
   const restTextWidth = font.widthOfTextAtSize(
     restaurantName,
@@ -205,11 +229,31 @@ async function generatePosterPdf(restaurant, table) {
 
   // ---------- Masa adı (QR altındaki 2. beyaz bar) ----------
   const tableName = table.name || "Masa";
-  const tableTextSize = 30;
 
   // Canva: masa adı barı -> left 4.5, right 10.3, top 14.3, bottom 15.4
+  const tableBarLeftCm = 4.5;
+  const tableBarRightCm = 10.3;
   const tableBarCenterFromTopCm = (14.3 + 15.4) / 2; // 14.85 cm
+
+  const tableBarWidthPx = (tableBarRightCm - tableBarLeftCm) * pxPerCmX;
   const tableCenterY = centerYFromTopCm(tableBarCenterFromTopCm);
+
+  const baseTableTextSize = 30;
+  const tableMaxWidthPx = tableBarWidthPx * 0.9;
+
+  const baseTableWidth = fontLight.widthOfTextAtSize(
+    tableName,
+    baseTableTextSize
+  );
+
+  let tableTextSize = baseTableTextSize;
+  if (baseTableWidth > tableMaxWidthPx) {
+    const scale = tableMaxWidthPx / baseTableWidth;
+    tableTextSize = baseTableTextSize * scale;
+    if (tableTextSize < 14) {
+      tableTextSize = 14;
+    }
+  }
 
   const tableTextWidth = fontLight.widthOfTextAtSize(
     tableName,
