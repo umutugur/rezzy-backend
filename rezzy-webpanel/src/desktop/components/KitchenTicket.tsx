@@ -34,13 +34,13 @@ function getFooterTexts(status: KitchenTicketStatus): {
 } {
   switch (status) {
     case "NEW":
-      return { primary: "Yeni sipariş", secondary: "Hazırlamaya alınacak" };
+      return { primary: "Yeni sipariş", secondary: "Hazırlamaya alınabilir" };
     case "IN_PROGRESS":
-      return { primary: "Hazırlanıyor", secondary: "Servis • Sıcak" };
+      return { primary: "Hazırlanıyor", secondary: "Servise hazır olacak" };
     case "READY":
-      return { primary: "Servise hazır", secondary: "Servise çıkmayı bekliyor" };
+      return { primary: "Servise hazır", secondary: "Teslim edilmeyi bekliyor" };
     case "SERVED":
-      return { primary: "Teslim edildi", secondary: "Servis tamamlandı" };
+      return { primary: "Teslim edildi", secondary: "Tamamlandı" };
     default:
       return { primary: "" };
   }
@@ -58,27 +58,24 @@ export const KitchenTicket: React.FC<KitchenTicketProps> = ({
   onReady,
   onServe,
 }) => {
-  const sourceLabel = getSourceLabel(source);
   const footer = getFooterTexts(status);
 
-  const handleStart = () => onStart?.(id);
-  const handleReady = () => onReady?.(id);
-  const handleServe = () => onServe?.(id);
-
   return (
-    <article className="rezvix-kitchen-ticket">
+    <article
+      className={`rezvix-kitchen-ticket status-${status.toLowerCase()}`}
+    >
       <header className="rezvix-kitchen-ticket__header">
         <div className="rezvix-kitchen-ticket__title">{tableLabel}</div>
         <div className="rezvix-kitchen-ticket__meta">
-          {sourceLabel} · +{minutesAgo} dk
+          {getSourceLabel(source)} · +{minutesAgo} dk
         </div>
       </header>
 
       <ul className="rezvix-kitchen-ticket__items">
         {items.map((item, idx) => (
           <li key={idx} className="rezvix-kitchen-ticket__item">
-            <span className="rezvix-kitchen-ticket__name">{item.name}</span>
-            <span className="rezvix-kitchen-ticket__qty">×{item.quantity}</span>
+            <span>{item.name}</span>
+            <span className="qty">×{item.quantity}</span>
           </li>
         ))}
       </ul>
@@ -86,47 +83,26 @@ export const KitchenTicket: React.FC<KitchenTicketProps> = ({
       {note && <div className="rezvix-kitchen-ticket__note">{note}</div>}
 
       <footer className="rezvix-kitchen-ticket__footer">
-        <div className="rezvix-kitchen-ticket__footer-text">
-          <div className="rezvix-kitchen-ticket__footer-primary">
-            {footer.primary}
-          </div>
-          {footer.secondary && (
-            <div className="rezvix-kitchen-ticket__footer-secondary">
-              {footer.secondary}
-            </div>
-          )}
+        <div className="info">
+          <div className="title">{footer.primary}</div>
+          {footer.secondary && <div className="sub">{footer.secondary}</div>}
         </div>
 
-        <div className="rezvix-kitchen-ticket__footer-actions">
+        <div className="actions">
           {status === "NEW" && (
-            <button
-              type="button"
-              className="rezvix-btn rezvix-btn--primary rezvix-btn--xs"
-              onClick={handleStart}
-              disabled={!onStart}
-            >
+            <button className="kbtn primary" onClick={() => onStart?.(id)}>
               Hazırlamaya al
             </button>
           )}
 
           {status === "IN_PROGRESS" && (
-            <button
-              type="button"
-              className="rezvix-btn rezvix-btn--primary rezvix-btn--xs"
-              onClick={handleReady}
-              disabled={!onReady}
-            >
+            <button className="kbtn warning" onClick={() => onReady?.(id)}>
               Hazır
             </button>
           )}
 
           {status === "READY" && (
-            <button
-              type="button"
-              className="rezvix-btn rezvix-btn--primary rezvix-btn--xs"
-              onClick={handleServe}
-              disabled={!onServe}
-            >
+            <button className="kbtn success" onClick={() => onServe?.(id)}>
               Teslim edildi
             </button>
           )}

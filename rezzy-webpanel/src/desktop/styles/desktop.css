@@ -587,12 +587,95 @@
   margin-top: 3px;
 }
 
+/* ---------- Kitchen ticket footer & buttons ---------- */
+
+/* Eski .rezvix-kitchen-ticket__footer bloğunu bununla değiştir */
 .rezvix-kitchen-ticket__footer {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  margin-top: 4px;
+  margin-top: 6px;
+  gap: 8px;
+}
+
+/* Sol taraftaki yazı bloğu */
+.rezvix-kitchen-ticket__footer-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rezvix-kitchen-ticket__footer-primary {
   font-size: 11px;
+  font-weight: 500;
+  color: var(--rezvix-text-main);
+}
+
+.rezvix-kitchen-ticket__footer-secondary {
+  font-size: 10px;
   color: var(--rezvix-text-soft);
+}
+
+/* Sağ taraftaki buton grubu */
+.rezvix-kitchen-ticket__footer-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+/* Ana buton görünümü */
+.rezvix-kitchen-ticket__button {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--rezvix-text-main);
+
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  transition:
+    background 0.15s ease-out,
+    border-color 0.15s ease-out,
+    transform 0.08s ease-out,
+    box-shadow 0.15s ease-out,
+    color 0.15s ease-out;
+}
+
+/* Primary (Hazırlamaya al / Hazır / Teslim edildi) */
+.rezvix-kitchen-ticket__button--primary {
+  background: linear-gradient(
+    135deg,
+    var(--rezvix-primary),
+    var(--rezvix-primary-strong)
+  );
+  color: #fff7f3;
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+/* Hover & active durumları */
+.rezvix-kitchen-ticket__button:hover {
+  transform: translateY(-0.5px);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+}
+
+.rezvix-kitchen-ticket__button:active {
+  transform: translateY(0.5px) scale(0.98);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18) inset;
+}
+
+/* Loading / disabled durum */
+.rezvix-kitchen-ticket__button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* ---------- Empty state ---------- */
@@ -1258,3 +1341,62 @@
 .rezvix-ticket__action-btn:active {
   transform: translateY(0.5px);
 }
+/* Sipariş hazır - sarı */
+.rezvix-table-card--order-ready {
+  background: #fff8c5;
+  border: 2px solid #facc15;
+  box-shadow: 0 0 20px rgba(250, 204, 21, 0.6);
+}
+
+.rezvix-table-card__status-dot--ready {
+  background-color: #facc15 !important;
+}
+/* --- KitchenTicket UI İyileştirmeleri --- */
+
+.rezvix-kitchen-ticket {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 14px;
+  border: 1px solid #e5e5e5;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: 0.25s;
+}
+
+.rezvix-kitchen-ticket.status-new { border-left: 4px solid #007bff55; }
+.rezvix-kitchen-ticket.status-in_progress { border-left: 4px solid #ffb200cc; background:#fff9e6; }
+.rezvix-kitchen-ticket.status-ready { border-left: 4px solid #00c853cc; background:#e8fff1; box-shadow: 0 0 6px #00c85355; }
+.rezvix-kitchen-ticket.status-served { opacity:.6; }
+
+.rezvix-kitchen-ticket__header {
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+}
+
+.rezvix-kitchen-ticket__items li {
+  display:flex; justify-content:space-between;
+  padding:4px 0; font-size:14px;
+}
+
+.rezvix-kitchen-ticket__note {
+  background:#fff4d8; padding:6px 8px; border-radius:6px;
+  font-size:13px; font-weight:500;
+}
+
+.rezvix-kitchen-ticket__footer {
+  display:flex; justify-content:space-between;
+  align-items:center; margin-top:6px;
+}
+
+.kbtn {
+  padding:6px 10px; border-radius:6px;
+  font-size:13px; cursor:pointer; font-weight:600;
+  border:none; color:#fff; transition:0.2s;
+}
+.kbtn.primary { background:#007bff; }
+.kbtn.warning { background:#ff9800; }
+.kbtn.success { background:#00c853; }
+.kbtn:hover { opacity:.85; }

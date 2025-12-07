@@ -510,38 +510,44 @@ export async function listKitchenTickets(req, res) {
 }
 
 /**
- * ✅ Tek bir siparişin mutfak durumunu güncelle
+ * 🔥 Mutfağın sipariş durumunu günceller (NEW → PREPARING → READY → DELIVERED)
+ * READY olduğunda otomatik garson uyarısı (order_ready) açar
+ * DELIVERED olduğunda kapatır ve masa rengini normale çeker
  */
 export async function updateKitchenStatus(req, res) {
   try {
     const { orderId } = req.params;
     const { status } = req.body || {};
 
-    if (!mongoose.Types.ObjectId.isValid(orderId)) {
-      return res.status(400).json({ message: "Geçersiz orderId." });
-    }
-
+    // ❗ Güvenli durumlar
     const allowed = ["new", "preparing", "ready", "delivered"];
-    if (!allowed.includes(status)) {
-      return res.status(400).json({ message: "Geçersiz mutfak durumu." });
+    if (!mongoose.Types.ObjectId.isValid(orderId) || !allowed.includes(status)) {
+      return res.status(400).json({ message: "Geçersiz parametre." });
     }
 
     const order = await Order.findById(orderId);
-    if (!order) {
-      return res.status(404).json({ message: "Sipariş bulunamadı." });
-    }
+    if (!order) return res.status(404).json({ message: "Sipariş bulunamadı." });
 
     order.kitchenStatus = status;
     await order.save();
 
-    const rid = order.restaurantId ? String(order.restaurantId) : null;
-    const tableId = order.tableId ? String(order.tableId) : null;
-    const sessionId = order.sessionId ? String(order.sessionId) : null;
+    const rid = String(order.restaurantId);
+    const tableId = String(order.tableId);
+    const sessionId = String(order.sessionId);
 
-    // READY → TableServiceRequest (order_ready) oluştur + masayı waiter_call yap
-    if (status === "ready" && rid && tableId) {
-      try {
-        const hasOpenReady = await TableServiceRequest.exists({
+    /* -------------------- READY OLDUĞUNDA -------------------- */
+    if (status === "ready") {
+      const existing = await TableServiceRequest.findOne({
+        restaurantId: rid,
+        tableId,
+        sessionId,
+        type: "order_ready",
+        status: "open",
+      });
+
+      // ❗ Zaten açık değilse oluştur
+      if (!existing) {
+        await TableServiceRequest.create({
           restaurantId: rid,
           tableId,
           sessionId,
@@ -549,60 +555,47 @@ export async function updateKitchenStatus(req, res) {
           status: "open",
         });
 
-        if (!hasOpenReady) {
-          await TableServiceRequest.create({
-            restaurantId: rid,
-            tableId,
-            sessionId,
-            type: "order_ready",
-          });
-
-          await Restaurant.updateOne(
-            { _id: rid, "tables._id": tableId },
-            { $set: { "tables.$.status": "waiter_call" } }
-          );
-        }
-      } catch (err) {
-        console.error("[updateKitchenStatus] create order_ready TSR err", err);
+        // 🔥 Masa UI rengini waiter_call yap
+        await Restaurant.updateOne(
+          { _id: rid, "tables._id": tableId },
+          { $set: { "tables.$.status": "waiter_call" } }
+        );
       }
     }
 
-    // DELIVERED → ilgili order_ready isteklerini kapat + gerekiyorsa masayı normale döndür
-    if (status === "delivered" && rid && tableId) {
-      try {
-        await TableServiceRequest.updateMany(
-          {
-            restaurantId: rid,
-            tableId,
-            sessionId,
-            type: "order_ready",
-            status: "open",
-          },
-          { $set: { status: "handled" } }
-        );
-
-        const stillOpen = await TableServiceRequest.exists({
+    /* -------------------- TESLİM EDİLDİĞİNDE -------------------- */
+    if (status === "delivered") {
+      // order_ready isteklerini kapat
+      await TableServiceRequest.updateMany(
+        {
           restaurantId: rid,
           tableId,
+          sessionId,
+          type: "order_ready",
           status: "open",
-        });
+        },
+        { $set: { status: "handled" } }
+      );
 
-        if (!stillOpen) {
-          await Restaurant.updateOne(
-            { _id: rid, "tables._id": tableId },
-            { $set: { "tables.$.status": "order_active" } }
-          );
-        }
-      } catch (err) {
-        console.error("[updateKitchenStatus] close order_ready TSR err", err);
+      // hâlâ açık başka istek var mı kontrol et
+      const stillWaiting = await TableServiceRequest.exists({
+        restaurantId: rid,
+        tableId,
+        status: "open",
+      });
+
+      // 🟢 yoksa masa normale dönsün
+      if (!stillWaiting) {
+        await Restaurant.updateOne(
+          { _id: rid, "tables._id": tableId },
+          { $set: { "tables.$.status": "order_active" } }
+        );
       }
     }
 
-    return res.json({ order: order.toObject() });
+    return res.json({ ok: true, status });
   } catch (e) {
     console.error("[updateKitchenStatus] err", e);
-    return res
-      .status(500)
-      .json({ message: "Mutfak durumu güncellenemedi." });
+    return res.status(500).json({ message: "Durum güncellenemedi." });
   }
 }
