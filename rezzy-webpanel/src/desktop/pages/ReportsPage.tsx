@@ -49,28 +49,23 @@ function fmtStatus(s: string) {
   return trStatus[s] ?? s;
 }
 
-// ---- Range & API yardımcıları (Dashboard mantığını aynen kullanıyoruz) ----
+// ---- Range & API yardımcıları ----
+// Default: Bugün, Son 7 gün, Son 30 gün, Son 90 gün
 function rangeParams(sel: string): Range {
   const today = new Date();
-  const startOfMonth = new Date(
-    today.getUTCFullYear(),
-    today.getUTCMonth(),
-    1
-  );
   const daysAgo = (n: number) => new Date(Date.now() - n * 86400000);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
   switch (sel) {
-    case "month":
-      return { from: fmt(startOfMonth), to: fmt(today) };
+    case "today":
+      return { from: fmt(today), to: fmt(today) };
+    case "7":
+      return { from: fmt(daysAgo(6)), to: fmt(today) }; // 7 gün
     case "30":
-      return { from: fmt(daysAgo(30)), to: fmt(today) };
+      return { from: fmt(daysAgo(29)), to: fmt(today) };
     case "90":
-      return { from: fmt(daysAgo(90)), to: fmt(today) };
-    case "all":
-      return {};
     default:
-      return { from: fmt(daysAgo(90)), to: fmt(today) };
+      return { from: fmt(daysAgo(89)), to: fmt(today) };
   }
 }
 
@@ -106,7 +101,7 @@ async function fetchAllReservationsInRange(
   return items;
 }
 
-/** Rapor ekranı için özetler (Dashboard ile aynı hesaplama mantığı). */
+/** Rapor ekranı için özetler (eski rezervasyon mantığı). */
 async function fetchReportsSummary(rid: string, sel: string) {
   const range = rangeParams(sel);
   const rows = await fetchAllReservationsInRange(rid, range);
@@ -162,7 +157,7 @@ async function fetchRecentInRange(
 export const ReportsPage: React.FC = () => {
   const user = authStore.getUser();
   const rid = user?.restaurantId || "";
-  const [sel, setSel] = React.useState<"month" | "30" | "90" | "all">("90");
+  const [sel, setSel] = React.useState<"today" | "7" | "30" | "90">("today");
   const [view, setView] = React.useState<ViewMode>("reservations");
 
   // Rezervasyon bazlı eski özet (mevcut mantık)
@@ -268,7 +263,7 @@ export const ReportsPage: React.FC = () => {
             <select
               value={sel}
               onChange={(e) =>
-                setSel(e.target.value as "month" | "30" | "90" | "all")
+                setSel(e.target.value as "today" | "7" | "30" | "90")
               }
               style={{
                 padding: "6px 10px",
@@ -277,10 +272,10 @@ export const ReportsPage: React.FC = () => {
                 fontSize: 12,
               }}
             >
-              <option value="month">Bu ay</option>
+              <option value="today">Bugün</option>
+              <option value="7">Son 7 gün</option>
               <option value="30">Son 30 gün</option>
               <option value="90">Son 90 gün</option>
-              <option value="all">Tümü</option>
             </select>
           </div>
 
@@ -650,9 +645,6 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
 /* -------------------------------------------
  * Alt bileşen: Gelişmiş Raporlar (yeni endpoint)
  * ----------------------------------------- */
-/* -------------------------------------------
- * Alt bileşen: Gelişmiş Raporlar (yeni endpoint) — V2
- * ----------------------------------------- */
 
 type AdvancedReportsViewProps = {
   data: {
@@ -695,12 +687,40 @@ type AdvancedReportsViewProps = {
         orders: number;
         revenue: number;
       }>;
+      byHour?: Array<{
+        hour: number;
+        orders: number;
+        revenue: number;
+      }>;
+      topItems?: Array<{
+        itemId: string | null;
+        title: string;
+        qty: number;
+        revenue: number;
+      }>;
+    };
+    tables?: {
+      totalSessions: number;
+      closedSessions: number;
+      avgSessionDurationMinutes: number;
+      payments: {
+        cardTotal: number;
+        payAtVenueTotal: number;
+        grandTotal: number;
+      };
+      topTables: Array<{
+        tableId: string;
+        sessionCount: number;
+        revenueTotal: number;
+      }>;
     };
   };
 };
 
-const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
-  const { reservations, orders, range } = data;
+const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
+  data,
+}) => {
+  const { reservations, orders, range, tables } = data;
 
   const totalReservations = reservations.totalCount;
   const totalOrders = orders.totalCount;
@@ -722,7 +742,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
   const arriveRate =
     arrivedBase > 0 ? (arrived / arrivedBase) * 100 : 0;
 
-  // 🔢 Masa siparişi kanal bazlı ciro (sadece orders bySource)
+  // 🔢 Masa siparişi kanal bazlı ciro
   const walkinRev = Number(orders.bySource.WALK_IN || 0);
   const qrRev = Number(orders.bySource.QR || 0);
   const rezvixTableRev = Number(orders.bySource.REZVIX || 0);
@@ -732,6 +752,20 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
 
   const pct = (val: number, base: number) =>
     base > 0 ? ((val / base) * 100).toFixed(1) : "0.0";
+
+  // 🔢 Adisyon / masa kullanımı
+  const totalSessions = tables?.totalSessions ?? 0;
+  const avgSessionDurationMinutes =
+    tables?.avgSessionDurationMinutes ?? 0;
+  const payments = tables?.payments || {
+    cardTotal: 0,
+    payAtVenueTotal: 0,
+    grandTotal: 0,
+  };
+  const topTables = tables?.topTables ?? [];
+
+  const byHour = orders.byHour ?? [];
+  const topItems = orders.topItems ?? [];
 
   return (
     <div className="rezvix-board-layout">
@@ -747,7 +781,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
         </div>
 
         <div className="rezvix-board-column__body" style={{ gap: 12 }}>
-          {/* Hero kart: Toplam Ciro */}
+          {/* Hero kart: Toplam Ciro — BU KISIM DEĞİŞMEDİ */}
           <div
             style={{
               borderRadius: 16,
@@ -954,10 +988,71 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
               </div>
             </div>
           )}
+
+          {/* En çok satan ürünler */}
+          {topItems.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  marginBottom: 6,
+                }}
+              >
+                En çok satan ürünler
+              </div>
+              <div
+                style={{
+                  maxHeight: 220,
+                  overflowY: "auto",
+                  borderRadius: 10,
+                  border: "1px solid var(--rezvix-border-subtle)",
+                  background: "rgba(255,255,255,0.9)",
+                }}
+              >
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: 11,
+                  }}
+                >
+                  <thead>
+                    <tr
+                      style={{
+                        textAlign: "left",
+                        color: "var(--rezvix-text-soft)",
+                      }}
+                    >
+                      <th style={{ padding: "6px 8px" }}>Ürün</th>
+                      <th style={{ padding: "6px 8px" }}>Adet</th>
+                      <th style={{ padding: "6px 8px" }}>Ciro (₺)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topItems.map((it, idx) => (
+                      <tr
+                        key={it.itemId ?? idx}
+                        style={{ borderTop: "1px solid #eee" }}
+                      >
+                        <td style={{ padding: "6px 8px" }}>
+                          {it.title || "-"}
+                        </td>
+                        <td style={{ padding: "6px 8px" }}>{it.qty}</td>
+                        <td style={{ padding: "6px 8px" }}>
+                          {Number(it.revenue).toLocaleString("tr-TR")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* SAĞ: Kanal bazlı masa siparişi performansı */}
+      {/* SAĞ: Kanal bazlı masa siparişi performansı + adisyon */}
       <div className="rezvix-board-column">
         <div className="rezvix-board-column__header">
           <div className="rezvix-board-column__title">
@@ -969,7 +1064,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
         </div>
 
         <div className="rezvix-board-column__body" style={{ gap: 12 }}>
-          {/* Kanal bazlı stacked bar (görsel etki) */}
+          {/* Kanal bazlı stacked bar — BU KISIM DEĞİŞMEDİ */}
           <div
             style={{
               borderRadius: 14,
@@ -1074,6 +1169,66 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
             </div>
           </div>
 
+          {/* Adisyon / masa KPI'ları */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+              gap: 8,
+            }}
+          >
+            <div className="rezvix-kitchen-ticket">
+              <div className="rezvix-kitchen-ticket__header">
+                <span className="rezvix-kitchen-ticket__title">
+                  Toplam adisyon
+                </span>
+              </div>
+              <div
+                style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
+              >
+                {totalSessions}
+              </div>
+              <div className="rezvix-kitchen-ticket__meta">
+                Seçili aralıktaki açılan masa oturumları
+              </div>
+            </div>
+
+            <div className="rezvix-kitchen-ticket">
+              <div className="rezvix-kitchen-ticket__header">
+                <span className="rezvix-kitchen-ticket__title">
+                  Ortalama oturma süresi
+                </span>
+              </div>
+              <div
+                style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
+              >
+                {avgSessionDurationMinutes} dk
+              </div>
+              <div className="rezvix-kitchen-ticket__meta">
+                Kapalı adisyonların ortalaması
+              </div>
+            </div>
+
+            <div className="rezvix-kitchen-ticket">
+              <div className="rezvix-kitchen-ticket__header">
+                <span className="rezvix-kitchen-ticket__title">
+                  Masadan alınan ödeme
+                </span>
+              </div>
+              <div
+                style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
+              >
+                {Number(
+                  payments.grandTotal || 0
+                ).toLocaleString("tr-TR")}{" "}
+                ₺
+              </div>
+              <div className="rezvix-kitchen-ticket__meta">
+                Kart + masada ödeme toplamı
+              </div>
+            </div>
+          </div>
+
           {/* Günlük sipariş & ciro tablosu */}
           {orders.byDay.length > 0 && (
             <div>
@@ -1088,7 +1243,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
               </div>
               <div
                 style={{
-                  maxHeight: 220,
+                  maxHeight: 180,
                   overflowY: "auto",
                   borderRadius: 10,
                   border: "1px solid var(--rezvix-border-subtle)",
@@ -1124,6 +1279,145 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
                         <td style={{ padding: "6px 8px" }}>{d.orders}</td>
                         <td style={{ padding: "6px 8px" }}>
                           {Number(d.revenue).toLocaleString("tr-TR")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Saatlik sipariş & ciro (mini bar chart) */}
+          {byHour.length > 0 && (
+            <div>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  marginBottom: 6,
+                }}
+              >
+                Saatlik sipariş & ciro
+              </div>
+              <div
+                style={{
+                  maxHeight: 180,
+                  overflowY: "auto",
+                  borderRadius: 10,
+                  border: "1px solid var(--rezvix-border-subtle)",
+                  background: "rgba(255,255,255,0.9)",
+                  padding: 8,
+                }}
+              >
+                {byHour.map((h) => {
+                  const maxRevenue = Math.max(
+                    ...byHour.map((x) => x.revenue || 0),
+                    1
+                  );
+                  const width = (h.revenue / maxRevenue) * 100;
+                  return (
+                    <div
+                      key={h.hour}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        marginBottom: 4,
+                        gap: 6,
+                      }}
+                    >
+                      <div style={{ width: 40, fontSize: 11 }}>
+                        {h.hour.toString().padStart(2, "0")}:00
+                      </div>
+                      <div
+                        style={{
+                          flex: 1,
+                          height: 8,
+                          borderRadius: 999,
+                          background: "rgba(0,0,0,0.05)",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${width}%`,
+                            height: "100%",
+                            background: "rgba(52, 152, 219, 0.9)",
+                          }}
+                        />
+                      </div>
+                      <div
+                        style={{
+                          width: 80,
+                          textAlign: "right",
+                          fontSize: 11,
+                        }}
+                      >
+                        {Number(h.revenue).toLocaleString("tr-TR")} ₺
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* En çok kullanılan masalar */}
+          {topTables.length > 0 && (
+            <div>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  marginBottom: 6,
+                }}
+              >
+                En çok kullanılan masalar
+              </div>
+              <div
+                style={{
+                  maxHeight: 180,
+                  overflowY: "auto",
+                  borderRadius: 10,
+                  border: "1px solid var(--rezvix-border-subtle)",
+                  background: "rgba(255,255,255,0.9)",
+                }}
+              >
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: 11,
+                  }}
+                >
+                  <thead>
+                    <tr
+                      style={{
+                        textAlign: "left",
+                        color: "var(--rezvix-text-soft)",
+                      }}
+                    >
+                      <th style={{ padding: "6px 8px" }}>Masa</th>
+                      <th style={{ padding: "6px 8px" }}>Adisyon</th>
+                      <th style={{ padding: "6px 8px" }}>Ciro (₺)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topTables.map((t) => (
+                      <tr
+                        key={t.tableId}
+                        style={{ borderTop: "1px solid #eee" }}
+                      >
+                        <td style={{ padding: "6px 8px" }}>
+                          {t.tableId}
+                        </td>
+                        <td style={{ padding: "6px 8px" }}>
+                          {t.sessionCount}
+                        </td>
+                        <td style={{ padding: "6px 8px" }}>
+                          {Number(
+                            t.revenueTotal
+                          ).toLocaleString("tr-TR")}
                         </td>
                       </tr>
                     ))}

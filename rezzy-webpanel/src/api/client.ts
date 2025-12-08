@@ -661,7 +661,7 @@ export interface RestaurantReportsOverview {
     depositTotal: number;
     revenueTotal: number;
     byDay: Array<{
-      date: string;              // "YYYY-MM-DD"
+      date: string;      // "YYYY-MM-DD"
       reservations: number;
       deposits: number;
       revenue: number;
@@ -683,9 +683,35 @@ export interface RestaurantReportsOverview {
       UNKNOWN: number;
     };
     byDay: Array<{
-      date: string;              // "YYYY-MM-DD"
+      date: string;      // "YYYY-MM-DD"
       orders: number;
       revenue: number;
+    }>;
+    byHour: Array<{
+      hour: number;      // 0–23
+      orders: number;
+      revenue: number;
+    }>;
+    topItems: Array<{
+      itemId: string | null;
+      title: string;
+      qty: number;
+      revenue: number;
+    }>;
+  };
+  tables: {
+    totalSessions: number;
+    closedSessions: number;
+    avgSessionDurationMinutes: number;
+    payments: {
+      cardTotal: number;
+      payAtVenueTotal: number;
+      grandTotal: number;
+    };
+    topTables: Array<{
+      tableId: string;
+      sessionCount: number;
+      revenueTotal: number;
     }>;
   };
 }
@@ -703,7 +729,6 @@ export async function restaurantGetReportsOverview(
   );
   return data as RestaurantReportsOverview;
 }
-
 // =========================
 // RESTAURANT — Live Tables & Orders
 // =========================

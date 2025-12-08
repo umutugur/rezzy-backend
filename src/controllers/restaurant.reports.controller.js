@@ -3,18 +3,23 @@ import mongoose from "mongoose";
 import dayjs from "dayjs";
 import Reservation from "../models/Reservation.js";
 import Order from "../models/Order.js";
+import OrderSession from "../models/OrderSession.js";
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 
 /**
  * GET /api/panel/restaurants/:rid/reports/overview
  *
- * - Tarih aralığına göre:
- *   • Rezervasyon status dağılımı (pending/confirmed/arrived/cancelled/no_show)
- *   • Rezervasyonlardan gelen toplam ciro + depozito
- *   • Gün bazlı rezervasyon & depozito serisi (grafik için)
- *   • QR / WALK_IN / REZVIX sipariş ciroları + adet
- *   • Gün bazlı sipariş cirosu (grafik için)
+ * Query:
+ *   from?: YYYY-MM-DD
+ *   to?:   YYYY-MM-DD
+ *
+ * Dönenler:
+ *   - Rezervasyon özetleri (status dağılımı, byDay vs.)
+ *   - Sipariş özetleri (kanal dağılımı, byDay)
+ *   - Saatlik sipariş & ciro (byHour)
+ *   - En çok satan ürünler (topItems)
+ *   - Adisyon / masa kullanımı (sessions + topTables)
  */
 export const getRestaurantReportsOverview = async (req, res, next) => {
   try {
@@ -45,8 +50,8 @@ export const getRestaurantReportsOverview = async (req, res, next) => {
         $group: {
           _id: "$status",
           count: { $sum: 1 },
-          depositTotal: { $sum: "$depositAmount" },
-          revenueTotal: { $sum: "$totalPrice" },
+          depositTotal: { $sum: { $ifNull: ["$depositAmount", 0] } },
+          revenueTotal: { $sum: { $ifNull: ["$totalPrice", 0] } },
         },
       },
     ];
@@ -62,8 +67,8 @@ export const getRestaurantReportsOverview = async (req, res, next) => {
             },
           },
           reservations: { $sum: 1 },
-          deposits: { $sum: "$depositAmount" },
-          revenue: { $sum: "$totalPrice" },
+          deposits: { $sum: { $ifNull: ["$depositAmount", 0] } },
+          revenue: { $sum: { $ifNull: ["$totalPrice", 0] } },
         },
       },
       { $sort: { _id: 1 } },
@@ -80,9 +85,9 @@ export const getRestaurantReportsOverview = async (req, res, next) => {
       { $match: ordersMatch },
       {
         $group: {
-          _id: "$source", // "walk_in" | "qr" | "rezvix" vs.
+          _id: "$source", // "walk_in" | "QR" | "REZVIX" vs.
           orderCount: { $sum: 1 },
-          revenueTotal: { $sum: "$total" },
+          revenueTotal: { $sum: { $ifNull: ["$total", 0] } },
         },
       },
     ];
@@ -98,22 +103,73 @@ export const getRestaurantReportsOverview = async (req, res, next) => {
             },
           },
           orders: { $sum: 1 },
-          revenue: { $sum: "$total" },
+          revenue: { $sum: { $ifNull: ["$total", 0] } },
         },
       },
       { $sort: { _id: 1 } },
     ];
+
+    // Saatlik satış (0–23)
+    const ordersByHourPipeline = [
+      { $match: ordersMatch },
+      {
+        $group: {
+          _id: { $hour: "$createdAt" },
+          orders: { $sum: 1 },
+          revenue: { $sum: { $ifNull: ["$total", 0] } },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ];
+
+    // En çok satan ürünler (top N)
+    const topItemsPipeline = [
+      { $match: ordersMatch },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: {
+            itemId: "$items.itemId",
+            title: "$items.title",
+          },
+          qty: { $sum: { $ifNull: ["$items.qty", 0] } },
+          revenue: {
+            $sum: {
+              $multiply: [
+                { $ifNull: ["$items.qty", 0] },
+                { $ifNull: ["$items.price", 0] },
+              ],
+            },
+          },
+        },
+      },
+      { $sort: { revenue: -1 } },
+      { $limit: 20 },
+    ];
+
+    /* ---------------- Masa / adisyon (OrderSession) tarafı ---------------- */
+
+    const sessionsMatch = {
+      restaurantId,
+      openedAt: { $gte: start.toDate(), $lte: end.toDate() },
+    };
 
     const [
       reservationsByStatus,
       reservationsByDay,
       ordersBySource,
       ordersByDay,
+      ordersByHourRaw,
+      topItemsRaw,
+      sessions,
     ] = await Promise.all([
       Reservation.aggregate(reservationsByStatusPipeline),
       Reservation.aggregate(reservationsByDayPipeline),
       Order.aggregate(ordersBySourcePipeline),
       Order.aggregate(ordersByDayPipeline),
+      Order.aggregate(ordersByHourPipeline),
+      Order.aggregate(topItemsPipeline),
+      OrderSession.find(sessionsMatch).lean(),
     ]);
 
     /* ---------------- Rezervasyon özetleri ---------------- */
@@ -139,7 +195,7 @@ export const getRestaurantReportsOverview = async (req, res, next) => {
     /* ---------------- Sipariş özetleri ---------------- */
 
     const ordersSourceMap = ordersBySource.reduce((acc, row) => {
-      const key = (row._id || "unknown").toUpperCase();
+      const key = (row._id || "UNKNOWN").toString().toUpperCase();
       acc[key] = row;
       return acc;
     }, {});
@@ -152,6 +208,64 @@ export const getRestaurantReportsOverview = async (req, res, next) => {
       (a, r) => a + (r.revenueTotal || 0),
       0
     );
+
+    const ordersByHour = ordersByHourRaw.map((h) => ({
+      hour: h._id, // 0–23
+      orders: h.orders,
+      revenue: h.revenue,
+    }));
+
+    const topItems = topItemsRaw.map((r) => ({
+      itemId: r._id.itemId || null,
+      title: r._id.title || "",
+      qty: r.qty || 0,
+      revenue: r.revenue || 0,
+    }));
+
+    /* ---------------- Masa / adisyon özetleri ---------------- */
+
+    let totalSessions = sessions.length;
+    let closedSessions = 0;
+    let totalDurationMs = 0;
+
+    let cardTotal = 0;
+    let payAtVenueTotal = 0;
+    let grandTotal = 0;
+
+    const tableMap = new Map(); // tableId -> { tableId, sessionCount, revenueTotal }
+
+    for (const s of sessions) {
+      const totals = s.totals || {};
+      cardTotal += Number(totals.cardTotal || 0);
+      payAtVenueTotal += Number(totals.payAtVenueTotal || 0);
+      grandTotal += Number(totals.grandTotal || 0);
+
+      if (s.closedAt && s.openedAt) {
+        closedSessions += 1;
+        totalDurationMs +=
+          new Date(s.closedAt).getTime() -
+          new Date(s.openedAt).getTime();
+      }
+
+      const key = String(s.tableId || "UNKNOWN");
+      const entry = tableMap.get(key) || {
+        tableId: key,
+        sessionCount: 0,
+        revenueTotal: 0,
+      };
+      entry.sessionCount += 1;
+      entry.revenueTotal += Number(totals.grandTotal || 0);
+      tableMap.set(key, entry);
+    }
+
+    const avgSessionDurationMinutes =
+      closedSessions > 0
+        ? Math.round(totalDurationMs / closedSessions / 60000)
+        : 0;
+
+    const topTables = Array.from(tableMap.values())
+      .sort((a, b) => b.revenueTotal - a.revenueTotal)
+      .slice(0, 20);
 
     /* ---------------- Response shape ---------------- */
 
@@ -202,6 +316,21 @@ export const getRestaurantReportsOverview = async (req, res, next) => {
           orders: d.orders,
           revenue: d.revenue,
         })),
+        byHour: ordersByHour, // ⏰ saatlik sipariş & ciro (0–23)
+        topItems,             // 🔝 en çok satan ürünler
+      },
+
+      // Masa / adisyon kullanımı
+      tables: {
+        totalSessions,
+        closedSessions,
+        avgSessionDurationMinutes, // Ortalama oturma süresi (dakika)
+        payments: {
+          cardTotal,
+          payAtVenueTotal,
+          grandTotal,
+        },
+        topTables, // { tableId, sessionCount, revenueTotal }[]
       },
     });
   } catch (e) {
