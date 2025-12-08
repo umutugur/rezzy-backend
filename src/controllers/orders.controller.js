@@ -12,7 +12,6 @@ const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecret
   ? new Stripe(stripeSecret, { apiVersion: "2024-06-20" })
   : null;
-
 function currencyFromRegion(region) {
   if (region === "UK") return "GBP";
   return "TRY";
@@ -34,33 +33,29 @@ async function updateTable(restaurantId, tableId, patch) {
     console.error("[orders.updateTable] err", err);
   }
 }
+
 /**
- * ✅ Aynı restoran + aynı user + BUGÜN + yakın saatlerdeki rezervasyonu bul
- * - Sadece pending / confirmed / arrived statülerinden
- * - Aynı gün içinde, saate en yakın olan rezervasyon (±3 saat tolerans)
+ * ✅ Aynı restoran + aynı user için en yakın rezervasyonu bul
  */
-async function findTodayReservationForUser(restaurantId, userId) {
+async function findClosestReservationForUser(restaurantId, userId) {
   try {
     if (!restaurantId || !userId) return null;
 
     const rid = new mongoose.Types.ObjectId(restaurantId);
     const uid = new mongoose.Types.ObjectId(userId);
 
-    // Bugünün başlangıcı / bitişi
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-
     const candidates = await Reservation.find({
       restaurantId: rid,
       userId: uid,
       status: { $in: ["pending", "confirmed", "arrived"] },
-      dateTimeUTC: { $gte: start, $lte: end },
     })
       .sort({ dateTimeUTC: 1 })
       .lean();
+
+    console.log(
+      "[findClosestReservationForUser] candidate count =",
+      candidates.length
+    );
 
     if (!candidates.length) return null;
 
@@ -78,16 +73,22 @@ async function findTodayReservationForUser(restaurantId, userId) {
       }
     }
 
-    // "yakın saatlerde" için 180 dakika (3 saat) tolerans
-    if (!best || bestDiffMin > 180) return null;
+    console.log(
+      "[findClosestReservationForUser] bestDiffMin =",
+      bestDiffMin,
+      "bestId =",
+      best?._id?.toString()
+    );
+
+    // 12 saat tolerans (öncesi / sonrası)
+    if (!best || bestDiffMin > 720) return null;
 
     return best._id;
   } catch (err) {
-    console.error("[findTodayReservationForUser] err", err);
+    console.error("[findClosestReservationForUser] err", err);
     return null;
   }
 }
-
 export async function openSession(req, res) {
   try {
     const { restaurantId, tableId, reservationId } = req.body || {};
@@ -100,22 +101,40 @@ export async function openSession(req, res) {
     const rid = String(restaurantId);
     const table = String(tableId);
 
+    console.log("---- [openSession] START ----");
+    console.log("[openSession] body =", req.body);
+    console.log("[openSession] user  =", req.user);
+
     // 1) Kullanılacak reservationId'yi belirle
     let resolvedReservationId = null;
 
     // a) Body'den geldiyse ve geçerliyse onu kullan
     if (reservationId && mongoose.Types.ObjectId.isValid(reservationId)) {
       resolvedReservationId = reservationId;
+      console.log(
+        "[openSession] using reservationId from body =",
+        resolvedReservationId
+      );
     } else if (req.user?._id) {
-      // b) Aksi halde: QR'yi okutup sipariş veren KULLANICININ
-      //    bugün için, bu restoranda, yakın saatlerde rezervasyonu var mı?
-      const matchId = await findTodayReservationForUser(
+      // b) Kullanıcı varsa → bu restoran için en yakın rezervasyonu bul
+      const matchId = await findClosestReservationForUser(
         rid,
         req.user._id
       );
       if (matchId) {
         resolvedReservationId = matchId;
+        console.log(
+          "[openSession] matched reservation for user =",
+          resolvedReservationId
+        );
+      } else {
+        console.log(
+          "[openSession] NO reservation matched for user",
+          req.user._id?.toString()
+        );
       }
+    } else {
+      console.log("[openSession] req.user YOK, user bazlı eşleşme yapamıyoruz.");
     }
 
     // 2) Bu masa için açık session var mı?
@@ -126,12 +145,24 @@ export async function openSession(req, res) {
     });
 
     if (s) {
+      console.log(
+        "[openSession] existing session found:",
+        s._id.toString(),
+        "current reservationId =",
+        s.reservationId ? s.reservationId.toString() : null
+      );
+
       // Eğer daha önce reservationId yazılmamışsa ve şimdi bulduysak, session'a işleyelim
       if (!s.reservationId && resolvedReservationId) {
         s.reservationId = resolvedReservationId;
         await s.save();
+        console.log(
+          "[openSession] reservationId patched on existing session:",
+          resolvedReservationId.toString()
+        );
       }
 
+      console.log("---- [openSession] END (existing) ----");
       return res.json({ sessionId: s._id });
     }
 
@@ -139,7 +170,7 @@ export async function openSession(req, res) {
     const r = await Restaurant.findById(rid).lean();
     const currency = currencyFromRegion(r?.region);
 
-    s = await OrderSession.create({
+    const createPayload = {
       restaurantId: rid,
       tableId: table,
       reservationId:
@@ -147,7 +178,11 @@ export async function openSession(req, res) {
           ? resolvedReservationId
           : null,
       currency,
-    });
+    };
+
+    console.log("[openSession] creating new session with payload =", createPayload);
+
+    s = await OrderSession.create(createPayload);
 
     // MASAYI AKTİF YAP
     await updateTable(rid, table, {
@@ -155,6 +190,14 @@ export async function openSession(req, res) {
       sessionId: s._id,
       status: "order_active",
     });
+
+    console.log(
+      "[openSession] new session created:",
+      s._id.toString(),
+      "reservationId =",
+      s.reservationId ? s.reservationId.toString() : null
+    );
+    console.log("---- [openSession] END (new) ----");
 
     return res.json({ sessionId: s._id });
   } catch (e) {
