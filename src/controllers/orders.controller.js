@@ -34,11 +34,63 @@ async function updateTable(restaurantId, tableId, patch) {
     console.error("[orders.updateTable] err", err);
   }
 }
+/**
+ * ✅ Aynı restoran + aynı user + BUGÜN + yakın saatlerdeki rezervasyonu bul
+ * - Sadece pending / confirmed / arrived statülerinden
+ * - Aynı gün içinde, saate en yakın olan rezervasyon (±3 saat tolerans)
+ */
+async function findTodayReservationForUser(restaurantId, userId) {
+  try {
+    if (!restaurantId || !userId) return null;
+
+    const rid = new mongoose.Types.ObjectId(restaurantId);
+    const uid = new mongoose.Types.ObjectId(userId);
+
+    // Bugünün başlangıcı / bitişi
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+
+    const candidates = await Reservation.find({
+      restaurantId: rid,
+      userId: uid,
+      status: { $in: ["pending", "confirmed", "arrived"] },
+      dateTimeUTC: { $gte: start, $lte: end },
+    })
+      .sort({ dateTimeUTC: 1 })
+      .lean();
+
+    if (!candidates.length) return null;
+
+    const now = Date.now();
+    let best = null;
+    let bestDiffMin = Infinity;
+
+    for (const r of candidates) {
+      if (!r.dateTimeUTC) continue;
+      const diffMs = Math.abs(new Date(r.dateTimeUTC).getTime() - now);
+      const diffMin = diffMs / 60000;
+      if (diffMin < bestDiffMin) {
+        bestDiffMin = diffMin;
+        best = r;
+      }
+    }
+
+    // "yakın saatlerde" için 180 dakika (3 saat) tolerans
+    if (!best || bestDiffMin > 180) return null;
+
+    return best._id;
+  } catch (err) {
+    console.error("[findTodayReservationForUser] err", err);
+    return null;
+  }
+}
 
 export async function openSession(req, res) {
   try {
-    const { restaurantId, tableId, reservationId: bodyReservationId } = req.body || {};
-
+    const { restaurantId, tableId, reservationId } = req.body || {};
     if (!restaurantId || !tableId) {
       return res
         .status(400)
@@ -48,65 +100,61 @@ export async function openSession(req, res) {
     const rid = String(restaurantId);
     const table = String(tableId);
 
-    // 🔐 Önce hangi reservationId'yi kullanacağımıza karar veriyoruz
-    let effectiveReservationId = null;
+    // 1) Kullanılacak reservationId'yi belirle
+    let resolvedReservationId = null;
 
-    // 1) Body'den gelen reservationId geçerliyse onu kullan
-    if (bodyReservationId && mongoose.Types.ObjectId.isValid(bodyReservationId)) {
-      effectiveReservationId = bodyReservationId;
+    // a) Body'den geldiyse ve geçerliyse onu kullan
+    if (reservationId && mongoose.Types.ObjectId.isValid(reservationId)) {
+      resolvedReservationId = reservationId;
     } else if (req.user?._id) {
-      // 2) Aksi halde, aynı gün içinde bu kullanıcıya ait uygun bir rezervasyon bul
-      const now = dayjs();
-      const from = now.startOf("day").toDate();
-      const to = now.endOf("day").toDate();
-
-      const candidate = await Reservation.findOne({
-        restaurantId: new mongoose.Types.ObjectId(rid),
-        userId: req.user._id,
-        dateTimeUTC: { $gte: from, $lte: to },
-        status: { $in: ["pending", "confirmed", "arrived"] },
-      })
-        .sort({ dateTimeUTC: 1 })
-        .lean();
-
-      if (candidate) {
-        effectiveReservationId = candidate._id;
+      // b) Aksi halde: QR'yi okutup sipariş veren KULLANICININ
+      //    bugün için, bu restoranda, yakın saatlerde rezervasyonu var mı?
+      const matchId = await findTodayReservationForUser(
+        rid,
+        req.user._id
+      );
+      if (matchId) {
+        resolvedReservationId = matchId;
       }
     }
 
-    // 3) Aynı masa için açık session var mı?
+    // 2) Bu masa için açık session var mı?
     let s = await OrderSession.findOne({
       restaurantId: rid,
       tableId: table,
       status: "open",
     });
 
-    if (!s) {
-      // ❌ Yoksa yeni session aç
-      const r = await Restaurant.findById(rid).lean();
-      const currency = currencyFromRegion(r?.region);
+    if (s) {
+      // Eğer daha önce reservationId yazılmamışsa ve şimdi bulduysak, session'a işleyelim
+      if (!s.reservationId && resolvedReservationId) {
+        s.reservationId = resolvedReservationId;
+        await s.save();
+      }
 
-      s = await OrderSession.create({
-        restaurantId: rid,
-        tableId: table,
-        reservationId:
-          effectiveReservationId && mongoose.Types.ObjectId.isValid(effectiveReservationId)
-            ? effectiveReservationId
-            : null,
-        currency,
-      });
-
-      // MASAYI AKTİF YAP
-      await updateTable(rid, table, {
-        hasActiveSession: true,
-        sessionId: s._id,
-        status: "order_active",
-      });
-    } else if (!s.reservationId && effectiveReservationId) {
-      // ✅ Açık session zaten var ama reservationId boş → otomatik bağla
-      s.reservationId = effectiveReservationId;
-      await s.save();
+      return res.json({ sessionId: s._id });
     }
+
+    // 3) Hiç açık session yoksa, yeni session aç
+    const r = await Restaurant.findById(rid).lean();
+    const currency = currencyFromRegion(r?.region);
+
+    s = await OrderSession.create({
+      restaurantId: rid,
+      tableId: table,
+      reservationId:
+        resolvedReservationId && mongoose.Types.ObjectId.isValid(resolvedReservationId)
+          ? resolvedReservationId
+          : null,
+      currency,
+    });
+
+    // MASAYI AKTİF YAP
+    await updateTable(rid, table, {
+      hasActiveSession: true,
+      sessionId: s._id,
+      status: "order_active",
+    });
 
     return res.json({ sessionId: s._id });
   } catch (e) {
