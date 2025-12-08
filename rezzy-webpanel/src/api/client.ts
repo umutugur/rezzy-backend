@@ -643,6 +643,66 @@ export async function adminUpdateRestaurant(rid: string, payload: any) {
   const { data } = await api.put(`/restaurants/${rid}`, payload);
   return data;
 }
+// =========================
+// RESTAURANT — Reports (Overview)
+// =========================
+
+export interface RestaurantReportsOverview {
+  range: { from: string; to: string };
+  reservations: {
+    totalCount: number;
+    statusCounts: {
+      pending: number;
+      confirmed: number;
+      arrived: number;
+      cancelled: number;
+      no_show: number;
+    };
+    depositTotal: number;
+    revenueTotal: number;
+    byDay: Array<{
+      date: string;              // "YYYY-MM-DD"
+      reservations: number;
+      deposits: number;
+      revenue: number;
+    }>;
+  };
+  orders: {
+    totalCount: number;
+    revenueTotal: number;
+    bySource: {
+      WALK_IN: number;
+      QR: number;
+      REZVIX: number;
+      UNKNOWN: number;
+    };
+    countsBySource: {
+      WALK_IN: number;
+      QR: number;
+      REZVIX: number;
+      UNKNOWN: number;
+    };
+    byDay: Array<{
+      date: string;              // "YYYY-MM-DD"
+      orders: number;
+      revenue: number;
+    }>;
+  };
+}
+
+/**
+ * GET /api/panel/restaurants/:rid/reports/overview
+ */
+export async function restaurantGetReportsOverview(
+  rid: string,
+  p?: { from?: string; to?: string }
+): Promise<RestaurantReportsOverview> {
+  const { data } = await api.get(
+    `/panel/restaurants/${rid}/reports/overview`,
+    { params: p }
+  );
+  return data as RestaurantReportsOverview;
+}
 
 // =========================
 // RESTAURANT — Live Tables & Orders

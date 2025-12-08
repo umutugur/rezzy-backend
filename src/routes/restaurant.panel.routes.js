@@ -12,6 +12,7 @@ import {
   closeTableSessionForRestaurant,
   resolveTableServiceRequests,
 } from "../controllers/restaurant.panel.controller.js";
+import { getRestaurantReportsOverview } from "../controllers/restaurant.reports.controller.js";
 
 const r = Router();
 
@@ -79,6 +80,13 @@ r.post(
   auth(),
   allow("restaurant", "admin"),
   resolveTableServiceRequests
+);
+// 🔢 Gelişmiş raporlar (overview)
+r.get(
+  "/:rid/reports/overview",
+  auth(),
+  allow("restaurant", "admin"),
+  getRestaurantReportsOverview
 );
 
 export default r;
