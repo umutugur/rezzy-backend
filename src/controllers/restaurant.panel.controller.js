@@ -268,7 +268,7 @@ export const getInsightsForRestaurant = async (req, res, next) => {
 /**
  * GET /api/panel/restaurants/:rid/tables/live
  * - Masaları, kat/pozisyon + anlık status ile döner
- * - status: empty / occupied / order_active / waiter_call / bill_request
+ * - status: empty / occupied / order_active / waiter_call / bill_request / order_ready
  */
 export const getTablesLive = async (req, res, next) => {
   try {
@@ -306,28 +306,43 @@ export const getTablesLive = async (req, res, next) => {
         .select("sessionId source")
         .lean();
 
-      // 1) Rezervasyon bağlı session → REZVIX
+      // 1) Rezervasyon bağlı session → REZVIX (en yüksek öncelik)
       for (const s of sessions) {
         if (s.reservationId) {
           sessionChannelMap.set(String(s._id), "REZVIX");
         }
       }
 
-      // 2) Sipariş kaynağına göre WALK_IN / QR
+      // 2) Sipariş kaynağına göre kanal:
+      // ÖNCELİK: REZVIX > QR > WALK_IN
       for (const o of orders) {
-        const sid = String(o.sessionId);
+        const sid = String(o.sessionId || "");
         if (!sid) continue;
 
-        // Eğer zaten REZVIX işaretlendiyse dokunma
-        if (sessionChannelMap.get(sid) === "REZVIX") continue;
+        const current = sessionChannelMap.get(sid); // "REZVIX" | "QR" | "WALK_IN" | undefined
+
+        // REZVIX hiçbir durumda override edilmez
+        if (current === "REZVIX") continue;
 
         if (o.source === "walk_in") {
-          sessionChannelMap.set(sid, "WALK_IN");
-        } else {
-          // createOrder tarafında source set edilmemiş → default QR sayalım
-          if (!sessionChannelMap.has(sid)) {
-            sessionChannelMap.set(sid, "QR");
+          // WALK_IN sadece henüz kanal atanmadıysa yazılsın
+          if (!current) {
+            sessionChannelMap.set(sid, "WALK_IN");
           }
+          continue;
+        }
+
+        if (o.source === "rezvix") {
+          // İleride ayrı sipariş kaynağı olarak kullanırsan:
+          // REZVIX her zaman en yüksek öncelik
+          sessionChannelMap.set(sid, "REZVIX");
+          continue;
+        }
+
+        // Geri kalan her şey (undefined, "qr" vs.) → QR kabul et
+        // QR, WALK_IN'i override edebilir ama REZVIX'i edemez
+        if (!current || current === "WALK_IN") {
+          sessionChannelMap.set(sid, "QR");
         }
       }
     }
@@ -337,7 +352,7 @@ export const getTablesLive = async (req, res, next) => {
       const reqs = findRequestsForTable(requests, t);
       const status = deriveTableStatus(t, session, reqs);
 
-      // 🔐 Bu masaya ait session varsa channel’ı çek
+      // 🔐 Bu masaya ait session varsa, önceden hesaplanan kanalı çek
       let channel = null;
       if (session) {
         const ch = sessionChannelMap.get(String(session._id));
@@ -365,7 +380,7 @@ export const getTablesLive = async (req, res, next) => {
           payAtVenueTotal: 0,
           grandTotal: 0,
         },
-        // 💜 live tables için kaynak bilgi
+        // 💜 canlı masalar için kaynak bilgisi
         channel, // null | "WALK_IN" | "REZVIX" | "QR"
       };
     });
@@ -493,10 +508,9 @@ export const listLiveOrdersForRestaurant = async (req, res, next) => {
     next(e);
   }
 };
-
 /**
  * GET /api/panel/restaurants/:rid/tables/:tableKey/detail
- * - Masa detay + aktif adisyon + siparişler + açık servis istekleri
+ * - Masa detay + aktif adisyon + siparişler + açık servis istekleri (+ varsa Rezvix rezervasyonu)
  */
 export const getTableDetailForRestaurant = async (req, res, next) => {
   try {
@@ -546,6 +560,51 @@ export const getTableDetailForRestaurant = async (req, res, next) => {
 
     const status = deriveTableStatus(table, session, requests);
 
+    // 🟣 Varsa, bu session'a bağlı Rezvix rezervasyonunu da çek
+    let reservationPayload = null;
+
+    if (session?.reservationId) {
+      const reservation = await Reservation.findById(session.reservationId)
+        .populate({ path: "userId", select: "name email" })
+        .lean();
+
+      if (reservation) {
+        // listReservationsForRestaurant'taki mantıkla aynı şekilde displayName türet
+        const user =
+          reservation.userId &&
+          (reservation.userId.name || reservation.userId.email)
+            ? {
+                name: reservation.userId.name,
+                email: reservation.userId.email,
+              }
+            : null;
+
+        const displayName = resolveDisplayNameForRestaurantPanel(
+          reservation,
+          user
+        );
+
+        const guestName =
+          (reservation.guestName &&
+            String(reservation.guestName).trim()) ||
+          (reservation.customerName &&
+            String(reservation.customerName).trim()) ||
+          (reservation.contactName &&
+            String(reservation.contactName).trim()) ||
+          null;
+
+        reservationPayload = {
+          _id: reservation._id,
+          dateTimeUTC: reservation.dateTimeUTC,
+          partySize: reservation.partySize,
+          depositAmount: reservation.depositAmount,
+          status: reservation.status,
+          displayName,
+          guestName,
+        };
+      }
+    }
+
     res.json({
       table: {
         id: table._id,
@@ -562,12 +621,13 @@ export const getTableDetailForRestaurant = async (req, res, next) => {
       totals: session?.totals || null,
       orders,
       serviceRequests: requests,
+      // 🆕 Rezvix şeridi için
+      reservation: reservationPayload,
     });
   } catch (e) {
     next(e);
   }
 };
-
 /**
  * POST /api/panel/restaurants/:rid/tables/:tableKey/close-session
  * - Masanın aktif adisyonunu kapatır, ilgili servis isteklerini handled yapar

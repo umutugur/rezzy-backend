@@ -5,6 +5,8 @@ import OrderSession from "../models/OrderSession.js";
 import Order from "../models/Order.js";
 import Restaurant from "../models/Restaurant.js";
 import TableServiceRequest from "../models/TableServiceRequest.js"; // 🆕 eklendi
+import dayjs from "dayjs"; // 🆕
+import Reservation from "../models/Reservation.js"; // 🆕
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecret
@@ -35,7 +37,8 @@ async function updateTable(restaurantId, tableId, patch) {
 
 export async function openSession(req, res) {
   try {
-    const { restaurantId, tableId, reservationId } = req.body || {};
+    const { restaurantId, tableId, reservationId: bodyReservationId } = req.body || {};
+
     if (!restaurantId || !tableId) {
       return res
         .status(400)
@@ -45,6 +48,33 @@ export async function openSession(req, res) {
     const rid = String(restaurantId);
     const table = String(tableId);
 
+    // 🔐 Önce hangi reservationId'yi kullanacağımıza karar veriyoruz
+    let effectiveReservationId = null;
+
+    // 1) Body'den gelen reservationId geçerliyse onu kullan
+    if (bodyReservationId && mongoose.Types.ObjectId.isValid(bodyReservationId)) {
+      effectiveReservationId = bodyReservationId;
+    } else if (req.user?._id) {
+      // 2) Aksi halde, aynı gün içinde bu kullanıcıya ait uygun bir rezervasyon bul
+      const now = dayjs();
+      const from = now.startOf("day").toDate();
+      const to = now.endOf("day").toDate();
+
+      const candidate = await Reservation.findOne({
+        restaurantId: new mongoose.Types.ObjectId(rid),
+        userId: req.user._id,
+        dateTimeUTC: { $gte: from, $lte: to },
+        status: { $in: ["pending", "confirmed", "arrived"] },
+      })
+        .sort({ dateTimeUTC: 1 })
+        .lean();
+
+      if (candidate) {
+        effectiveReservationId = candidate._id;
+      }
+    }
+
+    // 3) Aynı masa için açık session var mı?
     let s = await OrderSession.findOne({
       restaurantId: rid,
       tableId: table,
@@ -52,6 +82,7 @@ export async function openSession(req, res) {
     });
 
     if (!s) {
+      // ❌ Yoksa yeni session aç
       const r = await Restaurant.findById(rid).lean();
       const currency = currencyFromRegion(r?.region);
 
@@ -59,8 +90,8 @@ export async function openSession(req, res) {
         restaurantId: rid,
         tableId: table,
         reservationId:
-          reservationId && mongoose.Types.ObjectId.isValid(reservationId)
-            ? reservationId
+          effectiveReservationId && mongoose.Types.ObjectId.isValid(effectiveReservationId)
+            ? effectiveReservationId
             : null,
         currency,
       });
@@ -71,6 +102,10 @@ export async function openSession(req, res) {
         sessionId: s._id,
         status: "order_active",
       });
+    } else if (!s.reservationId && effectiveReservationId) {
+      // ✅ Açık session zaten var ama reservationId boş → otomatik bağla
+      s.reservationId = effectiveReservationId;
+      await s.save();
     }
 
     return res.json({ sessionId: s._id });
@@ -79,7 +114,6 @@ export async function openSession(req, res) {
     return res.status(500).json({ message: "Session açılamadı." });
   }
 }
-
 export async function getSession(req, res) {
   try {
     const { id } = req.params;
