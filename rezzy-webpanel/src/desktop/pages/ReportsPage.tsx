@@ -650,6 +650,9 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
 /* -------------------------------------------
  * Alt bileşen: Gelişmiş Raporlar (yeni endpoint)
  * ----------------------------------------- */
+/* -------------------------------------------
+ * Alt bileşen: Gelişmiş Raporlar (yeni endpoint) — V2
+ * ----------------------------------------- */
 
 type AdvancedReportsViewProps = {
   data: {
@@ -664,7 +667,7 @@ type AdvancedReportsViewProps = {
         no_show: number;
       };
       depositTotal: number;
-      revenueTotal: number;
+      revenueTotal: number; // sadece rezervasyon kaynaklı ciro
       byDay: Array<{
         date: string;
         reservations: number;
@@ -674,7 +677,7 @@ type AdvancedReportsViewProps = {
     };
     orders: {
       totalCount: number;
-      revenueTotal: number;
+      revenueTotal: number; // tüm masa siparişleri cirosu
       bySource: {
         WALK_IN: number;
         QR: number;
@@ -699,23 +702,138 @@ type AdvancedReportsViewProps = {
 const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
   const { reservations, orders, range } = data;
 
-  const totalRes = reservations.totalCount;
+  const totalReservations = reservations.totalCount;
   const totalOrders = orders.totalCount;
+
+  // 🔢 Toplam ciro (Rezervasyon + Masa siparişi)
+  const totalRevenue =
+    Number(reservations.revenueTotal || 0) +
+    Number(orders.revenueTotal || 0);
+
+  // 🔢 Depozito toplamı
+  const totalDeposit = Number(reservations.depositTotal || 0);
+
+  // 🔢 No-show & arrive oranları
+  const arrived = Number(reservations.statusCounts.arrived || 0);
+  const noShow = Number(reservations.statusCounts.no_show || 0);
+  const arrivedBase = arrived + noShow;
+  const noShowRate =
+    arrivedBase > 0 ? (noShow / arrivedBase) * 100 : 0;
+  const arriveRate =
+    arrivedBase > 0 ? (arrived / arrivedBase) * 100 : 0;
+
+  // 🔢 Masa siparişi kanal bazlı ciro (sadece orders bySource)
+  const walkinRev = Number(orders.bySource.WALK_IN || 0);
+  const qrRev = Number(orders.bySource.QR || 0);
+  const rezvixTableRev = Number(orders.bySource.REZVIX || 0);
+  const otherRev = Number(orders.bySource.UNKNOWN || 0);
+
+  const channelTotal = walkinRev + qrRev + rezvixTableRev + otherRev || 0;
+
+  const pct = (val: number, base: number) =>
+    base > 0 ? ((val / base) * 100).toFixed(1) : "0.0";
 
   return (
     <div className="rezvix-board-layout">
-      {/* Sol kolon: Rezervasyon odaklı gelişmiş özet */}
+      {/* SOL: Hero + Rezervasyon performansı */}
       <div className="rezvix-board-column">
         <div className="rezvix-board-column__header">
           <div className="rezvix-board-column__title">
-            Rezervasyon Performansı
+            Genel Özet (Rezvix + Masa)
           </div>
           <div className="rezvix-board-column__count">
             {range.from} – {range.to}
           </div>
         </div>
 
-        <div className="rezvix-board-column__body" style={{ gap: 10 }}>
+        <div className="rezvix-board-column__body" style={{ gap: 12 }}>
+          {/* Hero kart: Toplam Ciro */}
+          <div
+            style={{
+              borderRadius: 16,
+              padding: 14,
+              background:
+                "linear-gradient(135deg, rgba(120,90,255,0.12), rgba(255,255,255,0.9))",
+              border: "1px solid var(--rezvix-border-subtle)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 12,
+                textTransform: "uppercase",
+                letterSpacing: 0.6,
+                color: "var(--rezvix-text-soft)",
+              }}
+            >
+              Toplam ciro (Rezervasyon + Masa)
+            </div>
+            <div
+              style={{
+                fontSize: 32,
+                fontWeight: 700,
+                lineHeight: 1.1,
+              }}
+            >
+              {totalRevenue.toLocaleString("tr-TR")} ₺
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                fontSize: 12,
+                marginTop: 4,
+              }}
+            >
+              <div
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  background: "rgba(0,0,0,0.04)",
+                }}
+              >
+                Rezervasyon cirosu:{" "}
+                <strong>
+                  {Number(
+                    reservations.revenueTotal || 0
+                  ).toLocaleString("tr-TR")}{" "}
+                  ₺
+                </strong>
+              </div>
+              <div
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  background: "rgba(0,0,0,0.04)",
+                }}
+              >
+                Masa siparişi cirosu:{" "}
+                <strong>
+                  {Number(orders.revenueTotal || 0).toLocaleString(
+                    "tr-TR"
+                  )}{" "}
+                  ₺
+                </strong>
+              </div>
+              <div
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  background: "rgba(0,0,0,0.04)",
+                }}
+              >
+                Toplam depozito:{" "}
+                <strong>
+                  {totalDeposit.toLocaleString("tr-TR")} ₺
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Rezervasyon KPI kartları */}
           <div
             style={{
               display: "grid",
@@ -732,101 +850,49 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
               <div
                 style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
               >
-                {totalRes}
+                {totalReservations}
+              </div>
+              <div className="rezvix-kitchen-ticket__meta">
+                Bekleyen + onaylı + gelen + iptal + no-show
               </div>
             </div>
 
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
                 <span className="rezvix-kitchen-ticket__title">
-                  Gelen (Arrived)
+                  Gelme Oranı
                 </span>
               </div>
               <div
                 style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
               >
-                {reservations.statusCounts.arrived}
+                {arriveRate.toFixed(1)}%
+              </div>
+              <div className="rezvix-kitchen-ticket__meta">
+                (Gelen / Gelen + Gelmedi)
               </div>
             </div>
 
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
                 <span className="rezvix-kitchen-ticket__title">
-                  Gelmedi (No-show)
+                  No-show Oranı
                 </span>
               </div>
               <div
                 style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
               >
-                {reservations.statusCounts.no_show}
+                {noShowRate.toFixed(1)}%
               </div>
-            </div>
-
-            <div className="rezvix-kitchen-ticket">
-              <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">
-                  İptal
-                </span>
-              </div>
-              <div
-                style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
-              >
-                {reservations.statusCounts.cancelled}
+              <div className="rezvix-kitchen-ticket__meta">
+                (Gelmedi / Gelen + Gelmedi)
               </div>
             </div>
           </div>
 
-          {/* Ciro + depozito */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: 10,
-              marginTop: 10,
-            }}
-          >
-            <div className="rezvix-kitchen-ticket">
-              <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">
-                  Rezervasyon Cirosu (₺)
-                </span>
-              </div>
-              <div className="rezvix-kitchen-ticket__meta">
-                Onaylanan & gelen rezervasyonların toplam{" "}
-                <code>totalPrice</code> tutarı.
-              </div>
-              <div
-                style={{ fontSize: 24, fontWeight: 600, marginTop: 6 }}
-              >
-                {Number(
-                  reservations.revenueTotal || 0
-                ).toLocaleString("tr-TR")}
-              </div>
-            </div>
-
-            <div className="rezvix-kitchen-ticket">
-              <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">
-                  Toplam Depozito (₺)
-                </span>
-              </div>
-              <div className="rezvix-kitchen-ticket__meta">
-                Tüm rezervasyonlardan toplanan{" "}
-                <code>depositAmount</code> toplamı.
-              </div>
-              <div
-                style={{ fontSize: 24, fontWeight: 600, marginTop: 6 }}
-              >
-                {Number(
-                  reservations.depositTotal || 0
-                ).toLocaleString("tr-TR")}
-              </div>
-            </div>
-          </div>
-
-          {/* Günlük rezervasyon / depozito pseudo-grafik (basit barlar) */}
+          {/* Günlük rezervasyon/depozito/ciro tablosu */}
           {reservations.byDay.length > 0 && (
-            <div style={{ marginTop: 14 }}>
+            <div style={{ marginTop: 12 }}>
               <div
                 style={{
                   fontSize: 12,
@@ -834,7 +900,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
                   marginBottom: 6,
                 }}
               >
-                Günlük rezervasyon & depozito trendi
+                Günlük Rezervasyon & Depozito & Ciro
               </div>
               <div
                 style={{
@@ -872,7 +938,9 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
                         style={{ borderTop: "1px solid #eee" }}
                       >
                         <td style={{ padding: "6px 8px" }}>{d.date}</td>
-                        <td style={{ padding: "6px 8px" }}>{d.reservations}</td>
+                        <td style={{ padding: "6px 8px" }}>
+                          {d.reservations}
+                        </td>
                         <td style={{ padding: "6px 8px" }}>
                           {Number(d.deposits).toLocaleString("tr-TR")}
                         </td>
@@ -889,64 +957,25 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
         </div>
       </div>
 
-      {/* Sağ kolon: Sipariş (QR / WALK_IN / REZVIX) performansı */}
+      {/* SAĞ: Kanal bazlı masa siparişi performansı */}
       <div className="rezvix-board-column">
         <div className="rezvix-board-column__header">
           <div className="rezvix-board-column__title">
-            Masa & Menü (Sipariş) Performansı
+            Masa & Menü (Walk-in / QR / Rezvix)
           </div>
           <div className="rezvix-board-column__count">
             {totalOrders} sipariş
           </div>
         </div>
 
-        <div className="rezvix-board-column__body" style={{ gap: 10 }}>
+        <div className="rezvix-board-column__body" style={{ gap: 12 }}>
+          {/* Kanal bazlı stacked bar (görsel etki) */}
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-              gap: 10,
-            }}
-          >
-            <div className="rezvix-kitchen-ticket">
-              <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">
-                  Toplam Sipariş
-                </span>
-              </div>
-              <div
-                style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
-              >
-                {totalOrders}
-              </div>
-            </div>
-
-            <div className="rezvix-kitchen-ticket">
-              <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">
-                  Sipariş Cirosu (₺)
-                </span>
-              </div>
-              <div className="rezvix-kitchen-ticket__meta">
-                QR, walk-in ve Rezvix kaynaklı tüm siparişlerin toplam{" "}
-                <code>total</code> tutarı.
-              </div>
-              <div
-                style={{ fontSize: 24, fontWeight: 600, marginTop: 6 }}
-              >
-                {Number(orders.revenueTotal || 0).toLocaleString("tr-TR")}
-              </div>
-            </div>
-          </div>
-
-          {/* Kanal bazlı dağılım */}
-          <div
-            style={{
-              marginTop: 10,
-              borderRadius: 12,
+              borderRadius: 14,
+              padding: 12,
               border: "1px solid var(--rezvix-border-subtle)",
-              background: "rgba(255,255,255,0.85)",
-              padding: 10,
+              background: "rgba(255,255,255,0.9)",
             }}
           >
             <div
@@ -956,55 +985,98 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
                 marginBottom: 6,
               }}
             >
-              Kanal bazlı ciro dağılımı
+              Masa siparişi cirosu kanal dağılımı
             </div>
-            <table
+            <div
               style={{
-                width: "100%",
-                borderCollapse: "collapse",
+                height: 10,
+                borderRadius: 999,
+                overflow: "hidden",
+                background: "rgba(0,0,0,0.05)",
+                marginBottom: 8,
+              }}
+            >
+              {channelTotal > 0 && (
+                <div style={{ display: "flex", width: "100%", height: "100%" }}>
+                  <div
+                    style={{
+                      width: `${(walkinRev / channelTotal) * 100}%`,
+                      background:
+                        "rgba(46, 204, 113, 0.9)", // Walk-in
+                      transition: "width 0.3s ease",
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: `${(qrRev / channelTotal) * 100}%`,
+                      background:
+                        "rgba(52, 152, 219, 0.9)", // QR
+                      transition: "width 0.3s ease",
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: `${(rezvixTableRev / channelTotal) * 100}%`,
+                      background:
+                        "rgba(155, 89, 182, 0.9)", // Rezvix
+                      transition: "width 0.3s ease",
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: `${(otherRev / channelTotal) * 100}%`,
+                      background:
+                        "rgba(149, 165, 166, 0.9)", // Diğer
+                      transition: "width 0.3s ease",
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(120px, 1fr))",
+                gap: 8,
                 fontSize: 11,
               }}
             >
-              <thead>
-                <tr
-                  style={{
-                    textAlign: "left",
-                    color: "var(--rezvix-text-soft)",
-                  }}
-                >
-                  <th style={{ padding: "4px 6px" }}>Kanal</th>
-                  <th style={{ padding: "4px 6px" }}>Adet</th>
-                  <th style={{ padding: "4px 6px" }}>Ciro (₺)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  ["WALK_IN", "Walk-in"],
-                  ["QR", "QR Menü"],
-                  ["REZVIX", "Rezvix Rezervasyon"],
-                  ["UNKNOWN", "Diğer"],
-                ].map(([key, label]) => (
-                  <tr key={key} style={{ borderTop: "1px solid #eee" }}>
-                    <td style={{ padding: "4px 6px" }}>{label}</td>
-                    <td style={{ padding: "4px 6px" }}>
-                      {orders.countsBySource[key as keyof typeof orders.countsBySource] ??
-                        0}
-                    </td>
-                    <td style={{ padding: "4px 6px" }}>
-                      {Number(
-                        orders.bySource[key as keyof typeof orders.bySource] ??
-                          0
-                      ).toLocaleString("tr-TR")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+              <ChannelLegendItem
+                label="Walk-in"
+                color="rgba(46, 204, 113, 0.9)"
+                amount={walkinRev}
+                count={orders.countsBySource.WALK_IN || 0}
+                share={pct(walkinRev, channelTotal)}
+              />
+              <ChannelLegendItem
+                label="QR Menü"
+                color="rgba(52, 152, 219, 0.9)"
+                amount={qrRev}
+                count={orders.countsBySource.QR || 0}
+                share={pct(qrRev, channelTotal)}
+              />
+              <ChannelLegendItem
+                label="Rezvix"
+                color="rgba(155, 89, 182, 0.9)"
+                amount={rezvixTableRev}
+                count={orders.countsBySource.REZVIX || 0}
+                share={pct(rezvixTableRev, channelTotal)}
+              />
+              <ChannelLegendItem
+                label="Diğer"
+                color="rgba(149, 165, 166, 0.9)"
+                amount={otherRev}
+                count={orders.countsBySource.UNKNOWN || 0}
+                share={pct(otherRev, channelTotal)}
+              />
+            </div>
           </div>
 
-          {/* Günlük sipariş pseudo-grafiği */}
+          {/* Günlük sipariş & ciro tablosu */}
           {orders.byDay.length > 0 && (
-            <div style={{ marginTop: 14 }}>
+            <div>
               <div
                 style={{
                   fontSize: 12,
@@ -1012,7 +1084,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
                   marginBottom: 6,
                 }}
               >
-                Günlük sipariş & ciro trendi
+                Günlük sipariş & ciro
               </div>
               <div
                 style={{
@@ -1061,6 +1133,35 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({ data }) => {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+};
+
+const ChannelLegendItem: React.FC<{
+  label: string;
+  color: string;
+  amount: number;
+  count: number;
+  share: string; // "23.4"
+}> = ({ label, color, amount, count, share }) => {
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+      <div
+        style={{
+          width: 10,
+          height: 10,
+          borderRadius: 3,
+          marginTop: 3,
+          background: color,
+        }}
+      />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 600 }}>{label}</div>
+        <div style={{ color: "var(--rezvix-text-soft)" }}>
+          {count} sipariş · {amount.toLocaleString("tr-TR")} ₺
+        </div>
+        <div style={{ fontSize: 11 }}>{share}% pay</div>
       </div>
     </div>
   );
