@@ -1,5 +1,6 @@
 // routes/orders.routes.js
 import { Router } from "express";
+import { auth } from "../middlewares/auth.js"; // ✅ BUNU EKLE
 import {
   openSession,
   getSession,
@@ -12,9 +13,10 @@ import {
   updateKitchenStatus
 } from "../controllers/orders.controller.js";
 
+
 const router = Router();
 
-router.post("/sessions/open", openSession);
+router.post("/sessions/open", auth(), openSession);
 router.get("/sessions/:id", getSession);
 router.post("/sessions/:id/close", closeSession);
 

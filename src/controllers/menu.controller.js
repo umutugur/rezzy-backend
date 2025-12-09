@@ -12,11 +12,19 @@ import {
 } from "../validators/menu.schema.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import CoreCategory from "../models/CoreCategory.js";
+import { getResolvedMenuForRestaurant } from "../services/resolvedMenu.service.js";
 
+// ✅ Org menü modelleri
+import OrgMenuCategory from "../models/OrgMenuCategory.js";
+import OrgMenuItem from "../models/OrgMenuItem.js";
 
 /* ---------------- helpers ---------------- */
 function toObjectId(id) {
-  try { return new mongoose.Types.ObjectId(id); } catch { return null; }
+  try {
+    return new mongoose.Types.ObjectId(id);
+  } catch {
+    return null;
+  }
 }
 function isValidId(id) {
   return mongoose.Types.ObjectId.isValid(String(id || ""));
@@ -24,32 +32,43 @@ function isValidId(id) {
 
 /**
  * ✅ Ortalama harcama tabanı (avgSpendBase)
- * Sadece aktif + available ürünlerin fiyat ortalaması.
- * Rezervasyon create akışında FIX MENÜ yoksa buradan taban çekeceğiz.
+ * Artık **resolved menü** üzerinden hesaplanıyor:
+ *  - Org menü + override + lokal item'lar
+ *  - Org'suz restoranlarda klasik local menü
  */
 export async function computeAvgSpendBaseForRestaurant(restaurantId) {
   const rid = toObjectId(restaurantId);
   if (!rid) return 0;
 
-  const docs = await MenuItem.find({
-    restaurantId: rid,
-    isActive: true,
-    isAvailable: true,
-    price: { $gt: 0 },
-  })
-    .select("price")
-    .lean();
+  // Tek kapı: org'lu ise org+override+local, değilse sadece local menü
+  const resolved = await getResolvedMenuForRestaurant(rid.toString());
 
-  if (!docs.length) return 0;
+  const prices = [];
 
-  const prices = docs
-    .map(d => Number(d.price))
-    .filter(n => Number.isFinite(n) && n > 0)
-    .sort((a, b) => a - b);
+  for (const cat of resolved?.categories || []) {
+    // Kategori pasifse komple atla (resolved zaten isActive taşıyor)
+    if (cat.isActive === false) continue;
+
+    for (const item of cat.items || []) {
+      // Item aktif ve available mı?
+      if (item.isActive === false) continue;
+      if (item.isAvailable === false) continue;
+
+      const p = Number(item.price);
+      if (!Number.isFinite(p) || p <= 0) continue;
+
+      prices.push(p);
+    }
+  }
+
+  if (!prices.length) return 0;
+
+  // Aynı eski mantık: trimmed average (uç değerleri kırparak)
+  prices.sort((a, b) => a - b);
 
   const n = prices.length;
-  const trimPercent = 10;                  // 🔒 HARDCODE
-  const trimCount = Math.floor(n * trimPercent / 100);
+  const trimPercent = 10; // 🔒 HARDCODE – eskisiyle birebir
+  const trimCount = Math.floor((n * trimPercent) / 100);
 
   let trimmed = prices;
 
@@ -58,8 +77,7 @@ export async function computeAvgSpendBaseForRestaurant(restaurantId) {
     trimmed = prices.slice(trimCount, n - trimCount);
   }
 
-  const avg =
-    trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+  const avg = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
 
   return Number.isFinite(avg) ? Math.round(avg) : 0;
 }
@@ -70,45 +88,8 @@ export async function computeAvgSpendBaseForRestaurant(restaurantId) {
 export const listCategories = async (req, res, next) => {
   try {
     const { rid } = req.params;
-    if (!isValidId(rid)) return res.status(400).json({ message: "Invalid restaurant id" });
-
-    // 1) Önce mevcut kategorileri say
-    const existingCount = await MenuCategory.countDocuments({
-      restaurantId: rid,
-      isActive: true,
-    });
-
-    // 2) Eğer hiç kategori yoksa ve restoran bir kategori setine bağlıysa, setten seed et
-    if (existingCount === 0) {
-  const rest = await Restaurant.findById(rid)
-    .select("_id businessType preferredLanguage")
-    .lean();
-
-  const bt = rest?.businessType || "restaurant";
-
-  // CoreCategory'den bu businessType'a uygun olanları çek
-  const coreCats = await CoreCategory.find({
-    isActive: true,
-    businessTypes: bt,
-  })
-    .sort({ order: 1, createdAt: 1 })
-    .lean();
-
-  if (coreCats.length) {
-    const lang = rest?.preferredLanguage || "tr";
-
-    const seedDocs = coreCats.map((c) => ({
-      restaurantId: rid,
-      coreCategoryId: c._id,
-      title: c.i18n?.[lang]?.title || c.i18n?.tr?.title || c.key,
-      description: c.i18n?.[lang]?.description || c.i18n?.tr?.description || "",
-      order: Number(c.order ?? 0) || 0,
-      isActive: true,
-    }));
-
-    await MenuCategory.insertMany(seedDocs);
-  }
-}
+    if (!isValidId(rid))
+      return res.status(400).json({ message: "Invalid restaurant id" });
 
     const items = await MenuCategory.find({
       restaurantId: rid,
@@ -118,25 +99,86 @@ export const listCategories = async (req, res, next) => {
       .lean();
 
     res.json({ items });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 /** POST /api/panel/restaurants/:rid/menu/categories */
 export const createCategory = async (req, res, next) => {
   try {
     const { rid } = req.params;
-    if (!isValidId(rid)) return res.status(400).json({ message: "Invalid restaurant id" });
+    if (!isValidId(rid))
+      return res.status(400).json({ message: "Invalid restaurant id" });
 
-    const { error, value } = createCategorySchema.validate(req.body || {}, { abortEarly: true });
-    if (error) return res.status(400).json({ message: error.details[0].message });
+    const { error, value } = createCategorySchema.validate(req.body || {}, {
+      abortEarly: true,
+    });
+    if (error)
+      return res
+        .status(400)
+        .json({ message: error.details[0].message });
 
-    const { title, description = "", order = 0 } = value;
+    const {
+      title,
+      description = "",
+      order = 0,
+      orgCategoryId: rawOrgCategoryId,
+    } = value;
 
-    const rest = await Restaurant.findById(rid).select("_id owner").lean();
-    if (!rest) return res.status(404).json({ message: "Restaurant not found" });
+    const rest = await Restaurant.findById(rid)
+      .select("_id owner organizationId")
+      .lean();
+    if (!rest)
+      return res.status(404).json({ message: "Restaurant not found" });
+
+    let orgCategoryId = null;
+
+    // ✅ Eğer orgCategoryId geldiyse, bu kayıt OrgMenuCategory override’ı
+    if (rawOrgCategoryId != null) {
+      if (!isValidId(rawOrgCategoryId)) {
+        return res.status(400).json({ message: "Invalid orgCategoryId" });
+      }
+
+      if (!rest.organizationId) {
+        return res.status(400).json({
+          message:
+            "Restaurant is not attached to any organization, cannot use orgCategoryId",
+        });
+      }
+
+      const orgCat = await OrgMenuCategory.findOne({
+        _id: rawOrgCategoryId,
+        organizationId: rest.organizationId,
+      })
+        .select("_id")
+        .lean();
+
+      if (!orgCat) {
+        return res.status(404).json({
+          message: "Org menu category not found for this organization",
+        });
+      }
+
+      // Aynı orgCategory için daha önce override var mı?
+      const existingOverride = await MenuCategory.findOne({
+        restaurantId: rid,
+        orgCategoryId: rawOrgCategoryId,
+      }).lean();
+
+      if (existingOverride) {
+        return res.status(409).json({
+          message:
+            "Override for this org category already exists. Use update instead.",
+        });
+      }
+
+      orgCategoryId = rawOrgCategoryId;
+    }
 
     const doc = await MenuCategory.create({
       restaurantId: rid,
+      orgCategoryId: orgCategoryId || null,
       title: String(title).trim(),
       description: String(description || "").trim(),
       order: Number(order) || 0,
@@ -144,7 +186,9 @@ export const createCategory = async (req, res, next) => {
     });
 
     res.status(201).json({ ok: true, category: doc });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 /** PATCH /api/panel/restaurants/:rid/menu/categories/:cid */
@@ -154,26 +198,65 @@ export const updateCategory = async (req, res, next) => {
     if (!isValidId(rid) || !isValidId(cid))
       return res.status(400).json({ message: "Invalid id" });
 
-    const { error, value } = updateCategorySchema.validate(req.body || {}, { abortEarly: true });
-    if (error) return res.status(400).json({ message: error.details[0].message });
+    const { error, value } = updateCategorySchema.validate(req.body || {}, {
+      abortEarly: true,
+    });
+    if (error)
+      return res
+        .status(400)
+        .json({ message: error.details[0].message });
 
-    const patch = {};
     const { title, description, order, isActive } = value;
 
-    if (title != null) patch.title = String(title).trim();
-    if (description != null) patch.description = String(description).trim();
-    if (order != null) patch.order = Number(order) || 0;
-    if (isActive != null) patch.isActive = !!isActive;
+    // 🔍 Önce mevcut kategoriyi çekelim, override mı local mi görelim
+    const existing = await MenuCategory.findOne({
+      _id: cid,
+      restaurantId: rid,
+    }).lean();
 
-    const doc = await MenuCategory.findOneAndUpdate(
-      { _id: cid, restaurantId: rid },
-      { $set: patch },
+    if (!existing)
+      return res.status(404).json({ message: "Category not found" });
+
+    const isOverride = !!existing.orgCategoryId;
+
+    // Local kategori ise eski davranış: tüm alanlar güncellenebilir
+    if (!isOverride) {
+      const patch = {};
+
+      if (title != null) patch.title = String(title).trim();
+      if (description != null)
+        patch.description = String(description).trim();
+      if (order != null) patch.order = Number(order) || 0;
+      if (isActive != null) patch.isActive = !!isActive;
+
+      const doc = await MenuCategory.findByIdAndUpdate(
+        existing._id,
+        { $set: patch },
+        { new: true }
+      ).lean();
+
+      return res.json({ ok: true, category: doc });
+    }
+
+    // ✅ Org override kategorilerde: Sadece order / isActive (+ opsiyonel description) override
+    const overridePatch = {};
+
+    if (order != null) overridePatch.order = Number(order) || 0;
+    if (isActive != null) overridePatch.isActive = !!isActive;
+    if (description != null)
+      overridePatch.description = String(description).trim();
+
+    // title override etmiyoruz; başlık OrgMenuCategory'den geliyor
+    const doc = await MenuCategory.findByIdAndUpdate(
+      existing._id,
+      { $set: overridePatch },
       { new: true }
     ).lean();
 
-    if (!doc) return res.status(404).json({ message: "Category not found" });
-    res.json({ ok: true, category: doc });
-  } catch (e) { next(e); }
+    return res.json({ ok: true, category: doc });
+  } catch (e) {
+    next(e);
+  }
 };
 
 /** DELETE /api/panel/restaurants/:rid/menu/categories/:cid (soft delete) */
@@ -197,7 +280,9 @@ export const deleteCategory = async (req, res, next) => {
     );
 
     res.json({ ok: true });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 /* ---------------- ITEM CRUD (panel) ---------------- */
@@ -206,10 +291,19 @@ export const deleteCategory = async (req, res, next) => {
 export const listItems = async (req, res, next) => {
   try {
     const { rid } = req.params;
-    if (!isValidId(rid)) return res.status(400).json({ message: "Invalid restaurant id" });
+    if (!isValidId(rid))
+      return res.status(400).json({ message: "Invalid restaurant id" });
 
-    const { error: qErr, value: qVal } = listItemsQuerySchema.validate(req.query || {}, { abortEarly: true });
-    if (qErr) return res.status(400).json({ message: qErr.details[0].message });
+    const {
+      error: qErr,
+      value: qVal,
+    } = listItemsQuerySchema.validate(req.query || {}, {
+      abortEarly: true,
+    });
+    if (qErr)
+      return res
+        .status(400)
+        .json({ message: qErr.details[0].message });
     const { categoryId } = qVal;
 
     const q = { restaurantId: rid, isActive: true };
@@ -220,22 +314,88 @@ export const listItems = async (req, res, next) => {
       .lean();
 
     res.json({ items });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 /** POST /api/panel/restaurants/:rid/menu/items  (multipart/form-data) */
 export const createItem = async (req, res, next) => {
   try {
     const { rid } = req.params;
-    if (!isValidId(rid)) return res.status(400).json({ message: "Invalid restaurant id" });
+    if (!isValidId(rid))
+      return res.status(400).json({ message: "Invalid restaurant id" });
 
-    const { error: iErr, value: iVal } = createItemSchema.validate(req.body || {}, { abortEarly: true });
-    if (iErr) return res.status(400).json({ message: iErr.details[0].message });
+    const {
+      error: iErr,
+      value: iVal,
+    } = createItemSchema.validate(req.body || {}, { abortEarly: true });
+    if (iErr)
+      return res.status(400).json({ message: iErr.details[0].message });
 
-    const { categoryId, title, description = "", price, tags = [], order = 0, isAvailable = true } = iVal;
+    const {
+      categoryId,
+      title,
+      description = "",
+      price,
+      tags = [],
+      order = 0,
+      isAvailable = true,
+      orgItemId: rawOrgItemId,
+    } = iVal;
 
-    const cat = await MenuCategory.findOne({ _id: categoryId, restaurantId: rid, isActive: true }).lean();
-    if (!cat) return res.status(404).json({ message: "Category not found" });
+    const cat = await MenuCategory.findOne({
+      _id: categoryId,
+      restaurantId: rid,
+      isActive: true,
+    }).lean();
+    if (!cat)
+      return res.status(404).json({ message: "Category not found" });
+
+    let orgItemId = null;
+    let finalTitle = String(title).trim();
+    let finalDescription = String(description || "").trim();
+
+    // ✅ Org menü item’ı için override oluşturulacaksa:
+    if (rawOrgItemId != null) {
+      if (!isValidId(rawOrgItemId)) {
+        return res.status(400).json({ message: "Invalid orgItemId" });
+      }
+
+      const rest = await Restaurant.findById(rid)
+        .select("_id organizationId")
+        .lean();
+      if (!rest) {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+      if (!rest.organizationId) {
+        return res.status(400).json({
+          message:
+            "Restaurant is not attached to any organization, cannot use orgItemId",
+        });
+      }
+
+      const orgItem = await OrgMenuItem.findOne({
+        _id: rawOrgItemId,
+        organizationId: rest.organizationId,
+      }).lean();
+
+      if (!orgItem) {
+        return res.status(404).json({
+          message: "Org menu item not found for this organization",
+        });
+      }
+
+      orgItemId = rawOrgItemId;
+
+      // Başlık & açıklama kaynağı org item olsun; panelde fiyat / foto / tags override edilir
+      if (orgItem.title) {
+        finalTitle = String(orgItem.title).trim();
+      }
+      if (orgItem.description) {
+        finalDescription = String(orgItem.description).trim();
+      }
+    }
 
     let photoUrl = "";
     const f =
@@ -255,8 +415,9 @@ export const createItem = async (req, res, next) => {
     const doc = await MenuItem.create({
       restaurantId: rid,
       categoryId,
-      title: String(title).trim(),
-      description: String(description || "").trim(),
+      orgItemId: orgItemId || null,
+      title: finalTitle,
+      description: finalDescription,
       price: Number(price),
       photoUrl,
       tags: Array.isArray(tags) ? tags.map(String) : [],
@@ -266,7 +427,9 @@ export const createItem = async (req, res, next) => {
     });
 
     res.status(201).json({ ok: true, item: doc });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 /** PATCH /api/panel/restaurants/:rid/menu/items/:iid */
@@ -276,29 +439,65 @@ export const updateItem = async (req, res, next) => {
     if (!isValidId(rid) || !isValidId(iid))
       return res.status(400).json({ message: "Invalid id" });
 
-    const { error: uErr, value: uVal } = updateItemSchema.validate(req.body || {}, { abortEarly: true });
-    if (uErr) return res.status(400).json({ message: uErr.details[0].message });
-
-    const patch = {};
     const {
-      categoryId, title, description, price, tags, order,
-      isAvailable, isActive, removePhoto
+      error: uErr,
+      value: uVal,
+    } = updateItemSchema.validate(req.body || {}, { abortEarly: true });
+    if (uErr)
+      return res.status(400).json({ message: uErr.details[0].message });
+
+    const {
+      categoryId,
+      title,
+      description,
+      price,
+      tags,
+      order,
+      isAvailable,
+      isActive,
+      removePhoto,
     } = uVal;
 
-    if (categoryId != null) {
-      const cat = await MenuCategory.findOne({ _id: categoryId, restaurantId: rid, isActive: true }).lean();
-      if (!cat) return res.status(404).json({ message: "Category not found" });
+    // 🔍 Önce mevcut item’ı çekelim; org override mı local mi görelim
+    const existing = await MenuItem.findOne({
+      _id: iid,
+      restaurantId: rid,
+    }).lean();
+
+    if (!existing)
+      return res.status(404).json({ message: "Item not found" });
+
+    const isOverride = !!existing.orgItemId;
+
+    const patch = {};
+
+    // Category değişikliği: Sadece local item’larda izin veriyoruz
+    if (categoryId != null && !isOverride) {
+      const cat = await MenuCategory.findOne({
+        _id: categoryId,
+        restaurantId: rid,
+        isActive: true,
+      }).lean();
+      if (!cat)
+        return res.status(404).json({ message: "Category not found" });
       patch.categoryId = categoryId;
     }
 
-    if (title != null) patch.title = String(title).trim();
-    if (description != null) patch.description = String(description).trim();
+    // Local item için title/description güncellenebilir
+    if (!isOverride) {
+      if (title != null) patch.title = String(title).trim();
+      if (description != null)
+        patch.description = String(description).trim();
+    }
+
     if (price != null) patch.price = Number(price);
-    if (tags != null) patch.tags = Array.isArray(tags) ? tags.map(String) : [];
+    if (tags != null)
+      patch.tags = Array.isArray(tags) ? tags.map(String) : [];
     if (order != null) patch.order = Number(order) || 0;
     if (isAvailable != null) patch.isAvailable = !!isAvailable;
     if (isActive != null) patch.isActive = !!isActive;
 
+    // Fotoğraf upload / silme (local + override için geçerli)
     if (removePhoto === "true" || removePhoto === true) {
       patch.photoUrl = "";
     } else {
@@ -317,15 +516,43 @@ export const updateItem = async (req, res, next) => {
       }
     }
 
-    const doc = await MenuItem.findOneAndUpdate(
-      { _id: iid, restaurantId: rid },
-      { $set: patch },
+    // ✅ Org override item’larda sadece belirli alanları uygula
+    let patchToApply = patch;
+    if (isOverride) {
+      const overridePatch = {};
+      if (Object.prototype.hasOwnProperty.call(patch, "price")) {
+        overridePatch.price = patch.price;
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, "tags")) {
+        overridePatch.tags = patch.tags;
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, "order")) {
+        overridePatch.order = patch.order;
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, "isAvailable")) {
+        overridePatch.isAvailable = patch.isAvailable;
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, "isActive")) {
+        overridePatch.isActive = patch.isActive;
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, "photoUrl")) {
+        overridePatch.photoUrl = patch.photoUrl;
+      }
+      // title / description / categoryId override ETMİYORUZ
+      patchToApply = overridePatch;
+    }
+
+    const doc = await MenuItem.findByIdAndUpdate(
+      existing._id,
+      { $set: patchToApply },
       { new: true }
     ).lean();
 
     if (!doc) return res.status(404).json({ message: "Item not found" });
     res.json({ ok: true, item: doc });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 /** DELETE /api/panel/restaurants/:rid/menu/items/:iid (soft) */
@@ -343,5 +570,31 @@ export const deleteItem = async (req, res, next) => {
 
     if (!doc) return res.status(404).json({ message: "Item not found" });
     res.json({ ok: true });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
+};
+
+/* ---------------- RESOLVED MENU READ (panel / müşteri için temel kapı) ---------------- */
+
+/**
+ * GET /api/panel/restaurants/:rid/menu/resolved
+ * - Org + override + lokal item’lar merge edilmiş menüyü döner
+ * - Hem restoran panelindeki menü preview, hem de istersen QR / müşteri tarafı için
+ *   kullanılabilecek tek kapı endpoint.
+ */
+export const getResolvedMenuForPanel = async (req, res, next) => {
+  try {
+    const { rid } = req.params;
+    if (!isValidId(rid)) {
+      return res.status(400).json({ message: "Invalid restaurant id" });
+    }
+
+    const menu = await getResolvedMenuForRestaurant(String(rid));
+    // service ne döndürüyorsa aynen passthrough:
+    // { categories: [...], organizationId, restaurantId, ... }
+    res.json(menu || { categories: [] });
+  } catch (e) {
+    next(e);
+  }
 };

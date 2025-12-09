@@ -22,6 +22,14 @@ const RestaurantSchema = new mongoose.Schema(
       index: true,
     },
 
+    // ✅ Zincir/marka organizasyonu
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Organization",
+      required: true,
+      index: true,
+    },
+
     name: { type: String, required: true },
 
     // ✅ Bölge (ülke) – sabit enum yok
@@ -36,9 +44,18 @@ const RestaurantSchema = new mongoose.Schema(
       default: "tr",
     },
 
+    // Legacy aktif/pasif alanı – şimdilik korunuyor
     isActive: {
       type: Boolean,
       default: true,
+      index: true,
+    },
+
+    // ✅ Organizasyon içi operasyonel durum
+    status: {
+      type: String,
+      enum: ["pending_review", "active", "suspended", "closed"],
+      default: "active",
       index: true,
     },
 
@@ -170,6 +187,12 @@ RestaurantSchema.index({ name: "text" });
 RestaurantSchema.index(
   { isActive: 1, region: 1, rating: -1, name: 1 },
   { name: "isActive_region_rating_name" }
+);
+
+// ✅ Organizasyon + status bazlı sorgular için
+RestaurantSchema.index(
+  { organizationId: 1, status: 1 },
+  { name: "organization_status" }
 );
 
 export default mongoose.model("Restaurant", RestaurantSchema);

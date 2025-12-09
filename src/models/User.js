@@ -19,13 +19,55 @@ const IncidentSchema = new mongoose.Schema({
   at: { type: Date, default: Date.now }
 }, { _id: false });
 
+// ✅ Multi-organization: kullanıcı -> organization membership
+const OrganizationMembershipSchema = new mongoose.Schema({
+  organization: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Organization",
+    required: true,
+  },
+  role: {
+    type: String,
+    enum: ["org_owner", "org_admin", "org_finance"],
+    required: true,
+  },
+}, { _id: false });
+
+// ✅ Multi-location: kullanıcı -> restaurant membership
+const RestaurantMembershipSchema = new mongoose.Schema({
+  restaurant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Restaurant",
+    required: true,
+  },
+  role: {
+    type: String,
+    enum: ["location_manager", "staff"],
+    required: true,
+  },
+}, { _id: false });
+
 const UserSchema = new mongoose.Schema({
   name:   { type: String, required: true },
   email:  { type: String, unique: true, sparse: true },
   phone:  { type: String, unique: true, sparse: true },
   password: { type: String, select: false }, // sosyal girişte boş olabilir
   role:   { type: String, enum: ["customer", "restaurant", "admin"], default: "customer" },
+
+  // ✅ Legacy restaurant link (tek restoranlı yapı) – şimdilik korunuyor
   restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: "Restaurant", default: null },
+
+  // ✅ Multi-organization memberships
+  organizations: {
+    type: [OrganizationMembershipSchema],
+    default: [],
+  },
+
+  // ✅ Multi-location (restaurant) memberships
+  restaurantMemberships: {
+    type: [RestaurantMembershipSchema],
+    default: [],
+  },
 
   // Risk & no-show
   noShowCount: { type: Number, default: 0 },
@@ -97,5 +139,11 @@ UserSchema.methods._autobanIfNeeded = function() {
 UserSchema.index({ "providers.name": 1, "providers.sub": 1 });
 // Favori aramalarını hızlandırmak için hafif bir index:
 UserSchema.index({ _id: 1, favorites: 1 });
+
+// ✅ Organization membership üzerinden sorgular için
+UserSchema.index({ "organizations.organization": 1 });
+
+// ✅ Restaurant membership üzerinden sorgular için
+UserSchema.index({ "restaurantMemberships.restaurant": 1 });
 
 export default mongoose.model("User", UserSchema);

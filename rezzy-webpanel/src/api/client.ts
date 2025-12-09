@@ -115,6 +115,59 @@ export async function adminSendNotification(input: {
 }
 
 // =========================
+// ADMIN — Organizations
+// =========================
+
+export interface AdminOrganization {
+  _id: string;
+  name: string;
+  region?: string;
+  logoUrl?: string;
+  taxNumber?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  // Backend tarafında ek alanlar varsa onları da taşıyabilirsin
+  [key: string]: any;
+}
+
+/**
+ * GET /admin/organizations
+ * - Liste + opsiyonel arama/paging
+ */
+export async function adminListOrganizations(params?: {
+  query?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const { data } = await api.get("/admin/organizations", { params });
+  const items = Array.isArray(data) ? data : data?.items ?? [];
+  return items as AdminOrganization[];
+}
+
+/**
+ * GET /admin/organizations/:id
+ * - Detay + muhtemelen bağlı restoranlar, üyeler vs.
+ */
+export async function adminGetOrganization(id: string) {
+  const { data } = await api.get(`/admin/organizations/${id}`);
+  return data as AdminOrganization;
+}
+
+/**
+ * POST /admin/organizations
+ * - Yeni organization oluşturma
+ */
+export async function adminCreateOrganization(input: {
+  name: string;
+  region?: string;
+  logoUrl?: string;
+  taxNumber?: string;
+}) {
+  const { data } = await api.post("/admin/organizations", input);
+  return data as AdminOrganization;
+}
+
+// =========================
 // ADMIN — Restaurants
 // =========================
 export async function adminGetRestaurant(rid: string) {
@@ -217,6 +270,68 @@ export async function adminCreateRestaurant(input: {
   }
 
   const { data } = await api.post("/admin/restaurants", payload);
+  return data;
+}
+
+/**
+ * POST /admin/organizations/:orgId/restaurants
+ * - Organization’a bağlı yeni şube (restaurant) oluşturma
+ * - Payload, adminCreateRestaurant ile AYNI mantıkta hazırlanıyor
+ */
+export async function adminCreateOrganizationRestaurant(
+  orgId: string,
+  input: {
+    ownerId: string;
+    name: string;
+    region?: string;
+    city?: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+
+    businessType?: string;
+    categorySet?: string;
+
+    commissionRate?: number;
+    depositRequired?: boolean;
+    depositAmount?: number;
+    checkinWindowBeforeMinutes?: number;
+    checkinWindowAfterMinutes?: number;
+    underattendanceThresholdPercent?: number;
+
+    mapAddress?: string;
+    placeId?: string;
+    googleMapsUrl?: string;
+    location?: { type: "Point"; coordinates: [number, number] };
+  }
+) {
+  const lng = Number(input?.location?.coordinates?.[0]);
+  const lat = Number(input?.location?.coordinates?.[1]);
+  const hasCoords = Number.isFinite(lng) && Number.isFinite(lat);
+
+  const payload: any = {
+    ...input,
+    mapAddress: input.mapAddress ?? "",
+    placeId: input.placeId ?? "",
+  };
+
+  const gm = normalizeMapsUrl(input.googleMapsUrl);
+  if (gm) payload.googleMapsUrl = gm;
+  else delete payload.googleMapsUrl;
+
+  if (hasCoords) {
+    payload.location = {
+      type: "Point",
+      coordinates: [lng, lat] as [number, number],
+    };
+  } else {
+    delete payload.location;
+  }
+
+  const { data } = await api.post(
+    `/admin/organizations/${orgId}/restaurants`,
+    payload
+  );
   return data;
 }
 

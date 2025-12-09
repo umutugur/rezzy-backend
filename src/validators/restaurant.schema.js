@@ -39,6 +39,10 @@ export const createRestaurantSchema = Joi.object({
   body: Joi.object({
     name: Joi.string().required(),
     region: Joi.string().uppercase().min(2).max(3).required(),
+
+    // ✅ Yeni: restoran mutlaka bir organizasyona bağlı olmalı
+    organizationId: Joi.string().custom(objectId).required(),
+
     address: Joi.string().allow("", null),
     phone: Joi.string().allow("", null),
     city: Joi.string().allow("", null),
@@ -62,14 +66,66 @@ export const createRestaurantSchema = Joi.object({
     cancelPolicy: Joi.string().default("24h_100;3h_50;lt3h_0"),
     graceMinutes: Joi.number().min(0).max(120).default(15),
     isActive: Joi.boolean().default(true),
+
+    // ✅ Yeni: operasyonel durum (modeldeki status enum’ı ile aynı)
+    status: Joi.string()
+      .valid("pending_review", "active", "suspended", "closed")
+      .default("active"),
+
     location: locationSchema.optional(),
     mapAddress: Joi.string().allow("", null),
     placeId: Joi.string().allow("", null),
     googleMapsUrl: Joi.string().uri().allow("", null),
     businessType: Joi.string()
-    .valid(...BUSINESS_TYPES)
-    .default("restaurant"),
+      .valid(...BUSINESS_TYPES)
+      .default("restaurant"),
+  }),
+});
 
+/* ---------- CREATE RESTAURANT FOR ORGANIZATION (ADMIN) ---------- */
+export const createOrganizationRestaurantAdminSchema = Joi.object({
+  query: anyObject,
+  params: Joi.object({
+    oid: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object({
+    ownerId: Joi.string().custom(objectId).required(),
+    name: Joi.string().required(),
+    region: Joi.string().uppercase().min(2).max(3).required(),
+
+    address: Joi.string().allow("", null),
+    phone: Joi.string().allow("", null),
+    city: Joi.string().allow("", null),
+    priceRange: Joi.string()
+      .valid("₺", "₺₺", "₺₺₺", "₺₺₺₺")
+      .default("₺₺"),
+    rating: Joi.number().min(0).max(5).default(0),
+    iban: Joi.string().required(),
+    openingHours: Joi.array()
+      .items(
+        Joi.object({
+          day: Joi.number().integer().min(0).max(6).required(),
+          open: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
+          close: Joi.string().pattern(/^\d{1,2}:\d{2}$/).required(),
+          isClosed: Joi.boolean().default(false),
+        })
+      )
+      .default([]),
+    photos: Joi.array().items(Joi.string().uri()).default([]),
+    description: Joi.string().allow("", null),
+    social: Joi.array().items(Joi.string().allow("")).default([]),
+    depositRate: Joi.number().min(0).max(100).default(10),
+    cancelPolicy: Joi.string().default("24h_100;3h_50;lt3h_0"),
+    graceMinutes: Joi.number().min(0).max(120).default(15),
+    isActive: Joi.boolean().default(true),
+
+    location: locationSchema.optional(),
+    mapAddress: Joi.string().allow("", null),
+    placeId: Joi.string().allow("", null),
+    googleMapsUrl: Joi.string().uri().allow("", null),
+    businessType: Joi.string()
+      .valid(...BUSINESS_TYPES)
+      .default("restaurant"),
   }),
 });
 
@@ -104,6 +160,10 @@ export const updateRestaurantSchema = Joi.object({
   body: Joi.object({
     name: Joi.string(),
     region: Joi.string().uppercase().min(2).max(3),
+
+    // ✅ Yeni: gerekiyorsa restoran başka bir organizasyona taşınabilir
+    organizationId: Joi.string().custom(objectId),
+
     address: Joi.string().allow("", null),
     phone: Joi.string().allow("", null),
     city: Joi.string().allow("", null),
@@ -125,12 +185,15 @@ export const updateRestaurantSchema = Joi.object({
     cancelPolicy: Joi.string(),
     graceMinutes: Joi.number().min(0).max(120),
     isActive: Joi.boolean(),
+
+    // ✅ Yeni: status update (askıya alma, kapatma vb.)
+    status: Joi.string().valid("pending_review", "active", "suspended", "closed"),
+
     location: locationSchema.optional(),
     mapAddress: Joi.string().allow("", null),
     placeId: Joi.string().allow("", null),
     googleMapsUrl: Joi.string().allow("", null),
     businessType: Joi.string().valid(...BUSINESS_TYPES),
-
   }).min(1),
 });
 
@@ -223,21 +286,20 @@ export const updateMenusSchema = Joi.object({
 });
 
 /* ---------- PHOTOS ---------- */
-/**
- * Multipart yükleme (req.file) için: fileUrl zorunlu değil.
- * URL veya dataURL ile geliyorsa fileUrl kontrol edilir.
- * En az bir kaynak var mı kontrolü controller’da yapılır.
- */
 export const addPhotoSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
     id: Joi.string().custom(objectId).required(),
   }),
   body: Joi.object({
-    fileUrl: Joi.alternatives().try(
-      Joi.string().uri({ scheme: ["http", "https"] }),
-      Joi.string().pattern(/^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/)
-    ).optional()
+    fileUrl: Joi.alternatives()
+      .try(
+        Joi.string().uri({ scheme: ["http", "https"] }),
+        Joi.string().pattern(
+          /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/
+        )
+      )
+      .optional(),
   }).unknown(true),
 });
 

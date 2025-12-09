@@ -10,7 +10,22 @@ const MenuCategorySchema = new mongoose.Schema(
       index: true,
     },
 
-    // ✅ Core’dan kopyalandıysa referans
+    /**
+     * ✅ NEW: Organization seviyesindeki kategorinin referansı
+     * - orgCategoryId doluysa → bu kayıt o org kategorisinin restoran override’ı
+     * - orgCategoryId null ise → tamamen lokal, restorana özel kategori
+     */
+    orgCategoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "OrgMenuCategory",
+      default: null,
+      index: true,
+    },
+
+    /**
+     * 🔴 LEGACY: CoreCategory’den seed edilmiş kategoriler için,
+     * v2 org menü yapısında KULLANMAYACAĞIZ ama şimdilik silmiyoruz.
+     */
     coreCategoryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "CoreCategory",
@@ -27,6 +42,13 @@ const MenuCategorySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Eski index durabilir
 MenuCategorySchema.index({ restaurantId: 1, order: 1 });
+
+// ✅ Yeni: restoran + orgCategory için hızlı lookup
+MenuCategorySchema.index(
+  { restaurantId: 1, orgCategoryId: 1 },
+  { name: "restaurant_orgCategory" }
+);
 
 export default mongoose.model("MenuCategory", MenuCategorySchema);

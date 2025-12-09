@@ -24,6 +24,8 @@ import MenusPage from "./pages/restaurant/Menus";
 import PhotosPage from "./pages/restaurant/Photos";
 import PoliciesPage from "./pages/restaurant/Policies";
 import MenuManagerPage from "./pages/restaurant/MenuManager"; 
+import AdminOrganizationsPage from "./pages/admin/Organizations";
+import AdminOrganizationDetailPage from "./pages/admin/OrganizationDetail";
 
 // Desktop mode
 import { LiveTablesPage } from "./desktop/pages/LiveTablesPage";
@@ -174,18 +176,20 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
-      {/* Admin alanı */}
+          {/* Admin alanı */}
       <Route element={<PrivateRoute allow={["admin"]} />}>
         <Route path="/admin" element={<Shell><AdminDashboardPage /></Shell>} />
         <Route path="/admin/notifications" element={<Shell><AdminNotificationsPage /></Shell>} />
+        <Route path="/admin/organizations" element={<Shell><AdminOrganizationsPage /></Shell>} />
+        <Route path="/admin/organizations/:oid" element={<Shell><AdminOrganizationDetailPage /></Shell>} />
+        <Route path="/admin/commissions" element={<Shell><AdminCommissionsPage /></Shell>} />
         <Route path="/admin/restaurants" element={<Shell><AdminRestaurantsPage /></Shell>} />
-        <Route path="/admin/restaurants/new" element={<Shell><AdminRestaurantCreatePage /></Shell>} /> {/* ✅ YENİ */}
+        <Route path="/admin/restaurants/new" element={<Shell><AdminRestaurantCreatePage /></Shell>} />
         <Route path="/admin/restaurants/:rid" element={<Shell><AdminRestaurantDetailPage /></Shell>} />
         <Route path="/admin/users" element={<Shell><AdminUsersPage /></Shell>} />
         <Route path="/admin/users/:uid" element={<Shell><AdminUserDetailPage /></Shell>} />
         <Route path="/admin/reservations" element={<Shell><AdminReservationsPage /></Shell>} />
         <Route path="/admin/moderation" element={<Shell><AdminModerationPage /></Shell>} />
-        <Route path="/admin/commissions" element={<Shell><AdminCommissionsPage /></Shell>} />
       </Route>
 
             {/* Restoran alanı */}

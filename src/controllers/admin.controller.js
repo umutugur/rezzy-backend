@@ -4,19 +4,26 @@ import Restaurant from "../models/Restaurant.js";
 import User from "../models/User.js";
 import Review from "../models/Review.js";
 import Complaint from "../models/Complaint.js";
+import Organization from "../models/Organization.js";
+import BranchRequest from "../models/BranchRequest.js";
 import { ensureRestaurantForOwner } from "../services/restaurantOwner.service.js";
 // EN ÜSTE EKLE (diğer importların yanına)
 import { Parser } from "json2csv";
+
 /* ------------ helpers ------------ */
 function toObjectId(id) {
-  try { return new mongoose.Types.ObjectId(id); } catch { return null; }
+  try {
+    return new mongoose.Types.ObjectId(id);
+  } catch {
+    return null;
+  }
 }
 function parseDateRange(q) {
   const start = q.start ? new Date(q.start + "T00:00:00.000Z") : null;
-  const end   = q.end   ? new Date(q.end   + "T23:59:59.999Z") : null;
+  const end = q.end ? new Date(q.end + "T23:59:59.999Z") : null;
   const dt = {};
   if (start) dt.$gte = start;
-  if (end)   dt.$lte = end;
+  if (end) dt.$lte = end;
   return { start, end, dt };
 }
 function pageParams(q) {
@@ -27,7 +34,9 @@ function pageParams(q) {
 function nextCursor(items, limit) {
   return items.length > limit ? String(items[limit - 1]?._id || "") : undefined;
 }
-function cut(items, limit) { return items.slice(0, limit); }
+function cut(items, limit) {
+  return items.slice(0, limit);
+}
 
 /* ------------ KPI core ------------ */
 async function kpiAggregate(match) {
@@ -36,69 +45,77 @@ async function kpiAggregate(match) {
     {
       $group: {
         _id: "$status",
-        c:        { $sum: 1 },
-        revenue:  { $sum: { $ifNull: ["$totalPrice", 0] } },
+        c: { $sum: 1 },
+        revenue: { $sum: { $ifNull: ["$totalPrice", 0] } },
         deposits: { $sum: { $ifNull: ["$depositAmount", 0] } },
-      }
-    }
+      },
+    },
   ]);
 
-  const by = new Map(rows.map(r => [r._id, r]));
-  const total     = rows.reduce((a, r) => a + (r.c || 0), 0);
-  const revenue   = rows.reduce((a, r) => a + (r.revenue  || 0), 0);
-  const deposits  = rows.reduce((a, r) => a + (r.deposits || 0), 0);
+  const by = new Map(rows.map((r) => [r._id, r]));
+  const total = rows.reduce((a, r) => a + (r.c || 0), 0);
+  const revenue = rows.reduce((a, r) => a + (r.revenue || 0), 0);
+  const deposits = rows.reduce((a, r) => a + (r.deposits || 0), 0);
   const confirmed = by.get("confirmed")?.c || 0;
-  const arrived   = by.get("arrived")?.c   || 0;
+  const arrived = by.get("arrived")?.c || 0;
   const cancelled = by.get("cancelled")?.c || 0;
 
   const arrivedRevenue = by.get("arrived")?.revenue || 0;
   const depositFromConfirmedNoShow =
     (by.get("confirmed")?.deposits || 0) +
-    (by.get("no_show")?.deposits   || 0);
+    (by.get("no_show")?.deposits || 0);
 
   return {
     reservations: {
       total,
-      pending:   by.get("pending")?.c   || 0,
+      pending: by.get("pending")?.c || 0,
       confirmed,
       arrived,
       cancelled,
-      no_show:   by.get("no_show")?.c   || 0,
+      no_show: by.get("no_show")?.c || 0,
     },
     revenue,
     deposits,
     breakdown: { arrivedRevenue, depositFromConfirmedNoShow },
     rates: {
-      confirm: total     ? Number((confirmed / total).toFixed(3))  : 0,
-      checkin: confirmed ? Number((arrived   / confirmed).toFixed(3)) : 0,
-      cancel:  total     ? Number((cancelled / total).toFixed(3))  : 0,
-    }
+      confirm: total ? Number((confirmed / total).toFixed(3)) : 0,
+      checkin: confirmed
+        ? Number((arrived / confirmed).toFixed(3))
+        : 0,
+      cancel: total ? Number((cancelled / total).toFixed(3)) : 0,
+    },
   };
 }
 
 async function kpiSeries(match, groupBy = "day") {
   let dateFmt = "%Y-%m-%d";
   if (groupBy === "month") dateFmt = "%Y-%m";
-  if (groupBy === "week")  dateFmt = "%G-W%V";
+  if (groupBy === "week") dateFmt = "%G-W%V";
 
   const rows = await Reservation.aggregate([
     { $match: match },
     {
       $group: {
-        _id:      { $dateToString: { format: dateFmt, date: "$dateTimeUTC" } },
-        c:        { $sum: 1 },
-        revenue:  { $sum: { $ifNull: ["$totalPrice", 0] } },
-        arrived:  { $sum: { $cond: [{ $eq: ["$status", "arrived"] }, 1, 0] } },
-      }
+        _id: {
+          $dateToString: { format: dateFmt, date: "$dateTimeUTC" },
+        },
+        c: { $sum: 1 },
+        revenue: { $sum: { $ifNull: ["$totalPrice", 0] } },
+        arrived: {
+          $sum: {
+            $cond: [{ $eq: ["$status", "arrived"] }, 1, 0],
+          },
+        },
+      },
     },
-    { $sort: { _id: 1 } }
+    { $sort: { _id: 1 } },
   ]);
 
   return {
-    labels:       rows.map(r => r._id),
-    reservations: rows.map(r => r.c),
-    revenue:      rows.map(r => r.revenue),
-    arrived:      rows.map(r => r.arrived),
+    labels: rows.map((r) => r._id),
+    reservations: rows.map((r) => r.c),
+    revenue: rows.map((r) => r.revenue),
+    arrived: rows.map((r) => r.arrived),
   };
 }
 
@@ -117,23 +134,23 @@ function commissionBaseExpr() {
                   $map: {
                     input: { $ifNull: ["$selections", []] },
                     as: "s",
-                    in: { $ifNull: ["$$s.price", 0] }
-                  }
-                }
+                    in: { $ifNull: ["$$s.price", 0] },
+                  },
+                },
               },
               in: {
                 $cond: [
                   { $gt: [{ $size: "$$prices" }, 0] },
                   { $min: "$$prices" },
-                  0
-                ]
-              }
-            }
-          }
-        ]
+                  0,
+                ],
+              },
+            },
+          },
+        ],
       },
-      { $ifNull: ["$totalPrice", 0] }
-    ]
+      { $ifNull: ["$totalPrice", 0] },
+    ],
   };
 }
 
@@ -145,26 +162,32 @@ async function commissionTotals(match) {
         from: "restaurants",
         localField: "restaurantId",
         foreignField: "_id",
-        as: "rest"
-      }
+        as: "rest",
+      },
     },
     {
       $addFields: {
-        _rate: { $ifNull: [{ $arrayElemAt: ["$rest.commissionRate", 0] }, 0.05] },
-        _base: commissionBaseExpr()
-      }
+        _rate: {
+          $ifNull: [{ $arrayElemAt: ["$rest.commissionRate", 0] }, 0.05],
+        },
+        _base: commissionBaseExpr(),
+      },
     },
     {
       $group: {
         _id: null,
         commission: { $sum: { $multiply: ["$_base", "$_rate"] } },
-        revenue:    { $sum: { $ifNull: ["$totalPrice", 0] } },
-        count:      { $sum: 1 }
-      }
-    }
+        revenue: { $sum: { $ifNull: ["$totalPrice", 0] } },
+        count: { $sum: 1 },
+      },
+    },
   ]);
   const r = rows[0] || { commission: 0, revenue: 0, count: 0 };
-  return { total: r.commission || 0, revenue: r.revenue || 0, count: r.count || 0 };
+  return {
+    total: r.commission || 0,
+    revenue: r.revenue || 0,
+    count: r.count || 0,
+  };
 }
 
 async function commissionByRestaurant(match) {
@@ -175,29 +198,33 @@ async function commissionByRestaurant(match) {
         from: "restaurants",
         localField: "restaurantId",
         foreignField: "_id",
-        as: "rest"
-      }
+        as: "rest",
+      },
     },
     {
       $addFields: {
-        _rate: { $ifNull: [{ $arrayElemAt: ["$rest.commissionRate", 0] }, 0.05] },
-        _name: { $ifNull: [{ $arrayElemAt: ["$rest.name", 0] }, "(Restoran)"] },
-        _base: commissionBaseExpr()
-      }
+        _rate: {
+          $ifNull: [{ $arrayElemAt: ["$rest.commissionRate", 0] }, 0.05],
+        },
+        _name: {
+          $ifNull: [{ $arrayElemAt: ["$rest.name", 0] }, "(Restoran)"],
+        },
+        _base: commissionBaseExpr(),
+      },
     },
     {
       $group: {
         _id: "$restaurantId",
         name: { $first: "$_name" },
         commission: { $sum: { $multiply: ["$_base", "$_rate"] } },
-        revenue:    { $sum: { $ifNull: ["$totalPrice", 0] } },
-        count:      { $sum: 1 }
-      }
+        revenue: { $sum: { $ifNull: ["$totalPrice", 0] } },
+        count: { $sum: 1 },
+      },
     },
-    { $sort: { commission: -1 } }
+    { $sort: { commission: -1 } },
   ]);
 
-  return rows.map(r => ({
+  return rows.map((r) => ({
     restaurantId: r._id,
     name: r.name,
     commission: r.commission || 0,
@@ -221,18 +248,28 @@ export const kpiGlobal = async (req, res, next) => {
     const commissionsBreakdown = await commissionByRestaurant(match);
 
     res.json({
-      range: { start: req.query.start || null, end: req.query.end || null, groupBy },
+      range: {
+        start: req.query.start || null,
+        end: req.query.end || null,
+        groupBy,
+      },
       totals: { ...totals, commission: commissionsTotal.total },
       series,
-      commissions: { total: commissionsTotal.total, byRestaurant: commissionsBreakdown }
+      commissions: {
+        total: commissionsTotal.total,
+        byRestaurant: commissionsBreakdown,
+      },
     });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 export const kpiByRestaurant = async (req, res, next) => {
   try {
     const rid = toObjectId(req.params.rid);
-    if (!rid) return res.status(400).json({ message: "Invalid restaurant id" });
+    if (!rid)
+      return res.status(400).json({ message: "Invalid restaurant id" });
 
     const { start, end, dt } = parseDateRange(req.query);
     const groupBy = req.query.groupBy || "day";
@@ -244,12 +281,18 @@ export const kpiByRestaurant = async (req, res, next) => {
     const commissionsTotal = await commissionTotals(match);
 
     res.json({
-      range: { start: req.query.start || null, end: req.query.end || null, groupBy },
+      range: {
+        start: req.query.start || null,
+        end: req.query.end || null,
+        groupBy,
+      },
       totals: { ...totals, commission: commissionsTotal.total },
       series,
-      commissions: { total: commissionsTotal.total }
+      commissions: { total: commissionsTotal.total },
     });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 export const kpiByUser = async (req, res, next) => {
@@ -265,11 +308,285 @@ export const kpiByUser = async (req, res, next) => {
     const totals = await kpiAggregate(match);
     const series = await kpiSeries(match, groupBy);
 
-    res.json({ range: { start: req.query.start || null, end: req.query.end || null, groupBy }, totals, series });
-  } catch (e) { next(e); }
+    res.json({
+      range: {
+        start: req.query.start || null,
+        end: req.query.end || null,
+        groupBy,
+      },
+      totals,
+      series,
+    });
+  } catch (e) {
+    next(e);
+  }
 };
 
-/* ------------ Restaurants ------------ */
+/* ------------ Organizations (admin) ------------ */
+export const listOrganizations = async (req, res, next) => {
+  try {
+    const { query, region } = req.query || {};
+    const { limit, cursor } = pageParams(req.query || {});
+
+    const q = {};
+    if (query) {
+      const re = new RegExp(String(query), "i");
+      q.$or = [{ name: re }, { legalName: re }];
+    }
+    if (region) {
+      q.region = String(region).toUpperCase();
+    }
+    if (cursor) {
+      q._id = { $lt: cursor };
+    }
+
+    const rows = await Organization.find(q)
+      .sort({ _id: -1 })
+      .limit(limit + 1)
+      .select(
+        "_id name legalName region defaultLanguage taxNumber taxOffice createdAt updatedAt"
+      )
+      .lean();
+
+    res.json({
+      items: cut(rows, limit),
+      nextCursor: nextCursor(rows, limit),
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getOrganizationDetail = async (req, res, next) => {
+  try {
+    const oid = toObjectId(req.params.oid);
+    if (!oid)
+      return res.status(400).json({ message: "Invalid organization id" });
+
+    const org = await Organization.findById(oid)
+      .select(
+        "_id name legalName logoUrl region defaultLanguage description taxNumber taxOffice createdAt updatedAt"
+      )
+      .lean();
+
+    if (!org)
+      return res.status(404).json({ message: "Organization not found" });
+
+    res.json(org);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const createOrganization = async (req, res, next) => {
+  try {
+    let {
+      name,
+      legalName,
+      logoUrl,
+      region,
+      defaultLanguage,
+      description,
+      taxNumber,
+      taxOffice,
+    } = req.body || {};
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ message: "name is required" });
+    }
+    name = String(name).trim();
+
+    if (!region || !String(region).trim()) {
+      return res.status(400).json({ message: "region is required" });
+    }
+    region = String(region).trim().toUpperCase();
+
+    if (defaultLanguage) {
+      defaultLanguage = String(defaultLanguage).trim();
+    }
+
+    const org = await Organization.create({
+      name,
+      legalName: legalName || undefined,
+      logoUrl: logoUrl || undefined,
+      region,
+      defaultLanguage: defaultLanguage || undefined,
+      description: description || undefined,
+      taxNumber: taxNumber || undefined,
+      taxOffice: taxOffice || undefined,
+    });
+
+    res.status(201).json({
+      ok: true,
+      organization: {
+        _id: org._id,
+        name: org.name,
+        legalName: org.legalName || null,
+        logoUrl: org.logoUrl || null,
+        region: org.region || null,
+        defaultLanguage: org.defaultLanguage || null,
+        description: org.description || null,
+        taxNumber: org.taxNumber || null,
+        taxOffice: org.taxOffice || null,
+        createdAt: org.createdAt,
+        updatedAt: org.updatedAt,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * Admin → Organizasyona şube (restaurant) ekleme
+ * POST /admin/organizations/:oid/restaurants
+ */
+export const createOrganizationRestaurant = async (req, res, next) => {
+  try {
+    const oid = toObjectId(req.params.oid);
+    if (!oid) {
+      return res.status(400).json({ message: "Invalid organization id" });
+    }
+
+    // Organizasyon var mı?
+    const org = await Organization.findById(oid)
+      .select("_id name region")
+      .lean();
+    if (!org) {
+      return res.status(404).json({ message: "Organization not found" });
+    }
+
+    let {
+      ownerId,
+      name,
+      region,
+      address,
+      phone,
+      city,
+      priceRange,
+      rating,
+      iban,
+      openingHours,
+      photos,
+      description,
+      social,
+      depositRate,
+      cancelPolicy,
+      graceMinutes,
+      isActive,
+      location,
+      mapAddress,
+      placeId,
+      googleMapsUrl,
+      businessType,
+    } = req.body || {};
+
+    // ownerId zorunlu
+    if (!ownerId || !String(ownerId).trim()) {
+      return res.status(400).json({ message: "ownerId is required" });
+    }
+    const ownerObjectId = toObjectId(ownerId);
+    if (!ownerObjectId) {
+      return res.status(400).json({ message: "Invalid ownerId" });
+    }
+
+    // Owner user var mı?
+    const owner = await User.findById(ownerObjectId).select("_id").lean();
+    if (!owner) {
+      return res.status(404).json({ message: "Owner user not found" });
+    }
+
+    // name zorunlu
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ message: "name is required" });
+    }
+    name = String(name).trim();
+
+    // region zorunlu (Joi tarafında da validate edeceğiz ama burada da normalize edelim)
+    if (!region || !String(region).trim()) {
+      return res.status(400).json({ message: "region is required" });
+    }
+    region = String(region).trim().toUpperCase();
+
+    // priceRange / rating / depositRate / graceMinutes gibi sayısal alanları normalize et
+    if (rating != null) rating = Number(rating);
+    if (depositRate != null) depositRate = Number(depositRate);
+    if (graceMinutes != null) graceMinutes = Number(graceMinutes);
+
+    const doc = await Restaurant.create({
+      owner: owner._id,
+      organizationId: org._id,
+      name,
+      region,
+      address: address || undefined,
+      phone: phone || undefined,
+      city: city || undefined,
+      priceRange: priceRange || "₺₺",
+      rating: rating != null ? rating : 0,
+      iban,
+      openingHours: Array.isArray(openingHours) ? openingHours : [],
+      photos: Array.isArray(photos) ? photos : [],
+      description: description || undefined,
+      social: Array.isArray(social) ? social : [],
+      depositRate: depositRate != null ? depositRate : 10,
+      cancelPolicy: cancelPolicy || "24h_100;3h_50;lt3h_0",
+      graceMinutes: graceMinutes != null ? graceMinutes : 15,
+      isActive: typeof isActive === "boolean" ? isActive : true,
+      status: "active", // 🔒 Admin akışı: şube direkt aktif
+      location: location || undefined,
+      mapAddress: mapAddress || undefined,
+      placeId: placeId || undefined,
+      googleMapsUrl: googleMapsUrl || undefined,
+      businessType: businessType || "restaurant",
+    });
+
+    // Owner -> organizations & restaurantMemberships güncelle
+    await User.findByIdAndUpdate(
+      owner._id,
+      {
+        $addToSet: {
+          organizations: {
+            organization: org._id,
+            role: "org_owner",
+          },
+          restaurantMemberships: {
+            restaurant: doc._id,
+            role: "location_manager",
+          },
+        },
+      },
+      { new: true }
+    ).lean();
+
+    res.status(201).json({
+      ok: true,
+      restaurant: {
+        _id: doc._id,
+        organizationId: doc.organizationId,
+        ownerId: owner._id,
+        name: doc.name,
+        region: doc.region,
+        city: doc.city || null,
+        address: doc.address || null,
+        phone: doc.phone || null,
+        email: doc.email || null,
+        priceRange: doc.priceRange || null,
+        rating: doc.rating ?? null,
+        status: doc.status,
+        iban: doc.iban || null,
+        depositRate: doc.depositRate ?? null,
+        cancelPolicy: doc.cancelPolicy || null,
+        graceMinutes: doc.graceMinutes ?? null,
+        isActive: doc.isActive,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
 /* ------------ Restaurants ------------ */
 export const listRestaurants = async (req, res, next) => {
   try {
@@ -278,20 +595,25 @@ export const listRestaurants = async (req, res, next) => {
 
     const q = {};
     if (query) q.name = { $regex: String(query), $options: "i" };
-    if (city)  q.city = { $regex: String(city), $options: "i" };
+    if (city) q.city = { $regex: String(city), $options: "i" };
     if (cursor) q._id = { $lt: cursor };
 
     const rows = await Restaurant.find(q)
       .sort({ _id: -1 })
       .limit(limit + 1)
-      .select("_id name city address phone email region isActive commissionRate")
+      .select(
+        "_id name city address phone email region isActive commissionRate"
+      )
       .lean();
 
     res.json({ items: cut(rows, limit), nextCursor: nextCursor(rows, limit) });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
+
 // -------------------------
-// ✅ NEW: Admin — Create User
+// ✅ Admin — Create User
 // -------------------------
 export const createUser = async (req, res, next) => {
   try {
@@ -315,12 +637,12 @@ export const createUser = async (req, res, next) => {
     }
     if (phone) {
       const ex2 = await User.findOne({ phone }).select("_id").lean();
-      if (ex2) return res.status(409).json({ message: "Phone already in use" });
+      if (ex2)
+        return res.status(409).json({ message: "Phone already in use" });
     }
 
     // Şifre yoksa güvenli random üret
     if (!password) {
-      // basit bir random; dilersen crypto ile daha güçlü üret
       password = Math.random().toString(36).slice(-10);
     }
 
@@ -329,8 +651,8 @@ export const createUser = async (req, res, next) => {
       email: email || undefined,
       phone: phone || undefined,
       password,
-      role: "customer", // 🔒 B akışına uygun: restoran oluşturulunca role -> restaurant yapılacak
-      providers: email ? [{ name: "password", sub: email }] : []
+      role: "customer",
+      providers: email ? [{ name: "password", sub: email }] : [],
     });
 
     res.status(201).json({
@@ -341,11 +663,14 @@ export const createUser = async (req, res, next) => {
         email: user.email || null,
         phone: user.phone || null,
         role: user.role,
-        createdAt: user.createdAt
-      }
+        createdAt: user.createdAt,
+      },
     });
-  } catch (e) { next(e); }};
-  
+  } catch (e) {
+    next(e);
+  }
+};
+
 export const createRestaurant = async (req, res, next) => {
   try {
     let {
@@ -376,7 +701,8 @@ export const createRestaurant = async (req, res, next) => {
     // Komisyon normalizasyonu: 5 -> 0.05
     if (commissionRate != null) {
       commissionRate = Number(commissionRate);
-      if (Number.isNaN(commissionRate)) return res.status(400).json({ message: "Invalid commissionRate" });
+      if (Number.isNaN(commissionRate))
+        return res.status(400).json({ message: "Invalid commissionRate" });
       if (commissionRate > 1) commissionRate = commissionRate / 100;
       commissionRate = Math.max(0, Math.min(1, commissionRate));
     }
@@ -392,12 +718,23 @@ export const createRestaurant = async (req, res, next) => {
       address: address || undefined,
       phone: phone || undefined,
       email: email || undefined,
-      commissionRate: commissionRate != null ? commissionRate : undefined,
+      commissionRate:
+        commissionRate != null ? commissionRate : undefined,
       depositRequired: !!depositRequired,
-      depositAmount: depositAmount != null ? Number(depositAmount) : undefined,
-      checkinWindowBeforeMinutes: checkinWindowBeforeMinutes != null ? Number(checkinWindowBeforeMinutes) : undefined,
-      checkinWindowAfterMinutes:  checkinWindowAfterMinutes  != null ? Number(checkinWindowAfterMinutes)  : undefined,
-      underattendanceThresholdPercent: underattendanceThresholdPercent != null ? Number(underattendanceThresholdPercent) : undefined,
+      depositAmount:
+        depositAmount != null ? Number(depositAmount) : undefined,
+      checkinWindowBeforeMinutes:
+        checkinWindowBeforeMinutes != null
+          ? Number(checkinWindowBeforeMinutes)
+          : undefined,
+      checkinWindowAfterMinutes:
+        checkinWindowAfterMinutes != null
+          ? Number(checkinWindowAfterMinutes)
+          : undefined,
+      underattendanceThresholdPercent:
+        underattendanceThresholdPercent != null
+          ? Number(underattendanceThresholdPercent)
+          : undefined,
     });
 
     // Owner'ı restoran sahibi yap ve ilişkilendir
@@ -405,36 +742,51 @@ export const createRestaurant = async (req, res, next) => {
       $set: {
         role: "restaurant",
         restaurantId: doc._id,
-      }
+      },
     });
 
-    res.status(201).json({ ok: true, restaurant: {
-      _id: doc._id,
-      name: doc.name,
-      city: doc.city,
-      address: doc.address,
-      phone: doc.phone,
-      email: doc.email,
-      commissionRate: doc.commissionRate,
-    }});
-  } catch (e) { next(e); }
+    res.status(201).json({
+      ok: true,
+      restaurant: {
+        _id: doc._id,
+        name: doc.name,
+        city: doc.city,
+        address: doc.address,
+        phone: doc.phone,
+        email: doc.email,
+        commissionRate: doc.commissionRate,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
 };
 
 export const getRestaurantDetail = async (req, res, next) => {
   try {
     const r = await Restaurant.findById(req.params.rid)
-  .select("_id name city address owner settings depositAmount depositRate depositType commissionRate phone email isActive region")     
-  .lean();
+      .select(
+        "_id name city address owner settings depositAmount depositRate depositType commissionRate phone email isActive region"
+      )
+      .lean();
     if (!r) return res.status(404).json({ message: "Restaurant not found" });
     res.json(r);
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
-export const listReservationsByRestaurantAdmin = async (req, res, next) => {
+
+export const listReservationsByRestaurantAdmin = async (
+  req,
+  res,
+  next
+) => {
   try {
     const { status, start, end } = req.query;
     const { limit, cursor } = pageParams(req.query);
     const rid = toObjectId(req.params.rid);
-    if (!rid) return res.status(400).json({ message: "Invalid restaurant id" });
+    if (!rid)
+      return res.status(400).json({ message: "Invalid restaurant id" });
 
     const { dt } = parseDateRange({ start, end });
     const q = { restaurantId: rid };
@@ -451,8 +803,14 @@ export const listReservationsByRestaurantAdmin = async (req, res, next) => {
     const pickUser = (r) => {
       if (r.userId) return { name: r.userId.name, email: r.userId.email };
       if (r.user && (r.user.name || r.user.email)) return r.user;
-      if (r.customer && (r.customer.name || r.customer.email)) return r.customer;
-      if (r.customerName || r.guestName || r.contactName || r.name) {
+      if (r.customer && (r.customer.name || r.customer.email))
+        return r.customer;
+      if (
+        r.customerName ||
+        r.guestName ||
+        r.contactName ||
+        r.name
+      ) {
         return {
           name:
             r.customerName ||
@@ -485,20 +843,27 @@ export const listReservationsByRestaurantAdmin = async (req, res, next) => {
     }));
 
     res.json({ items, nextCursor: nextCursor(rows, limit) });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 /* ------------ Commission rate update ------------ */
 export const updateRestaurantCommission = async (req, res, next) => {
   try {
     const rid = toObjectId(req.params.rid);
-    if (!rid) return res.status(400).json({ message: "Invalid restaurant id" });
+    if (!rid)
+      return res.status(400).json({ message: "Invalid restaurant id" });
 
     let { commissionRate } = req.body || {};
-    if (commissionRate == null) return res.status(400).json({ message: "commissionRate is required" });
+    if (commissionRate == null)
+      return res
+        .status(400)
+        .json({ message: "commissionRate is required" });
 
     commissionRate = Number(commissionRate);
-    if (Number.isNaN(commissionRate)) return res.status(400).json({ message: "Invalid commissionRate" });
+    if (Number.isNaN(commissionRate))
+      return res.status(400).json({ message: "Invalid commissionRate" });
     if (commissionRate > 1) commissionRate = commissionRate / 100;
     commissionRate = Math.max(0, Math.min(1, commissionRate));
 
@@ -506,11 +871,15 @@ export const updateRestaurantCommission = async (req, res, next) => {
       rid,
       { $set: { commissionRate } },
       { new: true }
-    ).select("_id name commissionRate").lean();
+    )
+      .select("_id name commissionRate")
+      .lean();
 
     if (!r) return res.status(404).json({ message: "Restaurant not found" });
     res.json({ ok: true, restaurant: r });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 /* ------------ Users ------------ */
@@ -522,24 +891,27 @@ export const listUsers = async (req, res, next) => {
     const q = {};
     if (query) {
       q.$or = [
-        { name:  { $regex: String(query), $options: "i" } },
+        { name: { $regex: String(query), $options: "i" } },
         { email: { $regex: String(query), $options: "i" } },
       ];
     }
     if (role) q.role = role;
-    if (banned === "true")  q.banned = true;
+    if (banned === "true") q.banned = true;
     if (banned === "false") q.banned = { $ne: true };
     if (cursor) q._id = { $lt: cursor };
 
     const rows = await User.find(q)
       .sort({ _id: -1 })
       .limit(limit + 1)
-      // ✅ riskScore ve noShowCount listeye eklendi
-      .select("_id name email role restaurantId banned banReason bannedUntil createdAt riskScore noShowCount")
+      .select(
+        "_id name email role restaurantId banned banReason bannedUntil createdAt riskScore noShowCount"
+      )
       .lean();
 
     res.json({ items: cut(rows, limit), nextCursor: nextCursor(rows, limit) });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 export const getUserDetail = async (req, res, next) => {
@@ -548,7 +920,9 @@ export const getUserDetail = async (req, res, next) => {
     if (!uid) return res.status(400).json({ message: "Invalid user id" });
 
     const user = await User.findById(uid)
-      .select("_id name email phone role restaurantId banned banReason bannedUntil createdAt")
+      .select(
+        "_id name email phone role restaurantId banned banReason bannedUntil createdAt"
+      )
       .lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -557,31 +931,36 @@ export const getUserDetail = async (req, res, next) => {
       {
         $group: {
           _id: "$status",
-          c:        { $sum: 1 },
-          revenue:  { $sum: { $ifNull: ["$totalPrice", 0] } },
+          c: { $sum: 1 },
+          revenue: { $sum: { $ifNull: ["$totalPrice", 0] } },
           deposits: { $sum: { $ifNull: ["$depositAmount", 0] } },
-        }
-      }
+        },
+      },
     ]);
-    const by = new Map(agg.map(r => [r._id, r]));
-    const total   = agg.reduce((a, r) => a + (r.c || 0), 0);
-    const revenue = agg.reduce((a, r) => a + (r.revenue  || 0), 0);
-    const deposits = agg.reduce((a, r) => a + (r.deposits || 0), 0);
+    const by = new Map(agg.map((r) => [r._id, r]));
+    const total = agg.reduce((a, r) => a + (r.c || 0), 0);
+    const revenue = agg.reduce((a, r) => a + (r.revenue || 0), 0);
+    const deposits = agg.reduce(
+      (a, r) => a + (r.deposits || 0),
+      0
+    );
 
     res.json({
       user,
       kpi: {
         total,
-        pending:   by.get("pending")?.c   || 0,
+        pending: by.get("pending")?.c || 0,
         confirmed: by.get("confirmed")?.c || 0,
-        arrived:   by.get("arrived")?.c   || 0,
+        arrived: by.get("arrived")?.c || 0,
         cancelled: by.get("cancelled")?.c || 0,
-        no_show:   by.get("no_show")?.c   || 0,
+        no_show: by.get("no_show")?.c || 0,
         revenue,
         deposits,
-      }
+      },
     });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 /* ------------ NEW: User Risk History (read-only) ------------ */
@@ -594,14 +973,20 @@ export const getUserRiskHistory = async (req, res, next) => {
     const { start: s, end: e } = parseDateRange({ start, end });
 
     const u = await User.findById(uid)
-      .select("_id name email banned banReason bannedUntil riskScore noShowCount riskIncidents consecutiveGoodShows createdAt")
+      .select(
+        "_id name email banned banReason bannedUntil riskScore noShowCount riskIncidents consecutiveGoodShows createdAt"
+      )
       .lean();
     if (!u) return res.status(404).json({ message: "User not found" });
 
-    let incidents = Array.isArray(u.riskIncidents) ? u.riskIncidents.slice() : [];
-    incidents.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    let incidents = Array.isArray(u.riskIncidents)
+      ? u.riskIncidents.slice()
+      : [];
+    incidents.sort(
+      (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()
+    );
     if (s || e) {
-      incidents = incidents.filter(it => {
+      incidents = incidents.filter((it) => {
         const t = new Date(it.at).getTime();
         if (s && t < s.getTime()) return false;
         if (e && t > e.getTime()) return false;
@@ -609,7 +994,10 @@ export const getUserRiskHistory = async (req, res, next) => {
       });
     }
 
-    const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+    const limit = Math.min(
+      500,
+      Math.max(1, Number(req.query.limit) || 100)
+    );
     incidents = incidents.slice(0, limit);
 
     const snapshot = {
@@ -624,15 +1012,20 @@ export const getUserRiskHistory = async (req, res, next) => {
         NO_SHOW: 1.0,
         LATE_CANCEL: 0.5,
         UNDER_ATTEND: 0.25,
-        GOOD_ATTEND: -0.10,
+        GOOD_ATTEND: -0.1,
       },
       multiplier: 25,
     };
 
     res.json({
-      user: { _id: u._id, name: u.name, email: u.email, createdAt: u.createdAt },
+      user: {
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+        createdAt: u.createdAt,
+      },
       snapshot,
-      incidents: incidents.map(it => ({
+      incidents: incidents.map((it) => ({
         type: it.type,
         weight: it.weight,
         at: it.at,
@@ -640,7 +1033,9 @@ export const getUserRiskHistory = async (req, res, next) => {
       })),
       range: { start: start || null, end: end || null, limit },
     });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 export const banUser = async (req, res, next) => {
@@ -649,7 +1044,8 @@ export const banUser = async (req, res, next) => {
     if (!uid) return res.status(400).json({ message: "Invalid user id" });
 
     const { reason, bannedUntil } = req.body || {};
-    if (!reason || !String(reason).trim()) return res.status(400).json({ message: "Reason is required" });
+    if (!reason || !String(reason).trim())
+      return res.status(400).json({ message: "Reason is required" });
 
     const patch = {
       banned: true,
@@ -659,11 +1055,25 @@ export const banUser = async (req, res, next) => {
     };
     if (bannedUntil) patch.bannedUntil = new Date(bannedUntil);
 
-    const u = await User.findByIdAndUpdate(uid, { $set: patch }, { new: true }).lean();
+    const u = await User.findByIdAndUpdate(
+      uid,
+      { $set: patch },
+      { new: true }
+    ).lean();
     if (!u) return res.status(404).json({ message: "User not found" });
 
-    res.json({ ok: true, user: { _id: u._id, banned: u.banned, banReason: u.banReason, bannedUntil: u.bannedUntil } });
-  } catch (e) { next(e); }
+    res.json({
+      ok: true,
+      user: {
+        _id: u._id,
+        banned: u.banned,
+        banReason: u.banReason,
+        bannedUntil: u.bannedUntil,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
 };
 
 export const unbanUser = async (req, res, next) => {
@@ -673,13 +1083,18 @@ export const unbanUser = async (req, res, next) => {
 
     const u = await User.findByIdAndUpdate(
       uid,
-      { $set: { banned: false, banReason: null, bannedUntil: null }, $unset: { bannedAt: "", bannedBy: "" } },
+      {
+        $set: { banned: false, banReason: null, bannedUntil: null },
+        $unset: { bannedAt: "", bannedBy: "" },
+      },
       { new: true }
     ).lean();
 
     if (!u) return res.status(404).json({ message: "User not found" });
     res.json({ ok: true, user: { _id: u._id, banned: u.banned } });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 export const updateUserRole = async (req, res, next) => {
@@ -689,9 +1104,14 @@ export const updateUserRole = async (req, res, next) => {
 
     const { role } = req.body || {};
     const allowed = ["customer", "restaurant", "admin"];
-    if (!allowed.includes(role)) return res.status(400).json({ message: "Invalid role" });
+    if (!allowed.includes(role))
+      return res.status(400).json({ message: "Invalid role" });
 
-    const u0 = await User.findByIdAndUpdate(uid, { $set: { role } }, { new: true });
+    const u0 = await User.findByIdAndUpdate(
+      uid,
+      { $set: { role } },
+      { new: true }
+    );
     if (!u0) return res.status(404).json({ message: "User not found" });
 
     if (u0.role === "restaurant") {
@@ -706,16 +1126,27 @@ export const updateUserRole = async (req, res, next) => {
         name: u0.name,
         email: u0.email,
         role: u0.role,
-        restaurantId: u0.restaurantId ? u0.restaurantId.toString() : null,
+        restaurantId: u0.restaurantId
+          ? u0.restaurantId.toString()
+          : null,
       },
     });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 /* ------------ Reservations (global read-only) ------------ */
 export const listReservationsAdmin = async (req, res, next) => {
   try {
-    const { status, restaurantId, userId, start, end, reservationId } = req.query;
+    const {
+      status,
+      restaurantId,
+      userId,
+      start,
+      end,
+      reservationId,
+    } = req.query;
     const { limit, cursor } = pageParams(req.query);
     const { dt } = parseDateRange({ start, end });
 
@@ -723,18 +1154,21 @@ export const listReservationsAdmin = async (req, res, next) => {
     if (status) q.status = status;
     if (reservationId) {
       const rid = toObjectId(reservationId);
-      if (!rid) return res.status(400).json({ message: "Invalid reservationId" });
+      if (!rid)
+        return res.status(400).json({ message: "Invalid reservationId" });
       q._id = rid;
     }
 
     if (restaurantId) {
       const rid = toObjectId(restaurantId);
-      if (!rid) return res.status(400).json({ message: "Invalid restaurantId" });
+      if (!rid)
+        return res.status(400).json({ message: "Invalid restaurantId" });
       q.restaurantId = rid;
     }
     if (userId) {
       const uid = toObjectId(userId);
-      if (!uid) return res.status(400).json({ message: "Invalid userId" });
+      if (!uid)
+        return res.status(400).json({ message: "Invalid userId" });
       q.userId = uid;
     }
 
@@ -751,11 +1185,27 @@ export const listReservationsAdmin = async (req, res, next) => {
     const pickUser = (r) => {
       if (r.userId) return { name: r.userId.name, email: r.userId.email };
       if (r.user && (r.user.name || r.user.email)) return r.user;
-      if (r.customer && (r.customer.name || r.customer.email)) return r.customer;
-      if (r.customerName || r.guestName || r.contactName || r.name) {
+      if (r.customer && (r.customer.name || r.customer.email))
+        return r.customer;
+      if (
+        r.customerName ||
+        r.guestName ||
+        r.contactName ||
+        r.name
+      ) {
         return {
-          name:  r.customerName || r.guestName || r.contactName || r.name || null,
-          email: r.customerEmail || r.guestEmail || r.contactEmail || r.email || null,
+          name:
+            r.customerName ||
+            r.guestName ||
+            r.contactName ||
+            r.name ||
+            null,
+          email:
+            r.customerEmail ||
+            r.guestEmail ||
+            r.contactEmail ||
+            r.email ||
+            null,
         };
       }
       return null;
@@ -771,14 +1221,19 @@ export const listReservationsAdmin = async (req, res, next) => {
       status: r.status,
       receiptUrl: r.receiptUrl || null,
       restaurant: r.restaurantId
-        ? { id: r.restaurantId._id?.toString?.() ?? null, name: r.restaurantId.name }
+        ? {
+            id: r.restaurantId._id?.toString?.() ?? null,
+            name: r.restaurantId.name,
+          }
         : null,
       userId: r.userId?._id?.toString() ?? null,
       user: pickUser(r) || undefined,
     }));
 
     res.json({ items, nextCursor: nextCursor(rows, limit) });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 /* ------------ Reviews ------------ */
@@ -788,34 +1243,57 @@ export const listReviews = async (req, res, next) => {
     const { limit, cursor } = pageParams(req.query);
     const q = {};
     if (restaurantId) q.restaurantId = toObjectId(restaurantId);
-    if (userId)       q.userId       = toObjectId(userId);
-    if (status)       q.status       = status;
-    if (cursor)       q._id          = { $lt: cursor };
+    if (userId) q.userId = toObjectId(userId);
+    if (status) q.status = status;
+    if (cursor) q._id = { $lt: cursor };
 
-    const rows = await Review.find(q).sort({ _id: -1 }).limit(limit + 1).lean();
+    const rows = await Review.find(q)
+      .sort({ _id: -1 })
+      .limit(limit + 1)
+      .lean();
     res.json({ items: cut(rows, limit), nextCursor: nextCursor(rows, limit) });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 export const hideReview = async (req, res, next) => {
   try {
-    const r = await Review.findByIdAndUpdate(req.params.id, { $set: { status: "hidden" } }, { new: true }).lean();
+    const r = await Review.findByIdAndUpdate(
+      req.params.id,
+      { $set: { status: "hidden" } },
+      { new: true }
+    ).lean();
     if (!r) return res.status(404).json({ message: "Review not found" });
     res.json({ ok: true, status: r.status });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 export const unhideReview = async (req, res, next) => {
   try {
-    const r = await Review.findByIdAndUpdate(req.params.id, { $set: { status: "visible" } }, { new: true }).lean();
+    const r = await Review.findByIdAndUpdate(
+      req.params.id,
+      { $set: { status: "visible" } },
+      { new: true }
+    ).lean();
     if (!r) return res.status(404).json({ message: "Review not found" });
     res.json({ ok: true, status: r.status });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 export const removeReview = async (req, res, next) => {
   try {
-    const r = await Review.findByIdAndUpdate(req.params.id, { $set: { status: "removed" } }, { new: true }).lean();
+    const r = await Review.findByIdAndUpdate(
+      req.params.id,
+      { $set: { status: "removed" } },
+      { new: true }
+    ).lean();
     if (!r) return res.status(404).json({ message: "Review not found" });
     res.json({ ok: true, status: r.status });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 /* ------------ USERS: Export & Stats ------------ */
 
@@ -823,7 +1301,9 @@ export const removeReview = async (req, res, next) => {
 export const exportUsers = async (req, res, next) => {
   try {
     const users = await User.find({})
-      .select("name email phone role banned riskScore noShowCount createdAt")
+      .select(
+        "name email phone role banned riskScore noShowCount createdAt"
+      )
       .lean();
 
     const parser = new Parser({
@@ -841,7 +1321,10 @@ export const exportUsers = async (req, res, next) => {
     const csv = parser.parse(users);
 
     res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", "attachment; filename=users.csv");
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=users.csv"
+    );
     res.send(csv);
   } catch (err) {
     next(err);
@@ -853,7 +1336,9 @@ export const userStats = async (req, res, next) => {
   try {
     const total = await User.countDocuments({});
     const banned = await User.countDocuments({ banned: true });
-    const highRisk = await User.countDocuments({ riskScore: { $gte: 75 } });
+    const highRisk = await User.countDocuments({
+      riskScore: { $gte: 75 },
+    });
     const avgRiskAgg = await User.aggregate([
       { $match: { riskScore: { $ne: null } } },
       { $group: { _id: null, avg: { $avg: "$riskScore" } } },
@@ -878,7 +1363,8 @@ export const listComplaints = async (req, res, next) => {
     const { status, restaurantId, userId } = req.query;
     const q = {};
     if (status) q.status = status;
-    if (restaurantId) q.restaurantId = new mongoose.Types.ObjectId(restaurantId);
+    if (restaurantId)
+      q.restaurantId = new mongoose.Types.ObjectId(restaurantId);
     if (userId) q.userId = new mongoose.Types.ObjectId(userId);
 
     const rows = await Complaint.find(q)
@@ -920,6 +1406,231 @@ export const dismissComplaint = async (req, res, next) => {
     ).lean();
     if (!c) return res.status(404).json({ message: "Complaint not found" });
     res.json({ ok: true, status: c.status });
+  } catch (e) {
+    next(e);
+  }
+};
+/* ------------ Branch Requests (Admin) ------------ */
+
+export const listBranchRequestsAdmin = async (req, res, next) => {
+  try {
+    const { status, organizationId, requestedBy } = req.query;
+    const { limit, cursor } = pageParams(req.query);
+
+    const q = {};
+
+    if (status) {
+      q.status = status;
+    } else {
+      // default: pending
+      q.status = "pending";
+    }
+
+    if (organizationId) {
+      const oid = toObjectId(organizationId);
+      if (!oid) return res.status(400).json({ message: "Invalid organizationId" });
+      q.organizationId = oid;
+    }
+
+    if (requestedBy) {
+      const uid = toObjectId(requestedBy);
+      if (!uid) return res.status(400).json({ message: "Invalid requestedBy" });
+      q.requestedBy = uid;
+    }
+
+    if (cursor) {
+      q._id = { $lt: cursor };
+    }
+
+    const rows = await BranchRequest.find(q)
+      .sort({ _id: -1 })
+      .limit(limit + 1)
+      .populate("organizationId", "name region")
+      .populate("requestedBy", "name email")
+      .populate("restaurantId", "name")
+      .lean();
+
+    const items = cut(rows, limit).map((r) => ({
+      _id: r._id,
+      status: r.status,
+      organization: r.organizationId
+        ? {
+            id: r.organizationId._id?.toString?.() ?? null,
+            name: r.organizationId.name,
+            region: r.organizationId.region || null,
+          }
+        : null,
+      requestedBy: r.requestedBy
+        ? {
+            id: r.requestedBy._id?.toString?.() ?? null,
+            name: r.requestedBy.name,
+            email: r.requestedBy.email,
+          }
+        : null,
+      restaurant: r.restaurantId
+        ? {
+            id: r.restaurantId._id?.toString?.() ?? null,
+            name: r.restaurantId.name,
+          }
+        : null,
+      payload: r.payload,
+      notes: r.notes || null,
+      rejectReason: r.rejectReason || null,
+      createdAt: r.createdAt,
+      resolvedAt: r.resolvedAt || null,
+    }));
+
+    res.json({ items, nextCursor: nextCursor(rows, limit) });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const approveBranchRequestAdmin = async (req, res, next) => {
+  try {
+    const id = toObjectId(req.params.id);
+    if (!id) return res.status(400).json({ message: "Invalid branch request id" });
+
+    const br = await BranchRequest.findById(id);
+    if (!br) return res.status(404).json({ message: "Branch request not found" });
+
+    if (br.status !== "pending") {
+      return res.status(409).json({ message: "Branch request already resolved" });
+    }
+
+    const org = await Organization.findById(br.organizationId).lean();
+    if (!org) {
+      return res.status(400).json({ message: "Organization not found for this request" });
+    }
+
+    const user = await User.findById(br.requestedBy);
+    if (!user) {
+      return res.status(400).json({ message: "Requested user not found" });
+    }
+
+    const payload = br.payload || {};
+    const region = payload.region || org.region || "TR";
+
+    // Yeni Restaurant kaydı oluştur
+    const restaurantDoc = await Restaurant.create({
+      owner: user._id,
+      organizationId: br.organizationId,
+      name: payload.name,
+      region,
+      city: payload.city || undefined,
+      address: payload.address || undefined,
+      phone: payload.phone || undefined,
+      iban: payload.iban || undefined,
+      priceRange: payload.priceRange || "₺₺",
+      businessType: payload.businessType || "restaurant",
+      openingHours: Array.isArray(payload.openingHours)
+        ? payload.openingHours
+        : [],
+      description: payload.description || undefined,
+
+      // Multi-org statü + legacy flag
+      status: "active",
+      isActive: true,
+    });
+
+    // Kullanıcıyı organizasyon & şubeyle ilişkilendir
+    const orgEntryExists = Array.isArray(user.organizations)
+      ? user.organizations.some(
+          (o) => String(o.organization) === String(br.organizationId)
+        )
+      : false;
+
+    if (!orgEntryExists) {
+      user.organizations = [
+        ...(user.organizations || []),
+        { organization: br.organizationId, role: "org_owner" },
+      ];
+    }
+
+    const membershipExists = Array.isArray(user.restaurantMemberships)
+      ? user.restaurantMemberships.some(
+          (m) => String(m.restaurant) === String(restaurantDoc._id)
+        )
+      : false;
+
+    if (!membershipExists) {
+      user.restaurantMemberships = [
+        ...(user.restaurantMemberships || []),
+        { restaurant: restaurantDoc._id, role: "location_manager" },
+      ];
+    }
+
+    await user.save();
+
+    // Branch request'i güncelle
+    br.status = "approved";
+    br.restaurantId = restaurantDoc._id;
+    br.resolvedAt = new Date();
+    br.resolvedBy = toObjectId(req.user?.id || req.user?._id) || undefined;
+    br.rejectReason = undefined;
+
+    await br.save();
+
+    res.json({
+      ok: true,
+      request: {
+        _id: br._id,
+        status: br.status,
+        organizationId: br.organizationId,
+        requestedBy: br.requestedBy,
+        restaurantId: br.restaurantId,
+        resolvedAt: br.resolvedAt,
+        resolvedBy: br.resolvedBy,
+      },
+      restaurant: {
+        _id: restaurantDoc._id,
+        name: restaurantDoc.name,
+        region: restaurantDoc.region,
+        city: restaurantDoc.city,
+        address: restaurantDoc.address,
+        phone: restaurantDoc.phone,
+        organizationId: restaurantDoc.organizationId,
+        status: restaurantDoc.status,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const rejectBranchRequestAdmin = async (req, res, next) => {
+  try {
+    const id = toObjectId(req.params.id);
+    if (!id) return res.status(400).json({ message: "Invalid branch request id" });
+
+    const { reason } = req.body || {};
+
+    const br = await BranchRequest.findById(id);
+    if (!br) return res.status(404).json({ message: "Branch request not found" });
+
+    if (br.status !== "pending") {
+      return res.status(409).json({ message: "Branch request already resolved" });
+    }
+
+    br.status = "rejected";
+    br.rejectReason = reason || null;
+    br.resolvedAt = new Date();
+    br.resolvedBy = toObjectId(req.user?.id || req.user?._id) || undefined;
+
+    await br.save();
+
+    res.json({
+      ok: true,
+      request: {
+        _id: br._id,
+        status: br.status,
+        organizationId: br.organizationId,
+        requestedBy: br.requestedBy,
+        rejectReason: br.rejectReason,
+        resolvedAt: br.resolvedAt,
+        resolvedBy: br.resolvedBy,
+      },
+    });
   } catch (e) {
     next(e);
   }

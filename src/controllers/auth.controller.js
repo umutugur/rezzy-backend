@@ -69,12 +69,82 @@ function toClientUser(u) {
     }
   }
 
+  // 🔹 organizations[] → { id, name, role }
+  let organizations = [];
+  if (Array.isArray(u.organizations)) {
+    organizations = u.organizations.map((entry) => {
+      const role = entry?.role ?? null;
+      let orgId = null;
+      let orgName = null;
+
+      const org = entry?.organization;
+      if (org) {
+        if (org._id) {
+          orgId = org._id.toString();
+          orgName = org.name || null;
+        } else {
+          orgId = org.toString?.() || null;
+        }
+      }
+
+      return {
+        id: orgId,
+        name: orgName,
+        role,
+      };
+    });
+  }
+
+  // 🔹 restaurantMemberships[] → { id, name, organizationId, status, role }
+  let restaurantMemberships = [];
+  if (Array.isArray(u.restaurantMemberships)) {
+    restaurantMemberships = u.restaurantMemberships.map((entry) => {
+      const role = entry?.role ?? null;
+
+      let restId = null;
+      let restName = null;
+      let organizationId = null;
+      let status = null;
+
+      const rest = entry?.restaurant;
+      if (rest) {
+        if (rest._id) {
+          restId = rest._id.toString();
+          restName = rest.name || null;
+
+          // organizationId populate edilmiş veya sadece ObjectId olabilir
+          if (rest.organizationId) {
+            if (rest.organizationId._id) {
+              organizationId = rest.organizationId._id.toString();
+            } else {
+              organizationId = rest.organizationId.toString?.() || null;
+            }
+          }
+
+          status = rest.status || null;
+        } else {
+          // populate edilmemişse sadece id
+          restId = rest.toString?.() || null;
+        }
+      }
+
+      return {
+        id: restId,
+        name: restName,
+        organizationId,
+        status,
+        role,
+      };
+    });
+  }
+
   return {
     id: u._id?.toString?.() ?? null,
     name: u.name,
     email: u.email ?? null,
     phone: u.phone ?? null,
     role: u.role,
+    // 🔹 Legacy alanlar — DOKUNMUYORUZ
     restaurantId,
     restaurantName,
     avatarUrl: u.avatarUrl ?? null,
@@ -90,6 +160,10 @@ function toClientUser(u) {
     preferredLanguage,
     createdAt: u.createdAt ?? null,
     updatedAt: u.updatedAt ?? null,
+
+    // 🔹 Yeni multi-organization alanları
+    organizations,
+    restaurantMemberships,
   };
 }
 
@@ -301,12 +375,20 @@ export const me = async (req, res, next) => {
       });
     }
 
+    const baseSelect =
+      "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt organizations restaurantMemberships";
+
     // Önce kullanıcıyı al
     let u = await User.findById(req.user.id)
-      .select(
-        "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt"
-      )
-      .populate({ path: "restaurantId", select: "_id name" });
+      .select(baseSelect)
+      .populate([
+        { path: "restaurantId", select: "_id name" },
+        { path: "organizations.organization", select: "_id name" },
+        {
+          path: "restaurantMemberships.restaurant",
+          select: "_id name organizationId status",
+        },
+      ]);
 
     if (!u) return res.status(401).json({ message: "Unauthorized" });
 
@@ -314,10 +396,15 @@ export const me = async (req, res, next) => {
     if (u.role === "restaurant" && !u.restaurantId) {
       await ensureRestaurantForOwner(u._id);
       u = await User.findById(req.user.id)
-        .select(
-          "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt"
-        )
-        .populate({ path: "restaurantId", select: "_id name" });
+        .select(baseSelect)
+        .populate([
+          { path: "restaurantId", select: "_id name" },
+          { path: "organizations.organization", select: "_id name" },
+          {
+            path: "restaurantMemberships.restaurant",
+            select: "_id name organizationId status",
+          },
+        ]);
     }
 
     return res.json(toClientUser(u));
@@ -367,18 +454,29 @@ export const updateMe = async (req, res, next) => {
       patch.preferredLanguage = preferredLanguage;
     }
 
+    const baseSelect =
+      "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt organizations restaurantMemberships";
+
     const u = await User.findByIdAndUpdate(
       req.user.id,
       { $set: patch },
       { new: true }
-    ).lean();
+    )
+      .select(baseSelect)
+      .populate([
+        { path: "restaurantId", select: "_id name" },
+        { path: "organizations.organization", select: "_id name" },
+        {
+          path: "restaurantMemberships.restaurant",
+          select: "_id name organizationId status",
+        },
+      ]);
 
     if (!u) return res.status(404).json({ message: "User not found" });
 
     res.json(toClientUser(u));
   } catch (e) { next(e); }
 };
-
 export const changePassword = async (req, res, next) => {
   try {
     if (req.user?.role === "guest") {

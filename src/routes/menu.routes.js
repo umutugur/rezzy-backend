@@ -1,4 +1,3 @@
-// src/routes/menu.routes.js
 import express, { Router } from "express";
 import { auth } from "../middlewares/auth.js";
 import { allow } from "../middlewares/roles.js";
@@ -13,6 +12,7 @@ import {
   createItem,
   updateItem,
   deleteItem,
+  getResolvedMenuForPanel,
 } from "../controllers/menu.controller.js";
 
 import {
@@ -50,7 +50,7 @@ r.use(express.json());
 r.get(
   "/:rid/menu/categories",
   auth(),
-  allow("restaurant", "admin","customer"),
+  allow("restaurant", "admin", "customer"),
   listCategories
 );
 
@@ -81,8 +81,8 @@ r.delete(
 r.get(
   "/:rid/menu/items",
   auth(),
-  allow("restaurant", "admin","customer"),
-  listItems           // ❗ Query validation yok — controller kendisi validate ediyor
+  allow("restaurant", "admin", "customer"),
+  listItems // ❗ Query validation yok — controller kendisi validate ediyor
 );
 
 r.post(
@@ -114,6 +114,14 @@ r.delete(
   auth(),
   allow("restaurant", "admin"),
   deleteItem
+);
+
+// ---------------- Resolved Menu (panel preview + müşteri use-case) ----------------
+r.get(
+  "/:rid/menu/resolved",
+  auth(),
+  allow("restaurant", "admin", "customer"),
+  getResolvedMenuForPanel
 );
 
 export default r;
