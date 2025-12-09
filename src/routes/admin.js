@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
 import { allow } from "../middlewares/roles.js";
+import { validate } from "../middlewares/validate.js";
 import {
   kpiGlobal,
   kpiByRestaurant,
