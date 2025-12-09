@@ -12,7 +12,7 @@ import {
 } from "../validators/menu.schema.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import CoreCategory from "../models/CoreCategory.js";
-import { getResolvedMenuForRestaurant } from "../services/resolvedMenu.service.js";
+import { getResolvedMenuForRestaurant } from "../services/menuResolve.service.js";
 
 // ✅ Org menü modelleri
 import OrgMenuCategory from "../models/OrgMenuCategory.js";
