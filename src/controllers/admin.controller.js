@@ -590,23 +590,46 @@ export const createOrganizationRestaurant = async (req, res, next) => {
 /* ------------ Restaurants ------------ */
 export const listRestaurants = async (req, res, next) => {
   try {
-    const { query, city } = req.query;
+    const { query, city, organizationId } = req.query;
     const { limit, cursor } = pageParams(req.query);
 
     const q = {};
-    if (query) q.name = { $regex: String(query), $options: "i" };
-    if (city) q.city = { $regex: String(city), $options: "i" };
-    if (cursor) q._id = { $lt: cursor };
+
+    if (query) {
+      q.name = { $regex: String(query), $options: "i" };
+    }
+
+    if (city) {
+      q.city = { $regex: String(city), $options: "i" };
+    }
+
+    // 🔹 BURASI YENİ: Organizasyona göre filtre
+    if (organizationId) {
+      const oid = toObjectId(organizationId);
+      if (!oid) {
+        return res
+          .status(400)
+          .json({ message: "Invalid organizationId" });
+      }
+      q.organizationId = oid;
+    }
+
+    if (cursor) {
+      q._id = { ...(q._id || {}), $lt: cursor };
+    }
 
     const rows = await Restaurant.find(q)
       .sort({ _id: -1 })
       .limit(limit + 1)
       .select(
-        "_id name city address phone email region isActive commissionRate"
+        "_id name city address phone email region isActive commissionRate organizationId"
       )
       .lean();
 
-    res.json({ items: cut(rows, limit), nextCursor: nextCursor(rows, limit) });
+    res.json({
+      items: cut(rows, limit),
+      nextCursor: nextCursor(rows, limit),
+    });
   } catch (e) {
     next(e);
   }
