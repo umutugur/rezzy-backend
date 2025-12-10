@@ -7,6 +7,7 @@ import { restaurantKpis } from "../controllers/report.controller.js";
 
 
 const r = Router();
-r.get("/restaurant/:id", auth(), allow("restaurant","admin"), validate(restaurantKpisSchema), restaurantKpis);
+r.get("/restaurant/:id", auth(),allowLocationManagerOrAdmin("restaurantId"),
+ validate(restaurantKpisSchema), restaurantKpis);
 
 export default r;

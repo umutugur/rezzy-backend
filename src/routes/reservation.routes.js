@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
-import { allow } from "../middlewares/roles.js";
+import { allow, allowLocationManagerOrAdmin } from "../middlewares/roles.js";
 import { validate } from "../middlewares/validate.js";
 import {
   createReservationSchema,
@@ -24,12 +24,10 @@ import {
   listMyReservations,
   updateArrivedCount, // ✅
   createStripePaymentIntentForReservation, // ✅ Stripe controller
-} from "../controllers/reservation.controller.js";
-import { receiptUpload } from "../utils/multer.js";
-import {
   listReservationsByRestaurant,
   reservationStatsByRestaurant,
 } from "../controllers/reservation.controller.js";
+import { receiptUpload } from "../utils/multer.js";
 import { getReservationQR } from "../controllers/reservation.qr.controller.js";
 import { manualCheckin } from "../controllers/reservation.manual.controller.js";
 
@@ -52,28 +50,37 @@ r.post(
   createStripePaymentIntentForReservation
 );
 
-r.post("/", auth(), validate(createReservationSchema), createReservation); // müşteri
+// ✅ Rezervasyon oluşturma (müşteri)
+r.post("/", auth(), validate(createReservationSchema), createReservation);
+
+// ✅ Rezervasyon onay (restoran paneli / admin)
 r.post(
   "/:rid/approve",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   validate(approveReservationSchema),
   approveReservation
 );
+
+// ✅ Rezervasyon reddetme (restoran paneli / admin)
 r.post(
   "/:rid/reject",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   validate(rejectReservationSchema),
   rejectReservation
 );
+
+// ✅ Rezervasyon iptali (müşteri)
 r.post(
   "/:rid/cancel",
   auth(),
   validate(cancelReservationSchema),
   cancelReservation
-); // müşteri
+);
 
+// ✅ QR check-in (panel) – burada hala global restaurant/admin rolü kullanıyoruz
+// (body’de restaurantId varsa, ileride membership-aware middleware’e taşınabilir)
 r.post(
   "/checkin",
   auth(),
@@ -81,31 +88,47 @@ r.post(
   validate(checkinSchema),
   checkin
 ); // panel
-r.post("/:rid/checkin-manual", auth(), allow("restaurant", "admin"), manualCheckin);
 
-// ✅ check-in sonrası arrivedCount düzeltme
+// ✅ Manuel check-in (masa başı / panel)
+r.post(
+  "/:rid/checkin-manual",
+  auth(),
+  allowLocationManagerOrAdmin("rid"),
+  manualCheckin
+);
+
+// ✅ check-in sonrası arrivedCount düzeltme (panel)
 r.patch(
   "/:rid/arrived-count",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   validate(updateArrivedCountSchema),
   updateArrivedCount
 );
 
-r.get("/:rid", auth(), validate(getReservationSchema), getReservation); // detay
-r.get("/", auth(), listMyReservations); // liste (kullanıcı)
+// ✅ Rezervasyon detay (müşteri kendi rezervasyonu)
+r.get("/:rid", auth(), validate(getReservationSchema), getReservation);
+
+// ✅ Kullanıcının kendi rezervasyon listesi
+r.get("/", auth(), listMyReservations);
+
+// ✅ Restoran bazlı rezervasyon listesi (panel)
 r.get(
   "/by-restaurant/:rid",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   listReservationsByRestaurant
 );
+
+// ✅ Restoran bazlı rezervasyon istatistikleri (panel)
 r.get(
   "/by-restaurant/:rid/stats",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   reservationStatsByRestaurant
 );
+
+// ✅ Rezervasyon için QR
 r.get("/:rid/qr", auth(), getReservationQR);
 
 export default r;

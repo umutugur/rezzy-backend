@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
-import { allow } from "../middlewares/roles.js";
+import { allow, allowLocationManagerOrAdmin } from "../middlewares/roles.js";
 import { validate } from "../middlewares/validate.js";
 import { imageUpload } from "../utils/multer.js";
 
@@ -49,11 +49,13 @@ const r = Router();
 // Genel restoran işlemleri
 // ----------------------------
 
-// Listeleme ve detay
+// Listeleme ve detay (public)
 r.get("/", validate(listRestaurantsSchema), listRestaurants);
 r.get("/:id", validate(getRestaurantSchema), getRestaurant);
 
 // Oluşturma (sadece restoran sahibi veya admin)
+// -> Burayı şimdilik global role bazlı bırakıyorum;
+//    yeni şube açılışı için org endpointlerini kullanıyoruz.
 r.post(
   "/",
   auth(),
@@ -63,10 +65,11 @@ r.post(
 );
 
 // Menü oluşturma (eski uç)
+// -> Panelden çağrılıyorsa location_manager da kullanabilsin
 r.post(
   "/:id/menus",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("id"),
   validate(createMenuSchema),
   createMenu
 );
@@ -75,7 +78,7 @@ r.post(
 r.put(
   "/:id",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("id"),
   validate(updateRestaurantSchema),
   updateRestaurant
 );
@@ -88,7 +91,7 @@ r.put(
 r.put(
   "/:id/opening-hours",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("id"),
   validate(updateOpeningHoursSchema),
   updateOpeningHours
 );
@@ -97,7 +100,7 @@ r.put(
 r.put(
   "/:id/tables",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("id"),
   validate(updateTablesSchema),
   updateTables
 );
@@ -106,7 +109,7 @@ r.put(
 r.put(
   "/:id/policies",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("id"),
   validate(updatePoliciesSchema),
   updatePolicies
 );
@@ -115,7 +118,7 @@ r.put(
 r.put(
   "/:id/menus",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("id"),
   validate(updateMenusSchema),
   updateMenus
 );
@@ -124,8 +127,8 @@ r.put(
 r.post(
   "/:id/photos",
   auth(),
-  allow("restaurant", "admin"),
-  imageUpload.single("file"),              // ⬅️ burada
+  allowLocationManagerOrAdmin("id"),
+  imageUpload.single("file"),
   validate(addPhotoSchema),
   addPhoto
 );
@@ -134,7 +137,7 @@ r.post(
 r.post(
   "/:id/logo",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("id"),
   imageUpload.single("file"),
   uploadLogo
 );
@@ -143,7 +146,7 @@ r.post(
 r.delete(
   "/:id/photos",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("id"),
   validate(removePhotoSchema),
   removePhoto
 );
@@ -152,12 +155,14 @@ r.delete(
 r.get(
   "/:id/reservations",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("id"),
   validate(fetchReservationsByRestaurantSchema),
   fetchReservationsByRestaurant
 );
 
 // Rezervasyon durumunu güncelle (onayla/iptal et)
+// Burada restaurantId param yok, o yüzden şimdilik legacy role check kalsın.
+// Zaten yeni approve/reject uçları reservation.routes içinde membership-aware.
 r.put(
   "/reservations/:id/status",
   auth(),
@@ -176,10 +181,9 @@ r.get(
 );
 
 // ----------------------------
-// Müsaitlik sorgulama
+// Müsaitlik sorgulama (public)
 // ----------------------------
 
-// Belirli bir gün için boş saatleri döndür
 r.get(
   "/:id/availability",
   validate(getAvailabilitySchema),
