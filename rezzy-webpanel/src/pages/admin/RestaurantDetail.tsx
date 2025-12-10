@@ -1,3 +1,4 @@
+// src/pages/admin/AdminRestaurantDetailPage.tsx
 import React from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -7,7 +8,10 @@ import {
   adminGetRestaurant,
   adminUpdateRestaurantCommission,
   adminListReservationsByRestaurant,
-  adminUpdateRestaurant
+  adminUpdateRestaurant,
+  adminSearchUsers,
+  adminAddRestaurantMember,
+  adminRemoveRestaurantMember,
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
 
@@ -25,7 +29,10 @@ type RestaurantInfo = {
   commissionRate?: number;
   // Eski alanlarla geriye dönük uyumluluk:
   commissionPct?: number; // 0..100 arası tutulmuş olabilir
-  commission?: number;    // 0..100 arası tutulmuş olabilir
+  commission?: number; // 0..100 arası tutulmuş olabilir
+
+  // Restoran membership listesi
+  members?: any[];
 };
 
 type Rsv = {
@@ -39,6 +46,37 @@ type Rsv = {
 
 type RsvList = { items: Rsv[]; total: number; page: number; limit: number };
 
+type UserOption = {
+  _id: string;
+  name?: string;
+  email?: string;
+  role?: string;
+};
+
+// Restoran rollerini organizasyondan ayrı tutuyoruz
+const RESTAURANT_ROLES = [
+  { value: "location_manager", label: "Şube Yöneticisi" },
+  { value: "staff", label: "Personel" },
+  { value: "host", label: "Host / Karşılama" },
+  { value: "kitchen", label: "Mutfak" },
+];
+
+function prettyRestaurantRole(role?: string) {
+  if (!role) return "-";
+  switch (role) {
+    case "location_manager":
+      return "Şube Yöneticisi";
+    case "staff":
+      return "Personel";
+    case "host":
+      return "Host";
+    case "kitchen":
+      return "Mutfak";
+    default:
+      return role;
+  }
+}
+
 export default function AdminRestaurantDetailPage() {
   const params = useParams();
   const rid = params.rid ?? "";
@@ -51,7 +89,7 @@ export default function AdminRestaurantDetailPage() {
   const infoQ = useQuery<RestaurantInfo | null>({
     queryKey: ["admin-restaurant", rid],
     queryFn: async () => (await adminGetRestaurant(rid)) as RestaurantInfo,
-    enabled: !!rid
+    enabled: !!rid,
   });
 
   React.useEffect(() => {
@@ -75,7 +113,99 @@ export default function AdminRestaurantDetailPage() {
     setIsActive(typeof d.isActive === "boolean" ? d.isActive : true);
   }, [infoQ.data]);
 
-  // Liste filtreleri
+  // -------------------
+  // RESTAURANT MEMBERS
+  // -------------------
+  const members: any[] = (infoQ.data as any)?.members ?? [];
+
+  const [memberQuery, setMemberQuery] = React.useState("");
+  const [memberResults, setMemberResults] = React.useState<UserOption[]>([]);
+  const [memberSearchLoading, setMemberSearchLoading] =
+    React.useState(false);
+  const [selectedMember, setSelectedMember] =
+    React.useState<UserOption | null>(null);
+  const [memberRole, setMemberRole] =
+    React.useState<string>("location_manager");
+
+  const handleSearchMember = async () => {
+    if (!memberQuery.trim()) return;
+    try {
+      setMemberSearchLoading(true);
+      const res = await adminSearchUsers(memberQuery.trim());
+      setMemberResults(res);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Kullanıcı aranamadı";
+      showToast(msg, "error");
+    } finally {
+      setMemberSearchLoading(false);
+    }
+  };
+
+  const selectMember = (u: UserOption) => {
+    setSelectedMember(u);
+    setMemberResults([]);
+  };
+
+  const addMemberMut = useMutation({
+    mutationFn: () =>
+      adminAddRestaurantMember(rid, {
+        userId: selectedMember?._id as string,
+        role: memberRole,
+      }),
+    onSuccess: () => {
+      showToast("Restoran üyesi eklendi", "success");
+      setSelectedMember(null);
+      setMemberQuery("");
+      setMemberRole("location_manager");
+      qc.invalidateQueries({ queryKey: ["admin-restaurant", rid] });
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Üye eklenemedi";
+      showToast(msg, "error");
+    },
+  });
+
+  const removeMemberMut = useMutation({
+    mutationFn: (userId: string) => adminRemoveRestaurantMember(rid, userId),
+    onSuccess: () => {
+      showToast("Restoran üyeliği kaldırıldı", "success");
+      qc.invalidateQueries({ queryKey: ["admin-restaurant", rid] });
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Üyelik kaldırılamadı";
+      showToast(msg, "error");
+    },
+  });
+
+  const handleAddMember = () => {
+    if (!selectedMember?._id) {
+      showToast("Önce kullanıcı seçin", "error");
+      return;
+    }
+    if (!memberRole) {
+      showToast("Rol seçin", "error");
+      return;
+    }
+    addMemberMut.mutate();
+  };
+
+  const handleRemoveMember = (userId: string) => {
+    if (!userId) return;
+    removeMemberMut.mutate(userId);
+  };
+
+  // -------------------
+  // REZERVASYON LİSTESİ
+  // -------------------
   const [status, setStatus] = React.useState("");
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
@@ -91,20 +221,21 @@ export default function AdminRestaurantDetailPage() {
         from: from || undefined,
         to: to || undefined,
         page,
-        limit
+        limit,
       })) as RsvList,
-    enabled: !!rid
+    enabled: !!rid,
   });
 
   const activeMut = useMutation({
-    mutationFn: (next: boolean) => adminUpdateRestaurant(rid, { isActive: next }),
+    mutationFn: (next: boolean) =>
+      adminUpdateRestaurant(rid, { isActive: next }),
     onSuccess: () => {
       showToast("Restoran durumu güncellendi", "success");
       qc.invalidateQueries({ queryKey: ["admin-restaurant", rid] });
     },
     onError: () => {
       showToast("Restoran durumu güncellenemedi", "error");
-    }
+    },
   });
 
   // Komisyon kaydet
@@ -127,11 +258,13 @@ export default function AdminRestaurantDetailPage() {
         err?.message ||
         "Komisyon güncellenemedi";
       showToast(msg, "error");
-    }
+    },
   });
 
   const totalPages =
-    rsvQ.data && rsvQ.data.limit > 0 ? Math.ceil(rsvQ.data.total / rsvQ.data.limit) : 1;
+    rsvQ.data && rsvQ.data.limit > 0
+      ? Math.ceil(rsvQ.data.total / rsvQ.data.limit)
+      : 1;
 
   return (
     <div className="flex gap-6">
@@ -141,12 +274,15 @@ export default function AdminRestaurantDetailPage() {
           { to: "/admin/restaurants", label: "Restoranlar" },
           { to: "/admin/users", label: "Kullanıcılar" },
           { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" }
+          { to: "/admin/moderation", label: "Moderasyon" },
         ]}
       />
       <div className="flex-1 space-y-6">
-        <h2 className="text-lg font-semibold">{infoQ.data?.name || "Restoran Detayı"}</h2>
+        <h2 className="text-lg font-semibold">
+          {infoQ.data?.name || "Restoran Detayı"}
+        </h2>
 
+        {/* Bilgiler */}
         <Card title="Bilgiler">
           {infoQ.isLoading ? (
             "Yükleniyor…"
@@ -189,10 +325,179 @@ export default function AdminRestaurantDetailPage() {
           )}
         </Card>
 
+        {/* Restoran Üyeleri */}
+        <Card title="Restoran Üyeleri">
+          {/* Liste */}
+          {members && members.length > 0 ? (
+            <div className="overflow-auto mb-4">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    <th className="py-2 px-4">Ad</th>
+                    <th className="py-2 px-4">E-posta</th>
+                    <th className="py-2 px-4">Rol</th>
+                    <th className="py-2 px-4"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map((m) => {
+                    const userId =
+                      m.userId || m.user?._id || m._id || "";
+                    const name =
+                      m.name || m.user?.name || "İsimsiz";
+                    const email =
+                      m.email || m.user?.email || "-";
+                    const role =
+                      m.role ||
+                      m.restaurantRole ||
+                      m.locationRole ||
+                      "";
+
+                    return (
+                      <tr key={userId} className="border-t">
+                        <td className="py-2 px-4">{name}</td>
+                        <td className="py-2 px-4">{email}</td>
+                        <td className="py-2 px-4">
+                          {prettyRestaurantRole(role)}
+                        </td>
+                        <td className="py-2 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMember(userId)}
+                            disabled={removeMemberMut.isPending}
+                            className="px-2 py-1 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-60"
+                          >
+                            Kaldır
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500 mb-4">
+              Henüz bu restorana bağlı üye yok.
+            </div>
+          )}
+
+          {/* Üye ekleme formu */}
+          <div className="grid md:grid-cols-3 gap-3 items-start">
+            <div className="md:col-span-2 space-y-2">
+              <label className="block text-xs text-gray-600">
+                Kullanıcı Ara (isim / e-posta)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="border rounded-lg px-3 py-2 w-full text-sm"
+                  value={memberQuery}
+                  onChange={(e) => {
+                    setMemberQuery(e.target.value);
+                    setSelectedMember(null);
+                    setMemberResults([]);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleSearchMember}
+                  disabled={memberSearchLoading}
+                  className="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs disabled:opacity-60"
+                >
+                  {memberSearchLoading ? "Aranıyor…" : "Ara"}
+                </button>
+              </div>
+
+              {memberQuery.trim().length >= 2 && (
+                <div className="mt-2 max-h-48 overflow-auto border rounded-lg bg-gray-50">
+                  {memberSearchLoading && (
+                    <div className="px-3 py-2 text-sm text-gray-500">
+                      Aranıyor…
+                    </div>
+                  )}
+                  {!memberSearchLoading &&
+                    memberResults.length === 0 &&
+                    memberQuery.trim() && (
+                      <div className="px-3 py-2 text-sm text-gray-500">
+                        Sonuç yok
+                      </div>
+                    )}
+                  {memberResults.map((u) => (
+                    <button
+                      key={u._id}
+                      type="button"
+                      onClick={() => selectMember(u)}
+                      className={`w-full flex justify-between items-center px-3 py-2 text-sm hover:bg-white ${
+                        selectedMember?._id === u._id
+                          ? "bg-brand-50"
+                          : ""
+                      }`}
+                    >
+                      <span>
+                        {u.name || "İsimsiz"}{" "}
+                        <span className="text-gray-500">
+                          ({u.email || "-"})
+                        </span>
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {u.role || ""}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="text-xs text-emerald-700 mt-1">
+                {selectedMember
+                  ? `Seçili kullanıcı: ${
+                      selectedMember.name || "İsimsiz"
+                    } (${selectedMember.email || "-"})`
+                  : "Henüz kullanıcı seçilmedi"}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs text-gray-600 mb-1">
+                Rol
+              </label>
+              <select
+                className="border rounded-lg px-3 py-2 w-full text-sm"
+                value={memberRole}
+                onChange={(e) => setMemberRole(e.target.value)}
+              >
+                {RESTAURANT_ROLES.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={handleAddMember}
+                disabled={
+                  !selectedMember ||
+                  !memberRole ||
+                  addMemberMut.isPending
+                }
+                className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs w-full disabled:opacity-60"
+              >
+                {addMemberMut.isPending
+                  ? "Ekleniyor…"
+                  : "Üye Ekle"}
+              </button>
+            </div>
+          </div>
+        </Card>
+
+        {/* Komisyon */}
         <Card title="Komisyon">
           <div className="flex items-end gap-3">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">% Oran</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                % Oran
+              </label>
               <input
                 type="number"
                 min={0}
@@ -212,10 +517,13 @@ export default function AdminRestaurantDetailPage() {
           </div>
         </Card>
 
+        {/* Rezervasyonlar */}
         <Card title="Rezervasyonlar">
           <div className="flex flex-wrap gap-3 items-end mb-3">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Durum</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Durum
+              </label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
@@ -230,7 +538,9 @@ export default function AdminRestaurantDetailPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Başlangıç</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Başlangıç
+              </label>
               <input
                 type="date"
                 value={from}
@@ -239,7 +549,9 @@ export default function AdminRestaurantDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Bitiş</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Bitiş
+              </label>
               <input
                 type="date"
                 value={to}
@@ -248,22 +560,30 @@ export default function AdminRestaurantDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Sayfa</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Sayfa
+              </label>
               <input
                 type="number"
                 min={1}
                 value={page}
-                onChange={(e) => setPage(Number(e.target.value) || 1)}
+                onChange={(e) =>
+                  setPage(Number(e.target.value) || 1)
+                }
                 className="w-24 border rounded-lg px-3 py-2"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Limit</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Limit
+              </label>
               <input
                 type="number"
                 min={1}
                 value={limit}
-                onChange={(e) => setLimit(Number(e.target.value) || 20)}
+                onChange={(e) =>
+                  setLimit(Number(e.target.value) || 20)
+                }
                 className="w-24 border rounded-lg px-3 py-2"
               />
             </div>
@@ -284,22 +604,36 @@ export default function AdminRestaurantDetailPage() {
                 {(rsvQ.data?.items ?? []).map((r) => (
                   <tr key={r._id} className="border-t">
                     <td className="py-2 px-4">
-                      {r.dateTimeUTC ? new Date(r.dateTimeUTC).toLocaleString() : "-"}
+                      {r.dateTimeUTC
+                        ? new Date(
+                            r.dateTimeUTC
+                          ).toLocaleString()
+                        : "-"}
                     </td>
                     <td className="py-2 px-4">
                       {r.user?.name || "-"}{" "}
-                      <span className="text-gray-500">({r.user?.email || "-"})</span>
+                      <span className="text-gray-500">
+                        ({r.user?.email || "-"})
+                      </span>
                     </td>
                     <td className="py-2 px-4">{r.status}</td>
-                    <td className="py-2 px-4">{r.partySize ?? "-"}</td>
                     <td className="py-2 px-4">
-                      {r.totalPrice != null ? r.totalPrice.toLocaleString("tr-TR") : "-"}
+                      {r.partySize ?? "-"}
+                    </td>
+                    <td className="py-2 px-4">
+                      {r.totalPrice != null
+                        ? r.totalPrice.toLocaleString("tr-TR")
+                        : "-"}
                     </td>
                   </tr>
                 ))}
-                {(!rsvQ.data?.items || rsvQ.data.items.length === 0) && (
+                {(!rsvQ.data?.items ||
+                  rsvQ.data.items.length === 0) && (
                   <tr>
-                    <td className="py-3 px-4 text-gray-500" colSpan={5}>
+                    <td
+                      className="py-3 px-4 text-gray-500"
+                      colSpan={5}
+                    >
                       Kayıt yok
                     </td>
                   </tr>
@@ -313,7 +647,9 @@ export default function AdminRestaurantDetailPage() {
               <button
                 className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
                 disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() =>
+                  setPage((p) => Math.max(1, p - 1))
+                }
               >
                 Önceki
               </button>
