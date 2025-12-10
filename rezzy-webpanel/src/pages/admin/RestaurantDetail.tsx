@@ -16,6 +16,13 @@ import {
 import { showToast } from "../../ui/Toast";
 
 // ---- Tipler
+type RestaurantMember = {
+  userId: string;
+  name: string;
+  email?: string;
+  role: string;
+};
+
 type RestaurantInfo = {
   _id: string;
   name: string;
@@ -25,14 +32,11 @@ type RestaurantInfo = {
   email?: string;
   region?: string;
   isActive?: boolean;
-  // Yeni model: 0..1 arası oran
   commissionRate?: number;
-  // Eski alanlarla geriye dönük uyumluluk:
-  commissionPct?: number; // 0..100 arası tutulmuş olabilir
-  commission?: number; // 0..100 arası tutulmuş olabilir
+  commissionPct?: number;
+  commission?: number;
 
-  // Restoran membership listesi
-  members?: any[];
+  members?: RestaurantMember[];
 };
 
 type Rsv = {
@@ -114,9 +118,9 @@ export default function AdminRestaurantDetailPage() {
   }, [infoQ.data]);
 
   // -------------------
-  // RESTAURANT MEMBERS
-  // -------------------
-  const members: any[] = (infoQ.data as any)?.members ?? [];
+// RESTAURANT MEMBERS
+// -------------------
+const members: RestaurantMember[] = infoQ.data?.members ?? [];
 
   const [memberQuery, setMemberQuery] = React.useState("");
   const [memberResults, setMemberResults] = React.useState<UserOption[]>([]);
@@ -340,39 +344,25 @@ export default function AdminRestaurantDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {members.map((m) => {
-                    const userId =
-                      m.userId || m.user?._id || m._id || "";
-                    const name =
-                      m.name || m.user?.name || "İsimsiz";
-                    const email =
-                      m.email || m.user?.email || "-";
-                    const role =
-                      m.role ||
-                      m.restaurantRole ||
-                      m.locationRole ||
-                      "";
-
-                    return (
-                      <tr key={userId} className="border-t">
-                        <td className="py-2 px-4">{name}</td>
-                        <td className="py-2 px-4">{email}</td>
-                        <td className="py-2 px-4">
-                          {prettyRestaurantRole(role)}
-                        </td>
-                        <td className="py-2 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveMember(userId)}
-                            disabled={removeMemberMut.isPending}
-                            className="px-2 py-1 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-60"
-                          >
-                            Kaldır
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {members.map((m) => (
+  <tr key={m.userId} className="border-t">
+    <td className="py-2 px-4">{m.name || "İsimsiz"}</td>
+    <td className="py-2 px-4">{m.email || "-"}</td>
+    <td className="py-2 px-4">
+      {prettyRestaurantRole(m.role)}
+    </td>
+    <td className="py-2 px-4 text-right">
+      <button
+        type="button"
+        onClick={() => handleRemoveMember(m.userId)}
+        disabled={removeMemberMut.isPending}
+        className="px-2 py-1 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-60"
+      >
+        Kaldır
+      </button>
+    </td>
+  </tr>
+))}
                 </tbody>
               </table>
             </div>

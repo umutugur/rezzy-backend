@@ -463,8 +463,9 @@ export const listOrganizations = async (req, res, next) => {
 export const getOrganizationDetail = async (req, res, next) => {
   try {
     const oid = toObjectId(req.params.oid);
-    if (!oid)
+    if (!oid) {
       return res.status(400).json({ message: "Invalid organization id" });
+    }
 
     const org = await Organization.findById(oid)
       .select(
@@ -472,18 +473,40 @@ export const getOrganizationDetail = async (req, res, next) => {
       )
       .lean();
 
-    if (!org)
+    if (!org) {
       return res.status(404).json({ message: "Organization not found" });
+    }
 
-    // 🔹 Bu organizasyona bağlı restoranları çek
+    // 🔹 Bu organizasyona bağlı restoranlar
     const restaurants = await Restaurant.find({ organizationId: oid })
       .select("_id name city region isActive")
       .sort({ name: 1 })
       .lean();
 
+    // 🔹 Organizasyona bağlı kullanıcılar (organizations[] içinden)
+    const userDocs = await User.find({
+      "organizations.organization": oid,
+    })
+      .select("_id name email organizations")
+      .lean();
+
+    const members = userDocs.map((u) => {
+      const rel = (u.organizations || []).find(
+        (m) => String(m.organization) === String(oid)
+      );
+
+      return {
+        userId: u._id,
+        name: u.name,
+        email: u.email,
+        role: rel?.role || "org_staff",
+      };
+    });
+
     res.json({
       ...org,
       restaurants,
+      members,
     });
   } catch (e) {
     next(e);
@@ -1033,13 +1056,45 @@ export const createRestaurant = async (req, res, next) => {
 
 export const getRestaurantDetail = async (req, res, next) => {
   try {
-    const r = await Restaurant.findById(req.params.rid)
+    const rid = toObjectId(req.params.rid);
+    if (!rid) {
+      return res.status(400).json({ message: "Invalid restaurant id" });
+    }
+
+    const r = await Restaurant.findById(rid)
       .select(
-        "_id name city address owner settings depositAmount depositRate depositType commissionRate phone email isActive region"
+        "_id name city address owner settings depositAmount depositRate depositType commissionRate commissionPct commission phone email isActive region organizationId"
       )
       .lean();
-    if (!r) return res.status(404).json({ message: "Restaurant not found" });
-    res.json(r);
+
+    if (!r) {
+      return res.status(404).json({ message: "Restaurant not found" });
+    }
+
+    // 🔹 Bu restorana bağlı kullanıcılar (restaurantMemberships[] içinden)
+    const userDocs = await User.find({
+      "restaurantMemberships.restaurant": rid,
+    })
+      .select("_id name email restaurantMemberships")
+      .lean();
+
+    const members = userDocs.map((u) => {
+      const rel = (u.restaurantMemberships || []).find(
+        (m) => String(m.restaurant) === String(rid)
+      );
+
+      return {
+        userId: u._id,
+        name: u.name,
+        email: u.email,
+        role: rel?.role || "restaurant_staff",
+      };
+    });
+
+    res.json({
+      ...r,
+      members,
+    });
   } catch (e) {
     next(e);
   }
