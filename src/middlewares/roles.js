@@ -80,8 +80,10 @@ export function allowOrgOwnerOrAdmin(paramName = "oid") {
   };
 }
 
+// src/middlewares/roles.js
+
 /**
- * Şube (restaurant) location_manager veya global admin kontrolü.
+ * Şube (restaurant) location_manager, staff veya global admin kontrolü.
  *
  * Kullanım:
  *   router.get(
@@ -92,9 +94,12 @@ export function allowOrgOwnerOrAdmin(paramName = "oid") {
  *   );
  *
  * - Eğer req.user.role === "admin" ise her zaman geçer.
- * - Değilse req.user.restaurantMemberships içinde:
- *     { restaurant: <params[paramName]>, role: "location_manager" }
- *   kaydı var mı diye bakar.
+ * - Değilse aşağıdaki senaryolarda geçer:
+ *   1) Legacy: req.user.restaurantId === params[paramName]
+ *   2) Yeni membership:
+ *      req.user.restaurantMemberships içinde
+ *        { restaurant | restaurantId | id: <params[paramName]>,
+ *          role: "location_manager" | "staff" }
  */
 export function allowLocationManagerOrAdmin(paramName = "rid") {
   return (req, res, next) => {
@@ -113,20 +118,38 @@ export function allowLocationManagerOrAdmin(paramName = "rid") {
       return next({ status: 403, message: "Forbidden" });
     }
 
+    const targetId = String(restaurantId);
+
+    // 1) Legacy: user.restaurantId ile bağlanmış tek restoran kullanıcısı
+    if (user.restaurantId && String(user.restaurantId) === targetId) {
+      return next();
+    }
+
+    // 2) Yeni membership sistemi
     const memberships = Array.isArray(user.restaurantMemberships)
       ? user.restaurantMemberships
       : [];
 
+    const allowedRoles = ["location_manager", "staff"];
+
     const isManager = memberships.some((m) => {
-      if (!m || !m.restaurant) return false;
-      const restRef =
-        typeof m.restaurant === "object" && m.restaurant._id
+      if (!m) return false;
+
+      // Membership içindeki restaurant referansını olabildiğince akıllı çöz
+      const restRefRaw =
+        m.restaurantId ||
+        m.restaurant ||
+        m.id ||
+        (typeof m.restaurant === "object" && m.restaurant?._id
           ? m.restaurant._id
-          : m.restaurant;
-      return (
-        String(restRef) === String(restaurantId) &&
-        m.role === "location_manager"
-      );
+          : null);
+
+      if (!restRefRaw) return false;
+
+      const restRef = String(restRefRaw);
+      const role = String(m.role || "");
+
+      return restRef === targetId && allowedRoles.includes(role);
     });
 
     if (!isManager) {
