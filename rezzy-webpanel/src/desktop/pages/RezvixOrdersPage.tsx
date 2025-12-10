@@ -1,3 +1,4 @@
+// src/desktop/pages/RezvixOrdersPage.tsx
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { RestaurantDesktopLayout } from "../layouts/RestaurantDesktopLayout";
@@ -5,6 +6,7 @@ import { EmptyState } from "../components/EmptyState";
 import { api, restaurantUpdateReservationStatus } from "../../api/client";
 import { authStore } from "../../store/auth";
 import { showToast } from "../../ui/Toast";
+import { asId } from "../../lib/id"; // ✅ EKLENDİ
 
 // ---- Türler (RestaurantReservationsPage ile aynı model) ----
 type Row = {
@@ -61,7 +63,13 @@ async function fetchRezvixOrders(rid: string): Promise<Resp> {
 
 export const RezvixOrdersPage: React.FC = () => {
   const user = authStore.getUser();
-  const rid = user?.restaurantId || "";
+
+  // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
+  const fallbackMembershipRestaurantId =
+    user?.restaurantMemberships?.[0]?.id ?? null;
+
+  const rid =
+    asId(user?.restaurantId || fallbackMembershipRestaurantId) || "";
 
   const queryClient = useQueryClient();
 
@@ -69,7 +77,9 @@ export const RezvixOrdersPage: React.FC = () => {
     mutationFn: (resId: string) =>
       restaurantUpdateReservationStatus(resId, "confirmed"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["desktop-rezvix-orders", rid] });
+      queryClient.invalidateQueries({
+        queryKey: ["desktop-rezvix-orders", rid],
+      });
       showToast("Rezervasyon onaylandı.", "success");
     },
     onError: () => {
@@ -81,7 +91,9 @@ export const RezvixOrdersPage: React.FC = () => {
     mutationFn: (resId: string) =>
       restaurantUpdateReservationStatus(resId, "cancelled"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["desktop-rezvix-orders", rid] });
+      queryClient.invalidateQueries({
+        queryKey: ["desktop-rezvix-orders", rid],
+      });
       showToast("Rezervasyon iptal edildi.", "success");
     },
     onError: () => {
@@ -96,6 +108,7 @@ export const RezvixOrdersPage: React.FC = () => {
   });
 
   console.log("[RezvixOrdersPage:data]", data);
+
   const handleApprove = (id: string) => {
     if (!id || confirmMutation.isPending || cancelMutation.isPending) return;
     confirmMutation.mutate(id);
@@ -126,7 +139,10 @@ export const RezvixOrdersPage: React.FC = () => {
 
   const hasData = totalOrders > 0;
 
-  const renderCard = (r: Row, bucket: "pending" | "active" | "problematic") => {
+  const renderCard = (
+    r: Row,
+    bucket: "pending" | "active" | "problematic"
+  ) => {
     const dt = new Date(r.dateTimeUTC);
     const when = dt.toLocaleString("tr-TR");
 
@@ -137,6 +153,7 @@ export const RezvixOrdersPage: React.FC = () => {
       r.user?.name ||
       r.user?.email ||
       "İsimsiz misafir";
+
     return (
       <article key={r._id} className="rezvix-kitchen-ticket">
         <div className="rezvix-kitchen-ticket__header">
@@ -154,7 +171,9 @@ export const RezvixOrdersPage: React.FC = () => {
             </span>
           </li>
           <li className="rezvix-kitchen-ticket__item">
-            <span className="rezvix-kitchen-ticket__name">Beklenen harcama</span>
+            <span className="rezvix-kitchen-ticket__name">
+              Beklenen harcama
+            </span>
             <span className="rezvix-kitchen-ticket__qty">
               {r.totalPrice != null
                 ? `${r.totalPrice.toLocaleString("tr-TR")}₺`
@@ -208,7 +227,9 @@ export const RezvixOrdersPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleCancel(r._id)}
-                  disabled={confirmMutation.isPending || cancelMutation.isPending}
+                  disabled={
+                    confirmMutation.isPending || cancelMutation.isPending
+                  }
                   style={{
                     borderRadius: 999,
                     padding: "5px 12px",
@@ -232,7 +253,9 @@ export const RezvixOrdersPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleApprove(r._id)}
-                  disabled={confirmMutation.isPending || cancelMutation.isPending}
+                  disabled={
+                    confirmMutation.isPending || cancelMutation.isPending
+                  }
                   style={{
                     borderRadius: 999,
                     padding: "5px 14px",
@@ -318,7 +341,9 @@ export const RezvixOrdersPage: React.FC = () => {
           <div className="rezvix-board-column">
             <div className="rezvix-board-column__header">
               <div className="rezvix-board-column__title">Bekleyen</div>
-              <div className="rezvix-board-column__count">{pending.length}</div>
+              <div className="rezvix-board-column__count">
+                {pending.length}
+              </div>
             </div>
             <div className="rezvix-board-column__body">
               {pending.map((r) => renderCard(r, "pending"))}
@@ -328,7 +353,9 @@ export const RezvixOrdersPage: React.FC = () => {
           <div className="rezvix-board-column">
             <div className="rezvix-board-column__header">
               <div className="rezvix-board-column__title">Aktif</div>
-              <div className="rezvix-board-column__count">{active.length}</div>
+              <div className="rezvix-board-column__count">
+                {active.length}
+              </div>
             </div>
             <div className="rezvix-board-column__body">
               {active.map((r) => renderCard(r, "active"))}
@@ -338,7 +365,9 @@ export const RezvixOrdersPage: React.FC = () => {
           <div className="rezvix-board-column">
             <div className="rezvix-board-column__header">
               <div className="rezvix-board-column__title">Sorunlu</div>
-              <div className="rezvix-board-column__count">{problematic.length}</div>
+              <div className="rezvix-board-column__count">
+                {problematic.length}
+              </div>
             </div>
             <div className="rezvix-board-column__body">
               {problematic.map((r) => renderCard(r, "problematic"))}

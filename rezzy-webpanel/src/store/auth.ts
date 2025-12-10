@@ -1,4 +1,23 @@
-export type Role = "customer" | "restaurant" | "admin";
+// src/store/auth.ts
+
+export type Role = "customer" | "restaurant" | "admin" | "guest";
+
+export type OrgMembershipRole = "org_owner" | "org_admin" | "org_finance";
+export type RestaurantMembershipRole = "location_manager" | "staff";
+
+export type OrgMembership = {
+  id: string | null;
+  name: string | null;
+  role: OrgMembershipRole | null;
+};
+
+export type RestaurantMembership = {
+  id: string | null;
+  name: string | null;
+  organizationId: string | null;
+  status: string | null;
+  role: RestaurantMembershipRole | null;
+};
 
 export type MeUser = {
   id: string;
@@ -6,13 +25,19 @@ export type MeUser = {
   email?: string | null;
   phone?: string | null;
   role: Role;
-  restaurantId?: string | null;  // normalize edilecek
+
+  // Legacy
+  restaurantId?: string | null;
   restaurantName?: string | null;
   avatarUrl?: string | null;
+
+  // ✅ Multi-organization
+  organizations?: OrgMembership[];
+  restaurantMemberships?: RestaurantMembership[];
 };
 
 const TOKEN_KEY = "rezvix_token";
-const USER_KEY  = "rezvix_user";
+const USER_KEY = "rezvix_user";
 
 function extractObjectId(input: any): string | null {
   if (!input) return null;
@@ -20,7 +45,8 @@ function extractObjectId(input: any): string | null {
     const m = input.match(/[a-f0-9]{24}/i);
     return m ? m[0] : null;
   }
-  if (typeof input === "object" && (input as any)._id) return String((input as any)._id);
+  if (typeof input === "object" && (input as any)._id)
+    return String((input as any)._id);
   try {
     const j = JSON.stringify(input);
     const m = j.match(/[a-f0-9]{24}/i);
@@ -35,9 +61,77 @@ function sanitizeUser(u: any): MeUser {
   const rid = extractObjectId(u?.restaurantId ?? u?.restaurant);
 
   const restaurantName: string | null =
-    (u?.restaurant && typeof u.restaurant === "object" && (u.restaurant as any).name)
+    u?.restaurant && typeof u.restaurant === "object" && (u.restaurant as any).name
       ? String((u.restaurant as any).name)
-      : (u.restaurantName ? String(u.restaurantName) : null);
+      : u?.restaurantName
+      ? String(u.restaurantName)
+      : null;
+
+  // organizations[] → { id, name, role }
+  const organizationsRaw = Array.isArray(u?.organizations) ? u.organizations : [];
+  const organizations: OrgMembership[] = organizationsRaw.map((entry: any) => {
+    const id =
+      entry?.id ??
+      entry?._id ??
+      entry?.organization?._id ??
+      entry?.organization ??
+      null;
+
+    const name =
+      entry?.name ??
+      entry?.organization?.name ??
+      null;
+
+    const role = (entry?.role as OrgMembershipRole) ?? null;
+
+    return { id: id ? String(id) : null, name, role };
+  });
+
+  // restaurantMemberships[] → { id, name, organizationId, status, role }
+  const membershipsRaw = Array.isArray(u?.restaurantMemberships)
+    ? u.restaurantMemberships
+    : [];
+  const restaurantMemberships: RestaurantMembership[] = membershipsRaw.map(
+    (entry: any) => {
+      const rest =
+        entry?.restaurant && typeof entry.restaurant === "object"
+          ? entry.restaurant
+          : entry;
+
+      const id =
+        entry?.id ??
+        entry?._id ??
+        rest?._id ??
+        rest ??
+        null;
+
+      const name =
+        entry?.name ??
+        rest?.name ??
+        null;
+
+      const organizationId =
+        entry?.organizationId ??
+        (rest?.organizationId && rest.organizationId._id
+          ? String(rest.organizationId._id)
+          : rest?.organizationId ?? null);
+
+      const status =
+        entry?.status ??
+        rest?.status ??
+        null;
+
+      const role = (entry?.role as RestaurantMembershipRole) ?? null;
+
+      return {
+        id: id ? String(id) : null,
+        name,
+        organizationId: organizationId ? String(organizationId) : null,
+        status,
+        role,
+      };
+    }
+  );
 
   return {
     id: String(u.id ?? u._id ?? ""),
@@ -48,13 +142,23 @@ function sanitizeUser(u: any): MeUser {
     restaurantId: rid,
     restaurantName,
     avatarUrl: u.avatarUrl ?? null,
+    organizations,
+    restaurantMemberships,
   };
 }
 
 export const authStore = {
-  getToken(): string | null { return localStorage.getItem(TOKEN_KEY); },
-  setToken(t: string) { localStorage.setItem(TOKEN_KEY, t); window.dispatchEvent(new Event("auth:changed")); },
-  clearToken() { localStorage.removeItem(TOKEN_KEY); window.dispatchEvent(new Event("auth:changed")); },
+  getToken(): string | null {
+    return localStorage.getItem(TOKEN_KEY);
+  },
+  setToken(t: string) {
+    localStorage.setItem(TOKEN_KEY, t);
+    window.dispatchEvent(new Event("auth:changed"));
+  },
+  clearToken() {
+    localStorage.removeItem(TOKEN_KEY);
+    window.dispatchEvent(new Event("auth:changed"));
+  },
 
   getUser(): MeUser | null {
     const raw = localStorage.getItem(USER_KEY);
@@ -66,14 +170,24 @@ export const authStore = {
         localStorage.setItem(USER_KEY, JSON.stringify(sane));
       }
       return sane;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   },
+
   setUser(u: MeUser | any) {
     const sane = sanitizeUser(u);
     localStorage.setItem(USER_KEY, JSON.stringify(sane));
     window.dispatchEvent(new Event("auth:changed"));
   },
-  clearUser() { localStorage.removeItem(USER_KEY); window.dispatchEvent(new Event("auth:changed")); },
 
-  logout() { this.clearToken(); this.clearUser(); }
+  clearUser() {
+    localStorage.removeItem(USER_KEY);
+    window.dispatchEvent(new Event("auth:changed"));
+  },
+
+  logout() {
+    this.clearToken();
+    this.clearUser();
+  },
 };

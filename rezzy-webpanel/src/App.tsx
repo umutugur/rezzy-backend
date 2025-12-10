@@ -1,5 +1,13 @@
+// src/App.tsx
 import React from "react";
-import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import {
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { authStore, MeUser } from "./store/auth";
 import { fetchMe, loginWithEmail } from "./api/client";
 
@@ -13,7 +21,7 @@ import AdminModerationPage from "./pages/admin/Moderation";
 import AdminUserDetailPage from "./pages/admin/UserDetail";
 import AdminNotificationsPage from "./pages/admin/Notifications";
 import AdminCommissionsPage from "./pages/admin/commissions";
-import AdminRestaurantCreatePage from "./pages/admin/RestaurantCreate"; // ✅ YENİ
+import AdminRestaurantCreatePage from "./pages/admin/RestaurantCreate";
 
 import RestaurantDashboardPage from "./pages/restaurant/Dashboard";
 import RestaurantReservationsPage from "./pages/restaurant/Reservations";
@@ -23,7 +31,7 @@ import TablesPage from "./pages/restaurant/Tables";
 import MenusPage from "./pages/restaurant/Menus";
 import PhotosPage from "./pages/restaurant/Photos";
 import PoliciesPage from "./pages/restaurant/Policies";
-import MenuManagerPage from "./pages/restaurant/MenuManager"; 
+import MenuManagerPage from "./pages/restaurant/MenuManager";
 import AdminOrganizationsPage from "./pages/admin/Organizations";
 import AdminOrganizationDetailPage from "./pages/admin/OrganizationDetail";
 
@@ -34,6 +42,40 @@ import { RezvixOrdersPage } from "./desktop/pages/RezvixOrdersPage";
 import { ReportsPage } from "./desktop/pages/ReportsPage";
 import { SettingsPage } from "./desktop/pages/SettingsPage";
 
+// ---- Helpers ----
+
+// 🔑 Artık sadece “restaurant rolü var mı?” değil,
+// gerçekten panel kullanabilecek biri mi diye bakıyoruz:
+// - admin
+// - eski “restaurant” rolü
+// - tek restoranlı legacy kullanıcı (restaurantId dolu)
+// - restaurantMemberships[] dolu olanlar (location_manager / staff vs.)
+// - organizations[] dolu olanlar (org_owner / org_admin / org_finance → org panel kullanıcısı)
+function hasRestaurantPanelAccess(user: MeUser | null): boolean {
+  if (!user) return false;
+
+  // 1) Admin her yere girebilir
+  if (user.role === "admin") return true;
+
+  // 2) Eski sistemden gelen "restaurant" rolü
+  if (user.role === "restaurant") return true;
+
+  // 3) Legacy tek restoran bağlanmışsa
+  if (user.restaurantId) return true;
+
+  // 4) Yeni membership sistemi: restoran bazlı üyelik
+  if (user.restaurantMemberships && user.restaurantMemberships.length > 0) {
+    return true;
+  }
+
+  // 5) Yeni membership sistemi: organizasyon bazlı (org-owner / org-admin / org-finance)
+  // Bu kullanıcıların da org-level paneli ve raporları görmesi gerekiyor.
+  if (user.organizations && user.organizations.length > 0) {
+    return true;
+  }
+
+  return false;
+}
 
 // ---- Basit UI parçaları ----
 function Shell({ children }: { children: React.ReactNode }) {
@@ -65,15 +107,38 @@ function Shell({ children }: { children: React.ReactNode }) {
 function UserBadge() {
   const [user, setUser] = React.useState<MeUser | null>(authStore.getUser());
   const nav = useNavigate();
+
   React.useEffect(() => {
     const onChange = () => setUser(authStore.getUser());
     window.addEventListener("auth:changed", onChange);
     return () => window.removeEventListener("auth:changed", onChange);
   }, []);
+
   if (!user) return null;
+
+  // Rol label'ı: admin / org_owner / location_manager vs.
+  const roleLabel = React.useMemo(() => {
+    if (!user) return "-";
+    if (user.role === "admin") return "Admin";
+
+    const orgOwner = user.organizations?.find((o) => o.role === "org_owner");
+    if (orgOwner) return `Org Owner • ${orgOwner.name ?? "—"}`;
+
+    const locManager = user.restaurantMemberships?.find(
+      (m) => m.role === "location_manager"
+    );
+    if (locManager) return `Lokasyon Müdürü • ${locManager.name ?? "—"}`;
+
+    if (user.role === "restaurant") return "Restaurant Kullanıcısı";
+
+    return user.role;
+  }, [user]);
+
   return (
     <div className="flex items-center gap-3">
-      <span className="text-sm text-gray-600">{user.name} • {user.role}</span>
+      <span className="text-sm text-gray-600">
+        {user.name} • {roleLabel}
+      </span>
       <button
         className="px-3 py-1.5 text-sm rounded-md bg-gray-100 hover:bg-gray-200"
         onClick={() => {
@@ -88,14 +153,29 @@ function UserBadge() {
 }
 
 // ---- Auth guard ----
+// allow: ["admin"] veya ["restaurant", "admin"]
 function PrivateRoute({ allow }: { allow: Array<"admin" | "restaurant"> }) {
   const location = useLocation();
   const user = authStore.getUser();
   const token = authStore.getToken();
-  if (!token || !user) return <Navigate to="/login" replace state={{ from: location }} />;
-  if (!allow.includes(user.role as any)) {
-    return user.role === "admin" ? <Navigate to="/admin" replace /> : <Navigate to="/restaurant" replace />;
+
+  if (!token || !user) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
+
+  const isAdmin = user.role === "admin";
+  const isRestaurantPanelUser = hasRestaurantPanelAccess(user);
+
+  let allowed = false;
+  if (allow.includes("admin") && isAdmin) allowed = true;
+  if (allow.includes("restaurant") && isRestaurantPanelUser) allowed = true;
+
+  if (!allowed) {
+    if (isAdmin) return <Navigate to="/admin" replace />;
+    if (isRestaurantPanelUser) return <Navigate to="/restaurant" replace />;
+    return <Navigate to="/login" replace />;
+  }
+
   return <Outlet />;
 }
 
@@ -108,16 +188,25 @@ function LoginPage() {
   const nav = useNavigate();
   const location = useLocation() as any;
 
+  const computeRedirect = (u: MeUser | null): string => {
+    if (!u) return "/login";
+    if (u.role === "admin") return "/admin";
+    if (hasRestaurantPanelAccess(u)) return "/restaurant";
+    return "/login";
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
       const resp = await loginWithEmail({ email, password });
       authStore.setToken(resp.token);
       if (resp.user) authStore.setUser(resp.user);
       else authStore.setUser(await fetchMe());
       const u = authStore.getUser();
-      const redirect = location?.state?.from?.pathname || (u?.role === "admin" ? "/admin" : "/restaurant");
+      const fallback = computeRedirect(u);
+      const redirect = location?.state?.from?.pathname || fallback;
       nav(redirect, { replace: true });
     } catch (err: any) {
       setError(err?.response?.data?.message || "Giriş başarısız");
@@ -132,27 +221,46 @@ function LoginPage() {
     fetchMe()
       .then((me) => {
         authStore.setUser(me);
-        (nav as any)(me.role === "admin" ? "/admin" : "/restaurant", { replace: true });
+        const dest = computeRedirect(authStore.getUser());
+        (nav as any)(dest, { replace: true });
       })
       .catch(() => authStore.logout());
   }, [nav]);
 
   return (
     <div className="min-h-full grid place-items-center p-6">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm bg-white rounded-2xl shadow-soft p-6 space-y-4">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-sm bg-white rounded-2xl shadow-soft p-6 space-y-4"
+      >
         <h2 className="text-xl font-semibold">Panele Giriş</h2>
         <div>
           <label className="block text-sm text-gray-600 mb-1">E-posta</label>
-          <input type="email" className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400"
-                 value={email} onChange={(e)=>setEmail(e.target.value)} required autoFocus />
+          <input
+            type="email"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoFocus
+          />
         </div>
         <div>
           <label className="block text-sm text-gray-600 mb-1">Şifre</label>
-          <input type="password" className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400"
-                 value={password} onChange={(e)=>setPassword(e.target.value)} required />
+          <input
+            type="password"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
         </div>
         {error && <div className="text-sm text-red-600">{error}</div>}
-        <button type="submit" disabled={loading} className="w-full rounded-lg bg-brand-600 hover:bg-brand-700 text-white py-2 font-medium disabled:opacity-60">
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-lg bg-brand-600 hover:bg-brand-700 text-white py-2 font-medium disabled:opacity-60"
+        >
           {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
         </button>
       </form>
@@ -162,6 +270,7 @@ function LoginPage() {
 
 export default function App() {
   const nav = useNavigate();
+
   React.useEffect(() => {
     const onChange = () => {
       const t = authStore.getToken();
@@ -176,43 +285,209 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
-          {/* Admin alanı */}
+      {/* Admin alanı */}
       <Route element={<PrivateRoute allow={["admin"]} />}>
-        <Route path="/admin" element={<Shell><AdminDashboardPage /></Shell>} />
-        <Route path="/admin/notifications" element={<Shell><AdminNotificationsPage /></Shell>} />
-        <Route path="/admin/organizations" element={<Shell><AdminOrganizationsPage /></Shell>} />
-        <Route path="/admin/organizations/:oid" element={<Shell><AdminOrganizationDetailPage /></Shell>} />
-        <Route path="/admin/commissions" element={<Shell><AdminCommissionsPage /></Shell>} />
-        <Route path="/admin/restaurants" element={<Shell><AdminRestaurantsPage /></Shell>} />
-        <Route path="/admin/restaurants/new" element={<Shell><AdminRestaurantCreatePage /></Shell>} />
-        <Route path="/admin/restaurants/:rid" element={<Shell><AdminRestaurantDetailPage /></Shell>} />
-        <Route path="/admin/users" element={<Shell><AdminUsersPage /></Shell>} />
-        <Route path="/admin/users/:uid" element={<Shell><AdminUserDetailPage /></Shell>} />
-        <Route path="/admin/reservations" element={<Shell><AdminReservationsPage /></Shell>} />
-        <Route path="/admin/moderation" element={<Shell><AdminModerationPage /></Shell>} />
+        <Route
+          path="/admin"
+          element={
+            <Shell>
+              <AdminDashboardPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/notifications"
+          element={
+            <Shell>
+              <AdminNotificationsPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/organizations"
+          element={
+            <Shell>
+              <AdminOrganizationsPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/organizations/:oid"
+          element={
+            <Shell>
+              <AdminOrganizationDetailPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/commissions"
+          element={
+            <Shell>
+              <AdminCommissionsPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/restaurants"
+          element={
+            <Shell>
+              <AdminRestaurantsPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/restaurants/new"
+          element={
+            <Shell>
+              <AdminRestaurantCreatePage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/restaurants/:rid"
+          element={
+            <Shell>
+              <AdminRestaurantDetailPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <Shell>
+              <AdminUsersPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/users/:uid"
+          element={
+            <Shell>
+              <AdminUserDetailPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/reservations"
+          element={
+            <Shell>
+              <AdminReservationsPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/moderation"
+          element={
+            <Shell>
+              <AdminModerationPage />
+            </Shell>
+          }
+        />
       </Route>
 
-            {/* Restoran alanı */}
+      {/* Restoran alanı + Desktop */}
       <Route element={<PrivateRoute allow={["restaurant", "admin"]} />}>
-        <Route path="/restaurant" element={<Shell><RestaurantDashboardPage /></Shell>} />
-        <Route path="/restaurant/reservations" element={<Shell><RestaurantReservationsPage /></Shell>} />
-        <Route path="/restaurant/opening-hours" element={<Shell><OpeningHoursPage /></Shell>} />
-        <Route path="/restaurant/tables" element={<Shell><TablesPage /></Shell>} />
-        <Route path="/restaurant/menus" element={<Shell><MenusPage /></Shell>} />
-        {/* Geriye dönük uyumluluk: eski /restaurant/menus yolunu yeni prefix'e yönlendir */}
-        <Route path="/restaurant/menu" element={<Navigate to="/panel/restaurant/menu" replace />} />
-        <Route path="/restaurant/photos" element={<Shell><PhotosPage /></Shell>} />
-        <Route path="/restaurant/profile" element={<Shell><RestaurantProfilePage /></Shell>} />
-        <Route path="/restaurant/policies" element={<Shell><PoliciesPage /></Shell>} />
-        <Route path="/restaurant/menu-manager" element={<Shell><MenuManagerPage /></Shell>} />
+        <Route
+          path="/restaurant"
+          element={
+            <Shell>
+              <RestaurantDashboardPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/restaurant/reservations"
+          element={
+            <Shell>
+              <RestaurantReservationsPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/restaurant/opening-hours"
+          element={
+            <Shell>
+              <OpeningHoursPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/restaurant/tables"
+          element={
+            <Shell>
+              <TablesPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/restaurant/menus"
+          element={
+            <Shell>
+              <MenusPage />
+            </Shell>
+          }
+        />
+        {/* Geriye dönük uyumluluk */}
+        <Route
+          path="/restaurant/menu"
+          element={<Navigate to="/panel/restaurant/menu" replace />}
+        />
+        <Route
+          path="/restaurant/photos"
+          element={
+            <Shell>
+              <PhotosPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/restaurant/profile"
+          element={
+            <Shell>
+              <RestaurantProfilePage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/restaurant/policies"
+          element={
+            <Shell>
+              <PoliciesPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/restaurant/menu-manager"
+          element={
+            <Shell>
+              <MenuManagerPage />
+            </Shell>
+          }
+        />
 
-        {/* Yeni panel prefix'li menü rotaları (Sidebar bu yolu kullanıyor) */}
-        <Route path="/panel/restaurant/menu" element={<Shell><MenuManagerPage /></Shell>} />
-        <Route path="/panel/restaurant/menus" element={<Shell><MenusPage /></Shell>} />
-        {/* Geriye dönük uyumluluk: eski /restaurant/* yollarını yeni prefix'e yönlendir */}
-        <Route path="/panel/restaurant/menu-manager" element={<Navigate to="/panel/restaurant/menu" replace />} />
+        {/* Yeni panel prefix'li menü rotaları */}
+        <Route
+          path="/panel/restaurant/menu"
+          element={
+            <Shell>
+              <MenuManagerPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/panel/restaurant/menus"
+          element={
+            <Shell>
+              <MenusPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/panel/restaurant/menu-manager"
+          element={<Navigate to="/panel/restaurant/menu" replace />}
+        />
 
-        {/* 🔥 Restaurant Desktop Mode route'ları (Shell YOK, kendi layout'unu kullanıyor) */}
+        {/* 🔥 Restaurant Desktop Mode route'ları (Shell YOK) */}
         <Route path="/restaurant-desktop/tables" element={<LiveTablesPage />} />
         <Route path="/restaurant-desktop/kitchen" element={<KitchenBoardPage />} />
         <Route path="/restaurant-desktop/rezvix" element={<RezvixOrdersPage />} />
@@ -232,5 +507,7 @@ export default function App() {
 function RootRedirect() {
   const u = authStore.getUser();
   if (!u) return <Navigate to="/login" replace />;
-  return u.role === "admin" ? <Navigate to="/admin" replace /> : <Navigate to="/restaurant" replace />;
+  if (u.role === "admin") return <Navigate to="/admin" replace />;
+  if (hasRestaurantPanelAccess(u)) return <Navigate to="/restaurant" replace />;
+  return <Navigate to="/login" replace />;
 }

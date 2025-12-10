@@ -10,9 +10,8 @@ import { showToast } from "../../ui/Toast";
 
 type KitchenTicketStatus = "NEW" | "IN_PROGRESS" | "READY" | "SERVED";
 
-// Backend'den gelen ham ticket tipi
 type BackendKitchenTicket = {
-  id: string; // order veya kitchenTicket id
+  id: string;
   kitchenStatus: "new" | "preparing" | "ready" | "delivered";
   tableId: string;
   tableLabel: string;
@@ -21,7 +20,6 @@ type BackendKitchenTicket = {
   items: { title: string; qty: number; note?: string }[];
 };
 
-// UI'de kullandığımız ticket tipi
 export type KitchenTicketWithStatus = {
   id: string;
   status: KitchenTicketStatus;
@@ -64,14 +62,20 @@ function groupByStatus(
   return tickets.filter((t) => t.status === status);
 }
 
-// Backend'e göndereceğimiz kitchen status enum'u
 type KitchenStatusPayload = "new" | "preparing" | "ready" | "delivered";
 
 export const KitchenBoardPage: React.FC = () => {
-  const rid = asId(authStore.getUser()?.restaurantId) || "";
+  const user = authStore.getUser();
+
+  // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
+  const fallbackMembershipRestaurantId =
+    user?.restaurantMemberships?.[0]?.id ?? null;
+
+  const rid =
+    asId(user?.restaurantId || fallbackMembershipRestaurantId) || "";
+
   const qc = useQueryClient();
 
-  // 🔹 Mutfak fişlerini çek
   const { data, isLoading, error } = useQuery<{ tickets: BackendKitchenTicket[] }>(
     {
       queryKey: ["kitchen-tickets", rid],
@@ -80,7 +84,7 @@ export const KitchenBoardPage: React.FC = () => {
         return res.data;
       },
       enabled: !!rid,
-      refetchInterval: 5000, // 5 sn'de bir otomatik güncelle
+      refetchInterval: 5000,
     }
   );
 
@@ -109,16 +113,13 @@ export const KitchenBoardPage: React.FC = () => {
 
   const totalTickets = tickets.length;
 
-  // 🔹 Durum güncelleme (Yeni → Hazırlanıyor → Hazır → Teslim edildi)
-    const updateStatusMut = useMutation({
+  const updateStatusMut = useMutation({
     mutationFn: async (params: { orderId: string; nextStatus: KitchenStatusPayload }) => {
       const { orderId, nextStatus } = params;
       await api.patch(`/orders/${orderId}/kitchen-status`, { status: nextStatus });
     },
     onSuccess: () => {
-      // 🔁 Mutfak fişlerini yenile
       qc.invalidateQueries({ queryKey: ["kitchen-tickets", rid] });
-      // 🔔 Canlı masaları da yenile (order_ready → waiter_call / NEED_HELP)
       qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
     },
     onError: (e: any) => {
@@ -129,17 +130,16 @@ export const KitchenBoardPage: React.FC = () => {
     },
   });
 
-  // UI status → backend enum map
   const getNextBackendStatus = (
     ticketStatus: KitchenTicketStatus
   ): KitchenStatusPayload | null => {
     switch (ticketStatus) {
       case "NEW":
-        return "preparing"; // Yeni → Hazırlanıyor
+        return "preparing";
       case "IN_PROGRESS":
-        return "ready"; // Hazırlanıyor → Hazır
+        return "ready";
       case "READY":
-        return "delivered"; // Hazır → Teslim edildi
+        return "delivered";
       default:
         return null;
     }
@@ -183,11 +183,13 @@ export const KitchenBoardPage: React.FC = () => {
       )}
 
       <div className="rezvix-board-layout">
-        {/* === YENİ === */}
+        {/* Yeni */}
         <div className="rezvix-board-column">
           <div className="rezvix-board-column__header">
             <div className="rezvix-board-column__title">Yeni</div>
-            <div className="rezvix-board-column__count">{newOrders.length}</div>
+            <div className="rezvix-board-column__count">
+              {newOrders.length}
+            </div>
           </div>
           <div className="rezvix-board-column__body">
             {isLoading ? (
@@ -210,7 +212,7 @@ export const KitchenBoardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* === HAZIRLANIYOR === */}
+        {/* Hazırlanıyor */}
         <div className="rezvix-board-column">
           <div className="rezvix-board-column__header">
             <div className="rezvix-board-column__title">Hazırlanıyor</div>
@@ -237,11 +239,13 @@ export const KitchenBoardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* === HAZIR === */}
+        {/* Hazır */}
         <div className="rezvix-board-column">
           <div className="rezvix-board-column__header">
             <div className="rezvix-board-column__title">Hazır</div>
-            <div className="rezvix-board-column__count">{ready.length}</div>
+            <div className="rezvix-board-column__count">
+              {ready.length}
+            </div>
           </div>
           <div className="rezvix-board-column__body">
             {ready.length === 0 ? (
@@ -262,7 +266,7 @@ export const KitchenBoardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* === TESLİM EDİLDİ === */}
+        {/* Teslim edildi */}
         <div className="rezvix-board-column">
           <div className="rezvix-board-column__header">
             <div className="rezvix-board-column__title">Teslim edildi</div>

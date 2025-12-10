@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { RestaurantDesktopLayout } from "../layouts/RestaurantDesktopLayout";
 import { authStore } from "../../store/auth";
 import { api, restaurantGetReportsOverview } from "../../api/client";
+import { asId } from "../../lib/id"; // ✅ EKLENDİ
 
 // ---- Tipler (Dashboard ile aynı rezervasyon modeli) ----
 type Row = {
@@ -156,7 +157,14 @@ async function fetchRecentInRange(
 
 export const ReportsPage: React.FC = () => {
   const user = authStore.getUser();
-  const rid = user?.restaurantId || "";
+
+  // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
+  const fallbackMembershipRestaurantId =
+    user?.restaurantMemberships?.[0]?.id ?? null;
+
+  const rid =
+    asId(user?.restaurantId || fallbackMembershipRestaurantId) || "";
+
   const [sel, setSel] = React.useState<"today" | "7" | "30" | "90">("today");
   const [view, setView] = React.useState<ViewMode>("reservations");
 
@@ -611,10 +619,7 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
                 </thead>
                 <tbody>
                   {recent.data!.map((r) => (
-                    <tr
-                      key={r._id}
-                      style={{ borderTop: "1px solid #eee" }}
-                    >
+                    <tr key={r._id} style={{ borderTop: "1px solid #eee" }}>
                       <td style={{ padding: "6px 10px" }}>
                         {fmtDT(r.dateTimeUTC)}
                       </td>
@@ -624,9 +629,7 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
                           {r.user?.email ? `(${r.user.email})` : ""}
                         </span>
                       </td>
-                      <td style={{ padding: "6px 10px" }}>
-                        {r.partySize}
-                      </td>
+                      <td style={{ padding: "6px 10px" }}>{r.partySize}</td>
                       <td style={{ padding: "6px 10px" }}>
                         {fmtStatus(r.status)}
                       </td>
@@ -781,7 +784,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
         </div>
 
         <div className="rezvix-board-column__body" style={{ gap: 12 }}>
-          {/* Hero kart: Toplam Ciro — BU KISIM DEĞİŞMEDİ */}
+          {/* Hero kart: Toplam Ciro */}
           <div
             style={{
               borderRadius: 16,
@@ -1064,7 +1067,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
         </div>
 
         <div className="rezvix-board-column__body" style={{ gap: 12 }}>
-          {/* Kanal bazlı stacked bar — BU KISIM DEĞİŞMEDİ */}
+          {/* Kanal bazlı stacked bar */}
           <div
             style={{
               borderRadius: 14,
@@ -1096,32 +1099,28 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                   <div
                     style={{
                       width: `${(walkinRev / channelTotal) * 100}%`,
-                      background:
-                        "rgba(46, 204, 113, 0.9)", // Walk-in
+                      background: "rgba(46, 204, 113, 0.9)", // Walk-in
                       transition: "width 0.3s ease",
                     }}
                   />
                   <div
                     style={{
                       width: `${(qrRev / channelTotal) * 100}%`,
-                      background:
-                        "rgba(52, 152, 219, 0.9)", // QR
+                      background: "rgba(52, 152, 219, 0.9)", // QR
                       transition: "width 0.3s ease",
                     }}
                   />
                   <div
                     style={{
                       width: `${(rezvixTableRev / channelTotal) * 100}%`,
-                      background:
-                        "rgba(155, 89, 182, 0.9)", // Rezvix
+                      background: "rgba(155, 89, 182, 0.9)", // Rezvix
                       transition: "width 0.3s ease",
                     }}
                   />
                   <div
                     style={{
                       width: `${(otherRev / channelTotal) * 100}%`,
-                      background:
-                        "rgba(149, 165, 166, 0.9)", // Diğer
+                      background: "rgba(149, 165, 166, 0.9)", // Diğer
                       transition: "width 0.3s ease",
                     }}
                   />

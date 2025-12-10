@@ -142,7 +142,15 @@ const THEME_OPTIONS: { key: DesktopThemeKey; label: string; description: string 
 ];
 
 export const SettingsPage: React.FC = () => {
-  const rid = asId(authStore.getUser()?.restaurantId) || "";
+  const user = authStore.getUser();
+
+  // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
+  const fallbackMembershipRestaurantId =
+    user?.restaurantMemberships?.[0]?.id ?? null;
+
+  const rid =
+    asId(user?.restaurantId || fallbackMembershipRestaurantId) || "";
+
   const qc = useQueryClient();
 
   const [tab, setTab] = React.useState<TabKey>("general");

@@ -17,6 +17,7 @@ import { authStore } from "../../store/auth";
 import { showToast } from "../../ui/Toast";
 import { TableDetailModal } from "../components/TableDetailModal";
 import { WalkInOrderModal } from "../components/WalkInOrderModal";
+import { asId } from "../../lib/id"; // ✅ EKLENDİ
 
 // =============== Tipler ===============
 type MockTableLike = {
@@ -212,7 +213,14 @@ function printContent(title: string, html: string) {
 // =============== Component ===============
 export const LiveTablesPage: React.FC = () => {
   const user = authStore.getUser();
-  const rid = user?.restaurantId || "";
+
+  // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
+  const fallbackMembershipRestaurantId =
+    user?.restaurantMemberships?.[0]?.id ?? null;
+
+  const rid =
+    asId(user?.restaurantId || fallbackMembershipRestaurantId) || "";
+
   const qc = useQueryClient();
 
   // 🔔 Ses & değişiklik takibi
@@ -240,7 +248,8 @@ export const LiveTablesPage: React.FC = () => {
   const [activeCategoryId, setActiveCategoryId] =
     React.useState<string | "all">("all");
 
-  const [isDetailModalOpen, setIsDetailModalOpen] = React.useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] =
+    React.useState(false);
 
   // Canlı masalar
   const { data, isLoading, isError } = useQuery({
@@ -379,7 +388,8 @@ export const LiveTablesPage: React.FC = () => {
   });
 
   const closeSessionMut = useMutation({
-    mutationFn: () => restaurantCloseTableSession(rid, selectedTableId as string),
+    mutationFn: () =>
+      restaurantCloseTableSession(rid, selectedTableId as string),
     onSuccess: () => {
       // 🟢 Canlı masalar
       qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
@@ -716,7 +726,9 @@ export const LiveTablesPage: React.FC = () => {
           {isLoading && (
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">⏳</div>
-              <div className="rezvix-empty__title">Masalar getiriliyor…</div>
+              <div className="rezvix-empty__title">
+                Masalar getiriliyor…
+              </div>
               <div className="rezvix-empty__text">
                 Canlı masa durumları birkaç saniye içinde yüklenecek.
               </div>
@@ -726,7 +738,9 @@ export const LiveTablesPage: React.FC = () => {
           {isError && !isLoading && (
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">⚠️</div>
-              <div className="rezvix-empty__title">Masalar yüklenemedi</div>
+              <div className="rezvix-empty__title">
+                Masalar yüklenemedi
+              </div>
               <div className="rezvix-empty__text">
                 Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse
                 bağlantınızı kontrol edin.
@@ -737,7 +751,9 @@ export const LiveTablesPage: React.FC = () => {
           {!isLoading && !isError && !hasData && (
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">🪑</div>
-              <div className="rezvix-empty__title">Tanımlı masa bulunamadı</div>
+              <div className="rezvix-empty__title">
+                Tanımlı masa bulunamadı
+              </div>
               <div className="rezvix-empty__text">
                 Masa planı oluşturulduğunda, canlı masa durumu burada
                 görünecek.
