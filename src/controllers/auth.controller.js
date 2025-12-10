@@ -1,8 +1,9 @@
+// src/controllers/auth.controller.js
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { OAuth2Client } from "google-auth-library";
 import appleSignin from "apple-signin-auth";
-import { ensureRestaurantForOwner } from "../services/restaurantOwner.service.js";
+// ❌ ensureRestaurantForOwner kaldırıldı – tüm restoran sahipliği artık admin + membership akışlarıyla yönetiliyor
 
 const GOOGLE_AUDIENCES = [
   process.env.GOOGLE_CLIENT_ID_ANDROID,
@@ -11,38 +12,95 @@ const GOOGLE_AUDIENCES = [
   process.env.GOOGLE_IOS_CLIENT_ID,
   process.env.GOOGLE_CLIENT_ID_WEB,
   process.env.GOOGLE_WEB_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_ID
+  process.env.GOOGLE_CLIENT_ID,
 ].filter(Boolean);
 
 const googleClient = new OAuth2Client();
 
 /* ========== TOKENS ========== */
 // .env ÖNERİ: ACCESS_EXPIRES=2h, REFRESH_EXPIRES=30d
-const ACCESS_EXPIRES  = process.env.JWT_EXPIRES || "2h";
+const ACCESS_EXPIRES = process.env.JWT_EXPIRES || "2h";
 const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES || "30d";
-const ACCESS_SECRET   = process.env.JWT_SECRET;
-const REFRESH_SECRET  = process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRET + ".refresh");
+const ACCESS_SECRET = process.env.JWT_SECRET;
+const REFRESH_SECRET =
+  process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + ".refresh";
 
-/** Sadece access için */
-function signAccessToken(uOrPayload){
-    const p = typeof uOrPayload === "object" && uOrPayload._id
-    ? {
-        id: uOrPayload._id.toString(),
-        role: uOrPayload.role,
-        name: uOrPayload.name,
-        // Hem ObjectId hem populate edilmiş obje için güvenli dönüşüm
-        restaurantId: uOrPayload.restaurantId
-          ? (uOrPayload.restaurantId._id
-              ? uOrPayload.restaurantId._id.toString()
-              : (uOrPayload.restaurantId.toString?.() || null))
-          : null,
+/** Sadece access için (multi-org + memberships dahil) */
+function signAccessToken(uOrPayload) {
+  // Eğer elimizde gerçek User dokümanı varsa
+  if (typeof uOrPayload === "object" && uOrPayload._id) {
+    // 🔹 Legacy destek: token içinde restaurantId’yi hala taşıyoruz (okuma amaçlı)
+    let restaurantId = null;
+    if (uOrPayload.restaurantId) {
+      if (uOrPayload.restaurantId._id) {
+        restaurantId = uOrPayload.restaurantId._id.toString();
+      } else {
+        restaurantId = uOrPayload.restaurantId.toString?.() || null;
       }
-    : uOrPayload;
-  return jwt.sign(p, ACCESS_SECRET, { expiresIn: ACCESS_EXPIRES });
+    }
+
+    // 🔹 organizations → { organization: <id>, role }
+    const organizations = Array.isArray(uOrPayload.organizations)
+      ? uOrPayload.organizations
+          .map((entry) => {
+            if (!entry) return null;
+            const role = entry.role || null;
+            if (!role) return null;
+
+            const org = entry.organization;
+            if (!org) return null;
+
+            const orgId = org._id
+              ? org._id.toString()
+              : org.toString?.() || null;
+
+            if (!orgId) return null;
+            return { organization: orgId, role };
+          })
+          .filter(Boolean)
+      : [];
+
+    // 🔹 restaurantMemberships → { restaurant: <id>, role }
+    const restaurantMemberships = Array.isArray(
+      uOrPayload.restaurantMemberships
+    )
+      ? uOrPayload.restaurantMemberships
+          .map((entry) => {
+            if (!entry) return null;
+            const role = entry.role || null;
+            if (!role) return null;
+
+            const rest = entry.restaurant;
+            if (!rest) return null;
+
+            const restId = rest._id
+              ? rest._id.toString()
+              : rest.toString?.() || null;
+
+            if (!restId) return null;
+            return { restaurant: restId, role };
+          })
+          .filter(Boolean)
+      : [];
+
+    const p = {
+      id: uOrPayload._id.toString(),
+      role: uOrPayload.role,
+      name: uOrPayload.name,
+      restaurantId,
+      organizations,
+      restaurantMemberships,
+    };
+
+    return jwt.sign(p, ACCESS_SECRET, { expiresIn: ACCESS_EXPIRES });
+  }
+
+  // Guest veya özel payload gibi durumlarda ham payload’ı aynen imzala
+  return jwt.sign(uOrPayload, ACCESS_SECRET, { expiresIn: ACCESS_EXPIRES });
 }
 
 /** Refresh için (payload minimal tut) */
-function signRefreshToken(user){
+function signRefreshToken(user) {
   return jwt.sign(
     { id: user._id.toString(), v: 1 }, // v: ileride versiyonlamak istersen
     REFRESH_SECRET,
@@ -54,8 +112,7 @@ function signRefreshToken(user){
 function toClientUser(u) {
   const preferredRegion = u.preferredRegion || "CY";
   const preferredLanguage =
-    u.preferredLanguage ||
-    (preferredRegion === "UK" ? "en" : "tr");
+    u.preferredLanguage || (preferredRegion === "UK" ? "en" : "tr");
 
   // restaurantId hem ObjectId hem populate edilmiş obje olabilir
   let restaurantId = null;
@@ -149,13 +206,15 @@ function toClientUser(u) {
     restaurantName,
     avatarUrl: u.avatarUrl ?? null,
     notificationPrefs: {
-      push:  u.notificationPrefs?.push ?? true,
-      sms:   u.notificationPrefs?.sms  ?? false,
+      push: u.notificationPrefs?.push ?? true,
+      sms: u.notificationPrefs?.sms ?? false,
       email: u.notificationPrefs?.email ?? true,
     },
-    providers: Array.isArray(u.providers) ? u.providers.map(p => p.name) : [],
+    providers: Array.isArray(u.providers)
+      ? u.providers.map((p) => p.name)
+      : [],
     noShowCount: u.noShowCount ?? 0,
-    riskScore:   u.riskScore ?? 0,
+    riskScore: u.riskScore ?? 0,
     preferredRegion,
     preferredLanguage,
     createdAt: u.createdAt ?? null,
@@ -168,7 +227,9 @@ function toClientUser(u) {
 }
 
 function ensureProvider(user, providerName, sub) {
-  const exists = user.providers?.some((p) => p.name === providerName && p.sub === sub);
+  const exists = user.providers?.some(
+    (p) => p.name === providerName && p.sub === sub
+  );
   if (!exists) {
     user.providers = user.providers || [];
     user.providers.push({ name: providerName, sub });
@@ -203,29 +264,29 @@ export const guestLogin = async (req, res, next) => {
         riskScore: 0,
         createdAt: null,
         updatedAt: null,
-      }
+      },
     });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 /* ========== REGISTER ========== */
 export const register = async (req, res, next) => {
   try {
-    const { name, email, phone, password, role } = req.body;
+    const { name, email, phone, password } = req.body;
+
+    // 🔒 Güvenlik + mimari: public register her zaman "customer"
+    const safeRole = "customer";
 
     const user = await User.create({
       name,
       email,
       phone,
       password,
-      role: role || "customer",
+      role: safeRole,
       providers: [{ name: "password", sub: email || phone || "local" }],
     });
-
-    if (user.role === "restaurant") {
-      await ensureRestaurantForOwner(user._id);
-      await user.populate({ path: "restaurantId", select: "_id name" });
-    }
 
     const token = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
@@ -242,14 +303,11 @@ export const login = async (req, res, next) => {
     const { email, phone, password } = req.body;
     const query = email ? { email } : { phone };
     const user = await User.findOne(query).select("+password");
-    if (!user || !(await user.compare(password))) throw { status: 400, message: "Geçersiz bilgiler" };
+    if (!user || !(await user.compare(password))) {
+      throw { status: 400, message: "Geçersiz bilgiler" };
+    }
 
     ensureProvider(user, "password", email || phone || "local");
-
-    if (user.role === "restaurant") {
-      await ensureRestaurantForOwner(user._id);
-      await user.populate({ path: "restaurantId", select: "_id name" });
-    }
 
     await user.save();
     const token = signAccessToken(user);
@@ -264,38 +322,57 @@ export const login = async (req, res, next) => {
 export const googleLogin = async (req, res, next) => {
   try {
     const { idToken } = req.body;
-    if (!idToken) return next({ status: 400, message: "idToken gerekli" });
-    if (!GOOGLE_AUDIENCES.length) return next({ status: 500, message: "Sunucuda Google client ID tanımlı değil" });
+    if (!idToken)
+      return next({ status: 400, message: "idToken gerekli" });
+    if (!GOOGLE_AUDIENCES.length)
+      return next({
+        status: 500,
+        message: "Sunucuda Google client ID tanımlı değil",
+      });
 
-    const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_AUDIENCES });
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: GOOGLE_AUDIENCES,
+    });
     const payload = ticket.getPayload();
 
     const sub = payload.sub;
     const email = payload.email;
-    const name = payload.name || (email ? email.split("@")[0] : "GoogleUser");
+    const name =
+      payload.name ||
+      (email ? email.split("@")[0] : "GoogleUser");
 
-    let user = await User.findOne({ providers: { $elemMatch: { name: "google", sub } } });
+    let user = await User.findOne({
+      providers: { $elemMatch: { name: "google", sub } },
+    });
     if (!user && email) user = await User.findOne({ email });
 
     if (!user) {
-      user = await User.create({ name, email, role: "customer", providers: [{ name: "google", sub }] });
+      user = await User.create({
+        name,
+        email,
+        role: "customer",
+        providers: [{ name: "google", sub }],
+      });
     } else {
       ensureProvider(user, "google", sub);
       if (!user.email && email) user.email = email;
       await user.save();
     }
 
-    if (user.role === "restaurant") {
-      await ensureRestaurantForOwner(user._id);
-      await user.populate({ path: "restaurantId", select: "_id name" });
-    }
-
     const token = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
     res.json({ token, refreshToken, user: toClientUser(user) });
   } catch (e) {
-    if (e?.message?.includes("audience") || e?.message?.includes("Wrong recipient")) {
-      return next({ status: 400, message: "Google client ID eşleşmiyor (audience). Sunucu .env içine Android/Web/iOS client ID'lerini ekleyin." });
+    if (
+      e?.message?.includes("audience") ||
+      e?.message?.includes("Wrong recipient")
+    ) {
+      return next({
+        status: 400,
+        message:
+          "Google client ID eşleşmiyor (audience). Sunucu .env içine Android/Web/iOS client ID'lerini ekleyin.",
+      });
     }
     next(e);
   }
@@ -305,11 +382,17 @@ export const googleLogin = async (req, res, next) => {
 export const appleLogin = async (req, res, next) => {
   try {
     const { identityToken } = req.body;
-    if (!identityToken) return next({ status: 400, message: "identityToken gerekli" });
+    if (!identityToken)
+      return next({ status: 400, message: "identityToken gerekli" });
 
-    const expectedAudience = process.env.IOS_BUNDLE_ID || process.env.APPLE_CLIENT_ID;
+    const expectedAudience =
+      process.env.IOS_BUNDLE_ID || process.env.APPLE_CLIENT_ID;
     if (!expectedAudience) {
-      return next({ status: 500, message: "Apple audience tanımlı değil. Render env’e IOS_BUNDLE_ID=com.rezzy.app ekleyin." });
+      return next({
+        status: 500,
+        message:
+          "Apple audience tanımlı değil. Render env’e IOS_BUNDLE_ID=com.rezzy.app ekleyin.",
+      });
     }
 
     const tokenData = await appleSignin.verifyIdToken(identityToken, {
@@ -319,9 +402,15 @@ export const appleLogin = async (req, res, next) => {
 
     const sub = tokenData?.sub;
     const email = tokenData?.email || null;
-    if (!sub) return next({ status: 401, message: "Apple kimlik doğrulaması başarısız (sub yok)." });
+    if (!sub)
+      return next({
+        status: 401,
+        message: "Apple kimlik doğrulaması başarısız (sub yok).",
+      });
 
-    let user = await User.findOne({ providers: { $elemMatch: { name: "apple", sub } } });
+    let user = await User.findOne({
+      providers: { $elemMatch: { name: "apple", sub } },
+    });
     if (!user && email) user = await User.findOne({ email });
 
     if (!user) {
@@ -337,17 +426,16 @@ export const appleLogin = async (req, res, next) => {
       await user.save();
     }
 
-    if (user.role === "restaurant") {
-      await ensureRestaurantForOwner(user._id);
-      await user.populate({ path: "restaurantId", select: "_id name" });
-    }
-
     const token = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
     res.json({ token, refreshToken, user: toClientUser(user) });
   } catch (e) {
     if (e?.message?.toLowerCase?.().includes("audience")) {
-      return next({ status: 400, message: "Apple audience eşleşmedi. IOS_BUNDLE_ID env’inin bundleIdentifier ile birebir aynı olduğundan emin olun." });
+      return next({
+        status: 400,
+        message:
+          "Apple audience eşleşmedi. IOS_BUNDLE_ID env’inin bundleIdentifier ile birebir aynı olduğundan emin olun.",
+      });
     }
     next(e);
   }
@@ -378,8 +466,8 @@ export const me = async (req, res, next) => {
     const baseSelect =
       "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt organizations restaurantMemberships";
 
-    // Önce kullanıcıyı al
-    let u = await User.findById(req.user.id)
+    // Kullanıcıyı membership’leriyle birlikte çek
+    const u = await User.findById(req.user.id)
       .select(baseSelect)
       .populate([
         { path: "restaurantId", select: "_id name" },
@@ -392,21 +480,6 @@ export const me = async (req, res, next) => {
 
     if (!u) return res.status(401).json({ message: "Unauthorized" });
 
-    // Restaurant kullanıcıları için restoran kaydı yoksa oluştur ve tekrar populate et
-    if (u.role === "restaurant" && !u.restaurantId) {
-      await ensureRestaurantForOwner(u._id);
-      u = await User.findById(req.user.id)
-        .select(baseSelect)
-        .populate([
-          { path: "restaurantId", select: "_id name" },
-          { path: "organizations.organization", select: "_id name" },
-          {
-            path: "restaurantMemberships.restaurant",
-            select: "_id name organizationId status",
-          },
-        ]);
-    }
-
     return res.json(toClientUser(u));
   } catch (e) {
     next(e);
@@ -416,7 +489,10 @@ export const me = async (req, res, next) => {
 export const updateMe = async (req, res, next) => {
   try {
     if (req.user?.role === "guest") {
-      return res.status(403).json({ message: "Misafir profili güncellenemez. Lütfen giriş yapın veya kayıt olun." });
+      return res.status(403).json({
+        message:
+          "Misafir profili güncellenemez. Lütfen giriş yapın veya kayıt olun.",
+      });
     }
 
     const patch = {};
@@ -430,15 +506,15 @@ export const updateMe = async (req, res, next) => {
       preferredLanguage,
     } = req.body;
 
-    if (name != null)  patch.name  = String(name);
+    if (name != null) patch.name = String(name);
     if (email != null) patch.email = String(email);
     if (phone != null) patch.phone = String(phone);
     if (avatarUrl != null) patch.avatarUrl = String(avatarUrl);
 
     if (notificationPrefs && typeof notificationPrefs === "object") {
       patch.notificationPrefs = {
-        push:  !!notificationPrefs.push,
-        sms:   !!notificationPrefs.sms,
+        push: !!notificationPrefs.push,
+        sms: !!notificationPrefs.sms,
         email: !!notificationPrefs.email,
       };
     }
@@ -450,7 +526,10 @@ export const updateMe = async (req, res, next) => {
 
     // 🔹 Dil: tr / en / ru / el
     const ALLOWED_LANGS = ["tr", "en", "ru", "el"];
-    if (preferredLanguage && ALLOWED_LANGS.includes(preferredLanguage)) {
+    if (
+      preferredLanguage &&
+      ALLOWED_LANGS.includes(preferredLanguage)
+    ) {
       patch.preferredLanguage = preferredLanguage;
     }
 
@@ -475,32 +554,48 @@ export const updateMe = async (req, res, next) => {
     if (!u) return res.status(404).json({ message: "User not found" });
 
     res.json(toClientUser(u));
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
+
 export const changePassword = async (req, res, next) => {
   try {
     if (req.user?.role === "guest") {
-      return res.status(403).json({ message: "Misafir hesaplarında şifre değiştirilemez" });
+      return res.status(403).json({
+        message: "Misafir hesaplarında şifre değiştirilemez",
+      });
     }
 
     const { currentPassword, newPassword } = req.body || {};
     if (!currentPassword || !newPassword)
-      return res.status(400).json({ message: "currentPassword ve newPassword zorunludur" });
+      return res.status(400).json({
+        message: "currentPassword ve newPassword zorunludur",
+      });
 
-    const u = await User.findById(req.user.id).select("+password +providers").exec();
+    const u = await User.findById(req.user.id)
+      .select("+password +providers")
+      .exec();
     if (!u) return res.status(404).json({ message: "User not found" });
 
-    const providerNames = (u.providers || []).map(p => p?.name);
+    const providerNames = (u.providers || []).map((p) => p?.name);
     if (!providerNames.includes("password"))
-      return res.status(400).json({ message: "Hesap şifre sağlayıcısına bağlı değil" });
+      return res.status(400).json({
+        message: "Hesap şifre sağlayıcısına bağlı değil",
+      });
 
     const ok = await u.compare(currentPassword);
-    if (!ok) return res.status(400).json({ message: "Mevcut şifre hatalı" });
+    if (!ok)
+      return res
+        .status(400)
+        .json({ message: "Mevcut şifre hatalı" });
 
     u.password = newPassword;
     await u.save();
     res.json({ ok: true });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
 
 /* ========== REFRESH / LOGOUT ========== */
@@ -508,14 +603,21 @@ export const changePassword = async (req, res, next) => {
 export const refresh = async (req, res, next) => {
   try {
     const { refreshToken } = req.body || {};
-    if (!refreshToken) return res.status(400).json({ message: "refreshToken gerekli" });
+    if (!refreshToken)
+      return res
+        .status(400)
+        .json({ message: "refreshToken gerekli" });
 
     const payload = jwt.verify(refreshToken, REFRESH_SECRET); // { id, v, iat, exp }
-    // kullanıcı silinmiş olabilir
-    const u = await User.findById(payload.id).select("_id role name restaurantId");
-    if (!u) return res.status(401).json({ message: "Unauthorized" });
 
-    // yeni access üret
+    // kullanıcı silinmiş olabilir
+    const u = await User.findById(payload.id).select(
+      "_id role name restaurantId organizations restaurantMemberships"
+    );
+    if (!u)
+      return res.status(401).json({ message: "Unauthorized" });
+
+    // yeni access üret (membership’lar token’a tekrar yazılıyor)
     const token = signAccessToken(u);
     // istersen rotation yap (yeni refresh üret):
     const newRefresh = signRefreshToken(u);

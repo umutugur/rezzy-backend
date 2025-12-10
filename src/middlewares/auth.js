@@ -34,6 +34,14 @@ export function auth(required = true) {
         role: payload.role || "customer",
         name: payload.name || null,
         restaurantId: payload.restaurantId ?? null,
+
+        // 🆕 Multi-org membership bilgileri token’dan gelsin
+        organizations: Array.isArray(payload.organizations)
+          ? payload.organizations
+          : [],
+        restaurantMemberships: Array.isArray(payload.restaurantMemberships)
+          ? payload.restaurantMemberships
+          : [],
         // istersen token’ı da taşı
         // token,
       };

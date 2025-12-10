@@ -145,6 +145,20 @@ export async function adminListOrganizations(params?: {
 }
 
 /**
+ * POST /admin/organizations
+ * - Yeni organization oluşturma
+ */
+export async function adminCreateOrganization(input: {
+  name: string;
+  region?: string;
+  logoUrl?: string;
+  taxNumber?: string;
+  ownerId?:string;
+}) {
+  const { data } = await api.post("/admin/organizations", input);
+  return data as AdminOrganization;
+}
+/**
  * GET /admin/organizations/:id
  * - Detay + muhtemelen bağlı restoranlar, üyeler vs.
  */
@@ -154,17 +168,66 @@ export async function adminGetOrganization(id: string) {
 }
 
 /**
- * POST /admin/organizations
- * - Yeni organization oluşturma
+ * POST /admin/organizations/:id/members
+ * - Organizasyona yeni üye ekleme
  */
-export async function adminCreateOrganization(input: {
-  name: string;
-  region?: string;
-  logoUrl?: string;
-  taxNumber?: string;
-}) {
-  const { data } = await api.post("/admin/organizations", input);
-  return data as AdminOrganization;
+export async function adminAddOrganizationMember(
+  orgId: string,
+  input: { userId: string; role: string }
+) {
+  const { data } = await api.post(
+    `/admin/organizations/${orgId}/members`,
+    input
+  );
+  return data;
+}
+
+/**
+ * DELETE /admin/organizations/:id/members/:userId
+ * - Organizasyon üyeliği kaldırma
+ */
+export async function adminRemoveOrganizationMember(
+  orgId: string,
+  userId: string
+) {
+  const { data } = await api.delete(
+    `/admin/organizations/${orgId}/members/${userId}`
+  );
+  return data;
+}
+// =========================
+// ADMIN — Restaurant Memberships
+// =========================
+
+export async function adminAddRestaurantMember(
+  rid: string,
+  input: { userId: string; role: string }
+) {
+  const { data } = await api.post(
+    `/admin/restaurants/${rid}/members`,
+    input
+  );
+  return data as {
+    ok: boolean;
+    userId: string;
+    restaurantId: string;
+    role: string;
+  };
+}
+
+export async function adminRemoveRestaurantMember(
+  rid: string,
+  userId: string
+) {
+  const { data } = await api.delete(
+    `/admin/restaurants/${rid}/members/${userId}`
+  );
+  return data as {
+    ok: boolean;
+    userId: string;
+    restaurantId: string;
+    removed?: boolean;
+  };
 }
 
 // =========================

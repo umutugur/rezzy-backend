@@ -6,7 +6,6 @@ import Review from "../models/Review.js";
 import Complaint from "../models/Complaint.js";
 import Organization from "../models/Organization.js";
 import BranchRequest from "../models/BranchRequest.js";
-import { ensureRestaurantForOwner } from "../services/restaurantOwner.service.js";
 // EN ÜSTE EKLE (diğer importların yanına)
 import { Parser } from "json2csv";
 
@@ -36,6 +35,73 @@ function nextCursor(items, limit) {
 }
 function cut(items, limit) {
   return items.slice(0, limit);
+}
+
+/**
+ * ✅ Tek noktadan membership güncelleme helper’ı
+ *
+ * @param {string|mongoose.Types.ObjectId} userId
+ * @param {Object} options
+ * @param {string|mongoose.Types.ObjectId} [options.organizationId]
+ * @param {string} [options.orgRole] - "org_owner" | "org_admin" | "org_finance"
+ * @param {string|mongoose.Types.ObjectId} [options.restaurantId]
+ * @param {string} [options.restaurantRole] - "location_manager" | "staff"
+ * @param {boolean} [options.setLegacyRestaurantId]
+ */
+async function assignMemberships(userId, options = {}) {
+  const {
+    organizationId,
+    orgRole,
+    restaurantId,
+    restaurantRole,
+    setLegacyRestaurantId,
+  } = options;
+
+  const uid = toObjectId(userId);
+  if (!uid) return null;
+
+  const update = {};
+  const addToSet = {};
+
+  if (organizationId && orgRole) {
+    addToSet.organizations = {
+      organization: toObjectId(organizationId),
+      role: orgRole,
+    };
+  }
+
+  if (restaurantId && restaurantRole) {
+    addToSet.restaurantMemberships = {
+      restaurant: toObjectId(restaurantId),
+      role: restaurantRole,
+    };
+  }
+
+  if (Object.keys(addToSet).length > 0) {
+    update.$addToSet = addToSet;
+  }
+
+  if (setLegacyRestaurantId && restaurantId) {
+    update.$set = {
+      ...(update.$set || {}),
+      restaurantId: toObjectId(restaurantId),
+    };
+  }
+
+  if (Object.keys(update).length === 0) {
+    // Hiçbir şey güncellenecek değilse dokunma
+    return null;
+  }
+
+  try {
+    return await User.findByIdAndUpdate(uid, update, { new: true }).lean();
+  } catch (e) {
+    // Sessiz fail – admin akışını bozmamak için
+    if (process.env.AUTH_DEBUG === "1") {
+      console.log("[assignMemberships] error:", e?.message);
+    }
+    return null;
+  }
 }
 
 /* ------------ KPI core ------------ */
@@ -329,13 +395,22 @@ export const listOrganizations = async (req, res, next) => {
     const { limit, cursor } = pageParams(req.query || {});
 
     const q = {};
+
     if (query) {
       const re = new RegExp(String(query), "i");
-      q.$or = [{ name: re }, { legalName: re }];
+      q.$or = [
+        { name: re },
+        { legalName: re },
+        { taxNumber: re },
+        { region: re },
+      ];
     }
+
     if (region) {
+      // Ayrı region filtresi geldiyse, net olarak bunu da zorla
       q.region = String(region).toUpperCase();
     }
+
     if (cursor) {
       q._id = { $lt: cursor };
     }
@@ -348,8 +423,36 @@ export const listOrganizations = async (req, res, next) => {
       )
       .lean();
 
+    const sliced = cut(rows, limit);
+    const orgIds = sliced.map((o) => o._id).filter(Boolean);
+
+    // 🔹 Her organizasyona bağlı restoran sayısını hesapla
+    let countMap = new Map();
+    if (orgIds.length > 0) {
+      const counts = await Restaurant.aggregate([
+        { $match: { organizationId: { $in: orgIds } } },
+        {
+          $group: {
+            _id: "$organizationId",
+            c: { $sum: 1 },
+          },
+        },
+      ]);
+
+      counts.forEach((r) => {
+        countMap.set(String(r._id), r.c || 0);
+      });
+    }
+
+    const items = sliced.map((o) => ({
+      ...o,
+      // Frontend tarafında restaurantsCount / restaurantCount / branchesCount
+      // hepsi deneniyor, burada net bir isim veriyoruz:
+      restaurantCount: countMap.get(String(o._id)) ?? 0,
+    }));
+
     res.json({
-      items: cut(rows, limit),
+      items,
       nextCursor: nextCursor(rows, limit),
     });
   } catch (e) {
@@ -372,7 +475,16 @@ export const getOrganizationDetail = async (req, res, next) => {
     if (!org)
       return res.status(404).json({ message: "Organization not found" });
 
-    res.json(org);
+    // 🔹 Bu organizasyona bağlı restoranları çek
+    const restaurants = await Restaurant.find({ organizationId: oid })
+      .select("_id name city region isActive")
+      .sort({ name: 1 })
+      .lean();
+
+    res.json({
+      ...org,
+      restaurants,
+    });
   } catch (e) {
     next(e);
   }
@@ -389,6 +501,7 @@ export const createOrganization = async (req, res, next) => {
       description,
       taxNumber,
       taxOffice,
+      ownerId,
     } = req.body || {};
 
     if (!name || !String(name).trim()) {
@@ -416,6 +529,17 @@ export const createOrganization = async (req, res, next) => {
       taxOffice: taxOffice || undefined,
     });
 
+    // ✅ Owner ataması: body.ownerId varsa onu, yoksa req.user.id'yi owner say
+    const resolvedOwnerId =
+      ownerId || req.user?.id || req.user?._id || null;
+
+    if (resolvedOwnerId) {
+      await assignMemberships(resolvedOwnerId, {
+        organizationId: org._id,
+        orgRole: "org_owner",
+      });
+    }
+
     res.status(201).json({
       ok: true,
       organization: {
@@ -436,7 +560,207 @@ export const createOrganization = async (req, res, next) => {
     next(e);
   }
 };
+// ------------------------
+// Organization Membership
+// ------------------------
 
+export async function addOrganizationMember(req, res, next) {
+  try {
+    const { oid } = req.params;
+    const { userId, role } = req.body || {};
+
+    if (!oid || !userId || !role) {
+      return res
+        .status(400)
+        .json({ message: "organization, userId ve role zorunludur" });
+    }
+
+    const org = await Organization.findById(oid);
+    if (!org) {
+      return res.status(404).json({ message: "Organizasyon bulunamadı" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+
+    // user.organizations: [{ organization: ObjectId, role: string }]
+    if (!Array.isArray(user.organizations)) {
+      user.organizations = [];
+    }
+
+    const existing = user.organizations.find(
+      (m) => String(m.organization) === String(oid)
+    );
+
+    if (existing) {
+      // varsa rol güncelle
+      existing.role = role;
+    } else {
+      // yoksa yeni membership ekle
+      user.organizations.push({
+        organization: org._id,
+        role,
+      });
+    }
+
+    await user.save();
+
+    // Frontend zaten tekrar getOrganizationDetail çağırıyor,
+    // o yüzden burada full org dönmek zorunda değiliz.
+    return res.json({
+      ok: true,
+      userId: user._id,
+      organizationId: org._id,
+      role,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function removeOrganizationMember(req, res, next) {
+  try {
+    const { oid, uid } = req.params;
+
+    if (!oid || !uid) {
+      return res
+        .status(400)
+        .json({ message: "organization ve userId zorunludur" });
+    }
+
+    const user = await User.findById(uid);
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+
+    if (!Array.isArray(user.organizations)) {
+      user.organizations = [];
+    }
+
+    const before = user.organizations.length;
+
+    user.organizations = user.organizations.filter(
+      (m) => String(m.organization) !== String(oid)
+    );
+
+    const after = user.organizations.length;
+
+    // Değişiklik olmasa bile 200 dönmek sorun değil
+    if (before === after) {
+      // isteğe bağlı: message ile bilgi verilebilir
+    }
+
+    await user.save();
+
+    return res.json({
+      ok: true,
+      userId: user._id,
+      organizationId: oid,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+// ------------------------
+// Restaurant Membership
+// ------------------------
+
+export async function addRestaurantMember(req, res, next) {
+  try {
+    const { rid } = req.params;
+    const { userId, role } = req.body || {};
+
+    if (!rid || !userId || !role) {
+      return res
+        .status(400)
+        .json({ message: "restaurant, userId ve role zorunludur" });
+    }
+
+    const restaurant = await Restaurant.findById(rid);
+    if (!restaurant) {
+      return res.status(404).json({ message: "Restoran bulunamadı" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+
+    // user.restaurantMemberships: [{ restaurant: ObjectId, role: string }]
+    if (!Array.isArray(user.restaurantMemberships)) {
+      user.restaurantMemberships = [];
+    }
+
+    const existing = user.restaurantMemberships.find(
+      (m) => String(m.restaurant) === String(rid)
+    );
+
+    if (existing) {
+      // varsa rol güncelle
+      existing.role = role;
+    } else {
+      // yoksa yeni membership ekle
+      user.restaurantMemberships.push({
+        restaurant: restaurant._id,
+        role,
+      });
+    }
+
+    await user.save();
+
+    return res.json({
+      ok: true,
+      userId: user._id,
+      restaurantId: restaurant._id,
+      role,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function removeRestaurantMember(req, res, next) {
+  try {
+    const { rid, uid } = req.params;
+
+    if (!rid || !uid) {
+      return res
+        .status(400)
+        .json({ message: "restaurant ve userId zorunludur" });
+    }
+
+    const user = await User.findById(uid);
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+
+    if (!Array.isArray(user.restaurantMemberships)) {
+      user.restaurantMemberships = [];
+    }
+
+    const before = user.restaurantMemberships.length;
+
+    user.restaurantMemberships = user.restaurantMemberships.filter(
+      (m) => String(m.restaurant) !== String(rid)
+    );
+
+    const after = user.restaurantMemberships.length;
+
+    // değişiklik olmasa bile 200 dönmesi sorun değil
+    await user.save();
+
+    return res.json({
+      ok: true,
+      userId: user._id,
+      restaurantId: rid,
+      removed: before !== after,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
 /**
  * Admin → Organizasyona şube (restaurant) ekleme
  * POST /admin/organizations/:oid/restaurants
@@ -540,23 +864,14 @@ export const createOrganizationRestaurant = async (req, res, next) => {
       businessType: businessType || "restaurant",
     });
 
-    // Owner -> organizations & restaurantMemberships güncelle
-    await User.findByIdAndUpdate(
-      owner._id,
-      {
-        $addToSet: {
-          organizations: {
-            organization: org._id,
-            role: "org_owner",
-          },
-          restaurantMemberships: {
-            restaurant: doc._id,
-            role: "location_manager",
-          },
-        },
-      },
-      { new: true }
-    ).lean();
+    // ✅ Owner -> organizations & restaurantMemberships güncelle
+    await assignMemberships(owner._id, {
+      organizationId: org._id,
+      orgRole: "org_owner",
+      restaurantId: doc._id,
+      restaurantRole: "location_manager",
+      setLegacyRestaurantId: true, // backward compat için
+    });
 
     res.status(201).json({
       ok: true,
@@ -603,7 +918,7 @@ export const listRestaurants = async (req, res, next) => {
       q.city = { $regex: String(city), $options: "i" };
     }
 
-    // 🔹 BURASI YENİ: Organizasyona göre filtre
+    // 🔹 Organizasyona göre filtre
     if (organizationId) {
       const oid = toObjectId(organizationId);
       if (!oid) {
@@ -694,91 +1009,22 @@ export const createUser = async (req, res, next) => {
   }
 };
 
+/**
+ * ⚠️ LEGACY: Tek restoranlı yapı için kullanılan eski endpoint.
+ *
+ * Yeni mimaride:
+ *  - Restaurant her zaman bir Organization’a ait olmalı.
+ *  - Owner membership’leri organizations[] / restaurantMemberships[] üzerinden yönetiliyor.
+ *
+ * Bu yüzden bu endpoint’i artık gerçek restoran yaratmak için KULLANMIYORUZ.
+ * Admin panel tarafında /admin/organizations/:oid/restaurants endpoint’ini kullanman gerekiyor.
+ */
 export const createRestaurant = async (req, res, next) => {
   try {
-    let {
-      ownerId,
-      name,
-      city,
-      address,
-      phone,
-      email,
-      commissionRate,
-      depositRequired,
-      depositAmount,
-      checkinWindowBeforeMinutes,
-      checkinWindowAfterMinutes,
-      underattendanceThresholdPercent,
-    } = req.body || {};
-
-    if (!ownerId || !String(ownerId).trim()) {
-      return res.status(400).json({ message: "ownerId is required" });
-    }
-    const owner = toObjectId(ownerId);
-    if (!owner) return res.status(400).json({ message: "Invalid ownerId" });
-
-    if (!name || !String(name).trim()) {
-      return res.status(400).json({ message: "name is required" });
-    }
-
-    // Komisyon normalizasyonu: 5 -> 0.05
-    if (commissionRate != null) {
-      commissionRate = Number(commissionRate);
-      if (Number.isNaN(commissionRate))
-        return res.status(400).json({ message: "Invalid commissionRate" });
-      if (commissionRate > 1) commissionRate = commissionRate / 100;
-      commissionRate = Math.max(0, Math.min(1, commissionRate));
-    }
-
-    // Owner var mı?
-    const u = await User.findById(owner).lean();
-    if (!u) return res.status(404).json({ message: "Owner user not found" });
-
-    const doc = await Restaurant.create({
-      owner,
-      name: String(name).trim(),
-      city: city || undefined,
-      address: address || undefined,
-      phone: phone || undefined,
-      email: email || undefined,
-      commissionRate:
-        commissionRate != null ? commissionRate : undefined,
-      depositRequired: !!depositRequired,
-      depositAmount:
-        depositAmount != null ? Number(depositAmount) : undefined,
-      checkinWindowBeforeMinutes:
-        checkinWindowBeforeMinutes != null
-          ? Number(checkinWindowBeforeMinutes)
-          : undefined,
-      checkinWindowAfterMinutes:
-        checkinWindowAfterMinutes != null
-          ? Number(checkinWindowAfterMinutes)
-          : undefined,
-      underattendanceThresholdPercent:
-        underattendanceThresholdPercent != null
-          ? Number(underattendanceThresholdPercent)
-          : undefined,
-    });
-
-    // Owner'ı restoran sahibi yap ve ilişkilendir
-    await User.findByIdAndUpdate(owner, {
-      $set: {
-        role: "restaurant",
-        restaurantId: doc._id,
-      },
-    });
-
-    res.status(201).json({
-      ok: true,
-      restaurant: {
-        _id: doc._id,
-        name: doc.name,
-        city: doc.city,
-        address: doc.address,
-        phone: doc.phone,
-        email: doc.email,
-        commissionRate: doc.commissionRate,
-      },
+    return res.status(410).json({
+      ok: false,
+      message:
+        "Legacy /admin/restaurants endpoint is deprecated. Please use /admin/organizations/:oid/restaurants instead.",
     });
   } catch (e) {
     next(e);
@@ -1126,21 +1372,21 @@ export const updateUserRole = async (req, res, next) => {
     if (!uid) return res.status(400).json({ message: "Invalid user id" });
 
     const { role } = req.body || {};
-    const allowed = ["customer", "restaurant", "admin"];
-    if (!allowed.includes(role))
-      return res.status(400).json({ message: "Invalid role" });
+    // ✅ Global rol sadeleştirme: sadece "customer" ve "admin" yazılabilir.
+    const allowed = ["customer", "admin"];
+    if (!allowed.includes(role)) {
+      return res.status(400).json({
+        message:
+          'Invalid role. Only "customer" and "admin" can be set in the new multi-organization model.',
+      });
+    }
 
     const u0 = await User.findByIdAndUpdate(
       uid,
       { $set: { role } },
       { new: true }
-    );
+    ).lean();
     if (!u0) return res.status(404).json({ message: "User not found" });
-
-    if (u0.role === "restaurant") {
-      await ensureRestaurantForOwner(u0._id);
-      await u0.populate({ path: "restaurantId", select: "_id name" });
-    }
 
     res.json({
       ok: true,
@@ -1149,9 +1395,8 @@ export const updateUserRole = async (req, res, next) => {
         name: u0.name,
         email: u0.email,
         role: u0.role,
-        restaurantId: u0.restaurantId
-          ? u0.restaurantId.toString()
-          : null,
+        // Legacy restaurantId bilgisi sadece okunur amaçlı dönebilir
+        restaurantId: u0.restaurantId ? u0.restaurantId.toString() : null,
       },
     });
   } catch (e) {
@@ -1556,34 +1801,14 @@ export const approveBranchRequestAdmin = async (req, res, next) => {
       isActive: true,
     });
 
-    // Kullanıcıyı organizasyon & şubeyle ilişkilendir
-    const orgEntryExists = Array.isArray(user.organizations)
-      ? user.organizations.some(
-          (o) => String(o.organization) === String(br.organizationId)
-        )
-      : false;
-
-    if (!orgEntryExists) {
-      user.organizations = [
-        ...(user.organizations || []),
-        { organization: br.organizationId, role: "org_owner" },
-      ];
-    }
-
-    const membershipExists = Array.isArray(user.restaurantMemberships)
-      ? user.restaurantMemberships.some(
-          (m) => String(m.restaurant) === String(restaurantDoc._id)
-        )
-      : false;
-
-    if (!membershipExists) {
-      user.restaurantMemberships = [
-        ...(user.restaurantMemberships || []),
-        { restaurant: restaurantDoc._id, role: "location_manager" },
-      ];
-    }
-
-    await user.save();
+    // ✅ Kullanıcıyı organizasyon & şubeyle ilişkilendir
+    await assignMemberships(user._id, {
+      organizationId: br.organizationId,
+      orgRole: "org_owner",
+      restaurantId: restaurantDoc._id,
+      restaurantRole: "location_manager",
+      setLegacyRestaurantId: true,
+    });
 
     // Branch request'i güncelle
     br.status = "approved";

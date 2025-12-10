@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
-import { allow } from "../middlewares/roles.js";
+import {
+  allow,
+  allowAdmin,
+  allowOrgOwnerOrAdmin,
+  allowLocationManagerOrAdmin,
+} from "../middlewares/roles.js";
 import { validate } from "../middlewares/validate.js";
 import {
   kpiGlobal,
@@ -35,6 +40,10 @@ import {
   listBranchRequestsAdmin,
   approveBranchRequestAdmin,
   rejectBranchRequestAdmin,
+   addOrganizationMember,
+  removeOrganizationMember,
+  addRestaurantMember,
+  removeRestaurantMember,
 } from "../controllers/admin.controller.js";
 import {
   commissionsPreview,
@@ -54,6 +63,7 @@ import {
   updateOrgItem,
   deleteOrgItem,
 } from "../controllers/orgMenu.controller.js";
+
 const r = Router();
 
 // ---- KPI / Analytics ----
@@ -74,6 +84,21 @@ r.post(
   createOrganizationRestaurant
 );
 
+// 🔽 Organizasyon üyelikleri (membership)
+r.post(
+  "/organizations/:oid/members",
+  auth(),
+  allow("admin"),
+  addOrganizationMember
+);
+
+r.delete(
+  "/organizations/:oid/members/:uid",
+  auth(),
+  allow("admin"),
+  removeOrganizationMember
+);
+
 // ---- Restaurants ----
 r.get("/restaurants", auth(), allow("admin"), listRestaurants);
 r.post("/restaurants", auth(), allow("admin"), createRestaurant);
@@ -89,6 +114,21 @@ r.patch(
   auth(),
   allow("admin"),
   updateRestaurantCommission
+);
+
+// 🔽 Restaurant membership
+r.post(
+  "/restaurants/:rid/members",
+  auth(),
+  allow("admin"),
+  addRestaurantMember
+);
+
+r.delete(
+  "/restaurants/:rid/members/:uid",
+  auth(),
+  allow("admin"),
+  removeRestaurantMember
 );
 
 // ---- Users ----
@@ -140,6 +180,7 @@ r.post(
   validate(adminRejectBranchRequestSchema),
   rejectBranchRequestAdmin
 );
+
 // ---- Commissions ----
 r.get(
   "/commissions/monthly",
@@ -153,6 +194,7 @@ r.get(
   allow("admin"),
   commissionsExport
 );
+
 // ---- Organization Menu (Org-level menü) ----
 r.get(
   "/organizations/:oid/menu",

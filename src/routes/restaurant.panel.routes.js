@@ -1,7 +1,8 @@
-// src/routes/restaurant.panel.routes.js
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
-import { allow } from "../middlewares/roles.js";
+import {
+  allowLocationManagerOrAdmin,
+} from "../middlewares/roles.js";
 import {
   listReservationsForRestaurant,
   getInsightsForRestaurant,
@@ -16,13 +17,24 @@ import { getRestaurantReportsOverview } from "../controllers/restaurant.reports.
 
 const r = Router();
 
-// Restoran panel endpointleri (restoran sahibi veya admin)
+/**
+ * Restoran panel endpointleri
+ * Erişim:
+ *  - Global admin
+ *  - Veya o restoranda restaurantMemberships.role === "location_manager" olan kullanıcı
+ *
+ * allowLocationManagerOrAdmin("rid") middleware’i:
+ *  - req.user.role === "admin" ise direkt geçer
+ *  - Değilse req.user.restaurantMemberships içinde
+ *      { restaurant: req.params.rid, role: "location_manager" }
+ *    kaydı arar.
+ */
 
 // Rezervasyon listesi
 r.get(
   "/:rid/reservations",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   listReservationsForRestaurant
 );
 
@@ -30,7 +42,7 @@ r.get(
 r.get(
   "/:rid/insights",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   getInsightsForRestaurant
 );
 
@@ -38,7 +50,7 @@ r.get(
 r.get(
   "/:rid/tables/live",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   getTablesLive
 );
 
@@ -46,7 +58,7 @@ r.get(
 r.patch(
   "/:rid/tables/layout",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   updateTablesLayout
 );
 
@@ -54,7 +66,7 @@ r.patch(
 r.get(
   "/:rid/live-orders",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   listLiveOrdersForRestaurant
 );
 
@@ -62,7 +74,7 @@ r.get(
 r.get(
   "/:rid/tables/:tableKey/detail",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   getTableDetailForRestaurant
 );
 
@@ -70,7 +82,7 @@ r.get(
 r.post(
   "/:rid/tables/:tableKey/close-session",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   closeTableSessionForRestaurant
 );
 
@@ -78,14 +90,15 @@ r.post(
 r.post(
   "/:rid/tables/:tableKey/service/resolve",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   resolveTableServiceRequests
 );
+
 // 🔢 Gelişmiş raporlar (overview)
 r.get(
   "/:rid/reports/overview",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   getRestaurantReportsOverview
 );
 

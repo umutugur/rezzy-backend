@@ -6,9 +6,12 @@ import { Card } from "../../components/Card";
 import {
   adminListOrganizations,
   adminCreateOrganization,
+  adminSearchUsers,
   type AdminOrganization,
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
+
+type UserLite = { _id: string; name?: string; email?: string; role?: string };
 
 async function fetchOrganizations(
   query: string
@@ -33,20 +36,35 @@ export default function AdminOrganizationsPage() {
   const [region, setRegion] = React.useState("");
   const [taxNumber, setTaxNumber] = React.useState("");
 
+  // Owner seçimi
+  const [ownerQuery, setOwnerQuery] = React.useState("");
+  const [owner, setOwner] = React.useState<UserLite | null>(null);
+
+  const userSearchQ = useQuery({
+    queryKey: ["admin-org-owner-search", ownerQuery],
+    queryFn: () => adminSearchUsers(ownerQuery),
+    enabled: ownerQuery.trim().length >= 2,
+  });
+
   const createMut = useMutation({
     mutationFn: () =>
       adminCreateOrganization({
         name: name.trim(),
         region: region.trim() || undefined,
         taxNumber: taxNumber.trim() || undefined,
+        ownerId: owner?._id as string,
       }),
     onSuccess: (org) => {
       showToast("Organizasyon oluşturuldu", "success");
       setName("");
       setRegion("");
       setTaxNumber("");
+      setOwner(null);
+      setOwnerQuery("");
+
       qc.invalidateQueries({ queryKey: ["admin-organizations"] });
-      // İstersen otomatik detay sayfasına yönlendir:
+
+      // Otomatik detay sayfasına yönlendir:
       nav(`/admin/organizations/${org._id}`);
     },
     onError: (err: any) => {
@@ -62,6 +80,10 @@ export default function AdminOrganizationsPage() {
     e.preventDefault();
     if (!name.trim()) {
       showToast("İsim zorunlu", "error");
+      return;
+    }
+    if (!owner?._id) {
+      showToast("Önce organizasyon sahibi kullanıcıyı seçin", "error");
       return;
     }
     createMut.mutate();
@@ -166,10 +188,7 @@ export default function AdminOrganizationsPage() {
               })}
               {(!list || list.length === 0) && (
                 <tr>
-                  <td
-                    className="py-3 px-4 text-gray-500"
-                    colSpan={5}
-                  >
+                  <td className="py-3 px-4 text-gray-500" colSpan={5}>
                     Kayıt yok
                   </td>
                 </tr>
@@ -180,57 +199,134 @@ export default function AdminOrganizationsPage() {
 
         {/* Yeni organization formu */}
         <Card title="Yeni Organizasyon Ekle">
-          <form
-            onSubmit={handleCreate}
-            className="grid gap-3 md:grid-cols-3"
-          >
-            <div className="md:col-span-1">
-              <label className="block text-xs text-gray-600 mb-1">
-                İsim *
-              </label>
-              <input
-                type="text"
-                className="border rounded-lg px-3 py-2 w-full text-sm"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
+          <div className="space-y-4">
+            {/* Owner seçimi */}
             <div>
-              <label className="block text-xs text-gray-600 mb-1">
-                Bölge (ülke kodu, örn: TR, UK)
-              </label>
-              <input
-                type="text"
-                className="border rounded-lg px-3 py-2 w-full text-sm"
-                value={region}
-                onChange={(e) => setRegion(e.target.value.toUpperCase())}
-                maxLength={2}
-              />
+              <h3 className="text-sm font-medium mb-2">
+                Organizasyon Sahibi Seçimi
+              </h3>
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">
+                    Kullanıcı Ara (isim / e-posta)
+                  </label>
+                  <input
+                    type="text"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={ownerQuery}
+                    onChange={(e) => {
+                      setOwnerQuery(e.target.value);
+                      setOwner(null);
+                    }}
+                    placeholder="En az 2 karakter girin"
+                  />
+                  {ownerQuery.trim().length >= 2 && (
+                    <div className="mt-2 max-h-48 overflow-auto border rounded-lg">
+                      {userSearchQ.isLoading && (
+                        <div className="px-3 py-2 text-sm text-gray-500">
+                          Aranıyor…
+                        </div>
+                      )}
+                      {userSearchQ.data?.length === 0 && !userSearchQ.isLoading && (
+                        <div className="px-3 py-2 text-sm text-gray-500">
+                          Sonuç yok
+                        </div>
+                      )}
+                      {(userSearchQ.data ?? []).map((u: UserLite) => (
+                        <button
+                          key={u._id}
+                          type="button"
+                          onClick={() => setOwner(u)}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
+                            owner?._id === u._id ? "bg-brand-50" : ""
+                          }`}
+                        >
+                          <div className="font-medium">{u.name || "-"}</div>
+                          <div className="text-gray-500">{u.email || ""}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">
+                    Seçilen Sahip
+                  </label>
+                  <div className="border rounded-lg px-3 py-2 min-h-[42px]">
+                    {owner ? (
+                      <div>
+                        <div className="font-medium">{owner.name || "-"}</div>
+                        <div className="text-gray-500 text-sm">
+                          {owner.email || ""}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-gray-500 text-sm">
+                        Henüz seçilmedi
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Organizasyon oluştururken en az bir ana sahip kullanıcı seçilmelidir.
+                  </p>
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">
-                Vergi No
-              </label>
-              <input
-                type="text"
-                className="border rounded-lg px-3 py-2 w-full text-sm"
-                value={taxNumber}
-                onChange={(e) => setTaxNumber(e.target.value)}
-              />
-            </div>
-            <div className="md:col-span-3">
-              <button
-                type="submit"
-                disabled={createMut.isPending}
-                className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm disabled:opacity-60"
-              >
-                {createMut.isPending
-                  ? "Oluşturuluyor…"
-                  : "Organizasyon Oluştur"}
-              </button>
-            </div>
-          </form>
+
+            {/* Form alanları */}
+            <form
+              onSubmit={handleCreate}
+              className="grid gap-3 md:grid-cols-3"
+            >
+              <div className="md:col-span-1">
+                <label className="block text-xs text-gray-600 mb-1">
+                  İsim *
+                </label>
+                <input
+                  type="text"
+                  className="border rounded-lg px-3 py-2 w-full text-sm"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Bölge (ülke kodu, örn: TR, UK)
+                </label>
+                <input
+                  type="text"
+                  className="border rounded-lg px-3 py-2 w-full text-sm"
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value.toUpperCase())}
+                  maxLength={3}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Vergi No
+                </label>
+                <input
+                  type="text"
+                  className="border rounded-lg px-3 py-2 w-full text-sm"
+                  value={taxNumber}
+                  onChange={(e) => setTaxNumber(e.target.value)}
+                />
+              </div>
+              <div className="md:col-span-3">
+                <button
+                  type="submit"
+                  disabled={createMut.isPending}
+                  className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm disabled:opacity-60"
+                >
+                  {createMut.isPending
+                    ? "Oluşturuluyor…"
+                    : "Organizasyon Oluştur"}
+                </button>
+              </div>
+            </form>
+          </div>
         </Card>
       </div>
     </div>

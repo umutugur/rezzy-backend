@@ -11,6 +11,8 @@ import {
   adminGetOrganization,
   adminCreateOrganizationRestaurant,
   adminSearchUsers,
+  adminAddOrganizationMember,
+  adminRemoveOrganizationMember,
   type AdminOrganization,
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
@@ -24,6 +26,7 @@ type OrgDetail = AdminOrganization & {
     region?: string;
     isActive?: boolean;
   }>;
+  members?: any[];
 };
 
 type UserOption = {
@@ -32,6 +35,29 @@ type UserOption = {
   email?: string;
   role?: string;
 };
+
+const ORG_ROLES = [
+  { value: "org_owner", label: "Owner" },
+  { value: "org_admin", label: "Admin" },
+  { value: "org_finance", label: "Finans" },
+  { value: "org_staff", label: "Staff" },
+];
+
+function prettyOrgRole(role?: string) {
+  if (!role) return "-";
+  switch (role) {
+    case "org_owner":
+      return "Owner";
+    case "org_admin":
+      return "Admin";
+    case "org_finance":
+      return "Finans";
+    case "org_staff":
+      return "Staff";
+    default:
+      return role;
+  }
+}
 
 export default function AdminOrganizationDetailPage() {
   const { oid = "" } = useParams<{ oid: string }>();
@@ -43,7 +69,120 @@ export default function AdminOrganizationDetailPage() {
     enabled: !!oid,
   });
 
-  // Owner seçimi için user search
+  const org = orgQ.data;
+
+  const restaurants: Array<{
+    _id: string;
+    name: string;
+    city?: string;
+    region?: string;
+    isActive?: boolean;
+  }> =
+    (org as any)?.restaurants ??
+    (org as any)?.branches ??
+    (org as any)?.restaurantList ??
+    [];
+
+  // =======================
+  // ORGANIZATION MEMBERSHIP
+  // =======================
+
+  // Org members (backend shape esnek tutuldu)
+  const members: any[] = (org as any)?.members ?? [];
+
+  const [memberQuery, setMemberQuery] = React.useState("");
+  const [memberResults, setMemberResults] = React.useState<UserOption[]>([]);
+  const [memberSearchLoading, setMemberSearchLoading] =
+    React.useState(false);
+  const [selectedMember, setSelectedMember] =
+    React.useState<UserOption | null>(null);
+  const [memberRole, setMemberRole] =
+    React.useState<string>("org_admin");
+
+  const handleSearchMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!memberQuery.trim()) return;
+    try {
+      setMemberSearchLoading(true);
+      const res = await adminSearchUsers(memberQuery.trim());
+      setMemberResults(res);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Kullanıcı aranamadı";
+      showToast(msg, "error");
+    } finally {
+      setMemberSearchLoading(false);
+    }
+  };
+
+  const selectMember = (u: UserOption) => {
+    setSelectedMember(u);
+    setMemberResults([]);
+  };
+
+  const addMemberMut = useMutation({
+    mutationFn: () =>
+      adminAddOrganizationMember(oid, {
+        userId: selectedMember?._id as string,
+        role: memberRole,
+      }),
+    onSuccess: () => {
+      showToast("Üye eklendi", "success");
+      setSelectedMember(null);
+      setMemberQuery("");
+      setMemberRole("org_admin");
+      qc.invalidateQueries({ queryKey: ["admin-organization", oid] });
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Üye eklenemedi";
+      showToast(msg, "error");
+    },
+  });
+
+  const removeMemberMut = useMutation({
+    mutationFn: (userId: string) =>
+      adminRemoveOrganizationMember(oid, userId),
+    onSuccess: () => {
+      showToast("Üyelik kaldırıldı", "success");
+      qc.invalidateQueries({ queryKey: ["admin-organization", oid] });
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Üyelik kaldırılamadı";
+      showToast(msg, "error");
+    },
+  });
+
+  const handleAddMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedMember?._id) {
+      showToast("Önce kullanıcı seçin", "error");
+      return;
+    }
+    if (!memberRole) {
+      showToast("Rol seçin", "error");
+      return;
+    }
+    addMemberMut.mutate();
+  };
+
+  const handleRemoveMember = (userId: string) => {
+    if (!userId) return;
+    removeMemberMut.mutate(userId);
+  };
+
+  // =======================
+  // RESTAURANT CREATE FORM
+  // =======================
+
+  // Owner seçimi için user search (restoran)
   const [ownerQuery, setOwnerQuery] = React.useState("");
   const [ownerResults, setOwnerResults] = React.useState<UserOption[]>([]);
   const [ownerSearchLoading, setOwnerSearchLoading] =
@@ -128,19 +267,6 @@ export default function AdminOrganizationDetailPage() {
     createRestMut.mutate();
   };
 
-  const org = orgQ.data;
-  const restaurants: Array<{
-    _id: string;
-    name: string;
-    city?: string;
-    region?: string;
-    isActive?: boolean;
-  }> =
-    (org as any)?.restaurants ??
-    (org as any)?.branches ??
-    (org as any)?.restaurantList ??
-    [];
-
   return (
     <div className="flex gap-6">
       <Sidebar
@@ -199,6 +325,168 @@ export default function AdminOrganizationDetailPage() {
               </div>
             </div>
           )}
+        </Card>
+
+        {/* Organizasyon Üyeleri */}
+        <Card title="Organizasyon Üyeleri">
+          {/* Liste */}
+          {members && members.length > 0 ? (
+            <div className="overflow-auto mb-4">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    <th className="py-2 px-4">Ad</th>
+                    <th className="py-2 px-4">E-posta</th>
+                    <th className="py-2 px-4">Rol</th>
+                    <th className="py-2 px-4"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map((m) => {
+                    const userId =
+                      m.userId || m.user?._id || m._id || "";
+                    const name =
+                      m.name || m.user?.name || "İsimsiz";
+                    const email =
+                      m.email || m.user?.email || "-";
+                    const role =
+                      m.role ||
+                      m.orgRole ||
+                      m.organizationRole ||
+                      "";
+
+                    return (
+                      <tr key={userId} className="border-t">
+                        <td className="py-2 px-4">{name}</td>
+                        <td className="py-2 px-4">{email}</td>
+                        <td className="py-2 px-4">
+                          {prettyOrgRole(role)}
+                        </td>
+                        <td className="py-2 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMember(userId)}
+                            disabled={removeMemberMut.isPending}
+                            className="px-2 py-1 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-60"
+                          >
+                            Kaldır
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500 mb-4">
+              Henüz bu organizasyona bağlı üye yok.
+            </div>
+          )}
+
+          {/* Üye ekleme formu */}
+          <form
+            onSubmit={handleAddMember}
+            className="grid md:grid-cols-3 gap-3 items-start"
+          >
+            <div className="md:col-span-2 space-y-1">
+              <label className="block text-xs text-gray-600">
+                Kullanıcı Ara (isim / e-posta)
+              </label>
+              <input
+                type="text"
+                className="border rounded-lg px-3 py-2 w-full text-sm"
+                value={memberQuery}
+                onChange={(e) => {
+                  setMemberQuery(e.target.value);
+                  setSelectedMember(null);
+                  setMemberResults([]);
+                }}
+              />
+              <button
+                type="submit"
+                onClick={handleSearchMember}
+                className="hidden"
+              />
+              {memberQuery.trim().length >= 2 && (
+                <div className="mt-2 max-h-48 overflow-auto border rounded-lg bg-gray-50">
+                  {memberSearchLoading && (
+                    <div className="px-3 py-2 text-sm text-gray-500">
+                      Aranıyor…
+                    </div>
+                  )}
+                  {!memberSearchLoading &&
+                    memberResults.length === 0 &&
+                    memberQuery.trim() && (
+                      <div className="px-3 py-2 text-sm text-gray-500">
+                        Sonuç yok
+                      </div>
+                    )}
+                  {memberResults.map((u) => (
+                    <button
+                      key={u._id}
+                      type="button"
+                      onClick={() => selectMember(u)}
+                      className={`w-full flex justify-between items-center px-3 py-2 text-sm hover:bg-white ${
+                        selectedMember?._id === u._id
+                          ? "bg-brand-50"
+                          : ""
+                      }`}
+                    >
+                      <span>
+                        {u.name || "İsimsiz"}{" "}
+                        <span className="text-gray-500">
+                          ({u.email || "-"})
+                        </span>
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {u.role || ""}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="text-xs text-emerald-700 mt-1">
+                {selectedMember
+                  ? `Seçili kullanıcı: ${
+                      selectedMember.name || "İsimsiz"
+                    } (${selectedMember.email || "-"})`
+                  : "Henüz kullanıcı seçilmedi"}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs text-gray-600 mb-1">
+                Rol
+              </label>
+              <select
+                className="border rounded-lg px-3 py-2 w-full text-sm"
+                value={memberRole}
+                onChange={(e) => setMemberRole(e.target.value)}
+              >
+                {ORG_ROLES.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={handleAddMember}
+                disabled={
+                  !selectedMember ||
+                  !memberRole ||
+                  addMemberMut.isPending
+                }
+                className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs w-full disabled:opacity-60"
+              >
+                {addMemberMut.isPending
+                  ? "Ekleniyor…"
+                  : "Üye Ekle"}
+              </button>
+            </div>
+          </form>
         </Card>
 
         {/* Organizasyona bağlı restoranlar */}
