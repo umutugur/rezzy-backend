@@ -1858,8 +1858,6 @@ export const approveBranchRequestAdmin = async (req, res, next) => {
 
     // ✅ Kullanıcıyı organizasyon & şubeyle ilişkilendir
     await assignMemberships(user._id, {
-      organizationId: br.organizationId,
-      orgRole: "org_owner",
       restaurantId: restaurantDoc._id,
       restaurantRole: "location_manager",
       setLegacyRestaurantId: true,

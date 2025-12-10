@@ -63,12 +63,25 @@ export const createRestaurant = async (req, res, next) => {
   }
 };
 // Aktif restoranları listele
+// Aktif restoranları listele
 export const listRestaurants = async (req, res, next) => {
   const start = Date.now();
   console.log("[listRestaurants] START", req.query);
 
   try {
-    const { city, query, region, lat, lng, people, date, timeRange, budget, style, fromAssistant } = req.query || {};
+    const {
+      city,
+      query,
+      region,
+      lat,
+      lng,
+      people,
+      date,
+      timeRange,
+      budget,
+      style,
+      fromAssistant,
+    } = req.query || {};
 
     // Her zaman: sadece aktif restoranlar
     const filter = { isActive: true };
@@ -110,7 +123,7 @@ export const listRestaurants = async (req, res, next) => {
       });
     }
 
-    // Bütçe → priceRange alanına bağla (ör: "₺", "₺₺"...)
+    // Bütçe → priceRange
     if (budget && typeof budget === "string" && budget.trim()) {
       filter.priceRange = budget.trim();
     }
@@ -122,36 +135,36 @@ export const listRestaurants = async (req, res, next) => {
 
       andClauses.push({
         $or: [
-          // Örn: "meyhane", "bar", "coffee shop" → businessType
           { businessType: { $regex: sNorm, $options: "i" } },
-          // Metin bazlı eşleşme (daha doğal sorgular için)
           { description: { $regex: sRaw, $options: "i" } },
           { name: { $regex: sRaw, $options: "i" } },
         ],
       });
     }
 
-    // Eğer ekstra AND şartları oluştuysa filter.$and içine ekle
     if (andClauses.length) {
-      if (filter.$and) {
-        filter.$and = filter.$and.concat(andClauses);
-      } else {
-        filter.$and = andClauses;
-      }
+      if (filter.$and) filter.$and = filter.$and.concat(andClauses);
+      else filter.$and = andClauses;
     }
 
-    const hasLat = lat !== undefined && lat !== null && !Number.isNaN(Number(lat));
-    const hasLng = lng !== undefined && lng !== null && !Number.isNaN(Number(lng));
+    const hasLat =
+      lat !== undefined &&
+      lat !== null &&
+      !Number.isNaN(Number(lat));
+    const hasLng =
+      lng !== undefined &&
+      lng !== null &&
+      !Number.isNaN(Number(lng));
 
     // --- Yardımcı: foto filtresi (yalnızca http/https, base64 yok) ---
     const sanitizePhotos = (arr) => {
       if (!Array.isArray(arr) || arr.length === 0) return [];
       const first = String(arr[0] || "");
       if (!first) return [];
-      if (first.startsWith("data:")) return [];               // base64’i listeye koyma
-      if (first.length > 1024) return [];                     // anormal uzun stringleri ele
-      if (!/^https?:\/\//i.test(first)) return [];            // sadece http/https
-      return [first]; // sadece ilk foto ile dönüyoruz (payload küçük)
+      if (first.startsWith("data:")) return []; // base64’i listeye koyma
+      if (first.length > 1024) return []; // anormal uzun stringleri ele
+      if (!/^https?:\/\//i.test(first)) return []; // sadece http/https
+      return [first]; // sadece ilk foto ile dönüyoruz
     };
 
     // -----------------------------
@@ -174,7 +187,6 @@ export const listRestaurants = async (req, res, next) => {
           },
         },
         {
-          // yalnızca gereken alanlar + ilk foto için array’i 1’e kıs
           $project: {
             name: 1,
             city: 1,
@@ -191,31 +203,40 @@ export const listRestaurants = async (req, res, next) => {
         { $sort: { distance: 1, rating: -1, name: 1 } },
       ]);
 
-      // frontend uyumlu çıktı: photos[] (ilk eleman Cloudinary URL, base64 yok)
-      const data = raw.map((d) => ({
-        _id: d._id,
-        name: d.name,
-        city: d.city,
-        region: d.region,
-        priceRange: d.priceRange,
-        rating: d.rating,
-        location: d.location,
-        mapAddress: d.mapAddress,
-        photos: sanitizePhotos(d.photos),
-        logoUrl: d.logoUrl || null,
-        // distance’ı şimdilik göndermiyoruz; gerekirse eklenir
-      }));
-
       const geoDur = Date.now() - geoStart;
-      const size = JSON.stringify(data).length;
-      console.log("[listRestaurants] END geoNear", {
-        dur: Date.now() - start,
-        qdur: geoDur,
-        count: data.length,
-        size,
-      });
 
-      return res.json(data);
+      if (raw.length > 0) {
+        const data = raw.map((d) => ({
+          _id: d._id,
+          name: d.name,
+          city: d.city,
+          region: d.region,
+          priceRange: d.priceRange,
+          rating: d.rating,
+          location: d.location,
+          mapAddress: d.mapAddress,
+          photos: sanitizePhotos(d.photos),
+          logoUrl: d.logoUrl || null,
+          // distance şimdilik gönderilmiyor
+        }));
+
+        const size = JSON.stringify(data).length;
+        console.log("[listRestaurants] END geoNear", {
+          dur: Date.now() - start,
+          qdur: geoDur,
+          count: data.length,
+          size,
+        });
+
+        // ✅ Konumu olan restoranlar bulundu → direkt dön
+        return res.json(data);
+      }
+
+      // ✅ Hiç konumlu restoran yoksa normal find()’a düş
+      console.log(
+        "[listRestaurants] geoNear empty, falling back to find()",
+        { geoDur, filter }
+      );
     }
 
     // -----------------------------
@@ -226,12 +247,13 @@ export const listRestaurants = async (req, res, next) => {
     const qStart = Date.now();
 
     const baseQuery = Restaurant.find(filter)
-      .select("name city region priceRange rating location mapAddress photos logoUrl")
-      .slice("photos", 1)               // Mongo’dan yalnızca ilk foto
+      .select(
+        "name city region priceRange rating location mapAddress photos logoUrl"
+      )
+      .slice("photos", 1)
       .sort({ rating: -1, name: 1 })
       .lean();
 
-    // Sadece isActive + region(+city) var ve text/geo yoksa indeksi zorla
     const shouldHintIndex = !query && !hasLat && !hasLng;
     if (shouldHintIndex) {
       baseQuery.hint("isActive_region_rating_name");
