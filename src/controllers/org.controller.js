@@ -27,6 +27,17 @@ function cut(items, limit) {
   return items.slice(0, limit);
 }
 
+async function loadUserWithOrganizations(req) {
+  const uid = toObjectId(req.user?.id || req.user?._id);
+  if (!uid) return null;
+
+  const user = await User.findById(uid)
+    .select("_id role organizations")
+    .lean();
+
+  return user;
+}
+
 /* ------------------------------------------------------------------ */
 /*  ORG OWNER / ORG ADMIN PANEL FONKSİYONLARI                         */
 /* ------------------------------------------------------------------ */
@@ -37,8 +48,13 @@ function cut(items, limit) {
  */
 export const listMyOrganizations = async (req, res, next) => {
   try {
-    const orgRoles = Array.isArray(req.user?.organizations)
-      ? req.user.organizations
+    const user = await loadUserWithOrganizations(req);
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const orgRoles = Array.isArray(user.organizations)
+      ? user.organizations
       : [];
 
     // Sadece org_owner / org_admin rollerini dikkate al
@@ -112,8 +128,13 @@ export const getMyOrganizationDetail = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid organization id" });
     }
 
-    const orgRoles = Array.isArray(req.user?.organizations)
-      ? req.user.organizations
+    const user = await loadUserWithOrganizations(req);
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const orgRoles = Array.isArray(user.organizations)
+      ? user.organizations
       : [];
 
     const hasAccess = orgRoles.some((o) => {
@@ -126,7 +147,7 @@ export const getMyOrganizationDetail = async (req, res, next) => {
       );
     });
 
-    if (!hasAccess && req.user.role !== "admin") {
+    if (!hasAccess && user.role !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
     }
 
@@ -191,8 +212,13 @@ export const listOrganizationRestaurantsForOwner = async (
       return res.status(400).json({ message: "Invalid organization id" });
     }
 
-    const orgRoles = Array.isArray(req.user?.organizations)
-      ? req.user.organizations
+    const user = await loadUserWithOrganizations(req);
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const orgRoles = Array.isArray(user.organizations)
+      ? user.organizations
       : [];
 
     const hasAccess = orgRoles.some((o) => {
@@ -205,7 +231,7 @@ export const listOrganizationRestaurantsForOwner = async (
       );
     });
 
-    if (!hasAccess && req.user.role !== "admin") {
+    if (!hasAccess && user.role !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
     }
 
@@ -268,9 +294,13 @@ export const createBranchRequest = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid organizationId" });
     }
 
-    // Kullanıcının bu organizasyonda owner/admin rolü var mı?
-    const orgRoles = Array.isArray(req.user.organizations)
-      ? req.user.organizations
+    const user = await loadUserWithOrganizations(req);
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const orgRoles = Array.isArray(user.organizations)
+      ? user.organizations
       : [];
 
     const hasAccess = orgRoles.some((o) => {
@@ -350,8 +380,13 @@ export const listMyBranchRequests = async (req, res, next) => {
     const { status, organizationId } = req.query;
     const { limit, cursor } = pageParams(req.query);
 
-    const orgRoles = Array.isArray(req.user.organizations)
-      ? req.user.organizations
+    const user = await loadUserWithOrganizations(req);
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const orgRoles = Array.isArray(user.organizations)
+      ? user.organizations
       : [];
 
     // Kullanıcının erişebildiği organizasyonlar

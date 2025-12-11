@@ -908,6 +908,63 @@ export async function restaurantGetReportsOverview(
   return data as RestaurantReportsOverview;
 }
 // =========================
+// ORG — Organizations (Owner Panel)
+// =========================
+
+/**
+ * GET /org/organizations
+ * - Org owner / org_admin için kendi organizasyon listesi
+ */
+export async function orgListMyOrganizations(params?: {
+  cursor?: string;
+  limit?: number;
+}): Promise<{ items: AdminOrganization[]; nextCursor?: string }> {
+  const { data } = await api.get("/org/organizations", { params });
+  const items = Array.isArray(data?.items)
+    ? (data.items as AdminOrganization[])
+    : Array.isArray(data)
+    ? (data as AdminOrganization[])
+    : [];
+  const nextCursor =
+    typeof data?.nextCursor === "string" ? data.nextCursor : undefined;
+  return { items, nextCursor };
+}
+
+/**
+ * GET /org/organizations/:id
+ * - Org owner / org_admin için tek organizasyon detayı
+ *   (restoranlar + üyeler dahil)
+ */
+export async function orgGetMyOrganization(
+  id: string
+): Promise<AdminOrganization & { restaurants?: any[]; members?: any[] }> {
+  const { data } = await api.get(`/org/organizations/${id}`);
+  return data as AdminOrganization & { restaurants?: any[]; members?: any[] };
+}
+
+/**
+ * GET /org/organizations/:id/restaurants
+ * - Org owner / org_admin için organizasyona bağlı restoran listesi
+ */
+export async function orgListMyOrganizationRestaurants(
+  orgId: string,
+  params?: { cursor?: string; limit?: number }
+): Promise<{ items: any[]; nextCursor?: string }> {
+  const { data } = await api.get(`/org/organizations/${orgId}/restaurants`, {
+    params,
+  });
+
+  const items = Array.isArray(data?.items)
+    ? (data.items as any[])
+    : Array.isArray(data)
+    ? (data as any[])
+    : [];
+  const nextCursor =
+    typeof data?.nextCursor === "string" ? data.nextCursor : undefined;
+
+  return { items, nextCursor };
+}
+// =========================
 // ORG — Branch Requests
 // =========================
 
