@@ -22,6 +22,8 @@ import AdminUserDetailPage from "./pages/admin/UserDetail";
 import AdminNotificationsPage from "./pages/admin/Notifications";
 import AdminCommissionsPage from "./pages/admin/commissions";
 import AdminRestaurantCreatePage from "./pages/admin/RestaurantCreate";
+import AdminOrganizationsPage from "./pages/admin/Organizations";
+import AdminOrganizationDetailPage from "./pages/admin/OrganizationDetail";
 
 import RestaurantDashboardPage from "./pages/restaurant/Dashboard";
 import RestaurantReservationsPage from "./pages/restaurant/Reservations";
@@ -32,8 +34,10 @@ import MenusPage from "./pages/restaurant/Menus";
 import PhotosPage from "./pages/restaurant/Photos";
 import PoliciesPage from "./pages/restaurant/Policies";
 import MenuManagerPage from "./pages/restaurant/MenuManager";
-import AdminOrganizationsPage from "./pages/admin/Organizations";
-import AdminOrganizationDetailPage from "./pages/admin/OrganizationDetail";
+
+// ORG panel
+import OrgDashboardPage from "./pages/org/Dashboard";
+import OrgBranchRequestsPage from "./pages/org/BranchRequests";
 
 // Desktop mode
 import { LiveTablesPage } from "./desktop/pages/LiveTablesPage";
@@ -54,27 +58,42 @@ import { SettingsPage } from "./desktop/pages/SettingsPage";
 function hasRestaurantPanelAccess(user: MeUser | null): boolean {
   if (!user) return false;
 
-  // 1) Admin her yere girebilir
-  if (user.role === "admin") return true;
+  // Global roller
+  if (user.role === "admin" || user.role === "restaurant") return true;
 
-  // 2) Eski sistemden gelen "restaurant" rolü
-  if (user.role === "restaurant") return true;
-
-  // 3) Legacy tek restoran bağlanmışsa
+  // Legacy restaurantId
   if (user.restaurantId) return true;
 
-  // 4) Yeni membership sistemi: restoran bazlı üyelik
+  // Restaurant membership (location_manager / staff)
   if (user.restaurantMemberships && user.restaurantMemberships.length > 0) {
     return true;
   }
 
-  // 5) Yeni membership sistemi: organizasyon bazlı (org-owner / org-admin / org-finance)
-  // Bu kullanıcıların da org-level paneli ve raporları görmesi gerekiyor.
-  if (user.organizations && user.organizations.length > 0) {
+  // 🔥 NEW: Org owner / org admin
+  if (
+    user.organizations &&
+    user.organizations.some(
+      (o) => o.role === "org_owner" || o.role === "org_admin"
+    )
+  ) {
     return true;
   }
 
   return false;
+}
+
+function hasOrgPanelAccess(user: MeUser | null): boolean {
+  if (!user) return false;
+  return (
+    Array.isArray(user.organizations) &&
+    user.organizations.some(
+      (o) =>
+        o.role === "org_owner" ||
+        o.role === "org_admin" ||
+        o.role === "org_finance" ||
+        o.role === "org_staff"
+    )
+  );
 }
 
 // ---- Basit UI parçaları ----
@@ -179,6 +198,27 @@ function PrivateRoute({ allow }: { allow: Array<"admin" | "restaurant"> }) {
   return <Outlet />;
 }
 
+// Org panel guard
+function OrgPrivateRoute() {
+  const location = useLocation();
+  const user = authStore.getUser();
+  const token = authStore.getToken();
+
+  if (!token || !user) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (!hasOrgPanelAccess(user)) {
+    // Org panel yetkisi yoksa mevcut erişimine göre yönlendir
+    if (user.role === "admin") return <Navigate to="/admin" replace />;
+    if (hasRestaurantPanelAccess(user))
+      return <Navigate to="/restaurant" replace />;
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Outlet />;
+}
+
 // ---- Login Page ----
 function LoginPage() {
   const [email, setEmail] = React.useState("");
@@ -190,8 +230,14 @@ function LoginPage() {
 
   const computeRedirect = (u: MeUser | null): string => {
     if (!u) return "/login";
+
+    const isOrgUser = hasOrgPanelAccess(u);
+    const isRestaurantUser = hasRestaurantPanelAccess(u);
+
     if (u.role === "admin") return "/admin";
-    if (hasRestaurantPanelAccess(u)) return "/restaurant";
+    if (isOrgUser) return "/org";
+    if (isRestaurantUser) return "/restaurant";
+
     return "/login";
   };
 
@@ -385,6 +431,26 @@ export default function App() {
         />
       </Route>
 
+      {/* Org alanı */}
+      <Route element={<OrgPrivateRoute />}>
+        <Route
+          path="/org"
+          element={
+            <Shell>
+              <OrgDashboardPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/org/branch-requests"
+          element={
+            <Shell>
+              <OrgBranchRequestsPage />
+            </Shell>
+          }
+        />
+      </Route>
+
       {/* Restoran alanı + Desktop */}
       <Route element={<PrivateRoute allow={["restaurant", "admin"]} />}>
         <Route
@@ -507,7 +573,21 @@ export default function App() {
 function RootRedirect() {
   const u = authStore.getUser();
   if (!u) return <Navigate to="/login" replace />;
-  if (u.role === "admin") return <Navigate to="/admin" replace />;
-  if (hasRestaurantPanelAccess(u)) return <Navigate to="/restaurant" replace />;
+
+  const isOrgUser = hasOrgPanelAccess(u);
+
+  if (u.role === "admin") {
+    return <Navigate to="/admin" replace />;
+  }
+
+  // 🔥 Org kullanıcıları için ayrı giriş noktası
+  if (isOrgUser) {
+    return <Navigate to="/org" replace />;
+  }
+
+  if (hasRestaurantPanelAccess(u)) {
+    return <Navigate to="/restaurant" replace />;
+  }
+
   return <Navigate to="/login" replace />;
 }

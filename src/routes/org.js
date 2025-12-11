@@ -1,34 +1,33 @@
-// src/routes/org.js
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
-import { validate } from "../middlewares/validate.js";
-
+import { allowOrgOwnerOrAdmin } from "../middlewares/roles.js";
 import {
+  listMyOrganizations,
+  getMyOrganizationDetail,
+  listOrganizationRestaurantsForOwner,
   createBranchRequest,
   listMyBranchRequests,
 } from "../controllers/org.controller.js";
 
-import {
-  createBranchRequestSchema,
-  adminListBranchRequestsSchema, // GET için de kullanacağız
-} from "../validators/branchRequest.schema.js";
-
 const r = Router();
 
-// Org owner / org_admin → yeni şube talebi
-r.post(
-  "/branch-requests",
+r.get("/organizations", auth(), listMyOrganizations);
+
+r.get(
+  "/organizations/:oid",
   auth(),
-  validate(createBranchRequestSchema),
-  createBranchRequest
+  allowOrgOwnerOrAdmin("oid"),
+  getMyOrganizationDetail
 );
 
-// Org owner / org_admin → kendi taleplerini listeleme
 r.get(
-  "/branch-requests",
+  "/organizations/:oid/restaurants",
   auth(),
-  validate(adminListBranchRequestsSchema), // status, organizationId, limit, cursor validate
-  listMyBranchRequests
+  allowOrgOwnerOrAdmin("oid"),
+  listOrganizationRestaurantsForOwner
 );
+
+r.post("/branch-requests", auth(), createBranchRequest);
+r.get("/branch-requests", auth(), listMyBranchRequests);
 
 export default r;

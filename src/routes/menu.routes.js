@@ -1,6 +1,6 @@
 import express, { Router } from "express";
 import { auth } from "../middlewares/auth.js";
-import { allow } from "../middlewares/roles.js";
+import { allow, allowLocationManagerOrAdmin } from "../middlewares/roles.js";
 import { imageUpload } from "../utils/multer.js";
 
 import {
@@ -47,48 +47,59 @@ const validateBody = (schema) => (req, res, next) => {
 r.use(express.json());
 
 // ---------------- Categories ----------------
+
+// Menü kategorilerini listele
 r.get(
   "/:rid/menu/categories",
   auth(),
+  // okuma tarafında customer + restaurant + admin görebilsin (QR / panel vs.)
   allow("restaurant", "admin", "customer"),
   listCategories
 );
 
+// Menü kategorisi oluştur (panel)
+// -> location_manager veya admin erişsin
 r.post(
   "/:rid/menu/categories",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   validateBody(createCategorySchema),
   createCategory
 );
 
+// Menü kategorisi güncelle
 r.patch(
   "/:rid/menu/categories/:cid",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   validateBody(updateCategorySchema),
   updateCategory
 );
 
+// Menü kategorisi sil
 r.delete(
   "/:rid/menu/categories/:cid",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   deleteCategory
 );
 
 // ---------------- Items ----------------
+
+// Menü itemlarını listele
 r.get(
   "/:rid/menu/items",
   auth(),
+  // okuma tarafında customer + restaurant + admin görebilsin
   allow("restaurant", "admin", "customer"),
   listItems // ❗ Query validation yok — controller kendisi validate ediyor
 );
 
+// Menü item oluştur (panel)
 r.post(
   "/:rid/menu/items",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   imageUpload.single("photo"),
   (req, _res, next) => {
     console.log("CT:", req.headers["content-type"]);
@@ -100,23 +111,26 @@ r.post(
   createItem
 );
 
+// Menü item güncelle
 r.patch(
   "/:rid/menu/items/:iid",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   imageUpload.single("photo"),
   validateBody(updateItemSchema),
   updateItem
 );
 
+// Menü item sil
 r.delete(
   "/:rid/menu/items/:iid",
   auth(),
-  allow("restaurant", "admin"),
+  allowLocationManagerOrAdmin("rid"),
   deleteItem
 );
 
 // ---------------- Resolved Menu (panel preview + müşteri use-case) ----------------
+
 r.get(
   "/:rid/menu/resolved",
   auth(),

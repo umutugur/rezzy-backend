@@ -908,6 +908,87 @@ export async function restaurantGetReportsOverview(
   return data as RestaurantReportsOverview;
 }
 // =========================
+// ORG — Branch Requests
+// =========================
+
+export interface OrgBranchRequest {
+  _id: string;
+  organization?: {
+    id: string | null;
+    name?: string | null;
+    region?: string | null;
+  } | null;
+  status: "pending" | "approved" | "rejected";
+  payload: {
+    name?: string;
+    region?: string;
+    city?: string | null;
+    address?: string | null;
+    phone?: string | null;
+    iban?: string | null;
+    priceRange?: string;
+    businessType?: string;
+    openingHours?: any[];
+    description?: string | null;
+  };
+  notes?: string | null;
+  restaurant?: {
+    id: string | null;
+    name?: string | null;
+  } | null;
+  createdAt?: string;
+  resolvedAt?: string | null;
+  rejectReason?: string | null;
+}
+
+export async function orgListBranchRequests(params?: {
+  status?: string;
+  organizationId?: string;
+  cursor?: string;
+  limit?: number;
+}): Promise<{ items: OrgBranchRequest[]; nextCursor?: string }> {
+  const { data } = await api.get("/org/branch-requests", { params });
+  // backend zaten { items, nextCursor } dönüyor
+  const items = Array.isArray(data?.items) ? data.items : [];
+  const nextCursor =
+    typeof data?.nextCursor === "string" ? data.nextCursor : undefined;
+  return { items, nextCursor };
+}
+
+export async function orgCreateBranchRequest(input: {
+  organizationId: string;
+  name: string;
+  region?: string;
+  city?: string;
+  address?: string;
+  phone?: string;
+  iban?: string;
+  priceRange?: string;
+  businessType?: string;
+  description?: string;
+  notes?: string;
+}) {
+  const payload: any = {
+    organizationId: input.organizationId,
+    name: input.name,
+    region: input.region,
+    city: input.city || undefined,
+    address: input.address || undefined,
+    phone: input.phone || undefined,
+    iban: input.iban || undefined,
+    priceRange: input.priceRange || undefined,
+    businessType: input.businessType || undefined,
+    description: input.description || undefined,
+    notes: input.notes || undefined,
+  };
+
+  const { data } = await api.post("/org/branch-requests", payload);
+  return data as {
+    ok: boolean;
+    request: OrgBranchRequest;
+  };
+}
+// =========================
 // RESTAURANT — Live Tables & Orders
 // =========================
 

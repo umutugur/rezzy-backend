@@ -2,6 +2,8 @@
 import mongoose from "mongoose";
 import BranchRequest from "../models/BranchRequest.js";
 import Organization from "../models/Organization.js";
+import Restaurant from "../models/Restaurant.js";
+import User from "../models/User.js";
 
 function toObjectId(id) {
   try {
@@ -24,6 +26,216 @@ function nextCursor(items, limit) {
 function cut(items, limit) {
   return items.slice(0, limit);
 }
+
+/* ------------------------------------------------------------------ */
+/*  ORG OWNER / ORG ADMIN PANEL FONKSİYONLARI                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Org owner / org_admin → Kendi organizasyonlarını listeler
+ * GET /api/org/organizations
+ */
+export const listMyOrganizations = async (req, res, next) => {
+  try {
+    const orgRoles = Array.isArray(req.user?.organizations)
+      ? req.user.organizations
+      : [];
+
+    // Sadece org_owner / org_admin rollerini dikkate al
+    const ownedOrgIds = orgRoles
+      .filter((o) => o && (o.role === "org_owner" || o.role === "org_admin"))
+      .map((o) => toObjectId(o.organization || o.organizationId))
+      .filter(Boolean);
+
+    if (!ownedOrgIds.length) {
+      return res.json({ items: [], nextCursor: undefined });
+    }
+
+    const { limit, cursor } = pageParams(req.query || {});
+
+    const q = { _id: { $in: ownedOrgIds } };
+    if (cursor) {
+      q._id.$lt = cursor;
+    }
+
+    const rows = await Organization.find(q)
+      .sort({ _id: -1 })
+      .limit(limit + 1)
+      .select(
+        "_id name legalName region defaultLanguage taxNumber taxOffice createdAt updatedAt"
+      )
+      .lean();
+
+    const sliced = cut(rows, limit);
+    const ids = sliced.map((o) => o._id).filter(Boolean);
+
+    // Her organizasyona bağlı restoran sayısı
+    let countMap = new Map();
+    if (ids.length > 0) {
+      const counts = await Restaurant.aggregate([
+        { $match: { organizationId: { $in: ids } } },
+        {
+          $group: {
+            _id: "$organizationId",
+            c: { $sum: 1 },
+          },
+        },
+      ]);
+
+      counts.forEach((r) => {
+        countMap.set(String(r._id), r.c || 0);
+      });
+    }
+
+    const items = sliced.map((o) => ({
+      ...o,
+      restaurantCount: countMap.get(String(o._id)) ?? 0,
+    }));
+
+    res.json({
+      items,
+      nextCursor: nextCursor(rows, limit),
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * Org owner / org_admin → Tek organizasyon detayı + restoranlar + üyeler
+ * GET /api/org/organizations/:oid
+ */
+export const getMyOrganizationDetail = async (req, res, next) => {
+  try {
+    const oid = toObjectId(req.params.oid);
+    if (!oid) {
+      return res.status(400).json({ message: "Invalid organization id" });
+    }
+
+    const orgRoles = Array.isArray(req.user?.organizations)
+      ? req.user.organizations
+      : [];
+
+    const hasAccess = orgRoles.some((o) => {
+      if (!o) return false;
+      const orgRef = o.organization || o.organizationId;
+      if (!orgRef) return false;
+      return (
+        String(orgRef) === String(oid) &&
+        (o.role === "org_owner" || o.role === "org_admin")
+      );
+    });
+
+    if (!hasAccess && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const org = await Organization.findById(oid)
+      .select(
+        "_id name legalName logoUrl region defaultLanguage description taxNumber taxOffice createdAt updatedAt"
+      )
+      .lean();
+
+    if (!org) {
+      return res.status(404).json({ message: "Organization not found" });
+    }
+
+    // Bu organizasyona bağlı restoranlar
+    const restaurants = await Restaurant.find({ organizationId: oid })
+      .select("_id name city region isActive")
+      .sort({ name: 1 })
+      .lean();
+
+    // Organizasyona bağlı kullanıcılar (users.organizations[] içinden)
+    const userDocs = await User.find({
+      "organizations.organization": oid,
+    })
+      .select("_id name email organizations")
+      .lean();
+
+    const members = userDocs.map((u) => {
+      const rel = (u.organizations || []).find(
+        (m) => String(m.organization) === String(oid)
+      );
+
+      return {
+        userId: u._id,
+        name: u.name,
+        email: u.email,
+        role: rel?.role || "org_staff",
+      };
+    });
+
+    res.json({
+      ...org,
+      restaurants,
+      members,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * Org owner / org_admin → Organizasyona bağlı restoranların listesi
+ * GET /api/org/organizations/:oid/restaurants
+ */
+export const listOrganizationRestaurantsForOwner = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const oid = toObjectId(req.params.oid);
+    if (!oid) {
+      return res.status(400).json({ message: "Invalid organization id" });
+    }
+
+    const orgRoles = Array.isArray(req.user?.organizations)
+      ? req.user.organizations
+      : [];
+
+    const hasAccess = orgRoles.some((o) => {
+      if (!o) return false;
+      const orgRef = o.organization || o.organizationId;
+      if (!orgRef) return false;
+      return (
+        String(orgRef) === String(oid) &&
+        (o.role === "org_owner" || o.role === "org_admin")
+      );
+    });
+
+    if (!hasAccess && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const { limit, cursor } = pageParams(req.query || {});
+
+    const q = { organizationId: oid };
+    if (cursor) {
+      q._id = { $lt: cursor };
+    }
+
+    const rows = await Restaurant.find(q)
+      .sort({ _id: -1 })
+      .limit(limit + 1)
+      .select(
+        "_id name city address phone email region isActive organizationId"
+      )
+      .lean();
+
+    res.json({
+      items: cut(rows, limit),
+      nextCursor: nextCursor(rows, limit),
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/* ------------------------------------------------------------------ */
+/*  BRANCH REQUEST (ZATEN MEVCUT OLANLAR)                             */
+/* ------------------------------------------------------------------ */
 
 /**
  * Org owner / org_admin → Yeni şube açma talebi
@@ -72,13 +284,16 @@ export const createBranchRequest = async (req, res, next) => {
     });
 
     if (!hasAccess) {
-      return res
-        .status(403)
-        .json({ message: "You are not allowed to create branch requests for this organization" });
+      return res.status(403).json({
+        message:
+          "You are not allowed to create branch requests for this organization",
+      });
     }
 
     // Organizasyon gerçekten var mı?
-    const org = await Organization.findById(orgId).select("_id name region").lean();
+    const org = await Organization.findById(orgId)
+      .select("_id name region")
+      .lean();
     if (!org) {
       return res.status(404).json({ message: "Organization not found" });
     }
