@@ -199,7 +199,7 @@ r.get(
 r.get(
   "/organizations/:oid/menu",
   auth(),
-  allow("admin"),
+  allowOrgOwnerOrAdmin("oid"),
   getOrgMenu
 );
 
@@ -207,21 +207,21 @@ r.get(
 r.post(
   "/organizations/:oid/menu/categories",
   auth(),
-  allow("admin"),
+  allowOrgOwnerOrAdmin("oid"),
   createOrgCategory
 );
 
 r.patch(
   "/organizations/:oid/menu/categories/:cid",
   auth(),
-  allow("admin"),
+  allowOrgOwnerOrAdmin("oid"),
   updateOrgCategory
 );
 
 r.delete(
   "/organizations/:oid/menu/categories/:cid",
   auth(),
-  allow("admin"),
+  allowOrgOwnerOrAdmin("oid"),
   deleteOrgCategory
 );
 
@@ -229,21 +229,21 @@ r.delete(
 r.post(
   "/organizations/:oid/menu/items",
   auth(),
-  allow("admin"),
+  allowOrgOwnerOrAdmin("oid"),
   createOrgItem
 );
 
 r.patch(
   "/organizations/:oid/menu/items/:iid",
   auth(),
-  allow("admin"),
+  allowOrgOwnerOrAdmin("oid"),
   updateOrgItem
 );
 
 r.delete(
   "/organizations/:oid/menu/items/:iid",
   auth(),
-  allow("admin"),
+  allowOrgOwnerOrAdmin("oid"),
   deleteOrgItem
 );
 

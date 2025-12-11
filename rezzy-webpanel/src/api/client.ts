@@ -1065,6 +1065,248 @@ export async function orgCreateBranchRequest(input: {
   };
 }
 // =========================
+// ORG — Menu (Org-level master menü)
+// =========================
+
+export interface OrgMenuItem {
+  _id: string;
+  categoryId: string;
+  title: string;
+  description: string | null;
+  defaultPrice: number;
+  photoUrl: string | null;
+  tags: string[];
+  order: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface OrgMenuCategory {
+  _id: string;
+  title: string;
+  description: string | null;
+  order: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  items: OrgMenuItem[];
+}
+
+export interface OrgMenuResponse {
+  organization: {
+    _id: string;
+    name: string;
+    region: string | null;
+  };
+  categories: OrgMenuCategory[];
+}
+
+/**
+ * GET /admin/organizations/:orgId/menu
+ * - Org-level master menü (kategori + item birlikte)
+ */
+export async function orgGetMenu(orgId: string): Promise<OrgMenuResponse> {
+  const { data } = await api.get(`/admin/organizations/${orgId}/menu`);
+  return data as OrgMenuResponse;
+}
+
+/**
+ * POST /admin/organizations/:orgId/menu/categories
+ * - Yeni org kategori oluşturma
+ */
+export async function orgCreateMenuCategory(
+  orgId: string,
+  input: {
+    title: string;
+    description?: string;
+    order?: number;
+    isActive?: boolean;
+  }
+): Promise<{ ok: boolean; category: OrgMenuCategory }> {
+  const payload: any = {
+    title: input.title,
+  };
+
+  if (input.description != null && input.description !== "") {
+    payload.description = input.description;
+  }
+  if (typeof input.order === "number") {
+    payload.order = input.order;
+  }
+  if (typeof input.isActive === "boolean") {
+    payload.isActive = input.isActive;
+  }
+
+  const { data } = await api.post(
+    `/admin/organizations/${orgId}/menu/categories`,
+    payload
+  );
+  return data as { ok: boolean; category: OrgMenuCategory };
+}
+
+/**
+ * PATCH /admin/organizations/:orgId/menu/categories/:categoryId
+ * - Org kategori güncelleme
+ */
+export async function orgUpdateMenuCategory(
+  orgId: string,
+  categoryId: string,
+  input: {
+    title?: string;
+    description?: string | null;
+    order?: number;
+    isActive?: boolean;
+  }
+): Promise<{ ok: boolean; category: OrgMenuCategory }> {
+  const payload: any = {};
+
+  if (input.title != null && input.title.trim() !== "") {
+    payload.title = input.title.trim();
+  }
+  if (input.description !== undefined) {
+    payload.description = input.description || "";
+  }
+  if (typeof input.order === "number") {
+    payload.order = input.order;
+  }
+  if (typeof input.isActive === "boolean") {
+    payload.isActive = input.isActive;
+  }
+
+  const { data } = await api.patch(
+    `/admin/organizations/${orgId}/menu/categories/${categoryId}`,
+    payload
+  );
+  return data as { ok: boolean; category: OrgMenuCategory };
+}
+
+/**
+ * DELETE /admin/organizations/:orgId/menu/categories/:categoryId
+ * - Org kategori soft delete (isActive=false)
+ */
+export async function orgDeleteMenuCategory(
+  orgId: string,
+  categoryId: string
+): Promise<{ ok?: boolean; category: { _id: string; isActive: boolean } }> {
+  const { data } = await api.delete(
+    `/admin/organizations/${orgId}/menu/categories/${categoryId}`
+  );
+  return data as { ok?: boolean; category: { _id: string; isActive: boolean } };
+}
+
+/**
+ * POST /admin/organizations/:orgId/menu/items
+ * - Yeni org item oluşturma
+ */
+export async function orgCreateMenuItem(
+  orgId: string,
+  input: {
+    categoryId: string;
+    title: string;
+    defaultPrice: number;
+    description?: string;
+    photoUrl?: string;
+    tags?: string[];
+    order?: number;
+    isActive?: boolean;
+  }
+): Promise<{ ok: boolean; item: OrgMenuItem }> {
+  const payload: any = {
+    categoryId: input.categoryId,
+    title: input.title,
+    defaultPrice: input.defaultPrice,
+  };
+
+  if (input.description != null && input.description !== "") {
+    payload.description = input.description;
+  }
+  if (input.photoUrl != null && input.photoUrl !== "") {
+    payload.photoUrl = input.photoUrl;
+  }
+  if (Array.isArray(input.tags)) {
+    payload.tags = input.tags;
+  }
+  if (typeof input.order === "number") {
+    payload.order = input.order;
+  }
+  if (typeof input.isActive === "boolean") {
+    payload.isActive = input.isActive;
+  }
+
+  const { data } = await api.post(
+    `/admin/organizations/${orgId}/menu/items`,
+    payload
+  );
+  return data as { ok: boolean; item: OrgMenuItem };
+}
+
+/**
+ * PATCH /admin/organizations/:orgId/menu/items/:itemId
+ * - Org item güncelleme
+ */
+export async function orgUpdateMenuItem(
+  orgId: string,
+  itemId: string,
+  input: {
+    categoryId?: string;
+    title?: string;
+    description?: string | null;
+    defaultPrice?: number;
+    photoUrl?: string | null;
+    tags?: string[];
+    order?: number;
+    isActive?: boolean;
+  }
+): Promise<{ ok: boolean; item: OrgMenuItem }> {
+  const payload: any = {};
+
+  if (input.categoryId) {
+    payload.categoryId = input.categoryId;
+  }
+  if (input.title != null && input.title.trim() !== "") {
+    payload.title = input.title.trim();
+  }
+  if (input.description !== undefined) {
+    payload.description = input.description || "";
+  }
+  if (typeof input.defaultPrice === "number") {
+    payload.defaultPrice = input.defaultPrice;
+  }
+  if (input.photoUrl !== undefined) {
+    payload.photoUrl = input.photoUrl || "";
+  }
+  if (input.tags !== undefined) {
+    payload.tags = Array.isArray(input.tags) ? input.tags : [];
+  }
+  if (typeof input.order === "number") {
+    payload.order = input.order;
+  }
+  if (typeof input.isActive === "boolean") {
+    payload.isActive = input.isActive;
+  }
+
+  const { data } = await api.patch(
+    `/admin/organizations/${orgId}/menu/items/${itemId}`,
+    payload
+  );
+  return data as { ok: boolean; item: OrgMenuItem };
+}
+
+/**
+ * DELETE /admin/organizations/:orgId/menu/items/:itemId
+ * - Org item soft delete (isActive=false)
+ */
+export async function orgDeleteMenuItem(
+  orgId: string,
+  itemId: string
+): Promise<{ ok?: boolean; item: { _id: string; isActive: boolean } }> {
+  const { data } = await api.delete(
+    `/admin/organizations/${orgId}/menu/items/${itemId}`
+  );
+  return data as { ok?: boolean; item: { _id: string; isActive: boolean } };
+}
+// =========================
 // RESTAURANT — Live Tables & Orders
 // =========================
 

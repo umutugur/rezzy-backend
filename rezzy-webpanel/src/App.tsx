@@ -38,6 +38,7 @@ import MenuManagerPage from "./pages/restaurant/MenuManager";
 // ORG panel
 import OrgDashboardPage from "./pages/org/Dashboard";
 import OrgBranchRequestsPage from "./pages/org/BranchRequests";
+import OrgMenuManagerPage from "./pages/org/OrgMenuManagerPage"; 
 
 // Desktop mode
 import { LiveTablesPage } from "./desktop/pages/LiveTablesPage";
@@ -449,7 +450,16 @@ export default function App() {
             </Shell>
           }
         />
+        <Route
+          path="/org/organizations/:id/menu"
+          element={
+            <Shell>
+              <OrgMenuManagerPage />
+            </Shell>
+          }
+        />
       </Route>
+      
 
       {/* Restoran alanı + Desktop */}
       <Route element={<PrivateRoute allow={["restaurant", "admin"]} />}>
