@@ -27,6 +27,11 @@ function cut(items, limit) {
   return items.slice(0, limit);
 }
 
+function getOrgRole(rel) {
+  if (!rel) return undefined;
+  return rel.role || rel.orgRole || rel.organizationRole || undefined;
+}
+
 async function loadUserWithOrganizations(req) {
   const uid = toObjectId(req.user?.id || req.user?._id);
   if (!uid) return null;
@@ -59,7 +64,10 @@ export const listMyOrganizations = async (req, res, next) => {
 
     // Sadece org_owner / org_admin rollerini dikkate al
     const ownedOrgIds = orgRoles
-      .filter((o) => o && (o.role === "org_owner" || o.role === "org_admin"))
+      .filter((o) => {
+        const r = getOrgRole(o);
+        return r === "org_owner" || r === "org_admin";
+      })
       .map((o) => toObjectId(o.organization || o.organizationId))
       .filter(Boolean);
 
@@ -141,9 +149,10 @@ export const getMyOrganizationDetail = async (req, res, next) => {
       if (!o) return false;
       const orgRef = o.organization || o.organizationId;
       if (!orgRef) return false;
+      const r = getOrgRole(o);
       return (
         String(orgRef) === String(oid) &&
-        (o.role === "org_owner" || o.role === "org_admin")
+        (r === "org_owner" || r === "org_admin")
       );
     });
 
@@ -225,9 +234,10 @@ export const listOrganizationRestaurantsForOwner = async (
       if (!o) return false;
       const orgRef = o.organization || o.organizationId;
       if (!orgRef) return false;
+      const r = getOrgRole(o);
       return (
         String(orgRef) === String(oid) &&
-        (o.role === "org_owner" || o.role === "org_admin")
+        (r === "org_owner" || r === "org_admin")
       );
     });
 
@@ -305,7 +315,7 @@ export const createBranchRequest = async (req, res, next) => {
 
     const hasAccess = orgRoles.some((o) => {
       const oid = o.organization || o.organizationId;
-      const role = o.role;
+      const role = getOrgRole(o);
       return (
         oid &&
         String(oid) === String(orgId) &&
@@ -392,7 +402,7 @@ export const listMyBranchRequests = async (req, res, next) => {
     // Kullanıcının erişebildiği organizasyonlar
     let accessibleOrgIds = orgRoles
       .filter((o) => {
-        const role = o.role;
+        const role = getOrgRole(o);
         return role === "org_owner" || role === "org_admin";
       })
       .map((o) => toObjectId(o.organization || o.organizationId))
