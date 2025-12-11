@@ -14,6 +14,7 @@ import {
   OrgMenuCategory,
   OrgMenuItem,
 } from "../../api/client";
+import { getCurrencySymbolForRegion } from "../../utils/currency";
 
 type RouteParams = {
   id: string; // /org/organizations/:id/menu
@@ -23,7 +24,7 @@ export default function OrgMenuManagerPage() {
   const { id } = useParams<RouteParams>();
   const oid = id || "";
   const qc = useQueryClient();
-
+  
   // ---------- Query: Org Menü ----------
   const menuQ = useQuery({
     queryKey: ["org-menu", oid],
@@ -36,6 +37,7 @@ export default function OrgMenuManagerPage() {
 
   // Seçili kategori stabil kalsın / silinirse ilkine dönsün
   React.useEffect(() => {
+    
     if (!categories.length) {
       if (selectedCatId) setSelectedCatId(null);
       return;
@@ -48,8 +50,12 @@ export default function OrgMenuManagerPage() {
   const selectedCat =
     categories.find((c) => c._id === selectedCatId) ?? null;
 
-  const items: OrgMenuItem[] =
-    selectedCat?.items ?? [];
+  const items: OrgMenuItem[] = selectedCat?.items ?? [];
+
+  const orgRegion: string | undefined =
+    menuQ.data?.organization?.region ?? undefined;
+
+  const currencySymbol = getCurrencySymbolForRegion(orgRegion);
 
   // ---------- Mutations: Categories ----------
   const createCatMut = useMutation({
@@ -165,6 +171,30 @@ export default function OrgMenuManagerPage() {
     isActive?: boolean;
     photoUrl?: string;
   }>({});
+
+  const handleNewItemPhotoFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    setNewItem((prev) => ({
+      ...prev,
+      photoUrl: objectUrl,
+    }));
+  };
+
+  const handleEditingItemPhotoFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    setEditingItem((prev) => ({
+      ...prev,
+      photoUrl: objectUrl,
+    }));
+  };
 
   if (!oid) {
     return (
@@ -440,7 +470,9 @@ export default function OrgMenuManagerPage() {
 
                           <div className="md:col-span-2 text-sm">
                             Varsayılan fiyat:{" "}
-                            <b>{it.defaultPrice} ₺</b>
+                            <b>
+                              {it.defaultPrice} {currencySymbol}
+                            </b>
                             {!!it.tags?.length && (
                               <div className="text-xs text-gray-500 mt-1">
                                 #{it.tags.join(" #")}
@@ -513,7 +545,7 @@ export default function OrgMenuManagerPage() {
 
                             <div className="flex flex-col">
                               <label className="text-xs text-gray-500 mb-1">
-                                Varsayılan fiyat (₺)
+                                Varsayılan fiyat ({currencySymbol})
                               </label>
                               <input
                                 type="number"
@@ -579,7 +611,7 @@ export default function OrgMenuManagerPage() {
                                 Fotoğraf URL
                               </label>
                               <input
-                                className="border rounded px-2 py-1 text-sm"
+                                className="border rounded px-2 py-1 text-sm mb-1"
                                 placeholder="https://..."
                                 value={editingItem.photoUrl ?? ""}
                                 onChange={(e) =>
@@ -588,6 +620,12 @@ export default function OrgMenuManagerPage() {
                                     photoUrl: e.target.value,
                                   }))
                                 }
+                              />
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="text-xs"
+                                onChange={handleEditingItemPhotoFileChange}
                               />
                             </div>
 
@@ -682,7 +720,7 @@ export default function OrgMenuManagerPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div className="flex flex-col">
                       <label className="text-xs text-gray-500 mb-1">
-                        Varsayılan fiyat (₺)
+                        Varsayılan fiyat ({currencySymbol})
                       </label>
                       <input
                         type="number"
@@ -739,7 +777,7 @@ export default function OrgMenuManagerPage() {
                       Fotoğraf URL (opsiyonel)
                     </label>
                     <input
-                      className="border rounded px-2 py-1 text-sm"
+                      className="border rounded px-2 py-1 text-sm mb-1"
                       placeholder="https://..."
                       value={newItem.photoUrl}
                       onChange={(e) =>
@@ -748,6 +786,12 @@ export default function OrgMenuManagerPage() {
                           photoUrl: e.target.value,
                         }))
                       }
+                    />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="text-xs"
+                      onChange={handleNewItemPhotoFileChange}
                     />
                   </div>
 

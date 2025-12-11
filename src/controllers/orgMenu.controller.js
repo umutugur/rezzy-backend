@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import Organization from "../models/Organization.js";
 import OrgMenuCategory from "../models/OrgMenuCategory.js";
 import OrgMenuItem from "../models/OrgMenuItem.js";
-
+import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 function toObjectId(id) {
   try {
     return new mongoose.Types.ObjectId(id);
@@ -293,14 +293,29 @@ export const createOrgItem = async (req, res, next) => {
     if (typeof isActive !== "boolean") {
       isActive = true;
     }
+        // 🔽 Fotoğraf: önce body.photoUrl (string), varsa üstüne file upload override eder
+    let finalPhotoUrl = photoUrl || undefined;
 
+    const f =
+      req.file ||
+      (Array.isArray(req.files) && req.files[0]) ||
+      (req.files?.file && req.files.file[0]) ||
+      (req.files?.photo && req.files.photo[0]);
+
+    if (f?.buffer) {
+      const up = await uploadBufferToCloudinary(f.buffer, {
+        folder: process.env.CLOUDINARY_FOLDER || "rezvix/menu",
+        resource_type: "auto",
+      });
+      finalPhotoUrl = up.secure_url;
+    }
     const item = await OrgMenuItem.create({
       organizationId: org._id,
       categoryId: cat._id,
       title,
       description: description || undefined,
       defaultPrice,
-      photoUrl: photoUrl || undefined,
+      photoUrl: finalPhotoUrl,        
       tags: Array.isArray(tags) ? tags : [],
       order: order != null ? order : 0,
       isActive,
@@ -396,7 +411,25 @@ export const updateOrgItem = async (req, res, next) => {
     if (photoUrl !== undefined) {
       patch.photoUrl = photoUrl || undefined;
     }
+        // 🔽 Fotoğraf güncelleme:
+    // - Eğer yeni file geldiyse Cloudinary'ye yükle ve override et
+    // - Eğer body.photoUrl boş string ise fotoğrafı temizle
+    const f =
+      req.file ||
+      (Array.isArray(req.files) && req.files[0]) ||
+      (req.files?.file && req.files.file[0]) ||
+      (req.files?.photo && req.files.photo[0]);
 
+    if (f?.buffer) {
+      const up = await uploadBufferToCloudinary(f.buffer, {
+        folder: process.env.CLOUDINARY_FOLDER || "rezvix/menu",
+        resource_type: "auto",
+      });
+      patch.photoUrl = up.secure_url;
+    } else if (photoUrl === "" || photoUrl === null) {
+      patch.photoUrl = undefined;
+    }
+    
     if (tags !== undefined) {
       patch.tags = Array.isArray(tags) ? tags : [];
     }

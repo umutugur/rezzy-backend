@@ -1206,37 +1206,38 @@ export async function orgCreateMenuItem(
     title: string;
     defaultPrice: number;
     description?: string;
-    photoUrl?: string;
     tags?: string[];
     order?: number;
     isActive?: boolean;
+    photoFile?: File | null;
   }
 ): Promise<{ ok: boolean; item: OrgMenuItem }> {
-  const payload: any = {
-    categoryId: input.categoryId,
-    title: input.title,
-    defaultPrice: input.defaultPrice,
-  };
+  const fd = new FormData();
 
-  if (input.description != null && input.description !== "") {
-    payload.description = input.description;
-  }
-  if (input.photoUrl != null && input.photoUrl !== "") {
-    payload.photoUrl = input.photoUrl;
-  }
-  if (Array.isArray(input.tags)) {
-    payload.tags = input.tags;
+  fd.append("categoryId", input.categoryId);
+  fd.append("title", input.title);
+  fd.append("defaultPrice", String(input.defaultPrice));
+
+  if (input.description != null) {
+    fd.append("description", input.description);
   }
   if (typeof input.order === "number") {
-    payload.order = input.order;
+    fd.append("order", String(input.order));
   }
   if (typeof input.isActive === "boolean") {
-    payload.isActive = input.isActive;
+    fd.append("isActive", String(input.isActive));
+  }
+  (input.tags ?? []).forEach((t) => {
+    if (t) fd.append("tags", t);
+  });
+
+  if (input.photoFile instanceof File) {
+    fd.append("photo", input.photoFile);    // 🔴 backend'de upload.single("photo")
   }
 
   const { data } = await api.post(
     `/admin/organizations/${orgId}/menu/items`,
-    payload
+    fd
   );
   return data as { ok: boolean; item: OrgMenuItem };
 }
@@ -1253,42 +1254,42 @@ export async function orgUpdateMenuItem(
     title?: string;
     description?: string | null;
     defaultPrice?: number;
-    photoUrl?: string | null;
     tags?: string[];
     order?: number;
     isActive?: boolean;
+    photoFile?: File | null;
+    removePhoto?: boolean;
   }
 ): Promise<{ ok: boolean; item: OrgMenuItem }> {
-  const payload: any = {};
+  const fd = new FormData();
 
-  if (input.categoryId) {
-    payload.categoryId = input.categoryId;
+  if (input.categoryId) fd.append("categoryId", input.categoryId);
+  if (input.title != null) fd.append("title", input.title);
+  if (input.description !== undefined)
+    fd.append("description", input.description ?? "");
+  if (typeof input.defaultPrice === "number")
+    fd.append("defaultPrice", String(input.defaultPrice));
+  if (typeof input.order === "number")
+    fd.append("order", String(input.order));
+  if (typeof input.isActive === "boolean")
+    fd.append("isActive", String(input.isActive));
+
+  (input.tags ?? []).forEach((t) => {
+    if (t) fd.append("tags", t);
+  });
+
+  if (input.removePhoto) {
+    // Fotoğrafı kaldırmak istiyorsan
+    fd.append("photoUrl", ""); // backend'de "" → temizle mantığı
   }
-  if (input.title != null && input.title.trim() !== "") {
-    payload.title = input.title.trim();
-  }
-  if (input.description !== undefined) {
-    payload.description = input.description || "";
-  }
-  if (typeof input.defaultPrice === "number") {
-    payload.defaultPrice = input.defaultPrice;
-  }
-  if (input.photoUrl !== undefined) {
-    payload.photoUrl = input.photoUrl || "";
-  }
-  if (input.tags !== undefined) {
-    payload.tags = Array.isArray(input.tags) ? input.tags : [];
-  }
-  if (typeof input.order === "number") {
-    payload.order = input.order;
-  }
-  if (typeof input.isActive === "boolean") {
-    payload.isActive = input.isActive;
+
+  if (input.photoFile instanceof File) {
+    fd.append("photo", input.photoFile);
   }
 
   const { data } = await api.patch(
     `/admin/organizations/${orgId}/menu/items/${itemId}`,
-    payload
+    fd
   );
   return data as { ok: boolean; item: OrgMenuItem };
 }

@@ -63,6 +63,8 @@ import {
   updateOrgItem,
   deleteOrgItem,
 } from "../controllers/orgMenu.controller.js";
+import multer from "multer";
+const upload = multer();
 
 const r = Router();
 
@@ -230,6 +232,7 @@ r.post(
   "/organizations/:oid/menu/items",
   auth(),
   allowOrgOwnerOrAdmin("oid"),
+  upload.single("photo"), 
   createOrgItem
 );
 
@@ -237,6 +240,7 @@ r.patch(
   "/organizations/:oid/menu/items/:iid",
   auth(),
   allowOrgOwnerOrAdmin("oid"),
+  upload.single("photo"), 
   updateOrgItem
 );
 
