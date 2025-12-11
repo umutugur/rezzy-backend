@@ -911,6 +911,10 @@ export async function restaurantGetReportsOverview(
 // ORG — Organizations (Owner Panel)
 // =========================
 
+export interface OrgMyOrganization extends AdminOrganization {
+  restaurantCount?: number;
+}
+
 /**
  * GET /org/organizations
  * - Org owner / org_admin için kendi organizasyon listesi
@@ -918,16 +922,31 @@ export async function restaurantGetReportsOverview(
 export async function orgListMyOrganizations(params?: {
   cursor?: string;
   limit?: number;
-}): Promise<{ items: AdminOrganization[]; nextCursor?: string }> {
+}): Promise<{ items: OrgMyOrganization[]; nextCursor?: string }> {
   const { data } = await api.get("/org/organizations", { params });
-  const items = Array.isArray(data?.items)
-    ? (data.items as AdminOrganization[])
+
+  const items: OrgMyOrganization[] = Array.isArray(data?.items)
+    ? (data.items as OrgMyOrganization[])
     : Array.isArray(data)
-    ? (data as AdminOrganization[])
+    ? (data as OrgMyOrganization[])
     : [];
+
   const nextCursor =
     typeof data?.nextCursor === "string" ? data.nextCursor : undefined;
+
   return { items, nextCursor };
+}
+
+/**
+ * (Alias) GET /org/organizations
+ * - Eski kodda farklı isim kullanılmış olabilir diye, aynı endpoint'e
+ *   "orgListOrganizations" adıyla da erişim sağlıyoruz.
+ */
+export async function orgListOrganizations(params?: {
+  cursor?: string;
+  limit?: number;
+}): Promise<{ items: OrgMyOrganization[]; nextCursor?: string }> {
+  return orgListMyOrganizations(params);
 }
 
 /**
@@ -937,9 +956,9 @@ export async function orgListMyOrganizations(params?: {
  */
 export async function orgGetMyOrganization(
   id: string
-): Promise<AdminOrganization & { restaurants?: any[]; members?: any[] }> {
+): Promise<OrgMyOrganization & { restaurants?: any[]; members?: any[] }> {
   const { data } = await api.get(`/org/organizations/${id}`);
-  return data as AdminOrganization & { restaurants?: any[]; members?: any[] };
+  return data as OrgMyOrganization & { restaurants?: any[]; members?: any[] };
 }
 
 /**

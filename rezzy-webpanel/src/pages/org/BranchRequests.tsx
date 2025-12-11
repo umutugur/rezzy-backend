@@ -6,7 +6,9 @@ import { authStore, MeUser } from "../../store/auth";
 import {
   orgListBranchRequests,
   orgCreateBranchRequest,
+  orgListMyOrganizations,
   type OrgBranchRequest,
+  type OrgMyOrganization,
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
 
@@ -19,19 +21,26 @@ type OrgLite = {
 
 function getUserOrganizations(u: MeUser | null): OrgLite[] {
   if (!u || !Array.isArray(u.organizations)) return [];
+
   return u.organizations
     .map((o: any) => {
+      // Önce toClientUser’ın ürettiği shape’e bak
       const id =
+        o.id ||
         o.organization?._id ||
         o.organizationId ||
         o.organization ||
         o._id ||
         null;
+
       if (!id) return null;
+
       return {
         id: String(id),
+        // toClientUser -> name alanını zaten koyuyor
         name: o.name || o.organizationName || "İsimsiz Organizasyon",
-        region: o.region || null,
+        // Şu an backend region göndermiyor ama ileride eklersen buraya düşer
+        region: o.region ?? null,
         role: o.role,
       };
     })
