@@ -15,6 +15,19 @@ const GOOGLE_AUDIENCES = [
   process.env.GOOGLE_CLIENT_ID,
 ].filter(Boolean);
 
+
+const BASE_USER_SELECT =
+  "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt organizations restaurantMemberships";
+
+const USER_POPULATE = [
+  { path: "restaurantId", select: "_id name" },
+  { path: "organizations.organization", select: "_id name region" },
+  {
+    path: "restaurantMemberships.restaurant",
+    select: "_id name organizationId status",
+  },
+];
+
 const googleClient = new OAuth2Client();
 
 /* ========== TOKENS ========== */
@@ -279,7 +292,7 @@ export const register = async (req, res, next) => {
     // 🔒 Güvenlik + mimari: public register her zaman "customer"
     const safeRole = "customer";
 
-    const user = await User.create({
+    const created = await User.create({
       name,
       email,
       phone,
@@ -287,6 +300,10 @@ export const register = async (req, res, next) => {
       role: safeRole,
       providers: [{ name: "password", sub: email || phone || "local" }],
     });
+
+    const user = await User.findById(created._id)
+      .select(BASE_USER_SELECT)
+      .populate(USER_POPULATE);
 
     const token = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
@@ -302,14 +319,24 @@ export const login = async (req, res, next) => {
   try {
     const { email, phone, password } = req.body;
     const query = email ? { email } : { phone };
-    const user = await User.findOne(query).select("+password");
-    if (!user || !(await user.compare(password))) {
+
+    const userWithPassword = await User.findOne(query).select("+password");
+    if (!userWithPassword || !(await userWithPassword.compare(password))) {
       throw { status: 400, message: "Geçersiz bilgiler" };
     }
 
-    ensureProvider(user, "password", email || phone || "local");
+    ensureProvider(
+      userWithPassword,
+      "password",
+      email || phone || "local"
+    );
 
-    await user.save();
+    await userWithPassword.save();
+
+    const user = await User.findById(userWithPassword._id)
+      .select(BASE_USER_SELECT)
+      .populate(USER_POPULATE);
+
     const token = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
     res.json({ token, refreshToken, user: toClientUser(user) });
@@ -360,9 +387,13 @@ export const googleLogin = async (req, res, next) => {
       await user.save();
     }
 
-    const token = signAccessToken(user);
-    const refreshToken = signRefreshToken(user);
-    res.json({ token, refreshToken, user: toClientUser(user) });
+    const populated = await User.findById(user._id)
+      .select(BASE_USER_SELECT)
+      .populate(USER_POPULATE);
+
+    const token = signAccessToken(populated);
+    const refreshToken = signRefreshToken(populated);
+    res.json({ token, refreshToken, user: toClientUser(populated) });
   } catch (e) {
     if (
       e?.message?.includes("audience") ||
@@ -426,9 +457,13 @@ export const appleLogin = async (req, res, next) => {
       await user.save();
     }
 
-    const token = signAccessToken(user);
-    const refreshToken = signRefreshToken(user);
-    res.json({ token, refreshToken, user: toClientUser(user) });
+    const populated = await User.findById(user._id)
+      .select(BASE_USER_SELECT)
+      .populate(USER_POPULATE);
+
+    const token = signAccessToken(populated);
+    const refreshToken = signRefreshToken(populated);
+    res.json({ token, refreshToken, user: toClientUser(populated) });
   } catch (e) {
     if (e?.message?.toLowerCase?.().includes("audience")) {
       return next({
@@ -463,20 +498,10 @@ export const me = async (req, res, next) => {
       });
     }
 
-    const baseSelect =
-      "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt organizations restaurantMemberships";
-
     // Kullanıcıyı membership’leriyle birlikte çek
     const u = await User.findById(req.user.id)
-      .select(baseSelect)
-      .populate([
-        { path: "restaurantId", select: "_id name" },
-        { path: "organizations.organization", select: "_id name" },
-        {
-          path: "restaurantMemberships.restaurant",
-          select: "_id name organizationId status",
-        },
-      ]);
+      .select(BASE_USER_SELECT)
+      .populate(USER_POPULATE);
 
     if (!u) return res.status(401).json({ message: "Unauthorized" });
 
@@ -533,23 +558,13 @@ export const updateMe = async (req, res, next) => {
       patch.preferredLanguage = preferredLanguage;
     }
 
-    const baseSelect =
-      "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt organizations restaurantMemberships";
-
     const u = await User.findByIdAndUpdate(
       req.user.id,
       { $set: patch },
       { new: true }
     )
-      .select(baseSelect)
-      .populate([
-        { path: "restaurantId", select: "_id name" },
-        { path: "organizations.organization", select: "_id name" },
-        {
-          path: "restaurantMemberships.restaurant",
-          select: "_id name organizationId status",
-        },
-      ]);
+      .select(BASE_USER_SELECT)
+      .populate(USER_POPULATE);
 
     if (!u) return res.status(404).json({ message: "User not found" });
 
