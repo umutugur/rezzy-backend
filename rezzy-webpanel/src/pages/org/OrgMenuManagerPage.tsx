@@ -97,12 +97,12 @@ export default function OrgMenuManagerPage() {
     mutationFn: (payload: {
       categoryId: string;
       title: string;
-      description?: string;
       defaultPrice: number;
+      description?: string;
       tags?: string[];
       order?: number;
       isActive?: boolean;
-      photoUrl?: string;
+      photoFile?: File | null;
     }) => orgCreateMenuItem(oid, payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["org-menu", oid] });
@@ -120,7 +120,8 @@ export default function OrgMenuManagerPage() {
         tags?: string[];
         order?: number;
         isActive?: boolean;
-        photoUrl?: string;
+        photoFile?: File | null;
+        removePhoto?: boolean;
       };
     }) => orgUpdateMenuItem(oid, p.iid, p.payload),
     onSuccess: () => {
@@ -158,7 +159,8 @@ export default function OrgMenuManagerPage() {
     tagsText: "",
     order: 0,
     isActive: true,
-    photoUrl: "",
+    photoFile: null as File | null,
+    photoPreviewUrl: "",
   });
 
   const [editingItemId, setEditingItemId] = React.useState<string | null>(null);
@@ -169,7 +171,9 @@ export default function OrgMenuManagerPage() {
     tagsText?: string;
     order?: number;
     isActive?: boolean;
-    photoUrl?: string;
+    photoFile?: File | null;
+    photoPreviewUrl?: string;
+    removePhoto?: boolean;
   }>({});
 
   const handleNewItemPhotoFileChange = (
@@ -177,11 +181,20 @@ export default function OrgMenuManagerPage() {
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const objectUrl = URL.createObjectURL(file);
-    setNewItem((prev) => ({
-      ...prev,
-      photoUrl: objectUrl,
-    }));
+
+    setNewItem((prev) => {
+      if (prev.photoPreviewUrl) {
+        try {
+          URL.revokeObjectURL(prev.photoPreviewUrl);
+        } catch {}
+      }
+      const objectUrl = URL.createObjectURL(file);
+      return {
+        ...prev,
+        photoFile: file,
+        photoPreviewUrl: objectUrl,
+      };
+    });
   };
 
   const handleEditingItemPhotoFileChange = (
@@ -189,12 +202,38 @@ export default function OrgMenuManagerPage() {
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const objectUrl = URL.createObjectURL(file);
-    setEditingItem((prev) => ({
-      ...prev,
-      photoUrl: objectUrl,
-    }));
+
+    setEditingItem((prev) => {
+      if (prev.photoPreviewUrl) {
+        try {
+          URL.revokeObjectURL(prev.photoPreviewUrl);
+        } catch {}
+      }
+      const objectUrl = URL.createObjectURL(file);
+      return {
+        ...prev,
+        photoFile: file,
+        photoPreviewUrl: objectUrl,
+        removePhoto: false,
+      };
+    });
   };
+
+  React.useEffect(() => {
+    return () => {
+      if (newItem.photoPreviewUrl) {
+        try {
+          URL.revokeObjectURL(newItem.photoPreviewUrl);
+        } catch {}
+      }
+      if (editingItem.photoPreviewUrl) {
+        try {
+          URL.revokeObjectURL(editingItem.photoPreviewUrl);
+        } catch {}
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!oid) {
     return (
@@ -496,18 +535,20 @@ export default function OrgMenuManagerPage() {
                           <div className="md:col-span-2 flex gap-2">
                             <button
                               className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
-                              onClick={() => {
-                                setEditingItemId(it._id);
-                                setEditingItem({
-                                  title: it.title,
-                                  description: it.description ?? "",
-                                  defaultPrice: it.defaultPrice,
-                                  tagsText: (it.tags ?? []).join(", "),
-                                  order: it.order,
-                                  isActive: it.isActive,
-                                  photoUrl: it.photoUrl ?? "",
-                                });
-                              }}
+                          onClick={() => {
+                            setEditingItemId(it._id);
+                            setEditingItem({
+                              title: it.title,
+                              description: it.description ?? "",
+                              defaultPrice: it.defaultPrice,
+                              tagsText: (it.tags ?? []).join(", "),
+                              order: it.order,
+                              isActive: it.isActive,
+                              photoFile: null,
+                              photoPreviewUrl: "",
+                              removePhoto: false,
+                            });
+                          }}
                             >
                               Düzenle
                             </button>
@@ -607,20 +648,42 @@ export default function OrgMenuManagerPage() {
                             </div>
 
                             <div className="flex flex-col">
-                              <label className="text-xs text-gray-500 mb-1">
-                                Fotoğraf URL
-                              </label>
-                              <input
-                                className="border rounded px-2 py-1 text-sm mb-1"
-                                placeholder="https://..."
-                                value={editingItem.photoUrl ?? ""}
-                                onChange={(e) =>
-                                  setEditingItem((p) => ({
-                                    ...p,
-                                    photoUrl: e.target.value,
-                                  }))
-                                }
-                              />
+                              <label className="text-xs text-gray-500 mb-1">Fotoğraf</label>
+
+                              <div className="flex items-center gap-3 mb-2">
+                                {editingItem.photoPreviewUrl ? (
+                                  <img
+                                    src={editingItem.photoPreviewUrl}
+                                    className="w-20 h-16 object-cover rounded border"
+                                  />
+                                ) : it.photoUrl && !editingItem.removePhoto ? (
+                                  <img
+                                    src={it.photoUrl}
+                                    className="w-20 h-16 object-cover rounded border"
+                                  />
+                                ) : (
+                                  <div className="w-20 h-16 rounded border bg-gray-50 flex items-center justify-center text-xs text-gray-400">
+                                    Foto yok
+                                  </div>
+                                )}
+
+                                {it.photoUrl && !editingItem.photoPreviewUrl && (
+                                  <label className="flex items-center gap-2 text-xs text-gray-700">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!editingItem.removePhoto}
+                                      onChange={(e) =>
+                                        setEditingItem((p) => ({
+                                          ...p,
+                                          removePhoto: e.target.checked,
+                                        }))
+                                      }
+                                    />
+                                    Fotoğrafı kaldır
+                                  </label>
+                                )}
+                              </div>
+
                               <input
                                 type="file"
                                 accept="image/*"
@@ -664,9 +727,15 @@ export default function OrgMenuManagerPage() {
                                     tags,
                                     order: editingItem.order,
                                     isActive: editingItem.isActive,
-                                    photoUrl: editingItem.photoUrl,
+                                    photoFile: editingItem.photoFile ?? null,
+                                    removePhoto: !!editingItem.removePhoto,
                                   },
                                 });
+                                if (editingItem.photoPreviewUrl) {
+                                  try {
+                                    URL.revokeObjectURL(editingItem.photoPreviewUrl);
+                                  } catch {}
+                                }
                                 setEditingItemId(null);
                                 setEditingItem({});
                               }}
@@ -773,20 +842,21 @@ export default function OrgMenuManagerPage() {
                   </div>
 
                   <div className="flex flex-col">
-                    <label className="text-xs text-gray-500 mb-1">
-                      Fotoğraf URL (opsiyonel)
-                    </label>
-                    <input
-                      className="border rounded px-2 py-1 text-sm mb-1"
-                      placeholder="https://..."
-                      value={newItem.photoUrl}
-                      onChange={(e) =>
-                        setNewItem((p) => ({
-                          ...p,
-                          photoUrl: e.target.value,
-                        }))
-                      }
-                    />
+                    <label className="text-xs text-gray-500 mb-1">Fotoğraf</label>
+
+                    <div className="flex items-center gap-3 mb-2">
+                      {newItem.photoPreviewUrl ? (
+                        <img
+                          src={newItem.photoPreviewUrl}
+                          className="w-20 h-16 object-cover rounded border"
+                        />
+                      ) : (
+                        <div className="w-20 h-16 rounded border bg-gray-50 flex items-center justify-center text-xs text-gray-400">
+                          Foto yok
+                        </div>
+                      )}
+                    </div>
+
                     <input
                       type="file"
                       accept="image/*"
@@ -832,9 +902,14 @@ export default function OrgMenuManagerPage() {
                         tags,
                         order: newItem.order,
                         isActive: newItem.isActive,
-                        photoUrl: newItem.photoUrl || undefined,
+                        photoFile: newItem.photoFile ?? null,
                       });
 
+                      if (newItem.photoPreviewUrl) {
+                        try {
+                          URL.revokeObjectURL(newItem.photoPreviewUrl);
+                        } catch {}
+                      }
                       setNewItem({
                         title: "",
                         description: "",
@@ -842,7 +917,8 @@ export default function OrgMenuManagerPage() {
                         tagsText: "",
                         order: 0,
                         isActive: true,
-                        photoUrl: "",
+                        photoFile: null,
+                        photoPreviewUrl: "",
                       });
                     }}
                   >

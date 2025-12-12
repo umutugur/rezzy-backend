@@ -1165,7 +1165,15 @@ export async function orgUpdateMenuCategory(
     payload.title = input.title.trim();
   }
   if (input.description !== undefined) {
-    payload.description = input.description || "";
+    if (input.description === null) {
+      payload.description = "";
+    } else if (
+      typeof input.description === "string" &&
+      input.description.trim() !== ""
+    ) {
+      payload.description = input.description.trim();
+    }
+    // else: if empty string, don't include
   }
   if (typeof input.order === "number") {
     payload.order = input.order;
@@ -1278,15 +1286,16 @@ export async function orgUpdateMenuItem(
     if (t) fd.append("tags", t);
   });
 
-  if (input.removePhoto) {
-    // Fotoğrafı kaldırmak istiyorsan
-    fd.append("photoUrl", ""); // backend'de "" → temizle mantığı
+  // If removePhoto is true, append photoUrl = ""
+  if (input.removePhoto === true) {
+    fd.append("photoUrl", "");
   }
 
   if (input.photoFile instanceof File) {
     fd.append("photo", input.photoFile);
   }
 
+  // Note: The request interceptor removes Content-Type for FormData requests.
   const { data } = await api.patch(
     `/admin/organizations/${orgId}/menu/items/${itemId}`,
     fd

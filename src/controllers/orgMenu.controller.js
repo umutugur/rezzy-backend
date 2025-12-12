@@ -11,6 +11,11 @@ function toObjectId(id) {
     return null;
   }
 }
+function normalizeTags(tags) {
+  if (tags == null) return [];
+  if (Array.isArray(tags)) return tags.map(String).map(t => t.trim()).filter(Boolean);
+  return String(tags).split(",").map(t => t.trim()).filter(Boolean);
+}
 
 /* ------------ helpers ------------ */
 
@@ -65,6 +70,7 @@ export const getOrgMenu = async (req, res, next) => {
       updatedAt: c.updatedAt,
       items: (itemsByCat.get(String(c._id)) || []).map((it) => ({
         _id: it._id,
+        categoryId: String(it.categoryId),
         title: it.title,
         description: it.description || null,
         defaultPrice: it.defaultPrice,
@@ -244,7 +250,6 @@ export const createOrgItem = async (req, res, next) => {
     if (!oid) {
       return res.status(400).json({ message: "Invalid organization id" });
     }
-
     const org = await assertOrganization(oid);
     if (!org) {
       return res.status(404).json({ message: "Organization not found" });
@@ -260,6 +265,8 @@ export const createOrgItem = async (req, res, next) => {
       order,
       isActive,
     } = req.body || {};
+
+    const normTags = normalizeTags(tags);
 
     const catId = toObjectId(categoryId);
     if (!catId) {
@@ -316,7 +323,7 @@ export const createOrgItem = async (req, res, next) => {
       description: description || undefined,
       defaultPrice,
       photoUrl: finalPhotoUrl,        
-      tags: Array.isArray(tags) ? tags : [],
+      tags: normTags,
       order: order != null ? order : 0,
       isActive,
     });
@@ -429,9 +436,9 @@ export const updateOrgItem = async (req, res, next) => {
     } else if (photoUrl === "" || photoUrl === null) {
       patch.photoUrl = undefined;
     }
-    
+
     if (tags !== undefined) {
-      patch.tags = Array.isArray(tags) ? tags : [];
+      patch.tags = normalizeTags(tags);
     }
 
     if (order != null) {
