@@ -10,6 +10,7 @@ import {
   restaurantCreateItem,
   restaurantUpdateItem,
   restaurantDeleteItem,
+  restaurantGetResolvedMenu,
 } from "../../api/client";
 import { Card } from "../../components/Card";
 
@@ -33,10 +34,44 @@ type Item = {
   isActive: boolean;
   isAvailable: boolean;
 };
+type ResolvedMenuItem = {
+  _id: string;
+  title: string;
+  description?: string | null;
+  price: number;
+  photoUrl?: string | null;
+  tags?: string[];
+  order?: number;
+  isActive?: boolean;
+  isAvailable?: boolean;
+
+  // service döndürüyorsa kullanırız (zorunlu değil)
+  orgItemId?: string | null;
+  source?: "org" | "override" | "local";
+};
+
+type ResolvedMenuCategory = {
+  _id: string;
+  title: string;
+  description?: string | null;
+  order?: number;
+  isActive?: boolean;
+  items: ResolvedMenuItem[];
+
+  orgCategoryId?: string | null;
+  source?: "org" | "override" | "local";
+};
+
+type ResolvedMenuResponse = {
+  categories: ResolvedMenuCategory[];
+  organizationId?: string | null;
+  restaurantId?: string;
+};
 
 export default function MenuManagerPage() {
   const rid = authStore.getUser()?.restaurantId || "";
   const qc = useQueryClient();
+  const [mode, setMode] = React.useState<"manage" | "preview">("manage");
 
   // ---------- Categories ----------
   const catQ = useQuery({
@@ -88,6 +123,11 @@ export default function MenuManagerPage() {
       restaurantListItems(rid, selectedCatId ? { categoryId: selectedCatId } : {}),
     enabled: !!rid,
   });
+  const resolvedQ = useQuery({
+  queryKey: ["menu-resolved", rid],
+  queryFn: () => restaurantGetResolvedMenu(rid) as Promise<ResolvedMenuResponse>,
+  enabled: !!rid,
+});
 
   const createItemMut = useMutation({
     mutationFn: (payload: {
@@ -158,20 +198,70 @@ export default function MenuManagerPage() {
 
   return (
     <div className="flex-1 space-y-6">
-      <h2 className="text-lg font-semibold">Menü Kategorileri & Ürünler</h2>
+<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div>
+    <h2 className="text-lg font-semibold">Menü Yönetimi</h2>
+    <div className="text-xs text-gray-500">
+      Panel menüsünden kategori/ürün yönet. “Resolved Önizleme” org menü + override +
+      lokal birleşik görünümü gösterir.
+    </div>
+  </div>
 
+  <div className="flex items-center gap-2">
+    <button
+      className={`px-3 py-1.5 text-sm rounded border ${
+        mode === "manage"
+          ? "border-brand-600 bg-brand-50 text-brand-700"
+          : "border-gray-200 bg-white hover:bg-gray-50"
+      }`}
+      onClick={() => setMode("manage")}
+    >
+      Panel Menüsü
+    </button>
+
+    <button
+      className={`px-3 py-1.5 text-sm rounded border ${
+        mode === "preview"
+          ? "border-brand-600 bg-brand-50 text-brand-700"
+          : "border-gray-200 bg-white hover:bg-gray-50"
+      }`}
+      onClick={() => setMode("preview")}
+    >
+      Resolved Önizleme
+    </button>
+
+    <button
+      className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
+      onClick={() => {
+        qc.invalidateQueries({ queryKey: ["menu-categories", rid] });
+        qc.invalidateQueries({ queryKey: ["menu-items", rid] });
+        qc.invalidateQueries({ queryKey: ["menu-resolved", rid] });
+      }}
+    >
+      Yenile
+    </button>
+  </div>
+</div>
       {!rid && (
         <div className="text-sm text-red-600">
           RestaurantId bulunamadı. Oturum / authStore akışını kontrol et.
         </div>
       )}
 
-      {(catQ.isLoading || itemsQ.isLoading) && (
-        <div className="text-sm text-gray-500">Yükleniyor…</div>
-      )}
+      {((mode === "manage" && (catQ.isLoading || itemsQ.isLoading)) ||
+  (mode === "preview" && resolvedQ.isLoading)) && (
+  <div className="text-sm text-gray-500">Yükleniyor…</div>
+)}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ---------- Categories Column ---------- */}
+{(catQ.isError || itemsQ.isError || resolvedQ.isError) && (
+  <div className="text-sm text-red-600">
+    Menü verisi alınırken hata oluştu. Network/Yetki veya endpointleri kontrol et.
+  </div>
+)}
+
+{   mode === "manage" && (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* ---------- Categories Column ---------- */}
         <Card title="Kategoriler">
           <div className="space-y-3">
             {cats.map((c) => {
@@ -762,6 +852,119 @@ export default function MenuManagerPage() {
           </Card>
         </div>
       </div>
+      )}
+      {mode === "preview" && (
+  <div className="space-y-4">
+    <Card title="Resolved Menü (Org + Override + Lokal)">
+      <div className="text-xs text-gray-500 mb-3">
+        Bu görünüm sadece okuma amaçlıdır. Veri: <code>GET /panel/restaurants/:rid/menu/resolved</code>
+      </div>
+
+      {!resolvedQ.data?.categories?.length && (
+        <div className="text-sm text-gray-500">Resolved menü boş görünüyor.</div>
+      )}
+
+      <div className="space-y-4">
+        {(resolvedQ.data?.categories ?? [])
+          .slice()
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+          .map((c) => (
+            <div key={c._id} className="border rounded-lg p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-semibold flex items-center gap-2">
+                    <span>{c.title}</span>
+
+                    {c.isActive === false && (
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                        Pasif
+                      </span>
+                    )}
+
+                    {c.source && (
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">
+                        {c.source}
+                      </span>
+                    )}
+                  </div>
+
+                  {!!c.description && (
+                    <div className="text-sm text-gray-600 mt-1">{c.description}</div>
+                  )}
+                  <div className="text-xs text-gray-400 mt-1">Sıra: {c.order ?? 0}</div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(c.items ?? [])
+                  .slice()
+                  .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                  .map((it) => (
+                    <div key={it._id} className="border rounded-lg p-3 flex gap-3">
+                      <div className="w-24 shrink-0">
+                        {it.photoUrl ? (
+                          <img
+                            src={it.photoUrl}
+                            className="w-24 h-16 object-cover rounded border"
+                            alt={it.title}
+                          />
+                        ) : (
+                          <div className="w-24 h-16 rounded border bg-gray-50 flex items-center justify-center text-xs text-gray-400">
+                            Foto yok
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-medium truncate">{it.title}</div>
+                          <div className="text-sm font-semibold whitespace-nowrap">
+                            {it.price} ₺
+                          </div>
+                        </div>
+
+                        {!!it.description && (
+                          <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                            {it.description}
+                          </div>
+                        )}
+
+                        <div className="mt-2 flex flex-wrap gap-2 items-center">
+                          {it.isActive === false && (
+                            <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                              Pasif
+                            </span>
+                          )}
+                          {it.isAvailable === false && (
+                            <span className="text-[11px] px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100">
+                              Stok yok
+                            </span>
+                          )}
+                          {it.source && (
+                            <span className="text-[11px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">
+                              {it.source}
+                            </span>
+                          )}
+                          {!!it.tags?.length && (
+                            <span className="text-[11px] text-gray-500 truncate">
+                              #{it.tags.join(" #")}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                {(!c.items || c.items.length === 0) && (
+                  <div className="text-sm text-gray-500">Bu kategoride ürün yok.</div>
+                )}
+              </div>
+            </div>
+          ))}
+      </div>
+    </Card>
+  </div>
+)}
     </div>
   );
 }

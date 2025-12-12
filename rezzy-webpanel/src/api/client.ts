@@ -45,8 +45,8 @@ api.interceptors.request.use((config) => {
   const method = (config.method || "get").toLowerCase();
   const url = String(config.url || "");
 
-  // ✅ _ts sadece panel DIŞI GET’lerde
-  if (method === "get" && !url.includes("/panel/")) {
+  // ✅ Cache-buster: SADECE /auth/me (token yenilenince eski user cache'ini kırmak için)
+  if (method === "get" && url.includes("/auth/me")) {
     config.params = { ...(config.params || {}), _ts: Date.now() };
   }
 
@@ -648,6 +648,51 @@ export async function restaurantGetReservationQR(resId: string) {
 // =========================
 // RESTAURANT — Menu Categories & Items
 // =========================
+
+export type RestaurantResolvedMenuItem = {
+  _id: string;
+  categoryId: string;
+  title: string;
+  description: string | null;
+  price: number;
+  photoUrl: string | null;
+  tags: string[];
+  order: number;
+  isActive: boolean;
+  isAvailable: boolean;
+  orgItemId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type RestaurantResolvedMenuCategory = {
+  _id: string;
+  title: string;
+  description: string | null;
+  order: number;
+  isActive: boolean;
+  orgCategoryId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  items: RestaurantResolvedMenuItem[];
+};
+
+export type RestaurantResolvedMenuResponse = {
+  restaurantId?: string;
+  organizationId?: string | null;
+  categories: RestaurantResolvedMenuCategory[];
+};
+
+/**
+ * GET /api/panel/restaurants/:rid/menu/resolved
+ * - Org + override + local menü merge edilmiş tek kapı
+ */
+export async function restaurantGetResolvedMenu(
+  rid: string
+): Promise<RestaurantResolvedMenuResponse> {
+  const { data } = await api.get(`/panel/restaurants/${rid}/menu/resolved`);
+  return (data ?? { categories: [] }) as RestaurantResolvedMenuResponse;
+}
 export async function restaurantListCategories(rid: string) {
   const { data } = await api.get(
     `/panel/restaurants/${rid}/menu/categories`
