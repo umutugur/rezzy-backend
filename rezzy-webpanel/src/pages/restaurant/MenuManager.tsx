@@ -1003,27 +1003,54 @@ export default function MenuManagerPage() {
 
                         <button
                           className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
-                          onClick={async () => {
-                            if (!selected) return;
+                         onClick={async () => {
+  if (!selected) return;
 
-                            // Kapalıysa aç, açıksa kapat
-                            const next = !selected.isActive ? true : false;
+  const next = selected.isActive ? false : true;
 
-                            // org ise önce local override gerek
-                            if (selectedResolved?.source === "org") {
-                              const r = await ensureEditableCategoryForOrg(selectedResolved);
-                              if (!r) return;
-                              // localCats refetch sonrası gerçek id ile update yapılacak; burada “best effort”:
-                              // en güvenlisi: refreshAll sonrası user tekrar tıklar. Ama pratikte localCats hızlı gelir.
-                              refreshAll();
-                              return;
-                            }
+  // Org kategori ise: override kaydını garanti et, sonra o local kaydı update et
+  if (selectedResolved?.source === "org") {
+    if (!selectedResolved) return;
 
-                            // local/override: local id ya selectedLocalCatId ya da selected.local
-                            const cid = selectedLocalCatId || (selected.local ? getId(selected.local) : null);
-                            if (!cid) return;
-                            updateCatMut.mutate({ cid, payload: { isActive: next } });
-                          }}
+    // 1) override'ı oluştur / bul
+    await ensureEditableCategoryForOrg(selectedResolved);
+
+    // 2) en güncel local kategorileri refetch et
+    await qc.invalidateQueries({ queryKey: ["menu-categories", rid] });
+    const freshLocalCats = (await qc.fetchQuery({
+      queryKey: ["menu-categories", rid],
+      queryFn: () => restaurantListCategories(rid),
+    })) as any[];
+
+    // 3) override local kaydı bul ve isActive güncelle
+    const orgId = getId(selectedResolved);
+    const lc =
+      (freshLocalCats || []).find((x: any) => String(x?.orgCategoryId || "") === String(orgId)) ||
+      findOverrideCategoryForOrgHeuristic(freshLocalCats as any, selectedResolved);
+
+    const cid = lc ? getId(lc) : null;
+    if (!cid) {
+      refreshAll();
+      return;
+    }
+
+    updateCatMut.mutate(
+      { cid, payload: { isActive: next } as any },
+      {
+        onSuccess: () => {
+          refreshAll();
+        },
+      } as any
+    );
+
+    return;
+  }
+
+  // local/override
+  const cid = selectedLocalCatId || (selected.local ? getId(selected.local) : null);
+  if (!cid) return;
+  updateCatMut.mutate({ cid, payload: { isActive: next } as any });
+}}
                         >
                           {selected.isActive ? "Bu şubede kapat" : "Aç"}
                         </button>
@@ -1102,18 +1129,20 @@ export default function MenuManagerPage() {
                             sortByOrder(selectedResolved?.items ?? []).map((it, idx) => {
                               const src: ResolvedSource = (it.source ?? "local") as ResolvedSource;
                               const b = badgeFor(src);
-                              const orgId = getId(it);
+                              // NOTE: Resolved item için _id bazen local override id olabilir.
+// Org item ile local override eşleşmesini her zaman orgItemId üzerinden yap.
+const orgStableId = String((it as any)?.orgItemId ?? getId(it));
 
-                              const localEdited =
-                                src === "org"
-                                  ? localItems.find((li) => String(li.orgItemId || "") === String(orgId)) || null
-                                  : null;
+const localEdited =
+  src === "org"
+    ? localItems.find((li) => String(li.orgItemId || "") === orgStableId) || null
+    : null;
 
                               const canEditRow = !opsDisabled && (src !== "org" || !!localEdited);
                               const showDelete = src === "local"; // sadece şubeye özel
 
                               return (
-                                <tr key={`${src}:${orgId}:${idx}`} className="border-t">
+                                <tr key={`${src}:${orgStableId}:${idx}`} className="border-t">
                                   <td className="px-3 py-2">
                                     <div className="font-medium">{it.title}</div>
                                     {!!it.description && <div className="text-xs text-gray-500 line-clamp-2">{it.description}</div>}
@@ -1139,7 +1168,7 @@ export default function MenuManagerPage() {
                                             if (!selectedLocalCatId || opsDisabled) return;
                                             createItemMut.mutate({
                                               categoryId: selectedLocalCatId,
-                                              orgItemId: orgId,
+                                              orgItemId: orgStableId,
                                               title: it.title,
                                               description: it.description ?? "",
                                               price: it.price,
@@ -1179,7 +1208,7 @@ export default function MenuManagerPage() {
                                             createItemMut.mutate(
                                               {
                                                 categoryId: selectedLocalCatId,
-                                                orgItemId: orgId,
+                                                orgItemId: orgStableId,
                                                 title: it.title,
                                                 description: it.description ?? "",
                                                 price: it.price,
@@ -1189,9 +1218,11 @@ export default function MenuManagerPage() {
                                               } as any,
                                               {
                                                 onSuccess: (res: any) => {
-                                                  const newId = getId(res?.item ?? res);
-                                                  if (newId) updateItemMut.mutate({ iid: newId, isActive: false });
-                                                },
+  // backend farklı shape dönebiliyor: {item}, {ok,item}, direkt item...
+  const created = res?.item ?? res?.data?.item ?? res?.data ?? res;
+  const newId = getId(created);
+  if (newId) updateItemMut.mutate({ iid: newId, isActive: false });
+},
                                               } as any
                                             );
                                             return;
