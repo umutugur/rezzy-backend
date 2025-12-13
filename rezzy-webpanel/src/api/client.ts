@@ -688,15 +688,21 @@ export type RestaurantResolvedMenuResponse = {
  * - Org + override + local menü merge edilmiş tek kapı
  */
 export async function restaurantGetResolvedMenu(
-  rid: string
+  rid: string,
+  params?: { includeInactive?: boolean; includeUnavailable?: boolean }
 ): Promise<RestaurantResolvedMenuResponse> {
-  const { data } = await api.get(`/panel/restaurants/${rid}/menu/resolved`);
+  const { data } = await api.get(`/panel/restaurants/${rid}/menu/resolved`, {
+    params,
+  });
   return (data ?? { categories: [] }) as RestaurantResolvedMenuResponse;
 }
-export async function restaurantListCategories(rid: string) {
-  const { data } = await api.get(
-    `/panel/restaurants/${rid}/menu/categories`
-  );
+export async function restaurantListCategories(
+  rid: string,
+  params?: { includeInactive?: boolean }
+) {
+  const { data } = await api.get(`/panel/restaurants/${rid}/menu/categories`, {
+    params,
+  });
   return (data?.items ?? data ?? []) as Array<any>;
 }
 
@@ -737,7 +743,7 @@ export async function restaurantDeleteCategory(rid: string, cid: string) {
 
 export async function restaurantListItems(
   rid: string,
-  params?: { categoryId?: string }
+  params?: { categoryId?: string; includeInactive?: boolean }
 ) {
   const { data } = await api.get(
     `/panel/restaurants/${rid}/menu/items`,
