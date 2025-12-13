@@ -643,11 +643,15 @@ export default function MenuManagerPage() {
   // ---------------- Items: for selected local category ----------------
   const itemsQ = useQuery({
     queryKey: ["menu-items", rid, selectedLocalCatId],
-    queryFn: () => restaurantListItems(rid, { categoryId: String(selectedLocalCatId) }),
+    queryFn: () => restaurantListItems(rid, { categoryId: String(selectedLocalCatId), includeInactive: true } as any),
     enabled: !!rid && !!selectedLocalCatId,
   });
 
   const localItems: Item[] = (itemsQ.data ?? []) as any;
+
+  const closedLocalItems = React.useMemo(() => {
+    return sortByOrder((localItems || []).filter((x) => x && x.isActive === false));
+  }, [localItems]);
 
   const createItemMut = useMutation({
     mutationFn: (payload: {
@@ -697,6 +701,7 @@ export default function MenuManagerPage() {
   // ---------------- UI state: filters + modals ----------------
   const [tab, setTab] = React.useState<"active" | "closed">("active");
   const [q, setQ] = React.useState("");
+  const [itemTab, setItemTab] = React.useState<"active" | "closed">("active");
 
   const list = React.useMemo(() => {
     const base = tab === "active" ? active : closed;
@@ -965,9 +970,9 @@ export default function MenuManagerPage() {
                   <div className="shrink-0 flex items-center gap-2">
                     <button
                       className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-60"
-                      disabled={!selected || opsDisabled}
+                      disabled={!selected || opsDisabled || itemTab === "closed"}
                       onClick={openCreateItem}
-                      title={!selected ? "Önce kategori seç" : opsDisabled ? "Kategori kapalı" : "Ürün ekle"}
+                      title={!selected ? "Önce kategori seç" : opsDisabled ? "Kategori kapalı" : itemTab === "closed" ? "Kapalı ürünlerde ekleme yapılmaz" : "Ürün ekle"}
                     >
                       + Ürün Ekle
                     </button>
@@ -1046,6 +1051,33 @@ export default function MenuManagerPage() {
                     </div>
                   )}
 
+                  {/* Items tab switcher */}
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+                      <button
+                        className={`px-3 py-1.5 text-sm ${itemTab === "active" ? "bg-brand-50 text-brand-700" : "bg-white hover:bg-gray-50"}`}
+                        onClick={() => setItemTab("active")}
+                        type="button"
+                      >
+                        Aktif Ürünler
+                      </button>
+                      <button
+                        className={`px-3 py-1.5 text-sm border-l border-gray-200 ${itemTab === "closed" ? "bg-brand-50 text-brand-700" : "bg-white hover:bg-gray-50"}`}
+                        onClick={() => setItemTab("closed")}
+                        type="button"
+                      >
+                        Kapalı Ürünler
+                        {closedLocalItems.length > 0 ? (
+                          <span className="ml-2 inline-flex items-center justify-center text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{closedLocalItems.length}</span>
+                        ) : null}
+                      </button>
+                    </div>
+
+                    {itemTab === "closed" && closedLocalItems.length === 0 && (
+                      <div className="text-xs text-gray-500">Bu kategoride kapalı ürün yok.</div>
+                    )}
+                  </div>
+
                   {/* Items table */}
                   <div className="overflow-auto border rounded-xl">
                     <table className="min-w-full text-sm">
@@ -1059,95 +1091,53 @@ export default function MenuManagerPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {(sortByOrder(selectedResolved?.items ?? [])).length === 0 ? (
-                          <tr>
-                            <td className="px-3 py-4 text-gray-500" colSpan={5}>
-                              Bu kategoride ürün yok.
-                            </td>
-                          </tr>
-                        ) : (
-                          sortByOrder(selectedResolved?.items ?? []).map((it, idx) => {
-                            const src: ResolvedSource = (it.source ?? "local") as ResolvedSource;
-                            const b = badgeFor(src);
-                            const orgId = getId(it);
+                        {itemTab === "active" ? (
+                          (sortByOrder(selectedResolved?.items ?? [])).length === 0 ? (
+                            <tr>
+                              <td className="px-3 py-4 text-gray-500" colSpan={5}>
+                                Bu kategoride ürün yok.
+                              </td>
+                            </tr>
+                          ) : (
+                            sortByOrder(selectedResolved?.items ?? []).map((it, idx) => {
+                              const src: ResolvedSource = (it.source ?? "local") as ResolvedSource;
+                              const b = badgeFor(src);
+                              const orgId = getId(it);
 
-                            const localEdited =
-                              src === "org"
-                                ? localItems.find((li) => String(li.orgItemId || "") === String(orgId)) || null
-                                : null;
+                              const localEdited =
+                                src === "org"
+                                  ? localItems.find((li) => String(li.orgItemId || "") === String(orgId)) || null
+                                  : null;
 
-                            const canEditRow = !opsDisabled && (src !== "org" || !!localEdited);
-                            const showDelete = src === "local"; // sadece şubeye özel
+                              const canEditRow = !opsDisabled && (src !== "org" || !!localEdited);
+                              const showDelete = src === "local"; // sadece şubeye özel
 
-                            return (
-                              <tr key={`${src}:${orgId}:${idx}`} className="border-t">
-                                <td className="px-3 py-2">
-                                  <div className="font-medium">{it.title}</div>
-                                  {!!it.description && <div className="text-xs text-gray-500 line-clamp-2">{it.description}</div>}
-                                </td>
-                                <td className="px-3 py-2 whitespace-nowrap">
-                                  <b>{money(it.price)} ₺</b>
-                                </td>
-                                <td className="px-3 py-2">
-                                  <div className="text-xs text-gray-600">
-                                    {it.isActive === false ? "Kapalı" : "Açık"} • {it.isAvailable === false ? "Stok yok" : "Serviste"}
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2">
-                                  <span className={`text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                  <div className="inline-flex gap-2">
-                                    {src === "org" && !localEdited ? (
-                                      <button
-                                        className="px-2 py-1 text-xs rounded bg-amber-50 text-amber-900 hover:bg-amber-100 disabled:opacity-60"
-                                        disabled={!selectedLocalCatId || opsDisabled}
-                                        onClick={() => {
-                                          if (!selectedLocalCatId || opsDisabled) return;
-                                          createItemMut.mutate({
-                                            categoryId: selectedLocalCatId,
-                                            orgItemId: orgId,
-                                            title: it.title,
-                                            description: it.description ?? "",
-                                            price: it.price,
-                                            tags: it.tags ?? [],
-                                            order: it.order ?? 0,
-                                            isAvailable: it.isAvailable !== false,
-                                          });
-                                        }}
-                                      >
-                                        Düzenlemeyi Başlat
-                                      </button>
-                                    ) : (
-                                      <button
-                                        className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
-                                        disabled={!canEditRow}
-                                        onClick={() => {
-                                          if (!canEditRow) return;
-
-                                          const base = localEdited ?? (it as any);
-                                          openEditItem(base);
-                                        }}
-                                      >
-                                        Düzenle
-                                      </button>
-                                    )}
-
-                                    {/* Şubede kapat */}
-                                    <button
-                                      className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
-                                      disabled={!selectedLocalCatId || opsDisabled}
-                                      onClick={() => {
-                                        if (!selectedLocalCatId || opsDisabled) return;
-
-                                        if (src === "org") {
-                                          // localEdited varsa kapat; yoksa önce create sonra kapat
-                                          if (localEdited) {
-                                            updateItemMut.mutate({ iid: getId(localEdited), isActive: false });
-                                            return;
-                                          }
-                                          createItemMut.mutate(
-                                            {
+                              return (
+                                <tr key={`${src}:${orgId}:${idx}`} className="border-t">
+                                  <td className="px-3 py-2">
+                                    <div className="font-medium">{it.title}</div>
+                                    {!!it.description && <div className="text-xs text-gray-500 line-clamp-2">{it.description}</div>}
+                                  </td>
+                                  <td className="px-3 py-2 whitespace-nowrap">
+                                    <b>{money(it.price)} ₺</b>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <div className="text-xs text-gray-600">
+                                      {it.isActive === false ? "Kapalı" : "Açık"} • {it.isAvailable === false ? "Stok yok" : "Serviste"}
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <span className={`text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    <div className="inline-flex gap-2">
+                                      {src === "org" && !localEdited ? (
+                                        <button
+                                          className="px-2 py-1 text-xs rounded bg-amber-50 text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+                                          disabled={!selectedLocalCatId || opsDisabled}
+                                          onClick={() => {
+                                            if (!selectedLocalCatId || opsDisabled) return;
+                                            createItemMut.mutate({
                                               categoryId: selectedLocalCatId,
                                               orgItemId: orgId,
                                               title: it.title,
@@ -1156,43 +1146,133 @@ export default function MenuManagerPage() {
                                               tags: it.tags ?? [],
                                               order: it.order ?? 0,
                                               isAvailable: it.isAvailable !== false,
-                                            } as any,
-                                            {
-                                              onSuccess: (res: any) => {
-                                                const newId = getId(res?.item ?? res);
-                                                if (newId) updateItemMut.mutate({ iid: newId, isActive: false });
-                                              },
-                                            } as any
-                                          );
-                                          return;
-                                        }
+                                            });
+                                          }}
+                                        >
+                                          Düzenlemeyi Başlat
+                                        </button>
+                                      ) : (
+                                        <button
+                                          className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
+                                          disabled={!canEditRow}
+                                          onClick={() => {
+                                            if (!canEditRow) return;
+                                            const base = localEdited ?? (it as any);
+                                            openEditItem(base);
+                                          }}
+                                        >
+                                          Düzenle
+                                        </button>
+                                      )}
 
-                                        // local/override: resolved id üzerinden update
-                                        updateItemMut.mutate({ iid: getId(it), isActive: false });
-                                      }}
-                                    >
-                                      Bu şubede kapat
-                                    </button>
-
-                                    {showDelete && (
                                       <button
-                                        className="px-2 py-1 text-xs rounded bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60"
-                                        disabled={opsDisabled}
+                                        className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
+                                        disabled={!selectedLocalCatId || opsDisabled}
                                         onClick={() => {
-                                          if (opsDisabled) return;
-                                          if (confirm(`"${it.title}" silinsin mi?`)) {
-                                            deleteItemMut.mutate(getId(it));
+                                          if (!selectedLocalCatId || opsDisabled) return;
+
+                                          if (src === "org") {
+                                            if (localEdited) {
+                                              updateItemMut.mutate({ iid: getId(localEdited), isActive: false });
+                                              return;
+                                            }
+                                            createItemMut.mutate(
+                                              {
+                                                categoryId: selectedLocalCatId,
+                                                orgItemId: orgId,
+                                                title: it.title,
+                                                description: it.description ?? "",
+                                                price: it.price,
+                                                tags: it.tags ?? [],
+                                                order: it.order ?? 0,
+                                                isAvailable: it.isAvailable !== false,
+                                              } as any,
+                                              {
+                                                onSuccess: (res: any) => {
+                                                  const newId = getId(res?.item ?? res);
+                                                  if (newId) updateItemMut.mutate({ iid: newId, isActive: false });
+                                                },
+                                              } as any
+                                            );
+                                            return;
                                           }
+
+                                          updateItemMut.mutate({ iid: getId(it), isActive: false });
                                         }}
                                       >
-                                        Sil
+                                        Bu şubede kapat
                                       </button>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })
+
+                                      {showDelete && (
+                                        <button
+                                          className="px-2 py-1 text-xs rounded bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60"
+                                          disabled={opsDisabled}
+                                          onClick={() => {
+                                            if (opsDisabled) return;
+                                            if (confirm(`"${it.title}" silinsin mi?`)) {
+                                              deleteItemMut.mutate(getId(it));
+                                            }
+                                          }}
+                                        >
+                                          Sil
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )
+                        ) : (
+                          closedLocalItems.length === 0 ? (
+                            <tr>
+                              <td className="px-3 py-4 text-gray-500" colSpan={5}>
+                                Bu kategoride kapalı ürün yok.
+                              </td>
+                            </tr>
+                          ) : (
+                            closedLocalItems.map((it, idx) => {
+                              const src: ResolvedSource = it.orgItemId ? "org_override" : "local";
+                              const b = badgeFor(src);
+                              const iid = getId(it);
+
+                              return (
+                                <tr key={`closed:${src}:${iid}:${idx}`} className="border-t bg-gray-50/40">
+                                  <td className="px-3 py-2">
+                                    <div className="font-medium">{it.title}</div>
+                                    {!!it.description && <div className="text-xs text-gray-500 line-clamp-2">{it.description}</div>}
+                                  </td>
+                                  <td className="px-3 py-2 whitespace-nowrap">
+                                    <b>{money(it.price)} ₺</b>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <div className="text-xs text-gray-600">Kapalı • {it.isAvailable === false ? "Stok yok" : "Serviste"}</div>
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <span className={`text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    <div className="inline-flex gap-2">
+                                      <button
+                                        className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
+                                        disabled={opsDisabled}
+                                        onClick={() => openEditItem(it, "Kapalı Ürün Düzenle")}
+                                      >
+                                        Düzenle
+                                      </button>
+                                      <button
+                                        className="px-2 py-1 text-xs rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                                        disabled={opsDisabled}
+                                        onClick={() => updateItemMut.mutate({ iid, isActive: true })}
+                                      >
+                                        Aç
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )
                         )}
                       </tbody>
                     </table>
