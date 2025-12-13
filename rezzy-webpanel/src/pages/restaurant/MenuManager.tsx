@@ -567,9 +567,12 @@ const includeUnavailableForManage = mode === "manage";
     enabled: !!rid && !!selectedLocalCatId,
   });
 
-  const localItems: LocalItem[] = (itemsQ.data ?? []) as any;
-  const closedLocalItems = React.useMemo(() => sortByOrder(localItems.filter((x) => x.isActive === false)), [localItems]);
-
+ // const localItems: LocalItem[] = (itemsQ.data ?? []) as any;
+ // const closedLocalItems = React.useMemo(() => sortByOrder(localItems.filter((x) => x.isActive === false)), [localItems]);
+const closedCount = React.useMemo(() => {
+  const items = selectedResolved?.items ?? [];
+  return items.filter((x) => x.isActive === false).length;
+}, [selectedResolved]);
   // Filters
   const [q, setQ] = React.useState("");
   const list = React.useMemo(() => {
@@ -953,9 +956,9 @@ const includeUnavailableForManage = mode === "manage";
                         type="button"
                       >
                         Kapalı
-                        {closedLocalItems.length > 0 ? (
+                        {closedCount > 0 ? (
                           <span className="ml-2 inline-flex items-center justify-center text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
-                            {closedLocalItems.length}
+                            {closedCount}
                           </span>
                         ) : null}
                       </button>
@@ -1074,55 +1077,62 @@ const includeUnavailableForManage = mode === "manage";
                             })
                           )
                         ) : (
-                          // Kapalı ürünler: sadece local listeden gösteriyoruz (org hidden olanları panelde ayrıca göstermek istersen, resolved includeInactive ile ayrıca yönetilebilir)
-                          closedLocalItems.length === 0 ? (
-                            <tr>
-                              <td className="px-3 py-4 text-gray-500" colSpan={5}>
-                                Kapalı ürün yok.
-                              </td>
-                            </tr>
-                          ) : (
-                            closedLocalItems.map((it, idx) => {
-                              const iid = getId(it);
-                              const src: ResolvedSource = "local";
-                              const b = badgeFor(src);
+                            // itemTab === "closed"
+selectedItems.length === 0 ? (
+  <tr>
+    <td className="px-3 py-4 text-gray-500" colSpan={5}>
+      Kapalı ürün yok.
+    </td>
+  </tr>
+) : (
+  selectedItems.map((it, idx) => {
+    const src = (it.source ?? "local") as ResolvedSource;
+    const b = badgeFor(src);
+    const stableOrgItemId = String(it.orgItemId || getId(it));
+    const isOrg = src === "org" || src === "org_branch_override";
 
-                              return (
-                                <tr key={`closed:${iid}:${idx}`} className="border-t bg-gray-50/40">
-                                  <td className="px-3 py-2">
-                                    <div className="font-medium">{it.title}</div>
-                                  </td>
-                                  <td className="px-3 py-2 whitespace-nowrap">
-                                    <b>{money(it.price)} ₺</b>
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <div className="text-xs text-gray-600">Kapalı</div>
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <span className={`text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
-                                  </td>
-                                  <td className="px-3 py-2 text-right">
-                                    <div className="inline-flex gap-2">
-                                      <button
-                                        className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
-                                        disabled={selectedResolved.isActive === false}
-                                        onClick={() => openEditItem(it, "local")}
-                                      >
-                                        Düzenle
-                                      </button>
-                                      <button
-                                        className="px-2 py-1 text-xs rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
-                                        disabled={selectedResolved.isActive === false}
-                                        onClick={() => updateLocalItemMut.mutate({ iid, isActive: true } as any)}
-                                      >
-                                        Aç
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          )
+    return (
+      <tr key={`closed:${src}:${stableOrgItemId}:${idx}`} className="border-t bg-gray-50/40">
+        <td className="px-3 py-2">
+          <div className="font-medium">{it.title}</div>
+        </td>
+        <td className="px-3 py-2 whitespace-nowrap">
+          <b>{money(it.price)} ₺</b>
+        </td>
+        <td className="px-3 py-2">
+          <div className="text-xs text-gray-600">Kapalı</div>
+        </td>
+        <td className="px-3 py-2">
+          <span className={`text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
+        </td>
+        <td className="px-3 py-2 text-right">
+          <div className="inline-flex gap-2">
+            {/* Aç */}
+            <button
+              className="px-2 py-1 text-xs rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+              disabled={selectedResolved?.isActive === false}
+              onClick={() => {
+                if (selectedResolved?.isActive === false) return;
+
+                if (isOrg) {
+                  itemOverrideMut.mutate({
+                    orgItemId: stableOrgItemId,
+                    payload: { hidden: false },
+                  });
+                } else {
+                  updateLocalItemMut.mutate({ iid: getId(it), isActive: true } as any);
+                }
+              }}
+            >
+              Aç
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  })
+)
+                            
                         )}
                       </tbody>
                     </table>
