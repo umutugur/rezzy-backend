@@ -20,40 +20,38 @@ function toObjectId(id) {
  *    OrgMenuCategory + OrgMenuItem + override + lokal item'ları merge eder.
  *  - organizationId yoksa:
  *    Eski sistem gibi sadece MenuCategory + MenuItem döner.
+ *
+ * opts:
+ *  - includeInactive: true ise isActive=false kayıtları da döner (panel yönetim için)
+ *  - includeUnavailable: true ise isAvailable=false ürünleri de döner
  */
 export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
   const rid = toObjectId(restaurantId);
-  if (!rid) {
-    throw new Error("Invalid restaurantId");
-  }
+  if (!rid) throw new Error("Invalid restaurantId");
 
-  const restaurant = await Restaurant.findById(rid)
-    .select("_id organizationId")
-    .lean();
+  const includeInactive = opts?.includeInactive === true;
+  const includeUnavailable = opts?.includeUnavailable === true;
 
-  if (!restaurant) {
-    throw new Error("Restaurant not found");
-  }
+  const restaurant = await Restaurant.findById(rid).select("_id organizationId").lean();
+  if (!restaurant) throw new Error("Restaurant not found");
 
   // Org yoksa: klasik restoran menüsü (local only)
   if (!restaurant.organizationId) {
-    return getLocalMenuForRestaurant(rid);
+    return getLocalMenuForRestaurant(rid, { includeInactive, includeUnavailable });
   }
 
   const orgId = restaurant.organizationId;
 
   // Org menü + override + lokal menü birlikte çekiliyor
-  const [orgCategories, orgItems, restCategories, restItems] =
-    await Promise.all([
-      OrgMenuCategory.find({ organizationId: orgId, isActive: true })
-        .sort({ order: 1, _id: 1 })
-        .lean(),
-      OrgMenuItem.find({ organizationId: orgId, isActive: true })
-        .sort({ order: 1, _id: 1 })
-        .lean(),
-      MenuCategory.find({ restaurantId: rid }).lean(),
-      MenuItem.find({ restaurantId: rid }).lean(),
-    ]);
+  const [orgCategories, orgItems, restCategories, restItems] = await Promise.all([
+    // Org tarafında DB query'yi isActive true ile bırakıyoruz; kapalıları org tarafında dönmek istiyorsan
+    // burada da includeInactive'e göre genişletebilirsin. Şimdilik mevcut davranışı koruyoruz.
+    OrgMenuCategory.find({ organizationId: orgId, isActive: true }).sort({ order: 1, _id: 1 }).lean(),
+    OrgMenuItem.find({ organizationId: orgId, isActive: true }).sort({ order: 1, _id: 1 }).lean(),
+    // Restaurant tarafı override/local kayıtları: includeInactive true ise hepsini al
+    MenuCategory.find({ restaurantId: rid }).lean(),
+    MenuItem.find({ restaurantId: rid }).lean(),
+  ]);
 
   // ---- Category override map: orgCategoryId -> categoryOverride ----
   const categoryOverrideByOrgId = new Map();
@@ -62,10 +60,7 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
   for (const c of restCategories) {
     if (c.orgCategoryId) {
       const key = String(c.orgCategoryId);
-      // birden fazla override varsa ilkini baz alıyoruz
-      if (!categoryOverrideByOrgId.has(key)) {
-        categoryOverrideByOrgId.set(key, c);
-      }
+      if (!categoryOverrideByOrgId.has(key)) categoryOverrideByOrgId.set(key, c);
     } else {
       localCategories.push(c);
     }
@@ -78,60 +73,56 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
   for (const it of restItems) {
     if (it.orgItemId) {
       const key = String(it.orgItemId);
-      // burada da ilk override'ı baz alıyoruz
-      if (!itemOverrideByOrgId.has(key)) {
-        itemOverrideByOrgId.set(key, it);
-      }
+      if (!itemOverrideByOrgId.has(key)) itemOverrideByOrgId.set(key, it);
     } else {
       localItems.push(it);
     }
   }
 
-  // Local item'ları kategoriId'ye göre gruplayalım (local category için lazım olacak)
+  // Local item'ları kategoriId'ye göre gruplayalım
   const localItemsByCategoryId = new Map();
   for (const it of localItems) {
     const key = String(it.categoryId);
-    if (!localItemsByCategoryId.has(key)) {
-      localItemsByCategoryId.set(key, []);
-    }
+    if (!localItemsByCategoryId.has(key)) localItemsByCategoryId.set(key, []);
     localItemsByCategoryId.get(key).push(it);
   }
 
   // ---- 1) Org tabanlı kategoriler (override + org merge) ----
   const resolvedCategories = [];
 
+  // optimize: orgItems'i categoryId'ye göre grupla (filter ile her seferinde taramayalım)
+  const orgItemsByCategoryId = new Map();
+  for (const it of orgItems) {
+    const key = String(it.categoryId);
+    if (!orgItemsByCategoryId.has(key)) orgItemsByCategoryId.set(key, []);
+    orgItemsByCategoryId.get(key).push(it);
+  }
+
   for (const orgCat of orgCategories) {
     const orgCatIdStr = String(orgCat._id);
     const overrideCat = categoryOverrideByOrgId.get(orgCatIdStr) || null;
 
-    const isActive =
-      overrideCat?.isActive !== undefined
-        ? overrideCat.isActive
-        : orgCat.isActive;
+    const isActive = overrideCat?.isActive !== undefined ? overrideCat.isActive : orgCat.isActive;
 
-    // Kategori tamamen pasifse skip
-    if (!isActive) continue;
+    // ✅ includeInactive=false ise pasif kategori skip
+    if (!includeInactive && !isActive) continue;
 
     const resolvedCategoryId = overrideCat?._id || orgCat._id;
+
     const resolvedCategory = {
       _id: resolvedCategoryId,
-      categoryId: resolvedCategoryId, // backward compat için
+      categoryId: resolvedCategoryId, // backward compat
       orgCategoryId: orgCat._id,
       restaurantId: restaurant._id,
       title: overrideCat?.title || orgCat.title,
       description: overrideCat?.description || orgCat.description || "",
-      order:
-        overrideCat?.order !== undefined ? overrideCat.order : orgCat.order || 0,
+      order: overrideCat?.order !== undefined ? overrideCat.order : orgCat.order || 0,
       isActive,
       source: overrideCat ? "org_override" : "org",
       items: [],
     };
 
-    // Bu org kategoriye bağlı org item'lar
-    const orgItemsForCategory = orgItems.filter(
-      (it) => String(it.categoryId) === orgCatIdStr
-    );
-
+    const orgItemsForCategory = orgItemsByCategoryId.get(orgCatIdStr) || [];
     const resolvedItems = [];
 
     for (const orgItem of orgItemsForCategory) {
@@ -139,22 +130,21 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
       const overrideItem = itemOverrideByOrgId.get(orgItemIdStr) || null;
 
       const itemIsActive =
-        overrideItem?.isActive !== undefined
-          ? overrideItem.isActive
-          : orgItem.isActive;
+        overrideItem?.isActive !== undefined ? overrideItem.isActive : orgItem.isActive;
 
-      if (!itemIsActive) continue;
+      // ✅ includeInactive=false ise pasif item skip
+      if (!includeInactive && !itemIsActive) continue;
 
-      const price =
-        overrideItem?.price != null ? overrideItem.price : orgItem.defaultPrice;
+      const isAvailable =
+        overrideItem?.isAvailable !== undefined ? overrideItem.isAvailable : true;
 
-      const photoUrl =
-        overrideItem?.photoUrl || orgItem.photoUrl || "";
+      // ✅ includeUnavailable=false ise stok yok item skip
+      if (!includeUnavailable && isAvailable === false) continue;
 
+      const price = overrideItem?.price != null ? overrideItem.price : orgItem.defaultPrice;
+      const photoUrl = overrideItem?.photoUrl || orgItem.photoUrl || "";
       const tags =
-        overrideItem?.tags && overrideItem.tags.length
-          ? overrideItem.tags
-          : orgItem.tags || [];
+        overrideItem?.tags && overrideItem.tags.length ? overrideItem.tags : orgItem.tags || [];
 
       const resolvedItemId = overrideItem?._id || orgItem._id;
 
@@ -169,27 +159,15 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
         price,
         photoUrl,
         tags,
-        order:
-          overrideItem?.order !== undefined
-            ? overrideItem.order
-            : orgItem.order || 0,
+        order: overrideItem?.order !== undefined ? overrideItem.order : orgItem.order || 0,
         isActive: itemIsActive,
-        isAvailable:
-          overrideItem?.isAvailable !== undefined
-            ? overrideItem.isAvailable
-            : true,
+        isAvailable,
         source: overrideItem ? "org_override" : "org",
       });
     }
 
-    // order'a göre sort
     resolvedItems.sort((a, b) => (a.order || 0) - (b.order || 0));
     resolvedCategory.items = resolvedItems;
-
-    // (opsiyonel) override kategori altında lokal item’lar da göstermek istersen:
-    // const localForThisCat =
-    //   overrideCat && localItemsByCategoryId.get(String(overrideCat._id));
-    // onları da push edebiliriz. Şimdilik sade bırakıyorum.
 
     resolvedCategories.push(resolvedCategory);
   }
@@ -198,28 +176,39 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
   for (const localCat of localCategories) {
     const localCatIdStr = String(localCat._id);
 
-    if (localCat.isActive === false) continue;
+    const catIsActive = localCat.isActive !== false;
+
+    // ✅ includeInactive=false ise pasif kategori skip
+    if (!includeInactive && !catIsActive) continue;
 
     const localResolvedCategory = {
       id: localCat._id,
+      _id: localCat._id, // bazı client'lar _id bakıyor
       categoryId: localCat._id,
       orgCategoryId: null,
       restaurantId: restaurant._id,
       title: localCat.title,
       description: localCat.description || "",
       order: localCat.order || 0,
-      isActive: localCat.isActive !== false,
+      isActive: catIsActive,
       source: "local",
       items: [],
     };
 
-    const itemsForLocalCat =
-      localItemsByCategoryId.get(localCatIdStr) || [];
+    const itemsForLocalCat = localItemsByCategoryId.get(localCatIdStr) || [];
 
     const resolvedLocalItems = itemsForLocalCat
-      .filter((it) => it.isActive !== false && it.isAvailable !== false)
+      .filter((it) => {
+        const isActive = it.isActive !== false;
+        const isAvailable = it.isAvailable !== false;
+
+        if (!includeInactive && !isActive) return false;
+        if (!includeUnavailable && !isAvailable) return false;
+        return true;
+      })
       .map((it) => ({
         id: it._id,
+        _id: it._id,
         itemId: it._id,
         orgItemId: null,
         restaurantId: restaurant._id,
@@ -254,21 +243,20 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
 /**
  * Org’suz restoranlar için basit local menü
  */
-async function getLocalMenuForRestaurant(restaurantId) {
+async function getLocalMenuForRestaurant(restaurantId, opts = {}) {
+  const includeInactive = opts?.includeInactive === true;
+  const includeUnavailable = opts?.includeUnavailable === true;
+
+  const catQuery = { restaurantId };
+  if (!includeInactive) catQuery.isActive = true;
+
+  const itemQuery = { restaurantId };
+  if (!includeInactive) itemQuery.isActive = true;
+  if (!includeUnavailable) itemQuery.isAvailable = true;
+
   const [categories, items] = await Promise.all([
-    MenuCategory.find({
-      restaurantId,
-      isActive: true,
-    })
-      .sort({ order: 1, _id: 1 })
-      .lean(),
-    MenuItem.find({
-      restaurantId,
-      isActive: true,
-      isAvailable: true,
-    })
-      .sort({ order: 1, _id: 1 })
-      .lean(),
+    MenuCategory.find(catQuery).sort({ order: 1, _id: 1 }).lean(),
+    MenuItem.find(itemQuery).sort({ order: 1, _id: 1 }).lean(),
   ]);
 
   const itemsByCategoryId = new Map();
@@ -285,6 +273,7 @@ async function getLocalMenuForRestaurant(restaurantId) {
 
     return {
       id: c._id,
+      _id: c._id,
       categoryId: c._id,
       orgCategoryId: null,
       restaurantId: c.restaurantId,
@@ -295,6 +284,7 @@ async function getLocalMenuForRestaurant(restaurantId) {
       source: "local",
       items: catItems.map((it) => ({
         id: it._id,
+        _id: it._id,
         itemId: it._id,
         orgItemId: null,
         restaurantId: it.restaurantId,

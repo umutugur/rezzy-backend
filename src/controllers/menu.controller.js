@@ -84,17 +84,20 @@ export async function computeAvgSpendBaseForRestaurant(restaurantId) {
 
 /* ---------------- CATEGORY CRUD (panel) ---------------- */
 
-/** GET /api/panel/restaurants/:rid/menu/categories */
+/** GET /api/panel/restaurants/:rid/menu/categories?includeInactive=true */
 export const listCategories = async (req, res, next) => {
   try {
     const { rid } = req.params;
-    if (!isValidId(rid))
+    if (!isValidId(rid)) {
       return res.status(400).json({ message: "Invalid restaurant id" });
+    }
 
-    const items = await MenuCategory.find({
-      restaurantId: rid,
-      isActive: true,
-    })
+    const includeInactive = String(req.query.includeInactive || "") === "true";
+
+    const q = { restaurantId: rid };
+    if (!includeInactive) q.isActive = true;
+
+    const items = await MenuCategory.find(q)
       .sort({ order: 1, createdAt: 1 })
       .lean();
 
@@ -305,14 +308,17 @@ export const listItems = async (req, res, next) => {
         .status(400)
         .json({ message: qErr.details[0].message });
     const { categoryId } = qVal;
+    const includeInactive = String(req.query.includeInactive || "") === "true";
 
-    const q = { restaurantId: rid, isActive: true };
+    const q = { restaurantId: rid };
     if (categoryId && isValidId(categoryId)) q.categoryId = categoryId;
+
+    // default: sadece aktif
+    if (!includeInactive) q.isActive = true;
 
     const items = await MenuItem.find(q)
       .sort({ order: 1, createdAt: 1 })
       .lean();
-
     res.json({ items });
   } catch (e) {
     next(e);
@@ -578,7 +584,7 @@ export const deleteItem = async (req, res, next) => {
 /* ---------------- RESOLVED MENU READ (panel / müşteri için temel kapı) ---------------- */
 
 /**
- * GET /api/panel/restaurants/:rid/menu/resolved
+ * GET /api/panel/restaurants/:rid/menu/resolved?includeInactive=true&includeUnavailable=true
  * - Org + override + lokal item’lar merge edilmiş menüyü döner
  * - Hem restoran panelindeki menü preview, hem de istersen QR / müşteri tarafı için
  *   kullanılabilecek tek kapı endpoint.
@@ -590,7 +596,13 @@ export const getResolvedMenuForPanel = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid restaurant id" });
     }
 
-    const menu = await getResolvedMenuForRestaurant(String(rid));
+    const includeInactive = String(req.query.includeInactive || "") === "true";
+    const includeUnavailable = String(req.query.includeUnavailable || "") === "true";
+
+    const menu = await getResolvedMenuForRestaurant(String(rid), {
+      includeInactive,
+      includeUnavailable,
+    });
     // service ne döndürüyorsa aynen passthrough:
     // { categories: [...], organizationId, restaurantId, ... }
     res.json(menu || { categories: [] });
