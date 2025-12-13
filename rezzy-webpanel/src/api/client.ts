@@ -644,7 +644,51 @@ export async function restaurantGetReservationQR(resId: string) {
     qrUrl?: string;
   };
 }
+// =========================
+// RESTAURANT — Menu Overrides (Org menü için şube override)
+// =========================
 
+export type BranchCategoryOverridePayload = {
+  hidden?: boolean;   // true => şubede gizle
+  order?: number;     // şube sırası
+};
+
+export type BranchItemOverridePayload = {
+  hidden?: boolean;       // true => şubede gizle
+  order?: number;         // şube sırası
+  price?: number;         // şube fiyatı
+  isAvailable?: boolean;  // serviste mi
+};
+
+/**
+ * PATCH /api/panel/restaurants/:rid/menu/overrides/categories/:orgCategoryId
+ */
+export async function restaurantUpsertCategoryOverride(
+  rid: string,
+  orgCategoryId: string,
+  input: BranchCategoryOverridePayload
+) {
+  const { data } = await api.patch(
+    `/panel/restaurants/${rid}/menu/overrides/categories/${orgCategoryId}`,
+    input
+  );
+  return data as { ok: boolean; override: any };
+}
+
+/**
+ * PATCH /api/panel/restaurants/:rid/menu/overrides/items/:orgItemId
+ */
+export async function restaurantUpsertItemOverride(
+  rid: string,
+  orgItemId: string,
+  input: BranchItemOverridePayload
+) {
+  const { data } = await api.patch(
+    `/panel/restaurants/${rid}/menu/overrides/items/${orgItemId}`,
+    input
+  );
+  return data as { ok: boolean; override: any };
+}
 // =========================
 // RESTAURANT — Menu Categories & Items
 // =========================

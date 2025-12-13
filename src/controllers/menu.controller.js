@@ -118,16 +118,9 @@ export const createCategory = async (req, res, next) => {
       abortEarly: true,
     });
     if (error)
-      return res
-        .status(400)
-        .json({ message: error.details[0].message });
+      return res.status(400).json({ message: error.details[0].message });
 
-    const {
-      title,
-      description = "",
-      order = 0,
-      orgCategoryId: rawOrgCategoryId,
-    } = value;
+    const { title, description = "", order = 0 } = value;
 
     const rest = await Restaurant.findById(rid)
       .select("_id owner organizationId")
@@ -135,53 +128,10 @@ export const createCategory = async (req, res, next) => {
     if (!rest)
       return res.status(404).json({ message: "Restaurant not found" });
 
-    let orgCategoryId = null;
-
-    // ✅ Eğer orgCategoryId geldiyse, bu kayıt OrgMenuCategory override’ı
-    if (rawOrgCategoryId != null) {
-      if (!isValidId(rawOrgCategoryId)) {
-        return res.status(400).json({ message: "Invalid orgCategoryId" });
-      }
-
-      if (!rest.organizationId) {
-        return res.status(400).json({
-          message:
-            "Restaurant is not attached to any organization, cannot use orgCategoryId",
-        });
-      }
-
-      const orgCat = await OrgMenuCategory.findOne({
-        _id: rawOrgCategoryId,
-        organizationId: rest.organizationId,
-      })
-        .select("_id")
-        .lean();
-
-      if (!orgCat) {
-        return res.status(404).json({
-          message: "Org menu category not found for this organization",
-        });
-      }
-
-      // Aynı orgCategory için daha önce override var mı?
-      const existingOverride = await MenuCategory.findOne({
-        restaurantId: rid,
-        orgCategoryId: rawOrgCategoryId,
-      }).lean();
-
-      if (existingOverride) {
-        return res.status(409).json({
-          message:
-            "Override for this org category already exists. Use update instead.",
-        });
-      }
-
-      orgCategoryId = rawOrgCategoryId;
-    }
-
+    // ✅ Artık orgCategoryId ile override yaratmak yok.
     const doc = await MenuCategory.create({
       restaurantId: rid,
-      orgCategoryId: orgCategoryId || null,
+      orgCategoryId: null,
       title: String(title).trim(),
       description: String(description || "").trim(),
       order: Number(order) || 0,
@@ -332,12 +282,10 @@ export const createItem = async (req, res, next) => {
     if (!isValidId(rid))
       return res.status(400).json({ message: "Invalid restaurant id" });
 
-    const {
-      error: iErr,
-      value: iVal,
-    } = createItemSchema.validate(req.body || {}, { abortEarly: true });
-    if (iErr)
-      return res.status(400).json({ message: iErr.details[0].message });
+    const { error: iErr, value: iVal } = createItemSchema.validate(req.body || {}, {
+      abortEarly: true,
+    });
+    if (iErr) return res.status(400).json({ message: iErr.details[0].message });
 
     const {
       categoryId,
@@ -347,7 +295,6 @@ export const createItem = async (req, res, next) => {
       tags = [],
       order = 0,
       isAvailable = true,
-      orgItemId: rawOrgItemId,
     } = iVal;
 
     const cat = await MenuCategory.findOne({
@@ -355,53 +302,7 @@ export const createItem = async (req, res, next) => {
       restaurantId: rid,
       isActive: true,
     }).lean();
-    if (!cat)
-      return res.status(404).json({ message: "Category not found" });
-
-    let orgItemId = null;
-    let finalTitle = String(title).trim();
-    let finalDescription = String(description || "").trim();
-
-    // ✅ Org menü item’ı için override oluşturulacaksa:
-    if (rawOrgItemId != null) {
-      if (!isValidId(rawOrgItemId)) {
-        return res.status(400).json({ message: "Invalid orgItemId" });
-      }
-
-      const rest = await Restaurant.findById(rid)
-        .select("_id organizationId")
-        .lean();
-      if (!rest) {
-        return res.status(404).json({ message: "Restaurant not found" });
-      }
-      if (!rest.organizationId) {
-        return res.status(400).json({
-          message:
-            "Restaurant is not attached to any organization, cannot use orgItemId",
-        });
-      }
-
-      const orgItem = await OrgMenuItem.findOne({
-        _id: rawOrgItemId,
-        organizationId: rest.organizationId,
-      }).lean();
-
-      if (!orgItem) {
-        return res.status(404).json({
-          message: "Org menu item not found for this organization",
-        });
-      }
-
-      orgItemId = rawOrgItemId;
-
-      // Başlık & açıklama kaynağı org item olsun; panelde fiyat / foto / tags override edilir
-      if (orgItem.title) {
-        finalTitle = String(orgItem.title).trim();
-      }
-      if (orgItem.description) {
-        finalDescription = String(orgItem.description).trim();
-      }
-    }
+    if (!cat) return res.status(404).json({ message: "Category not found" });
 
     let photoUrl = "";
     const f =
@@ -421,9 +322,9 @@ export const createItem = async (req, res, next) => {
     const doc = await MenuItem.create({
       restaurantId: rid,
       categoryId,
-      orgItemId: orgItemId || null,
-      title: finalTitle,
-      description: finalDescription,
+      orgItemId: null, // ✅ artık override yok
+      title: String(title).trim(),
+      description: String(description || "").trim(),
       price: Number(price),
       photoUrl,
       tags: Array.isArray(tags) ? tags.map(String) : [],
@@ -437,7 +338,6 @@ export const createItem = async (req, res, next) => {
     next(e);
   }
 };
-
 /** PATCH /api/panel/restaurants/:rid/menu/items/:iid */
 export const updateItem = async (req, res, next) => {
   try {

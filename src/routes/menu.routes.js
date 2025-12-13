@@ -14,7 +14,10 @@ import {
   deleteItem,
   getResolvedMenuForPanel,
 } from "../controllers/menu.controller.js";
-
+import {
+  upsertCategoryOverride,
+  upsertItemOverride,
+} from "../controllers/branchMenuOverride.controller.js";
 import {
   createCategorySchema,
   updateCategorySchema,
@@ -137,5 +140,18 @@ r.get(
   allow("restaurant", "admin", "customer"),
   getResolvedMenuForPanel
 );
+// ---------------- Branch Overrides (ORG menü için kopyasız yönetim) ----------------
+r.patch(
+  "/:rid/menu/overrides/categories/:orgCategoryId",
+  auth(),
+  allowLocationManagerOrAdmin("rid"),
+  upsertCategoryOverride
+);
 
+r.patch(
+  "/:rid/menu/overrides/items/:orgItemId",
+  auth(),
+  allowLocationManagerOrAdmin("rid"),
+  upsertItemOverride
+);
 export default r;
