@@ -136,7 +136,6 @@ r.delete(
 
 r.get(
   "/:rid/menu/resolved",
-  auth(),
   allow("restaurant", "admin", "customer"),
   getResolvedMenuForPanel
 );
