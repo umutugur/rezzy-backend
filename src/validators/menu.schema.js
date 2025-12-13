@@ -46,7 +46,11 @@ const tagsLike = Joi.alternatives()
  * - "" / null / undefined -> null
  */
 const objectIdLike = Joi.alternatives()
-  .try(Joi.string().trim().hex().length(24), Joi.string().trim().allow(""), Joi.allow(null))
+  .try(
+    Joi.string().trim().hex().length(24),
+    Joi.string().trim().allow(""),
+    Joi.allow(null)
+  )
   .custom((v) => {
     if (v === "" || v == null) return null;
     return v;
@@ -59,7 +63,7 @@ export const createCategorySchema = Joi.object({
   description: Joi.string().trim().allow("").max(500).default(""),
   order: numLike.integer().min(0).max(10000).default(0),
 
-  // ✅ BUNU EKLE: org category override için
+  // ✅ Org category override için
   orgCategoryId: objectIdLike.default(null),
 });
 
@@ -68,9 +72,6 @@ export const updateCategorySchema = Joi.object({
   description: Joi.string().trim().allow("").max(500),
   order: numLike.integer().min(0).max(10000),
   isActive: boolLike,
-
-  // (opsiyonel) update’te orgCategoryId değiştirmeyi zaten istemiyorsun.
-  // Bu yüzden eklemiyorum; controller da zaten override/local ayrımını kendisi yapıyor.
 }).min(1);
 
 /* ---------------- ITEM ---------------- */
@@ -84,7 +85,7 @@ export const createItemSchema = Joi.object({
   order: numLike.integer().min(0).max(10000).default(0),
   isAvailable: boolLike.default(true),
 
-  // ✅ BUNU EKLE: org item override için
+  // ✅ Org item override için
   orgItemId: objectIdLike.default(null),
 });
 

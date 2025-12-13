@@ -114,7 +114,7 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
 
     const resolvedCategoryId = overrideCat?._id || orgCat._id;
     const resolvedCategory = {
-      id: resolvedCategoryId,
+      _id: resolvedCategoryId,
       categoryId: resolvedCategoryId, // backward compat için
       orgCategoryId: orgCat._id,
       restaurantId: restaurant._id,
@@ -159,7 +159,7 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
       const resolvedItemId = overrideItem?._id || orgItem._id;
 
       resolvedItems.push({
-        id: resolvedItemId,
+        _id: resolvedItemId,
         itemId: resolvedItemId, // backward compat
         orgItemId: orgItem._id,
         restaurantId: restaurant._id,
