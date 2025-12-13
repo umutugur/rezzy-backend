@@ -158,6 +158,286 @@ function Modal({
   );
 }
 
+// -------------------- Extracted Modals --------------------
+type CategoryModalState =
+  | { open: false }
+  | {
+      open: true;
+      mode: "create" | "edit";
+      title: string;
+      categoryId?: string | null; // edit için local category id
+      initial: { title: string; description: string; order: number };
+    };
+
+function CategoryEditorModal({
+  state,
+  onClose,
+  onSave,
+  saving,
+}: {
+  state: CategoryModalState;
+  onClose: () => void;
+  onSave: (payload: { title: string; description: string; order: number }) => void;
+  saving: boolean;
+}) {
+  const open = state.open;
+  const [form, setForm] = React.useState({ title: "", description: "", order: 0 });
+
+  React.useEffect(() => {
+    if (!open) return;
+    setForm({
+      title: state.initial.title ?? "",
+      description: state.initial.description ?? "",
+      order: Number(state.initial.order ?? 0),
+    });
+  }, [open, state.open && state.initial]);
+
+  if (!open) return null;
+
+  return (
+    <Modal
+      open={open}
+      title={state.title}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
+            onClick={onClose}
+          >
+            Vazgeç
+          </button>
+          <button
+            className="px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
+            disabled={!form.title.trim() || saving}
+            onClick={() =>
+              onSave({
+                title: form.title.trim(),
+                description: form.description?.trim() || "",
+                order: Number(form.order) || 0,
+              })
+            }
+          >
+            Kaydet
+          </button>
+        </div>
+      }
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="md:col-span-2">
+          <label className="text-xs text-gray-500">Başlık</label>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.title}
+            onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+          />
+        </div>
+        <div className="md:col-span-2">
+          <label className="text-xs text-gray-500">Açıklama</label>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.description}
+            onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Sıra</label>
+          <input
+            type="number"
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.order}
+            onChange={(e) => setForm((p) => ({ ...p, order: Number(e.target.value) || 0 }))}
+          />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+type ItemModalState =
+  | { open: false }
+  | {
+      open: true;
+      mode: "create" | "edit";
+      title: string;
+      itemId?: string | null;
+      initial: {
+        title: string;
+        description: string;
+        price: number;
+        tagsText: string;
+        order: number;
+        isAvailable: boolean;
+      };
+    };
+
+function ItemEditorModal({
+  state,
+  disabled,
+  onClose,
+  onSave,
+  onQuickDisable,
+  saving,
+}: {
+  state: ItemModalState;
+  disabled: boolean;
+  onClose: () => void;
+  onSave: (payload: {
+    title: string;
+    description: string;
+    price: number;
+    tagsText: string;
+    order: number;
+    isAvailable: boolean;
+    photoFile: File | null;
+  }) => void;
+  onQuickDisable?: (() => void) | null;
+  saving: boolean;
+}) {
+  const open = state.open;
+  const [form, setForm] = React.useState({
+    title: "",
+    description: "",
+    price: 0,
+    tagsText: "",
+    order: 0,
+    isAvailable: true,
+    photoFile: null as File | null,
+  });
+
+  React.useEffect(() => {
+    if (!open) return;
+    setForm({
+      title: state.initial.title ?? "",
+      description: state.initial.description ?? "",
+      price: Number(state.initial.price ?? 0),
+      tagsText: state.initial.tagsText ?? "",
+      order: Number(state.initial.order ?? 0),
+      isAvailable: state.initial.isAvailable !== false,
+      photoFile: null,
+    });
+  }, [open, state.open && state.initial]);
+
+  if (!open) return null;
+
+  return (
+    <Modal
+      open={open}
+      title={state.title}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-between gap-2">
+          {state.mode === "edit" && onQuickDisable && (
+            <button
+              className="px-3 py-1.5 text-sm rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
+              disabled={disabled || saving}
+              onClick={onQuickDisable}
+            >
+              Bu şubede kapat
+            </button>
+          )}
+
+          <div className="ml-auto flex gap-2">
+            <button
+              className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
+              onClick={onClose}
+            >
+              Vazgeç
+            </button>
+
+            <button
+              className="px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
+              disabled={disabled || !form.title.trim() || saving}
+              onClick={() =>
+                onSave({
+                  title: form.title.trim(),
+                  description: form.description?.trim() || "",
+                  price: Number(form.price) || 0,
+                  tagsText: form.tagsText,
+                  order: Number(form.order) || 0,
+                  isAvailable: !!form.isAvailable,
+                  photoFile: form.photoFile,
+                })
+              }
+            >
+              Kaydet
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="md:col-span-2">
+          <label className="text-xs text-gray-500">Ürün adı</label>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.title}
+            onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="text-xs text-gray-500">Açıklama</label>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.description}
+            onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500">Fiyat (₺)</label>
+          <input
+            type="number"
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.price}
+            onChange={(e) => setForm((p) => ({ ...p, price: Number(e.target.value) || 0 }))}
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500">Sıra</label>
+          <input
+            type="number"
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.order}
+            onChange={(e) => setForm((p) => ({ ...p, order: Number(e.target.value) || 0 }))}
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="text-xs text-gray-500">Etiketler (virgülle)</label>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.tagsText}
+            onChange={(e) => setForm((p) => ({ ...p, tagsText: e.target.value }))}
+          />
+        </div>
+
+        <div className="md:col-span-2 flex items-center justify-between">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.isAvailable}
+              onChange={(e) => setForm((p) => ({ ...p, isAvailable: e.target.checked }))}
+            />
+            Serviste
+          </label>
+
+          <label className="text-sm">
+            <span className="text-xs text-gray-500 mr-2">Fotoğraf</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setForm((p) => ({ ...p, photoFile: e.target.files?.[0] ?? null }))}
+            />
+          </label>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 /* =======================
    View model
 ======================= */
@@ -425,24 +705,98 @@ export default function MenuManagerPage() {
     return base.filter((c) => norm(c.title).includes(qq) || norm(c.description || "").includes(qq));
   }, [tab, active, closed, q]);
 
-  // Category modal
-  const [catModalOpen, setCatModalOpen] = React.useState(false);
-  const [catForm, setCatForm] = React.useState({ title: "", description: "", order: 0 });
+  // ---------------- Modals (extracted) ----------------
+  const [categoryModal, setCategoryModal] = React.useState<CategoryModalState>({ open: false });
+  const [itemModal, setItemModal] = React.useState<ItemModalState>({ open: false });
 
-  // Item modal
-  const [itemModalOpen, setItemModalOpen] = React.useState(false);
-  const [itemForm, setItemForm] = React.useState({
-    title: "",
-    description: "",
-    price: 0,
-    tagsText: "",
-    order: 0,
-    isAvailable: true,
-    photoFile: null as File | null,
-  });
+  const closeCategoryModal = React.useCallback(() => setCategoryModal({ open: false }), []);
+  const closeItemModal = React.useCallback(() => setItemModal({ open: false }), []);
 
-  // Edit item modal (reuse)
-  const [editingItemId, setEditingItemId] = React.useState<string | null>(null);
+  const openCreateCategory = React.useCallback(() => {
+    setCategoryModal({
+      open: true,
+      mode: "create",
+      title: "Yeni Kategori (Şubeye Özel)",
+      initial: { title: "", description: "", order: 0 },
+    });
+  }, []);
+
+  const openEditSelectedCategory = React.useCallback(
+    async (opts?: { forceOrgOverride?: boolean }) => {
+      if (!selected) return;
+
+      // Kapalı listeden seçiliyse zaten local var
+      if (selected.kind === "closed_local" && selected.local) {
+        const lc = selected.local;
+        setCategoryModal({
+          open: true,
+          mode: "edit",
+          title: "Kategori Düzenle",
+          categoryId: getId(lc),
+          initial: {
+            title: lc.title ?? "",
+            description: lc.description ?? "",
+            order: Number(lc.order ?? 0),
+          },
+        });
+        return;
+      }
+
+      // Aktif resolved seçiliyse local kaydı bul / gerekiyorsa oluştur
+      const rc = selectedResolved;
+      if (!rc) return;
+
+      if ((rc.source ?? "local") === "org") {
+        // Merkez kategori: önce override garanti et
+        await ensureEditableCategoryForOrg(rc);
+        await qc.invalidateQueries({ queryKey: ["menu-categories", rid] });
+        await qc.invalidateQueries({ queryKey: ["menu-resolved", rid] });
+      }
+
+      // local kaydı tekrar bul
+      const lc = findLocalForResolved(rc);
+      if (!lc) return;
+
+      setCategoryModal({
+        open: true,
+        mode: "edit",
+        title: "Kategori Düzenle",
+        categoryId: getId(lc),
+        initial: {
+          title: lc.title ?? "",
+          description: lc.description ?? "",
+          order: Number(lc.order ?? 0),
+        },
+      });
+    },
+    [selected, selectedResolved, ensureEditableCategoryForOrg, findLocalForResolved, qc, rid]
+  );
+
+  const openCreateItem = React.useCallback(() => {
+    setItemModal({
+      open: true,
+      mode: "create",
+      title: "Yeni Ürün (Şubeye Özel)",
+      initial: { title: "", description: "", price: 0, tagsText: "", order: 0, isAvailable: true },
+    });
+  }, []);
+
+  const openEditItem = React.useCallback((base: any, title?: string) => {
+    setItemModal({
+      open: true,
+      mode: "edit",
+      title: title || "Ürün Düzenle",
+      itemId: getId(base),
+      initial: {
+        title: base.title ?? "",
+        description: base.description ?? "",
+        price: Number(base.price ?? 0),
+        tagsText: (base.tags ?? []).join(", "),
+        order: Number(base.order ?? 0),
+        isAvailable: base.isAvailable !== false,
+      },
+    });
+  }, []);
 
   // ---------------- Derived: selected display ----------------
   const selectedBadge = selected ? badgeFor(selected.source) : null;
@@ -519,7 +873,7 @@ export default function MenuManagerPage() {
                   <span>Kategoriler</span>
                   <button
                     className="px-3 py-1.5 text-xs rounded bg-brand-600 text-white hover:bg-brand-700"
-                    onClick={() => setCatModalOpen(true)}
+                    onClick={openCreateCategory}
                   >
                     + Kategori Ekle
                   </button>
@@ -612,7 +966,7 @@ export default function MenuManagerPage() {
                     <button
                       className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-60"
                       disabled={!selected || opsDisabled}
-                      onClick={() => setItemModalOpen(true)}
+                      onClick={openCreateItem}
                       title={!selected ? "Önce kategori seç" : opsDisabled ? "Kategori kapalı" : "Ürün ekle"}
                     >
                       + Ürün Ekle
@@ -621,6 +975,14 @@ export default function MenuManagerPage() {
                     {/* Kategori aksiyonları */}
                     {selected && (
                       <>
+                        <button
+                          className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
+                          disabled={!selected || opsDisabled}
+                          onClick={() => openEditSelectedCategory()}
+                          title={opsDisabled ? "Kategori kapalı" : "Kategori düzenle"}
+                        >
+                          Kategori Düzenle
+                        </button>
                         {selected.kind === "active_resolved" && selectedResolved?.source === "org" && (
                           <button
                             className="px-3 py-1.5 text-sm rounded bg-amber-50 text-amber-900 hover:bg-amber-100"
@@ -764,17 +1126,7 @@ export default function MenuManagerPage() {
                                           if (!canEditRow) return;
 
                                           const base = localEdited ?? (it as any);
-                                          setEditingItemId(getId(base));
-                                          setItemForm({
-                                            title: base.title,
-                                            description: base.description ?? "",
-                                            price: Number(base.price ?? 0),
-                                            tagsText: (base.tags ?? []).join(", "),
-                                            order: Number(base.order ?? 0),
-                                            isAvailable: base.isAvailable !== false,
-                                            photoFile: null,
-                                          });
-                                          setItemModalOpen(true);
+                                          openEditItem(base);
                                         }}
                                       >
                                         Düzenle
@@ -914,183 +1266,86 @@ export default function MenuManagerPage() {
       )}
 
       {/* =======================
-          MODALS
+          MODALS (extracted)
       ======================= */}
 
-      {/* Category Add Modal */}
-      <Modal
-        open={catModalOpen}
-        title="Yeni Kategori (Şubeye Özel)"
-        onClose={() => setCatModalOpen(false)}
-        footer={
-          <div className="flex justify-end gap-2">
-            <button className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50" onClick={() => setCatModalOpen(false)}>
-              Vazgeç
-            </button>
-            <button
-              className="px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
-              disabled={!catForm.title.trim()}
-              onClick={() => {
-                createCatMut.mutate({
-                  title: catForm.title.trim(),
-                  description: catForm.description?.trim() || "",
-                  order: Number(catForm.order) || 0,
-                });
-                setCatForm({ title: "", description: "", order: 0 });
-                setCatModalOpen(false);
-              }}
-            >
-              Kaydet
-            </button>
-          </div>
-        }
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="md:col-span-2">
-            <label className="text-xs text-gray-500">Başlık</label>
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={catForm.title} onChange={(e) => setCatForm((p) => ({ ...p, title: e.target.value }))} />
-          </div>
-          <div className="md:col-span-2">
-            <label className="text-xs text-gray-500">Açıklama</label>
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={catForm.description} onChange={(e) => setCatForm((p) => ({ ...p, description: e.target.value }))} />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500">Sıra</label>
-            <input type="number" className="w-full border rounded-lg px-3 py-2 text-sm" value={catForm.order} onChange={(e) => setCatForm((p) => ({ ...p, order: Number(e.target.value) || 0 }))} />
-          </div>
-        </div>
-      </Modal>
+      <CategoryEditorModal
+        state={categoryModal}
+        onClose={closeCategoryModal}
+        saving={createCatMut.isPending || updateCatMut.isPending}
+        onSave={(payload) => {
+          if (!rid) return;
 
-      {/* Item Add/Edit Modal */}
-      <Modal
-        open={itemModalOpen}
-        title={editingItemId ? "Ürün Düzenle" : "Yeni Ürün (Şubeye Özel)"}
-        onClose={() => {
-          setItemModalOpen(false);
-          setEditingItemId(null);
-          setItemForm({ title: "", description: "", price: 0, tagsText: "", order: 0, isAvailable: true, photoFile: null });
+          if (!categoryModal.open) return;
+
+          if (categoryModal.mode === "create") {
+            createCatMut.mutate({
+              title: payload.title,
+              description: payload.description,
+              order: payload.order,
+            } as any);
+            closeCategoryModal();
+            return;
+          }
+
+          const cid = categoryModal.categoryId || selectedLocalCatId || (selected?.local ? getId(selected.local) : null);
+          if (!cid) return;
+          updateCatMut.mutate({ cid, payload: { title: payload.title, description: payload.description, order: payload.order } as any });
+          closeCategoryModal();
         }}
-        footer={
-          <div className="flex justify-between gap-2">
-            {editingItemId && (
-              <button
-                className="px-3 py-1.5 text-sm rounded bg-gray-100 hover:bg-gray-200"
-                onClick={() => {
-                  // hızlı kapatma
-                  if (!editingItemId) return;
-                  updateItemMut.mutate({ iid: editingItemId, isActive: false });
-                  setItemModalOpen(false);
-                  setEditingItemId(null);
-                }}
-              >
-                Bu şubede kapat
-              </button>
-            )}
+      />
 
-            <div className="ml-auto flex gap-2">
-              <button
-                className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
-                onClick={() => {
-                  setItemModalOpen(false);
-                  setEditingItemId(null);
-                  setItemForm({ title: "", description: "", price: 0, tagsText: "", order: 0, isAvailable: true, photoFile: null });
-                }}
-              >
-                Vazgeç
-              </button>
-
-              <button
-                className="px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
-                disabled={!selectedLocalCatId || opsDisabled || !itemForm.title.trim()}
-                onClick={() => {
-                  if (!selectedLocalCatId || opsDisabled) return;
-
-                  const tags = String(itemForm.tagsText || "")
-                    .split(",")
-                    .map((x) => x.trim())
-                    .filter(Boolean);
-
-                  if (editingItemId) {
-                    updateItemMut.mutate({
-                      iid: editingItemId,
-                      title: itemForm.title.trim(),
-                      description: itemForm.description?.trim() || "",
-                      price: Number(itemForm.price) || 0,
-                      tags,
-                      order: Number(itemForm.order) || 0,
-                      isAvailable: !!itemForm.isAvailable,
-                      photoFile: itemForm.photoFile,
-                    });
-                  } else {
-                    createItemMut.mutate({
-                      categoryId: selectedLocalCatId,
-                      title: itemForm.title.trim(),
-                      description: itemForm.description?.trim() || "",
-                      price: Number(itemForm.price) || 0,
-                      tags,
-                      order: Number(itemForm.order) || 0,
-                      isAvailable: !!itemForm.isAvailable,
-                      photoFile: itemForm.photoFile,
-                    } as any);
-                  }
-
-                  setItemModalOpen(false);
-                  setEditingItemId(null);
-                  setItemForm({ title: "", description: "", price: 0, tagsText: "", order: 0, isAvailable: true, photoFile: null });
-                }}
-              >
-                Kaydet
-              </button>
-            </div>
-          </div>
+      <ItemEditorModal
+        state={itemModal}
+        disabled={!selectedLocalCatId || opsDisabled}
+        saving={createItemMut.isPending || updateItemMut.isPending}
+        onClose={closeItemModal}
+        onQuickDisable={
+          itemModal.open && itemModal.mode === "edit" && itemModal.itemId
+            ? () => {
+                updateItemMut.mutate({ iid: String(itemModal.itemId), isActive: false });
+                closeItemModal();
+              }
+            : null
         }
-      >
-        {!selectedLocalCatId && (
-          <div className="border rounded-xl p-3 bg-amber-50 text-amber-900 mb-3">
-            Ürün eklemek/düzenlemek için bu kategoride şube düzenlemesi aktif olmalı.
-            Eğer kategori <b>Merkez Menü</b> ise önce <b>Düzenlemeyi Başlat</b>.
-          </div>
-        )}
+        onSave={(payload) => {
+          if (!selectedLocalCatId || opsDisabled) return;
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="md:col-span-2">
-            <label className="text-xs text-gray-500">Ürün adı</label>
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={itemForm.title} onChange={(e) => setItemForm((p) => ({ ...p, title: e.target.value }))} />
-          </div>
+          const tags = String(payload.tagsText || "")
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean);
 
-          <div className="md:col-span-2">
-            <label className="text-xs text-gray-500">Açıklama</label>
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={itemForm.description} onChange={(e) => setItemForm((p) => ({ ...p, description: e.target.value }))} />
-          </div>
+          if (!itemModal.open) return;
 
-          <div>
-            <label className="text-xs text-gray-500">Fiyat (₺)</label>
-            <input type="number" className="w-full border rounded-lg px-3 py-2 text-sm" value={itemForm.price} onChange={(e) => setItemForm((p) => ({ ...p, price: Number(e.target.value) || 0 }))} />
-          </div>
+          if (itemModal.mode === "edit" && itemModal.itemId) {
+            updateItemMut.mutate({
+              iid: String(itemModal.itemId),
+              title: payload.title,
+              description: payload.description,
+              price: payload.price,
+              tags,
+              order: payload.order,
+              isAvailable: !!payload.isAvailable,
+              photoFile: payload.photoFile,
+            } as any);
+            closeItemModal();
+            return;
+          }
 
-          <div>
-            <label className="text-xs text-gray-500">Sıra</label>
-            <input type="number" className="w-full border rounded-lg px-3 py-2 text-sm" value={itemForm.order} onChange={(e) => setItemForm((p) => ({ ...p, order: Number(e.target.value) || 0 }))} />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="text-xs text-gray-500">Etiketler (virgülle)</label>
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={itemForm.tagsText} onChange={(e) => setItemForm((p) => ({ ...p, tagsText: e.target.value }))} />
-          </div>
-
-          <div className="md:col-span-2 flex items-center justify-between">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={itemForm.isAvailable} onChange={(e) => setItemForm((p) => ({ ...p, isAvailable: e.target.checked }))} />
-              Serviste
-            </label>
-
-            <label className="text-sm">
-              <span className="text-xs text-gray-500 mr-2">Fotoğraf</span>
-              <input type="file" accept="image/*" onChange={(e) => setItemForm((p) => ({ ...p, photoFile: e.target.files?.[0] ?? null }))} />
-            </label>
-          </div>
-        </div>
-      </Modal>
+          createItemMut.mutate({
+            categoryId: selectedLocalCatId,
+            title: payload.title,
+            description: payload.description,
+            price: payload.price,
+            tags,
+            order: payload.order,
+            isAvailable: !!payload.isAvailable,
+            photoFile: payload.photoFile,
+          } as any);
+          closeItemModal();
+        }}
+      />
     </div>
   );
 }
