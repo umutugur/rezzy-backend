@@ -490,7 +490,7 @@ export default function MenuManagerPage() {
 
   const resolvedQ = useQuery({
     queryKey: ["menu-resolved", rid],
-    queryFn: () => restaurantGetResolvedMenu(rid) as Promise<ResolvedMenuResponse>,
+    queryFn: () => restaurantGetResolvedMenu(rid,{ includeInactive: true }),
     enabled: !!rid,
   });
 
