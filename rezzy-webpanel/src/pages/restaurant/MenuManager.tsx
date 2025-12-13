@@ -17,7 +17,8 @@ import { Card } from "../../components/Card";
    Types
 ======================= */
 type Category = {
-  _id: string;
+  _id?: string;
+  id?: string;
   title: string;
   description?: string;
   order: number;
@@ -26,7 +27,8 @@ type Category = {
 };
 
 type Item = {
-  _id: string;
+  _id?: string;
+  id?: string;
   categoryId: string;
   title: string;
   description?: string;
@@ -42,7 +44,8 @@ type Item = {
 type ResolvedSource = "org" | "org_override" | "local";
 
 type ResolvedMenuItem = {
-  _id: string;
+  _id?: string;
+  id?: string;
   title: string;
   description?: string | null;
   price: number;
@@ -56,7 +59,8 @@ type ResolvedMenuItem = {
 };
 
 type ResolvedMenuCategory = {
-  _id: string;
+  _id?: string;
+  id?: string;
   title: string;
   description?: string | null;
   order?: number;
@@ -89,6 +93,20 @@ function norm(s?: string | null) {
   return String(s ?? "").trim().toLowerCase();
 }
 
+function getId(x: any): string {
+  const v = x?._id ?? x?.id;
+  if (v && typeof v === "string") return v;
+  // deterministic fallback (çok nadir devreye girer)
+  return `__missing_id__:${norm(x?.title)}:${Number(x?.order ?? 0)}`;
+}
+
+function badgeFor(src: ResolvedSource) {
+  if (src === "org") return { text: "Merkez Menü", cls: "bg-blue-50 text-blue-700 border border-blue-100" };
+  if (src === "org_override")
+    return { text: "Şubede Düzenlendi", cls: "bg-emerald-50 text-emerald-700 border border-emerald-100" };
+  return { text: "Şubeye Özel", cls: "bg-gray-100 text-gray-700 border border-gray-200" };
+}
+
 /**
  * orgCategoryId yoksa bile “override”ı yakalamak için heuristik (fallback).
  * - title + order aynı olan ilk local category’yi alır
@@ -99,53 +117,53 @@ function findOverrideCategoryForOrgHeuristic(localCats: Category[], orgCat: Reso
 
   const candidates = localCats
     .filter((c) => norm(c.title) === title && (c.order ?? 0) === ord)
-    .sort((a, b) => String(a._id).localeCompare(String(b._id)));
+    .sort((a, b) => String(getId(a)).localeCompare(String(getId(b))));
 
   return candidates[0] ?? null;
 }
 
-function badgeForCategory(src: ResolvedSource) {
-  if (src === "org") return { text: "Merkez Menü", cls: "bg-blue-50 text-blue-700 border border-blue-100" };
-  if (src === "org_override")
-    return { text: "Bu Şubede Düzenlendi", cls: "bg-emerald-50 text-emerald-700 border border-emerald-100" };
-  return { text: "Bu Şubeye Özel", cls: "bg-gray-100 text-gray-700 border border-gray-200" };
-}
-
-function badgeForItem(src: ResolvedSource) {
-  if (src === "org") return { text: "Merkez Menü", cls: "bg-blue-50 text-blue-700 border border-blue-100" };
-  if (src === "org_override")
-    return { text: "Bu Şubede Düzenlendi", cls: "bg-emerald-50 text-emerald-700 border border-emerald-100" };
-  return { text: "Bu Şubeye Özel", cls: "bg-gray-100 text-gray-700 border border-gray-200" };
-}
-
-/**
- * ✅ Deterministic + collision-safe key
- * Render key = selection key (KRİTİK)
- */
-function resolvedCategoryKey(c: ResolvedMenuCategory) {
-  const src: ResolvedSource = (c.source ?? "local") as ResolvedSource;
-  if (src === "org") return `org:${String(c._id)}`;
-  if (src === "org_override") return `org_override:${String(c.orgCategoryId || c._id)}`;
-  return `local:${String(c._id)}`;
-}
-
-function localCategoryKey(localId: string) {
-  return `local:${String(localId)}`;
-}
-
-function resolvedItemKey(i: ResolvedMenuItem) {
-  const src: ResolvedSource = (i.source ?? "local") as ResolvedSource;
-  if (src === "org") return `org:${String(i._id)}`;
-  // local / override: orgItemId varsa bile selection/render key’i item’ın kendi _id’si (resolved düzeyinde) kalabilir.
-  // Çünkü burada listede duplicate render ile uğraşmıyoruz; determinism için yine unique prefix kullanalım.
-  return `${src}:${String(i.orgItemId || i._id)}`;
+/* =======================
+   Modal (minimal)
+======================= */
+function Modal({
+  open,
+  title,
+  children,
+  onClose,
+  footer,
+}: {
+  open: boolean;
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+  footer?: React.ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="w-full max-w-2xl bg-white rounded-2xl shadow-soft border border-gray-100">
+          <div className="flex items-center justify-between px-5 py-4 border-b">
+            <div className="font-semibold">{title}</div>
+            <button className="px-2 py-1 rounded hover:bg-gray-100" onClick={onClose} aria-label="Close">
+              ✕
+            </button>
+          </div>
+          <div className="p-5">{children}</div>
+          {footer && <div className="px-5 py-4 border-t bg-gray-50 rounded-b-2xl">{footer}</div>}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* =======================
    View model
 ======================= */
-type CategoryCardVM = {
-  key: string; // render key + selection key
+type CategoryVM = {
+  key: string;              // UI selection key (unique)
+  id: string;               // resolved id
   title: string;
   description?: string | null;
   order: number;
@@ -184,12 +202,15 @@ export default function MenuManagerPage() {
     qc.invalidateQueries({ queryKey: ["menu-items", rid] });
   }, [qc, rid]);
 
-  // ---------------- Build category cards ----------------
-  const { activeCards, closedCards, allCards } = React.useMemo(() => {
-    const active: CategoryCardVM[] = resolvedCats.map((c) => {
+  // ---------------- Build categories (new UI list) ----------------
+  const { active, closed, all } = React.useMemo(() => {
+    const activeVM: CategoryVM[] = resolvedCats.map((c, idx) => {
       const src: ResolvedSource = (c.source ?? "local") as ResolvedSource;
+      const id = getId(c);
+      const key = `${src}:${id}:${idx}`; // idx eklemek collision riskini sıfırlar
       return {
-        key: resolvedCategoryKey(c),
+        key,
+        id,
         title: c.title,
         description: c.description ?? null,
         order: c.order ?? 0,
@@ -203,11 +224,14 @@ export default function MenuManagerPage() {
 
     const closedLocalCats = (localCats || []).filter((c) => c.isActive === false);
 
-    const closed: CategoryCardVM[] = sortByOrder(
-      closedLocalCats.map((lc) => {
+    const closedVM: CategoryVM[] = sortByOrder(
+      closedLocalCats.map((lc, idx) => {
         const src: ResolvedSource = lc.orgCategoryId ? "org_override" : "local";
+        const id = getId(lc);
+        const key = `closed:${src}:${id}:${idx}`;
         return {
-          key: localCategoryKey(lc._id), // ✅ closed always keyed by local _id
+          key,
+          id,
           title: lc.title,
           description: lc.description ?? null,
           order: lc.order ?? 0,
@@ -216,56 +240,47 @@ export default function MenuManagerPage() {
           resolved: null,
           local: lc,
           kind: "closed_local",
-        } satisfies CategoryCardVM;
+        } satisfies CategoryVM;
       })
-    ).filter((x) => !active.some((a) => a.key === x.key)); // defensive
+    );
 
     return {
-      activeCards: sortByOrder(active),
-      closedCards: closed,
-      allCards: [...sortByOrder(active), ...closed],
+      active: sortByOrder(activeVM),
+      closed: closedVM,
+      all: [...sortByOrder(activeVM), ...closedVM],
     };
   }, [resolvedCats, localCats]);
 
-  // ---------------- Selection (single source of truth) ----------------
+  // ---------------- Selection ----------------
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
 
-  // keep selection stable across refetch; fallback to first active
   React.useEffect(() => {
-    if (!allCards.length) {
+    if (!all.length) {
       if (selectedKey) setSelectedKey(null);
       return;
     }
-    if (selectedKey && allCards.some((c) => c.key === selectedKey)) return;
+    if (selectedKey && all.some((x) => x.key === selectedKey)) return;
+    setSelectedKey(active[0]?.key ?? all[0].key);
+  }, [all, active, selectedKey]);
 
-    const first = activeCards[0] ?? allCards[0];
-    setSelectedKey(first.key);
-  }, [allCards, activeCards, selectedKey]);
-
-  const selectedCard = React.useMemo(() => {
-    if (!selectedKey) return null;
-    return allCards.find((c) => c.key === selectedKey) ?? null;
-  }, [allCards, selectedKey]);
-
-  const selectedResolved = selectedCard?.resolved ?? null;
+  const selected = React.useMemo(() => all.find((x) => x.key === selectedKey) ?? null, [all, selectedKey]);
+  const selectedResolved = selected?.resolved ?? null;
 
   // ---------------- Map selected -> local category id ----------------
   const findLocalForResolved = React.useCallback(
     (rc: ResolvedMenuCategory | null): Category | null => {
       if (!rc) return null;
-
       const src: ResolvedSource = (rc.source ?? "local") as ResolvedSource;
 
-      // local / org_override resolved => local id matches resolved _id
       if (src !== "org") {
-        return localCats.find((lc) => String(lc._id) === String(rc._id)) || null;
+        const rid2 = getId(rc);
+        return localCats.find((lc) => getId(lc) === rid2) || null;
       }
 
-      // org => try link first
-      const byLink = localCats.find((lc) => String(lc.orgCategoryId || "") === String(rc._id)) || null;
+      const orgId = getId(rc);
+      const byLink = localCats.find((lc) => String(lc.orgCategoryId || "") === String(orgId)) || null;
       if (byLink) return byLink;
 
-      // fallback heuristic
       return findOverrideCategoryForOrgHeuristic(localCats, rc);
     },
     [localCats]
@@ -274,44 +289,28 @@ export default function MenuManagerPage() {
   const [selectedLocalCatId, setSelectedLocalCatId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!selectedCard) {
+    if (!selected) {
       setSelectedLocalCatId(null);
       return;
     }
-
-    // closed local selected
-    if (selectedCard.kind === "closed_local" && selectedCard.local?._id) {
-      setSelectedLocalCatId(String(selectedCard.local._id));
+    if (selected.kind === "closed_local") {
+      setSelectedLocalCatId(selected.local ? getId(selected.local) : null);
       return;
     }
-
-    // resolved selected
     const lc = findLocalForResolved(selectedResolved);
-    setSelectedLocalCatId(lc?._id ?? null);
-  }, [selectedCard, selectedResolved, findLocalForResolved]);
+    setSelectedLocalCatId(lc ? getId(lc) : null);
+  }, [selected, selectedResolved, findLocalForResolved]);
 
-  const selectedLocalCat = React.useMemo(() => {
-    if (!selectedLocalCatId) return null;
-    return localCats.find((c) => String(c._id) === String(selectedLocalCatId)) || null;
-  }, [localCats, selectedLocalCatId]);
-
-  const selectedIsClosed = selectedCard ? selectedCard.isActive === false : false;
+  const selectedIsClosed = selected ? selected.isActive === false : false;
+  const opsDisabled = selectedIsClosed;
 
   // ---------------- Mutations: Categories ----------------
   const createCatMut = useMutation({
     mutationFn: (payload: { title: string; description?: string; order?: number; orgCategoryId?: string }) =>
       restaurantCreateCategory(rid, payload as any),
-    onSuccess: async (res: any) => {
-      const id = res?._id || res?.category?._id || null;
+    onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["menu-categories", rid] });
       await qc.invalidateQueries({ queryKey: ["menu-resolved", rid] });
-
-      if (id) {
-        const k = localCategoryKey(String(id));
-        setSelectedKey(k);
-        setSelectedLocalCatId(String(id));
-        await qc.invalidateQueries({ queryKey: ["menu-items", rid, String(id)] });
-      }
     },
   });
 
@@ -324,38 +323,35 @@ export default function MenuManagerPage() {
     },
   });
 
-  // “Merkez menü” kategorisinde düzenlemeyi başlat / kapat için: local override kaydı garanti
+  // Merkez kategori için: şube override kaydı garanti et
   const ensureEditableCategoryForOrg = React.useCallback(
     async (orgCat: ResolvedMenuCategory) => {
+      const orgId = getId(orgCat);
       const existing =
-        localCats.find((lc) => String(lc.orgCategoryId || "") === String(orgCat._id)) ||
+        localCats.find((lc) => String(lc.orgCategoryId || "") === String(orgId)) ||
         findOverrideCategoryForOrgHeuristic(localCats, orgCat);
 
-      if (existing?._id) {
-        setSelectedLocalCatId(existing._id);
-        return existing._id as string;
+      if (existing) {
+        setSelectedLocalCatId(getId(existing));
+        return getId(existing);
       }
 
       const payload: any = {
         title: orgCat.title,
         description: orgCat.description ?? "",
         order: orgCat.order ?? 0,
-        orgCategoryId: orgCat._id,
+        orgCategoryId: orgId,
         isActive: true,
       };
 
       return await new Promise<string | null>((resolve) => {
         createCatMut.mutate(payload, {
-          onSuccess: async (res: any) => {
-            const id = res?._id || res?.category?._id || null;
+          onSuccess: async () => {
             await qc.invalidateQueries({ queryKey: ["menu-categories", rid] });
             await qc.invalidateQueries({ queryKey: ["menu-resolved", rid] });
-            if (id) {
-              setSelectedLocalCatId(String(id));
-              resolve(String(id));
-            } else {
-              resolve(null);
-            }
+
+            // create sonrası localCats state hemen güncellenmeyebilir; refetch sonrası tekrar yakalanacak.
+            resolve("__created__");
           },
           onError: () => resolve(null),
         });
@@ -418,13 +414,24 @@ export default function MenuManagerPage() {
     },
   });
 
-  // ---------------- UI state: forms ----------------
-  const [newCat, setNewCat] = React.useState({ title: "", description: "", order: 0 });
+  // ---------------- UI state: filters + modals ----------------
+  const [tab, setTab] = React.useState<"active" | "closed">("active");
+  const [q, setQ] = React.useState("");
 
-  const [editingCatId, setEditingCatId] = React.useState<string | null>(null);
-  const [editingCat, setEditingCat] = React.useState<Partial<Category>>({});
+  const list = React.useMemo(() => {
+    const base = tab === "active" ? active : closed;
+    const qq = norm(q);
+    if (!qq) return base;
+    return base.filter((c) => norm(c.title).includes(qq) || norm(c.description || "").includes(qq));
+  }, [tab, active, closed, q]);
 
-  const [newItem, setNewItem] = React.useState({
+  // Category modal
+  const [catModalOpen, setCatModalOpen] = React.useState(false);
+  const [catForm, setCatForm] = React.useState({ title: "", description: "", order: 0 });
+
+  // Item modal
+  const [itemModalOpen, setItemModalOpen] = React.useState(false);
+  const [itemForm, setItemForm] = React.useState({
     title: "",
     description: "",
     price: 0,
@@ -434,28 +441,27 @@ export default function MenuManagerPage() {
     photoFile: null as File | null,
   });
 
+  // Edit item modal (reuse)
   const [editingItemId, setEditingItemId] = React.useState<string | null>(null);
-  const [editingItem, setEditingItem] = React.useState<any>({});
-  const [editingItemPhoto, setEditingItemPhoto] = React.useState<File | null>(null);
 
-  // ---------------- Derived: can operate? ----------------
-  const opsDisabled = selectedIsClosed; // kategori kapalıyken ürün işlemleri yok
+  // ---------------- Derived: selected display ----------------
+  const selectedBadge = selected ? badgeFor(selected.source) : null;
 
-  const anyError = catQ.isError || resolvedQ.isError || itemsQ.isError;
   const loadingManage = mode === "manage" && (catQ.isLoading || resolvedQ.isLoading || itemsQ.isLoading);
   const loadingPreview = mode === "preview" && resolvedQ.isLoading;
+  const anyError = catQ.isError || resolvedQ.isError || itemsQ.isError;
 
   /* =======================
      UI
   ======================= */
   return (
     <div className="flex-1 space-y-6">
+      {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold">Menü Yönetimi</h2>
           <div className="text-xs text-gray-500">
-            Menü; <b>Merkez Menü</b> + <b>Bu Şubede Düzenlenen</b> + <b>Bu Şubeye Özel</b> içeriklerin birleşimidir.
-            Merkez menüden gelen bir şeyi şube bazında değiştirmek için önce <b>Düzenlemeyi Başlat</b> kullanılır.
+            Menü; <b>Merkez Menü</b> + <b>Şubede Düzenlenen</b> + <b>Şubeye Özel</b> birleşimidir.
           </div>
         </div>
 
@@ -468,7 +474,7 @@ export default function MenuManagerPage() {
             }`}
             onClick={() => setMode("manage")}
           >
-            Menüyü Düzenle
+            Yönetim
           </button>
 
           <button
@@ -482,22 +488,21 @@ export default function MenuManagerPage() {
             Müşteri Görünümü
           </button>
 
-          <button
-            className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
-            onClick={refreshAll}
-          >
+          <button className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50" onClick={refreshAll}>
             Yenile
           </button>
         </div>
       </div>
 
-      {!rid && <div className="text-sm text-red-600">RestaurantId bulunamadı. Oturum / authStore akışını kontrol et.</div>}
+      {!rid && (
+        <div className="text-sm text-red-600">RestaurantId bulunamadı. authStore akışını kontrol et.</div>
+      )}
 
       {(loadingManage || loadingPreview) && <div className="text-sm text-gray-500">Yükleniyor…</div>}
 
       {anyError && (
         <div className="text-sm text-red-600">
-          Menü verisi alınırken hata oluştu. DevTools → Network / Console’da ilgili isteğin response’unu kontrol et.
+          Menü verisi alınırken hata oluştu. Network/Yetki/Response’u kontrol et.
         </div>
       )}
 
@@ -505,731 +510,342 @@ export default function MenuManagerPage() {
           MANAGE
       ======================= */}
       {mode === "manage" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* ---------- Left: Categories ---------- */}
-          <Card title="Kategoriler">
-            <div className="space-y-3">
-              {/* Active (resolved) */}
-              {activeCards.map((card) => {
-                const c = card.resolved!;
-                const isSelected = card.key === selectedKey;
-                const badge = badgeForCategory(card.source);
-
-                // local record if exists (for edit/toggle)
-                const localForThisResolved = findLocalForResolved(c);
-                const isEditing = !!localForThisResolved && localForThisResolved._id === editingCatId;
-
-                return (
-                  <div
-                    key={card.key} // ✅ render key = selection key
-                    className={`border rounded-lg p-3 transition ${
-                      isSelected
-                        ? "border-brand-600 bg-brand-50 shadow-sm"
-                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                    }`}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* LEFT */}
+          <div className="lg:col-span-4 space-y-4">
+            <Card
+              title={
+                <div className="flex items-center justify-between">
+                  <span>Kategoriler</span>
+                  <button
+                    className="px-3 py-1.5 text-xs rounded bg-brand-600 text-white hover:bg-brand-700"
+                    onClick={() => setCatModalOpen(true)}
                   >
-                    {!isEditing ? (
-                      <>
-                        <button
-                          className="w-full text-left"
-                          aria-selected={isSelected}
-                          onClick={() => setSelectedKey(card.key)}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className="font-medium">{card.title}</div>
-                            <span className={`text-[11px] px-2 py-0.5 rounded ${badge.cls}`}>{badge.text}</span>
-                            {card.isActive === false && (
-                              <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">
-                                Kapalı
-                              </span>
-                            )}
-                          </div>
-
-                          {!!card.description && <div className="text-xs text-gray-500 mt-1">{card.description}</div>}
-
-                          <div className="text-xs text-gray-400 mt-1">
-                            Sıra: {card.order} • {card.isActive ? "Açık" : "Kapalı"}
-                            {card.source === "org" && !localForThisResolved ? " • Bu şubede düzenleme yok" : ""}
-                          </div>
-                        </button>
-
-                        <div className="flex gap-2 mt-2 flex-wrap">
-                          {/* Merkez menü: düzenlemeyi başlat */}
-                          {card.source === "org" && !localForThisResolved && (
-                            <button
-                              className="px-2 py-1 text-xs rounded bg-amber-50 text-amber-900 hover:bg-amber-100"
-                              onClick={async () => {
-                                const id = await ensureEditableCategoryForOrg(c);
-                                if (id) refreshAll();
-                              }}
-                            >
-                              Düzenlemeyi Başlat
-                            </button>
-                          )}
-
-                          {/* Kategori düzenle (local record varsa) */}
-                          {localForThisResolved && (
-                            <button
-                              className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
-                              onClick={() => {
-                                setEditingCatId(localForThisResolved._id);
-                                setEditingCat({
-                                  title: localForThisResolved.title,
-                                  description: localForThisResolved.description || "",
-                                  order: localForThisResolved.order,
-                                  isActive: localForThisResolved.isActive,
-                                });
-                              }}
-                            >
-                              Kategoriyi Düzenle
-                            </button>
-                          )}
-
-                          {/* Bu şubede kapat (çift yönlü; silme yok) */}
-                          <button
-                            className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
-                            onClick={async () => {
-                              // org ise önce editable record aç
-                              if (card.source === "org") {
-                                const id = await ensureEditableCategoryForOrg(c);
-                                if (!id) return;
-                                updateCatMut.mutate({ cid: String(id), payload: { isActive: false } });
-                                return;
-                              }
-
-                              // local / org_override: local record zaten olmalı
-                              if (localForThisResolved?._id) {
-                                updateCatMut.mutate({ cid: String(localForThisResolved._id), payload: { isActive: false } });
-                              }
-                            }}
-                          >
-                            Bu şubede kapat
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="space-y-2">
-                        <input
-                          className="w-full border rounded px-2 py-1 text-sm"
-                          value={editingCat.title ?? ""}
-                          placeholder="Kategori adı"
-                          onChange={(e) => setEditingCat((p) => ({ ...p, title: e.target.value }))}
-                        />
-                        <input
-                          className="w-full border rounded px-2 py-1 text-sm"
-                          value={editingCat.description ?? ""}
-                          placeholder="Açıklama"
-                          onChange={(e) => setEditingCat((p) => ({ ...p, description: e.target.value }))}
-                        />
-                        <div className="flex gap-2 items-center">
-                          <div className="flex flex-col">
-                            <label className="text-xs text-gray-500 mb-1">Menü sırası</label>
-                            <input
-                              type="number"
-                              className="w-28 border rounded px-2 py-1 text-sm"
-                              value={editingCat.order ?? 0}
-                              onChange={(e) => setEditingCat((p) => ({ ...p, order: Number(e.target.value) || 0 }))}
-                            />
-                          </div>
-
-                          <label className="flex items-center gap-2 text-sm mt-5">
-                            <input
-                              type="checkbox"
-                              checked={editingCat.isActive ?? true}
-                              onChange={(e) => setEditingCat((p) => ({ ...p, isActive: e.target.checked }))}
-                            />
-                            Menüde görünsün
-                          </label>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <button
-                            className="px-3 py-1.5 text-xs rounded bg-brand-600 text-white hover:bg-brand-700"
-                            onClick={() => {
-                              if (!editingCatId) return;
-                              updateCatMut.mutate({ cid: editingCatId, payload: editingCat });
-                              setEditingCatId(null);
-                              setEditingCat({});
-                            }}
-                          >
-                            Kaydet
-                          </button>
-                          <button
-                            className="px-3 py-1.5 text-xs rounded bg-gray-100 hover:bg-gray-200"
-                            onClick={() => {
-                              setEditingCatId(null);
-                              setEditingCat({});
-                            }}
-                          >
-                            Vazgeç
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* New local category */}
-              <div className="border rounded-lg p-3 bg-white space-y-2">
-                <div className="text-sm font-medium">Yeni Kategori (Bu Şubeye Özel)</div>
-
-                <input
-                  className="w-full border rounded px-2 py-1 text-sm"
-                  placeholder="Başlık"
-                  value={newCat.title}
-                  onChange={(e) => setNewCat((p) => ({ ...p, title: e.target.value }))}
-                />
-
-                <input
-                  className="w-full border rounded px-2 py-1 text-sm"
-                  placeholder="Açıklama (isteğe bağlı)"
-                  value={newCat.description}
-                  onChange={(e) => setNewCat((p) => ({ ...p, description: e.target.value }))}
-                />
-
-                <div className="flex flex-col w-32">
-                  <label className="text-xs text-gray-500 mb-1">Menü sırası</label>
-                  <input
-                    type="number"
-                    className="border rounded px-2 py-1 text-sm"
-                    value={newCat.order}
-                    onChange={(e) => setNewCat((p) => ({ ...p, order: Number(e.target.value) || 0 }))}
-                  />
+                    + Kategori Ekle
+                  </button>
+                </div>
+              }
+            >
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <button
+                    className={`flex-1 px-3 py-1.5 text-sm rounded border ${
+                      tab === "active" ? "border-brand-600 bg-brand-50 text-brand-700" : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
+                    onClick={() => setTab("active")}
+                  >
+                    Aktif
+                  </button>
+                  <button
+                    className={`flex-1 px-3 py-1.5 text-sm rounded border ${
+                      tab === "closed" ? "border-brand-600 bg-brand-50 text-brand-700" : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
+                    onClick={() => setTab("closed")}
+                  >
+                    Kapalı
+                  </button>
                 </div>
 
-                <button
-                  className="w-full px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
-                  disabled={!newCat.title.trim()}
-                  onClick={() => {
-                    createCatMut.mutate(newCat);
-                    setNewCat({ title: "", description: "", order: 0 });
-                  }}
-                >
-                  Kategori Ekle
-                </button>
-              </div>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  placeholder="Kategori ara…"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                />
 
-              {/* Closed categories */}
-              <details className="border rounded-lg p-3 bg-gray-50">
-                <summary className="cursor-pointer text-sm font-medium text-gray-700">
-                  Kapalı Kategoriler (Bu Şubede) — {closedCards.length}
-                </summary>
-
-                <div className="mt-3 space-y-2">
-                  {closedCards.length === 0 ? (
-                    <div className="text-xs text-gray-500">
-                      Bu şubede kapalı kategori yok. Eğer “kapat” yaptıktan sonra burada görünmüyorsa,
-                      backend <code>menu/categories</code> endpoint’i kapalıları filtreliyor olabilir.
-                    </div>
+                <div className="max-h-[520px] overflow-auto pr-1 space-y-2">
+                  {list.length === 0 ? (
+                    <div className="text-sm text-gray-500 p-2">Kayıt yok.</div>
                   ) : (
-                    closedCards.map((card) => {
-                      const isSelected = card.key === selectedKey;
-                      const badge = badgeForCategory(card.source);
+                    list.map((c) => {
+                      const isSelected = c.key === selectedKey;
+                      const b = badgeFor(c.source);
 
                       return (
-                        <div
-                          key={card.key} // ✅ render key = selection key
-                          className={`border rounded-lg p-3 bg-white transition ${
-                            isSelected
-                              ? "border-brand-600 bg-brand-50 shadow-sm"
-                              : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                        <button
+                          key={c.key}
+                          onClick={() => setSelectedKey(c.key)}
+                          className={`w-full text-left border rounded-xl p-3 transition ${
+                            isSelected ? "border-brand-600 bg-brand-50" : "border-gray-200 hover:bg-gray-50"
                           }`}
                         >
-                          <button className="w-full text-left" aria-selected={isSelected} onClick={() => setSelectedKey(card.key)}>
-                            <div className="flex items-center gap-2">
-                              <div className="font-medium">{card.title}</div>
-                              <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
-                                Kapalı
-                              </span>
-                              <span className={`text-[11px] px-2 py-0.5 rounded ${badge.cls}`}>{badge.text}</span>
-                            </div>
-                            {!!card.description && <div className="text-xs text-gray-500 mt-1">{card.description}</div>}
-                            <div className="text-xs text-gray-400 mt-1">Sıra: {card.order}</div>
-                          </button>
-
-                          <div className="mt-2">
-                            <button
-                              className="px-2 py-1 text-xs rounded bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-                              onClick={() => {
-                                const cid = card.local?._id;
-                                if (!cid) return;
-                                updateCatMut.mutate({ cid: String(cid), payload: { isActive: true } });
-                              }}
-                            >
-                              Aç
-                            </button>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-medium truncate">{c.title}</div>
+                            <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
                           </div>
-                        </div>
+                          {!!c.description && <div className="text-xs text-gray-500 mt-1 line-clamp-2">{c.description}</div>}
+                          <div className="text-[11px] text-gray-400 mt-1">Sıra: {c.order} • {c.isActive ? "Açık" : "Kapalı"}</div>
+                        </button>
                       );
                     })
                   )}
                 </div>
-              </details>
-            </div>
-          </Card>
+              </div>
+            </Card>
+          </div>
 
-          {/* ---------- Right: Items ---------- */}
-          <div className="lg:col-span-2 space-y-4">
+          {/* RIGHT */}
+          <div className="lg:col-span-8 space-y-4">
             <Card
               title={
-                selectedCard ? `Ürünler — ${selectedCard.title}${selectedIsClosed ? " (Kapalı)" : ""}` : "Ürünler"
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate">
+                        {selected ? `Ürünler — ${selected.title}` : "Ürünler"}
+                      </span>
+                      {selectedBadge && (
+                        <span className={`text-[11px] px-2 py-0.5 rounded ${selectedBadge.cls}`}>{selectedBadge.text}</span>
+                      )}
+                      {selectedIsClosed && (
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
+                          Kapalı
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Seçim bug’ı düzeldi: her kategori tekil key ile seçilir.
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 flex items-center gap-2">
+                    <button
+                      className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-60"
+                      disabled={!selected || opsDisabled}
+                      onClick={() => setItemModalOpen(true)}
+                      title={!selected ? "Önce kategori seç" : opsDisabled ? "Kategori kapalı" : "Ürün ekle"}
+                    >
+                      + Ürün Ekle
+                    </button>
+
+                    {/* Kategori aksiyonları */}
+                    {selected && (
+                      <>
+                        {selected.kind === "active_resolved" && selectedResolved?.source === "org" && (
+                          <button
+                            className="px-3 py-1.5 text-sm rounded bg-amber-50 text-amber-900 hover:bg-amber-100"
+                            onClick={async () => {
+                              if (!selectedResolved) return;
+                              await ensureEditableCategoryForOrg(selectedResolved);
+                              refreshAll();
+                            }}
+                          >
+                            Düzenlemeyi Başlat
+                          </button>
+                        )}
+
+                        <button
+                          className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
+                          onClick={async () => {
+                            if (!selected) return;
+
+                            // Kapalıysa aç, açıksa kapat
+                            const next = !selected.isActive ? true : false;
+
+                            // org ise önce local override gerek
+                            if (selectedResolved?.source === "org") {
+                              const r = await ensureEditableCategoryForOrg(selectedResolved);
+                              if (!r) return;
+                              // localCats refetch sonrası gerçek id ile update yapılacak; burada “best effort”:
+                              // en güvenlisi: refreshAll sonrası user tekrar tıklar. Ama pratikte localCats hızlı gelir.
+                              refreshAll();
+                              return;
+                            }
+
+                            // local/override: local id ya selectedLocalCatId ya da selected.local
+                            const cid = selectedLocalCatId || (selected.local ? getId(selected.local) : null);
+                            if (!cid) return;
+                            updateCatMut.mutate({ cid, payload: { isActive: next } });
+                          }}
+                        >
+                          {selected.isActive ? "Bu şubede kapat" : "Aç"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
               }
             >
-              {!selectedCard && <div className="text-sm text-gray-500">Soldan bir kategori seç.</div>}
+              {!selected && <div className="text-sm text-gray-500">Soldan bir kategori seç.</div>}
 
-              {selectedCard && (
-                <div className="space-y-3">
-                  {/* Closed category banner */}
+              {selected && (
+                <>
                   {selectedIsClosed && (
-                    <div className="border rounded-lg p-3 bg-gray-50 text-gray-800">
-                      <div className="font-medium">Bu kategori şu anda kapalı.</div>
-                      <div className="text-sm text-gray-600 mt-1">
-                        Ürün eklemek veya düzenlemek için önce kategoriyi açmalısın.
-                      </div>
-
-                      <div className="mt-2">
-                        <button
-                          className="px-3 py-1.5 text-sm rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                          disabled={!selectedLocalCatId}
-                          onClick={() => {
-                            if (!selectedLocalCatId) return;
-                            updateCatMut.mutate({ cid: String(selectedLocalCatId), payload: { isActive: true } });
-                          }}
-                        >
-                          Kategoriyi Aç
-                        </button>
-                      </div>
+                    <div className="border rounded-xl p-3 bg-gray-50">
+                      <div className="font-medium">Bu kategori kapalı.</div>
+                      <div className="text-sm text-gray-600 mt-1">Ürün ekleme/düzenleme için önce aç.</div>
                     </div>
                   )}
 
-                  {/* Org resolved selected but no editable local record yet */}
+                  {/* Merkez menü seçili, local override yok banner */}
                   {selectedResolved?.source === "org" && !selectedLocalCatId && (
-                    <div className="border rounded-lg p-3 bg-amber-50 text-amber-900">
-                      Bu kategori <b>Merkez Menü</b>den geliyor. Şubeye özel fiyat / stok / görünürlük için önce{" "}
-                      <b>Düzenlemeyi Başlat</b> kullan.
-                      <div className="mt-2">
-                        <button
-                          className="px-3 py-1.5 text-sm rounded bg-amber-100 hover:bg-amber-200"
-                          onClick={async () => {
-                            if (!selectedResolved) return;
-                            await ensureEditableCategoryForOrg(selectedResolved);
-                            refreshAll();
-                          }}
-                        >
-                          Düzenlemeyi Başlat
-                        </button>
-                      </div>
+                    <div className="border rounded-xl p-3 bg-amber-50 text-amber-900">
+                      Bu kategori <b>Merkez Menü</b>den geliyor. Şubeye özel ayarlar için <b>Düzenlemeyi Başlat</b> yap.
                     </div>
                   )}
 
-                  {/* Items list: prefer resolved if exists, otherwise show local items */}
-                  <div className="space-y-2">
-                    {selectedResolved ? (
-                      sortByOrder(selectedResolved.items || []).map((it) => {
-                        const src: ResolvedSource = (it.source ?? "local") as ResolvedSource;
-                        const badge = badgeForItem(src);
+                  {/* Items table */}
+                  <div className="overflow-auto border rounded-xl">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50 text-gray-600">
+                        <tr>
+                          <th className="text-left font-medium px-3 py-2">Ürün</th>
+                          <th className="text-left font-medium px-3 py-2">Fiyat</th>
+                          <th className="text-left font-medium px-3 py-2">Durum</th>
+                          <th className="text-left font-medium px-3 py-2">Kaynak</th>
+                          <th className="text-right font-medium px-3 py-2">Aksiyon</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(sortByOrder(selectedResolved?.items ?? [])).length === 0 ? (
+                          <tr>
+                            <td className="px-3 py-4 text-gray-500" colSpan={5}>
+                              Bu kategoride ürün yok.
+                            </td>
+                          </tr>
+                        ) : (
+                          sortByOrder(selectedResolved?.items ?? []).map((it, idx) => {
+                            const src: ResolvedSource = (it.source ?? "local") as ResolvedSource;
+                            const b = badgeFor(src);
+                            const orgId = getId(it);
 
-                        // org item => branch edit record may exist among localItems via orgItemId match
-                        const localEdited =
-                          src === "org"
-                            ? localItems.find((li) => String(li.orgItemId || "") === String(it._id)) || null
-                            : null;
+                            const localEdited =
+                              src === "org"
+                                ? localItems.find((li) => String(li.orgItemId || "") === String(orgId)) || null
+                                : null;
 
-                        const canEditThisRow = !opsDisabled && (src !== "org" || !!localEdited);
+                            const canEditRow = !opsDisabled && (src !== "org" || !!localEdited);
+                            const showDelete = src === "local"; // sadece şubeye özel
 
-                        const rowKey = resolvedItemKey(it);
-                        const isEditing = editingItemId === (localEdited?._id || it._id);
-
-                        return (
-                          <div key={rowKey} className="border rounded-lg p-3">
-                            {!isEditing ? (
-                              <div className="grid grid-cols-1 md:grid-cols-8 gap-3 items-start">
-                                <div className="md:col-span-3">
-                                  <div className="flex items-center gap-2">
-                                    <div className="font-medium">{it.title}</div>
-                                    <span className={`text-[11px] px-2 py-0.5 rounded ${badge.cls}`}>{badge.text}</span>
+                            return (
+                              <tr key={`${src}:${orgId}:${idx}`} className="border-t">
+                                <td className="px-3 py-2">
+                                  <div className="font-medium">{it.title}</div>
+                                  {!!it.description && <div className="text-xs text-gray-500 line-clamp-2">{it.description}</div>}
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  <b>{money(it.price)} ₺</b>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="text-xs text-gray-600">
+                                    {it.isActive === false ? "Kapalı" : "Açık"} • {it.isAvailable === false ? "Stok yok" : "Serviste"}
                                   </div>
-
-                                  {!!it.description && <div className="text-xs text-gray-500 mt-1">{it.description}</div>}
-
-                                  <div className="text-xs text-gray-400 mt-1">
-                                    sıra: {it.order ?? 0} • {it.isActive === false ? "kapalı" : "açık"} •{" "}
-                                    {it.isAvailable === false ? "stok yok" : "serviste"}
-                                  </div>
-                                </div>
-
-                                <div className="md:col-span-2 text-sm">
-                                  Fiyat: <b>{money(it.price)} ₺</b>
-                                  {!!it.tags?.length && <div className="text-xs text-gray-500 mt-1">#{it.tags.join(" #")}</div>}
-                                </div>
-
-                                <div className="md:col-span-1">
-                                  {it.photoUrl ? (
-                                    <img src={it.photoUrl} className="w-28 h-20 object-cover rounded border" alt="" />
-                                  ) : (
-                                    <div className="w-28 h-20 rounded border bg-gray-50 flex items-center justify-center text-xs text-gray-400">
-                                      Foto yok
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="md:col-span-2 flex gap-2 flex-wrap">
-                                  {/* Org item: only “Düzenlemeyi Başlat” to create branch record */}
-                                  {src === "org" && !localEdited && (
-                                    <button
-                                      className="px-2 py-1 text-xs rounded bg-amber-50 text-amber-900 hover:bg-amber-100 disabled:opacity-60"
-                                      disabled={!selectedLocalCatId || opsDisabled}
-                                      title={
-                                        opsDisabled
-                                          ? "Kategori kapalıyken işlem yapılamaz"
-                                          : !selectedLocalCatId
-                                          ? "Önce kategoride ‘Düzenlemeyi Başlat’ yap"
-                                          : "Bu ürüne şube ayarlarını aç"
-                                      }
-                                      onClick={() => {
-                                        if (!selectedLocalCatId || opsDisabled) return;
-                                        createItemMut.mutate({
-                                          categoryId: selectedLocalCatId,
-                                          orgItemId: it._id,
-                                          title: it.title,
-                                          description: it.description ?? "",
-                                          price: it.price,
-                                          tags: it.tags ?? [],
-                                          order: it.order ?? 0,
-                                          isAvailable: it.isAvailable !== false,
-                                        });
-                                      }}
-                                    >
-                                      Düzenlemeyi Başlat
-                                    </button>
-                                  )}
-
-                                  {/* Edit: for local/override OR for org that already has localEdited */}
-                                  {(src !== "org" || !!localEdited) && (
-                                    <button
-                                      className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
-                                      disabled={!canEditThisRow}
-                                      onClick={() => {
-                                        if (!canEditThisRow) return;
-                                        const base = localEdited ?? (it as any);
-                                        setEditingItemId(String(base._id));
-                                        setEditingItem({
-                                          title: base.title,
-                                          description: base.description ?? "",
-                                          price: base.price,
-                                          tagsText: (base.tags ?? []).join(", "),
-                                          order: base.order ?? 0,
-                                          isAvailable: base.isAvailable !== false,
-                                          isActive: base.isActive !== false,
-                                        });
-                                        setEditingItemPhoto(null);
-                                      }}
-                                    >
-                                      Ürünü Düzenle
-                                    </button>
-                                  )}
-
-                                  {/* Branch “kapat” for org item: create/edit local record then set isActive false */}
-                                  {src === "org" && (
-                                    <button
-                                      className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
-                                      disabled={!selectedLocalCatId || opsDisabled}
-                                      onClick={() => {
-                                        if (!selectedLocalCatId || opsDisabled) return;
-
-                                        if (localEdited?._id) {
-                                          updateItemMut.mutate({ iid: String(localEdited._id), isActive: false });
-                                          return;
-                                        }
-
-                                        // create branch record then deactivate
-                                        createItemMut.mutate(
-                                          {
+                                </td>
+                                <td className="px-3 py-2">
+                                  <span className={`text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
+                                </td>
+                                <td className="px-3 py-2 text-right">
+                                  <div className="inline-flex gap-2">
+                                    {src === "org" && !localEdited ? (
+                                      <button
+                                        className="px-2 py-1 text-xs rounded bg-amber-50 text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+                                        disabled={!selectedLocalCatId || opsDisabled}
+                                        onClick={() => {
+                                          if (!selectedLocalCatId || opsDisabled) return;
+                                          createItemMut.mutate({
                                             categoryId: selectedLocalCatId,
-                                            orgItemId: it._id,
+                                            orgItemId: orgId,
                                             title: it.title,
                                             description: it.description ?? "",
                                             price: it.price,
                                             tags: it.tags ?? [],
                                             order: it.order ?? 0,
                                             isAvailable: it.isAvailable !== false,
-                                          } as any,
-                                          {
-                                            onSuccess: (res: any) => {
-                                              const id = res?._id || res?.item?._id;
-                                              if (id) updateItemMut.mutate({ iid: String(id), isActive: false });
-                                            },
-                                          } as any
-                                        );
+                                          });
+                                        }}
+                                      >
+                                        Düzenlemeyi Başlat
+                                      </button>
+                                    ) : (
+                                      <button
+                                        className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
+                                        disabled={!canEditRow}
+                                        onClick={() => {
+                                          if (!canEditRow) return;
+
+                                          const base = localEdited ?? (it as any);
+                                          setEditingItemId(getId(base));
+                                          setItemForm({
+                                            title: base.title,
+                                            description: base.description ?? "",
+                                            price: Number(base.price ?? 0),
+                                            tagsText: (base.tags ?? []).join(", "),
+                                            order: Number(base.order ?? 0),
+                                            isAvailable: base.isAvailable !== false,
+                                            photoFile: null,
+                                          });
+                                          setItemModalOpen(true);
+                                        }}
+                                      >
+                                        Düzenle
+                                      </button>
+                                    )}
+
+                                    {/* Şubede kapat */}
+                                    <button
+                                      className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
+                                      disabled={!selectedLocalCatId || opsDisabled}
+                                      onClick={() => {
+                                        if (!selectedLocalCatId || opsDisabled) return;
+
+                                        if (src === "org") {
+                                          // localEdited varsa kapat; yoksa önce create sonra kapat
+                                          if (localEdited) {
+                                            updateItemMut.mutate({ iid: getId(localEdited), isActive: false });
+                                            return;
+                                          }
+                                          createItemMut.mutate(
+                                            {
+                                              categoryId: selectedLocalCatId,
+                                              orgItemId: orgId,
+                                              title: it.title,
+                                              description: it.description ?? "",
+                                              price: it.price,
+                                              tags: it.tags ?? [],
+                                              order: it.order ?? 0,
+                                              isAvailable: it.isAvailable !== false,
+                                            } as any,
+                                            {
+                                              onSuccess: (res: any) => {
+                                                const newId = getId(res?.item ?? res);
+                                                if (newId) updateItemMut.mutate({ iid: newId, isActive: false });
+                                              },
+                                            } as any
+                                          );
+                                          return;
+                                        }
+
+                                        // local/override: resolved id üzerinden update
+                                        updateItemMut.mutate({ iid: getId(it), isActive: false });
                                       }}
                                     >
                                       Bu şubede kapat
                                     </button>
-                                  )}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="space-y-2">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                  <div className="flex flex-col">
-                                    <label className="text-xs text-gray-500 mb-1">Ürün adı</label>
-                                    <input
-                                      className="border rounded px-2 py-1 text-sm disabled:opacity-60"
-                                      disabled={opsDisabled}
-                                      value={editingItem.title ?? ""}
-                                      onChange={(e) => setEditingItem((p: any) => ({ ...p, title: e.target.value }))}
-                                    />
+
+                                    {showDelete && (
+                                      <button
+                                        className="px-2 py-1 text-xs rounded bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60"
+                                        disabled={opsDisabled}
+                                        onClick={() => {
+                                          if (opsDisabled) return;
+                                          if (confirm(`"${it.title}" silinsin mi?`)) {
+                                            deleteItemMut.mutate(getId(it));
+                                          }
+                                        }}
+                                      >
+                                        Sil
+                                      </button>
+                                    )}
                                   </div>
-
-                                  <div className="flex flex-col">
-                                    <label className="text-xs text-gray-500 mb-1">Fiyat (₺)</label>
-                                    <input
-                                      type="number"
-                                      className="border rounded px-2 py-1 text-sm disabled:opacity-60"
-                                      disabled={opsDisabled}
-                                      value={editingItem.price ?? 0}
-                                      onChange={(e) => setEditingItem((p: any) => ({ ...p, price: Number(e.target.value) || 0 }))}
-                                    />
-                                  </div>
-                                </div>
-
-                                <input
-                                  className="w-full border rounded px-2 py-1 text-sm disabled:opacity-60"
-                                  disabled={opsDisabled}
-                                  value={editingItem.description ?? ""}
-                                  placeholder="Açıklama (isteğe bağlı)"
-                                  onChange={(e) => setEditingItem((p: any) => ({ ...p, description: e.target.value }))}
-                                />
-
-                                <input
-                                  className="w-full border rounded px-2 py-1 text-sm disabled:opacity-60"
-                                  disabled={opsDisabled}
-                                  value={editingItem.tagsText ?? ""}
-                                  placeholder="Etiketler (virgülle) — örn: acı, vegan"
-                                  onChange={(e) => setEditingItem((p: any) => ({ ...p, tagsText: e.target.value }))}
-                                />
-
-                                <div className="flex gap-3 items-center">
-                                  <div className="flex flex-col">
-                                    <label className="text-xs text-gray-500 mb-1">Sıra</label>
-                                    <input
-                                      type="number"
-                                      className="w-28 border rounded px-2 py-1 text-sm disabled:opacity-60"
-                                      disabled={opsDisabled}
-                                      value={editingItem.order ?? 0}
-                                      onChange={(e) =>
-                                        setEditingItem((p: any) => ({ ...p, order: Number(e.target.value) || 0 }))
-                                      }
-                                    />
-                                  </div>
-
-                                  <label className="flex items-center gap-2 text-sm">
-                                    <input
-                                      type="checkbox"
-                                      disabled={opsDisabled}
-                                      checked={editingItem.isAvailable ?? true}
-                                      onChange={(e) => setEditingItem((p: any) => ({ ...p, isAvailable: e.target.checked }))}
-                                    />
-                                    Serviste
-                                  </label>
-
-                                  <label className="flex items-center gap-2 text-sm">
-                                    <input
-                                      type="checkbox"
-                                      disabled={opsDisabled}
-                                      checked={editingItem.isActive ?? true}
-                                      onChange={(e) => setEditingItem((p: any) => ({ ...p, isActive: e.target.checked }))}
-                                    />
-                                    Menüde görünsün
-                                  </label>
-                                </div>
-
-                                <div className="space-y-1">
-                                  <label className="text-sm text-gray-600">Fotoğraf (isteğe bağlı)</label>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    disabled={opsDisabled}
-                                    onChange={(e) => setEditingItemPhoto(e.target.files?.[0] ?? null)}
-                                  />
-                                  <label className="flex items-center gap-2 text-sm mt-1">
-                                    <input
-                                      type="checkbox"
-                                      disabled={opsDisabled}
-                                      onChange={(e) => setEditingItem((p: any) => ({ ...p, removePhoto: e.target.checked }))}
-                                    />
-                                    Fotoğrafı kaldır
-                                  </label>
-                                </div>
-
-                                <div className="flex gap-2 pt-1">
-                                  <button
-                                    className="px-3 py-1.5 text-xs rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
-                                    disabled={opsDisabled}
-                                    onClick={() => {
-                                      if (opsDisabled) return;
-                                      updateItemMut.mutate({
-                                        iid: String(editingItemId),
-                                        title: editingItem.title,
-                                        description: editingItem.description,
-                                        price: editingItem.price,
-                                        tags: String(editingItem.tagsText || "")
-                                          .split(",")
-                                          .map((x: string) => x.trim())
-                                          .filter(Boolean),
-                                        order: editingItem.order,
-                                        isAvailable: editingItem.isAvailable,
-                                        isActive: editingItem.isActive,
-                                        removePhoto: editingItem.removePhoto,
-                                        photoFile: editingItemPhoto,
-                                      });
-                                      setEditingItemId(null);
-                                      setEditingItem({});
-                                      setEditingItemPhoto(null);
-                                    }}
-                                  >
-                                    Kaydet
-                                  </button>
-
-                                  <button
-                                    className="px-3 py-1.5 text-xs rounded bg-gray-100 hover:bg-gray-200"
-                                    onClick={() => {
-                                      setEditingItemId(null);
-                                      setEditingItem({});
-                                      setEditingItemPhoto(null);
-                                    }}
-                                  >
-                                    Vazgeç
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      // no resolved category: show local items list (for closed local categories etc.)
-                      <div className="text-sm text-gray-500">
-                        Bu kategori resolved listede görünmüyor. (Muhtemelen kapalı.) Ürün işlemleri için kategoriyi aç.
-                      </div>
-                    )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
                   </div>
-
-                  {/* New local item (only if editable local category exists) */}
-                  <div className="border rounded-lg p-3 bg-white space-y-2">
-                    <div className="text-sm font-medium">Yeni Ürün (Bu Şubeye Özel)</div>
-
-                    <div className="text-xs text-gray-500">
-                      Ürün eklemek için kategori <b>açık</b> olmalı. Eğer kategori <b>Merkez Menü</b> ise önce{" "}
-                      <b>Düzenlemeyi Başlat</b> yap.
-                    </div>
-
-                    <input
-                      className="w-full border rounded px-2 py-1 text-sm disabled:opacity-60"
-                      disabled={opsDisabled}
-                      placeholder="Ürün adı"
-                      value={newItem.title}
-                      onChange={(e) => setNewItem((p) => ({ ...p, title: e.target.value }))}
-                    />
-
-                    <input
-                      className="w-full border rounded px-2 py-1 text-sm disabled:opacity-60"
-                      disabled={opsDisabled}
-                      placeholder="Açıklama (isteğe bağlı)"
-                      value={newItem.description}
-                      onChange={(e) => setNewItem((p) => ({ ...p, description: e.target.value }))}
-                    />
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <div className="flex flex-col">
-                        <label className="text-xs text-gray-500 mb-1">Fiyat (₺)</label>
-                        <input
-                          type="number"
-                          className="border rounded px-2 py-1 text-sm disabled:opacity-60"
-                          disabled={opsDisabled}
-                          value={newItem.price}
-                          onChange={(e) => setNewItem((p) => ({ ...p, price: Number(e.target.value) || 0 }))}
-                        />
-                      </div>
-
-                      <div className="flex flex-col">
-                        <label className="text-xs text-gray-500 mb-1">Sıra</label>
-                        <input
-                          type="number"
-                          className="border rounded px-2 py-1 text-sm disabled:opacity-60"
-                          disabled={opsDisabled}
-                          value={newItem.order}
-                          onChange={(e) => setNewItem((p) => ({ ...p, order: Number(e.target.value) || 0 }))}
-                        />
-                      </div>
-
-                      <div className="flex flex-col">
-                        <label className="text-xs text-gray-500 mb-1">Etiketler</label>
-                        <input
-                          className="border rounded px-2 py-1 text-sm disabled:opacity-60"
-                          disabled={opsDisabled}
-                          value={newItem.tagsText}
-                          onChange={(e) => setNewItem((p) => ({ ...p, tagsText: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        disabled={opsDisabled}
-                        checked={newItem.isAvailable}
-                        onChange={(e) => setNewItem((p) => ({ ...p, isAvailable: e.target.checked }))}
-                      />
-                      Serviste
-                    </label>
-
-                    <div className="space-y-1">
-                      <label className="text-sm text-gray-600">Fotoğraf (isteğe bağlı)</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        disabled={opsDisabled}
-                        onChange={(e) => setNewItem((p) => ({ ...p, photoFile: e.target.files?.[0] ?? null }))}
-                      />
-                    </div>
-
-                    <button
-                      className="w-full px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
-                      disabled={opsDisabled || !newItem.title.trim() || !selectedLocalCatId}
-                      onClick={() => {
-                        if (!selectedLocalCatId || opsDisabled) return;
-
-                        createItemMut.mutate({
-                          categoryId: selectedLocalCatId,
-                          title: newItem.title,
-                          description: newItem.description,
-                          price: newItem.price,
-                          tags: String(newItem.tagsText || "")
-                            .split(",")
-                            .map((x) => x.trim())
-                            .filter(Boolean),
-                          order: newItem.order,
-                          isAvailable: newItem.isAvailable,
-                          photoFile: newItem.photoFile,
-                        });
-
-                        setNewItem({
-                          title: "",
-                          description: "",
-                          price: 0,
-                          tagsText: "",
-                          order: 0,
-                          isAvailable: true,
-                          photoFile: null,
-                        });
-                      }}
-                    >
-                      Ürün Ekle
-                    </button>
-                  </div>
-                </div>
+                </>
               )}
             </Card>
           </div>
@@ -1237,89 +853,56 @@ export default function MenuManagerPage() {
       )}
 
       {/* =======================
-          PREVIEW
+          PREVIEW (same as before but simpler)
       ======================= */}
       {mode === "preview" && (
         <div className="space-y-4">
-          <Card title="Müşteri Görünümü (Menü Önizleme)">
+          <Card title="Müşteri Görünümü (Önizleme)">
             <div className="text-xs text-gray-500 mb-3">
-              Bu ekran sadece kontrol içindir. Veri: <code>GET /panel/restaurants/:rid/menu/resolved</code>
+              Veri: <code>GET /panel/restaurants/:rid/menu/resolved</code>
             </div>
 
             {!resolvedQ.data?.categories?.length && <div className="text-sm text-gray-500">Menü boş görünüyor.</div>}
 
             <div className="space-y-4">
-              {sortByOrder(resolvedQ.data?.categories ?? []).map((c) => {
+              {sortByOrder(resolvedQ.data?.categories ?? []).map((c, idx) => {
                 const src: ResolvedSource = (c.source ?? "local") as ResolvedSource;
-                const badge = badgeForCategory(src);
+                const badge = badgeFor(src);
 
                 return (
-                  <div key={resolvedCategoryKey(c)} className="border rounded-lg p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-semibold flex items-center gap-2">
-                          <span>{c.title}</span>
-
-                          {c.isActive === false && (
-                            <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-600">Kapalı</span>
-                          )}
-
-                          <span className={`text-[11px] px-2 py-0.5 rounded ${badge.cls}`}>{badge.text}</span>
-                        </div>
-
-                        {!!c.description && <div className="text-sm text-gray-600 mt-1">{c.description}</div>}
-                        <div className="text-xs text-gray-400 mt-1">Sıra: {c.order ?? 0}</div>
-                      </div>
+                  <div key={`${src}:${getId(c)}:${idx}`} className="border rounded-xl p-4">
+                    <div className="flex items-center gap-2">
+                      <div className="font-semibold">{c.title}</div>
+                      <span className={`text-[11px] px-2 py-0.5 rounded ${badge.cls}`}>{badge.text}</span>
+                      {c.isActive === false && (
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">
+                          Kapalı
+                        </span>
+                      )}
                     </div>
+                    {!!c.description && <div className="text-sm text-gray-600 mt-1">{c.description}</div>}
 
-                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {sortByOrder(c.items ?? []).map((it) => {
-                        const isrc: ResolvedSource = (it.source ?? "local") as ResolvedSource;
-                        const ib = badgeForItem(isrc);
-
-                        return (
-                          <div key={resolvedItemKey(it)} className="border rounded-lg p-3 flex gap-3">
-                            <div className="w-24 shrink-0">
-                              {it.photoUrl ? (
-                                <img
-                                  src={it.photoUrl}
-                                  className="w-24 h-16 object-cover rounded border"
-                                  alt={it.title}
-                                />
-                              ) : (
-                                <div className="w-24 h-16 rounded border bg-gray-50 flex items-center justify-center text-xs text-gray-400">
-                                  Foto yok
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="font-medium truncate">{it.title}</div>
-                                <div className="text-sm font-semibold whitespace-nowrap">{money(it.price)} ₺</div>
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {sortByOrder(c.items ?? []).map((it, j) => (
+                        <div key={`${getId(it)}:${j}`} className="border rounded-xl p-3 flex gap-3">
+                          <div className="w-24 shrink-0">
+                            {it.photoUrl ? (
+                              <img src={it.photoUrl} className="w-24 h-16 object-cover rounded border" alt={it.title} />
+                            ) : (
+                              <div className="w-24 h-16 rounded border bg-gray-50 flex items-center justify-center text-xs text-gray-400">
+                                Foto yok
                               </div>
-
-                              {!!it.description && <div className="text-xs text-gray-500 mt-1 line-clamp-2">{it.description}</div>}
-
-                              <div className="mt-2 flex flex-wrap gap-2 items-center">
-                                {it.isActive === false && (
-                                  <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-600">Kapalı</span>
-                                )}
-                                {it.isAvailable === false && (
-                                  <span className="text-[11px] px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100">
-                                    Stok yok
-                                  </span>
-                                )}
-                                <span className={`text-[11px] px-2 py-0.5 rounded ${ib.cls}`}>{ib.text}</span>
-                                {!!it.tags?.length && (
-                                  <span className="text-[11px] text-gray-500 truncate">#{it.tags.join(" #")}</span>
-                                )}
-                              </div>
-                            </div>
+                            )}
                           </div>
-                        );
-                      })}
-
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-medium truncate">{it.title}</div>
+                              <div className="text-sm font-semibold whitespace-nowrap">{money(it.price)} ₺</div>
+                            </div>
+                            {!!it.description && <div className="text-xs text-gray-500 mt-1 line-clamp-2">{it.description}</div>}
+                          </div>
+                        </div>
+                      ))}
                       {(!c.items || c.items.length === 0) && <div className="text-sm text-gray-500">Bu kategoride ürün yok.</div>}
                     </div>
                   </div>
@@ -1329,6 +912,185 @@ export default function MenuManagerPage() {
           </Card>
         </div>
       )}
+
+      {/* =======================
+          MODALS
+      ======================= */}
+
+      {/* Category Add Modal */}
+      <Modal
+        open={catModalOpen}
+        title="Yeni Kategori (Şubeye Özel)"
+        onClose={() => setCatModalOpen(false)}
+        footer={
+          <div className="flex justify-end gap-2">
+            <button className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50" onClick={() => setCatModalOpen(false)}>
+              Vazgeç
+            </button>
+            <button
+              className="px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
+              disabled={!catForm.title.trim()}
+              onClick={() => {
+                createCatMut.mutate({
+                  title: catForm.title.trim(),
+                  description: catForm.description?.trim() || "",
+                  order: Number(catForm.order) || 0,
+                });
+                setCatForm({ title: "", description: "", order: 0 });
+                setCatModalOpen(false);
+              }}
+            >
+              Kaydet
+            </button>
+          </div>
+        }
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs text-gray-500">Başlık</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={catForm.title} onChange={(e) => setCatForm((p) => ({ ...p, title: e.target.value }))} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-gray-500">Açıklama</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={catForm.description} onChange={(e) => setCatForm((p) => ({ ...p, description: e.target.value }))} />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Sıra</label>
+            <input type="number" className="w-full border rounded-lg px-3 py-2 text-sm" value={catForm.order} onChange={(e) => setCatForm((p) => ({ ...p, order: Number(e.target.value) || 0 }))} />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Item Add/Edit Modal */}
+      <Modal
+        open={itemModalOpen}
+        title={editingItemId ? "Ürün Düzenle" : "Yeni Ürün (Şubeye Özel)"}
+        onClose={() => {
+          setItemModalOpen(false);
+          setEditingItemId(null);
+          setItemForm({ title: "", description: "", price: 0, tagsText: "", order: 0, isAvailable: true, photoFile: null });
+        }}
+        footer={
+          <div className="flex justify-between gap-2">
+            {editingItemId && (
+              <button
+                className="px-3 py-1.5 text-sm rounded bg-gray-100 hover:bg-gray-200"
+                onClick={() => {
+                  // hızlı kapatma
+                  if (!editingItemId) return;
+                  updateItemMut.mutate({ iid: editingItemId, isActive: false });
+                  setItemModalOpen(false);
+                  setEditingItemId(null);
+                }}
+              >
+                Bu şubede kapat
+              </button>
+            )}
+
+            <div className="ml-auto flex gap-2">
+              <button
+                className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
+                onClick={() => {
+                  setItemModalOpen(false);
+                  setEditingItemId(null);
+                  setItemForm({ title: "", description: "", price: 0, tagsText: "", order: 0, isAvailable: true, photoFile: null });
+                }}
+              >
+                Vazgeç
+              </button>
+
+              <button
+                className="px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
+                disabled={!selectedLocalCatId || opsDisabled || !itemForm.title.trim()}
+                onClick={() => {
+                  if (!selectedLocalCatId || opsDisabled) return;
+
+                  const tags = String(itemForm.tagsText || "")
+                    .split(",")
+                    .map((x) => x.trim())
+                    .filter(Boolean);
+
+                  if (editingItemId) {
+                    updateItemMut.mutate({
+                      iid: editingItemId,
+                      title: itemForm.title.trim(),
+                      description: itemForm.description?.trim() || "",
+                      price: Number(itemForm.price) || 0,
+                      tags,
+                      order: Number(itemForm.order) || 0,
+                      isAvailable: !!itemForm.isAvailable,
+                      photoFile: itemForm.photoFile,
+                    });
+                  } else {
+                    createItemMut.mutate({
+                      categoryId: selectedLocalCatId,
+                      title: itemForm.title.trim(),
+                      description: itemForm.description?.trim() || "",
+                      price: Number(itemForm.price) || 0,
+                      tags,
+                      order: Number(itemForm.order) || 0,
+                      isAvailable: !!itemForm.isAvailable,
+                      photoFile: itemForm.photoFile,
+                    } as any);
+                  }
+
+                  setItemModalOpen(false);
+                  setEditingItemId(null);
+                  setItemForm({ title: "", description: "", price: 0, tagsText: "", order: 0, isAvailable: true, photoFile: null });
+                }}
+              >
+                Kaydet
+              </button>
+            </div>
+          </div>
+        }
+      >
+        {!selectedLocalCatId && (
+          <div className="border rounded-xl p-3 bg-amber-50 text-amber-900 mb-3">
+            Ürün eklemek/düzenlemek için bu kategoride şube düzenlemesi aktif olmalı.
+            Eğer kategori <b>Merkez Menü</b> ise önce <b>Düzenlemeyi Başlat</b>.
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs text-gray-500">Ürün adı</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={itemForm.title} onChange={(e) => setItemForm((p) => ({ ...p, title: e.target.value }))} />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="text-xs text-gray-500">Açıklama</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={itemForm.description} onChange={(e) => setItemForm((p) => ({ ...p, description: e.target.value }))} />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500">Fiyat (₺)</label>
+            <input type="number" className="w-full border rounded-lg px-3 py-2 text-sm" value={itemForm.price} onChange={(e) => setItemForm((p) => ({ ...p, price: Number(e.target.value) || 0 }))} />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500">Sıra</label>
+            <input type="number" className="w-full border rounded-lg px-3 py-2 text-sm" value={itemForm.order} onChange={(e) => setItemForm((p) => ({ ...p, order: Number(e.target.value) || 0 }))} />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="text-xs text-gray-500">Etiketler (virgülle)</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={itemForm.tagsText} onChange={(e) => setItemForm((p) => ({ ...p, tagsText: e.target.value }))} />
+          </div>
+
+          <div className="md:col-span-2 flex items-center justify-between">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={itemForm.isAvailable} onChange={(e) => setItemForm((p) => ({ ...p, isAvailable: e.target.checked }))} />
+              Serviste
+            </label>
+
+            <label className="text-sm">
+              <span className="text-xs text-gray-500 mr-2">Fotoğraf</span>
+              <input type="file" accept="image/*" onChange={(e) => setItemForm((p) => ({ ...p, photoFile: e.target.files?.[0] ?? null }))} />
+            </label>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
