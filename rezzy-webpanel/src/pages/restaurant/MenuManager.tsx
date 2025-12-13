@@ -487,13 +487,17 @@ export default function MenuManagerPage() {
     queryFn: () => restaurantListCategories(rid, { includeInactive: true }),
     enabled: !!rid,
   });
-
-  const resolvedQ = useQuery({
-    queryKey: ["menu-resolved", rid],
-    queryFn: () => restaurantGetResolvedMenu(rid,{ includeInactive: true }),
-    enabled: !!rid,
-  });
-
+const includeInactiveForManage = mode === "manage";
+const includeUnavailableForManage = mode === "manage";
+ const resolvedQ = useQuery({
+  queryKey: ["menu-resolved", rid, includeInactiveForManage, includeUnavailableForManage],
+  queryFn: () =>
+    restaurantGetResolvedMenu(rid, {
+      includeInactive: includeInactiveForManage,
+      includeUnavailable: includeUnavailableForManage,
+    }) as Promise<ResolvedMenuResponse>,
+  enabled: !!rid,
+});
   const localCats: LocalCategory[] = (localCatQ.data ?? []) as any;
   const resolvedCats: ResolvedMenuCategory[] = sortByOrder(resolvedQ.data?.categories ?? []);
 
@@ -537,6 +541,16 @@ export default function MenuManagerPage() {
   const selected = React.useMemo(() => all.find((x) => x.key === selectedKey) ?? null, [all, selectedKey]);
   const selectedResolved = selected?.resolved ?? null;
 
+  // Items tab (must be declared before any memo that uses it)
+  const [itemTab, setItemTab] = React.useState<"active" | "closed">("active");
+
+  // Selected resolved items filtered by tab
+  const selectedItems = React.useMemo(() => {
+    const items = sortByOrder(selectedResolved?.items ?? []);
+    if (itemTab === "closed") return items.filter((x) => x.isActive === false);
+    return items.filter((x) => x.isActive !== false);
+  }, [selectedResolved, itemTab]);
+
   // Local category mapping (sadece local CRUD için lazım)
   const selectedLocalCatId = React.useMemo(() => {
     if (!selectedResolved) return null;
@@ -564,7 +578,6 @@ export default function MenuManagerPage() {
     return all.filter((c) => norm(c.title).includes(qq) || norm(c.description || "").includes(qq));
   }, [all, q]);
 
-  const [itemTab, setItemTab] = React.useState<"active" | "closed">("active");
 
   // Mutations: Local category CRUD
   const createLocalCatMut = useMutation({
@@ -964,14 +977,14 @@ export default function MenuManagerPage() {
 
                       <tbody>
                         {itemTab === "active" ? (
-                          sortByOrder(selectedResolved.items ?? []).length === 0 ? (
+                          selectedItems.length === 0 ? (
                             <tr>
                               <td className="px-3 py-4 text-gray-500" colSpan={5}>
                                 Ürün yok.
                               </td>
                             </tr>
                           ) : (
-                            sortByOrder(selectedResolved.items ?? []).map((it, idx) => {
+                            selectedItems.map((it, idx) => {
                               const src = (it.source ?? "local") as ResolvedSource;
                               const b = badgeFor(src);
 
