@@ -78,6 +78,7 @@ app.use("/api/reservations/checkin", checkinLimiter);
 
 // Public restoran endpointleri (mobil app burayı kullanacak)
 app.use("/api/restaurants", restaurantRoutes);
+app.use("/api/restaurants", menuRoutes);
 
 // Panel / admin restoran endpointleri
 app.use("/api/panel/restaurants", panelRoutes);
