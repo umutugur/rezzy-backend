@@ -159,19 +159,37 @@ export const createReservation = async (req, res, next) => {
 
     // ✅ FIX MENÜ VARSA: eski hesap
     if (Array.isArray(selections) && selections.length > 0) {
-      const ids = selections.map((s) => s.menuId).filter(Boolean);
-      const menus = await Menu.find({ _id: { $in: ids }, isActive: true }).lean();
-      const priceMap = new Map(
-        menus.map((m) => [String(m._id), Number(m.pricePerPerson || 0)])
-      );
+      const ids = selections.map((s) => s.menuId).filter(Boolean).map(String);
 
-      const missing = ids.filter((id) => !priceMap.has(String(id)));
-      if (missing.length)
+      // ✅ 1) Öncelik: Restaurant dokümanındaki fix menüler (embedded)
+      const restMenus = Array.isArray(restaurant?.menus) ? restaurant.menus : [];
+      const priceMap = new Map();
+
+      if (restMenus.length > 0) {
+        for (const m of restMenus) {
+          const id = String(m?._id || "");
+          if (!id) continue;
+          // isActive default true
+          const isActive = m?.isActive !== false;
+          if (!isActive) continue;
+          priceMap.set(id, Number(m?.pricePerPerson || 0));
+        }
+      } else {
+        // ✅ 2) Fallback: Legacy Menu collection (eğer hâlâ kullanılıyorsa)
+        const menus = await Menu.find({ _id: { $in: ids }, isActive: true }).lean();
+        for (const m of menus) {
+          priceMap.set(String(m._id), Number(m.pricePerPerson || 0));
+        }
+      }
+
+      const missing = ids.filter((id) => !priceMap.has(id));
+      if (missing.length) {
         throw {
           status: 400,
           message: "Some menus are inactive or not found",
           detail: missing,
         };
+      }
 
       withPrices = selections.map((s) => ({
         person: Number(s.person) || 0,
@@ -183,11 +201,12 @@ export const createReservation = async (req, res, next) => {
       selectionMode = strict.mode;
       totalPrice = strict.totalPrice;
 
-      if (strict.partySize <= 0)
+      if (strict.partySize <= 0) {
         throw {
           status: 400,
           message: "partySize must be at least 1 based on selections",
         };
+      }
     }
 
     // ✅ FIX: partySize body’den geliyor (fix menüsüz akış için)
