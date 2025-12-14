@@ -13,6 +13,7 @@ import {
   updateItem,
   deleteItem,
   getResolvedMenuForPanel,
+  getResolvedMenuForPublic
 } from "../controllers/menu.controller.js";
 import {
   upsertCategoryOverride,
@@ -136,9 +137,16 @@ r.delete(
 
 r.get(
   "/:rid/menu/resolved",
+  auth(),
   allow("restaurant", "admin", "customer"),
   getResolvedMenuForPanel
 );
+// routes/restaurant.public.js
+r.get(
+  "/:rid/menu/public",
+  getResolvedMenuForPublic
+);
+
 // ---------------- Branch Overrides (ORG menü için kopyasız yönetim) ----------------
 r.patch(
   "/:rid/menu/overrides/categories/:orgCategoryId",

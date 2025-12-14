@@ -496,6 +496,7 @@ export const getResolvedMenuForPanel = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid restaurant id" });
     }
 
+
     const includeInactive = String(req.query.includeInactive || "") === "true";
     const includeUnavailable = String(req.query.includeUnavailable || "") === "true";
 
@@ -509,4 +510,13 @@ export const getResolvedMenuForPanel = async (req, res, next) => {
   } catch (e) {
     next(e);
   }
+};
+// public
+export const getResolvedMenuForPublic = async (req, res, next) => {
+  const { rid } = req.params;
+  const menu = await getResolvedMenuForRestaurant(rid, {
+    includeInactive: false,
+    includeUnavailable: false,
+  });
+  res.json(menu);
 };
