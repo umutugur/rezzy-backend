@@ -32,6 +32,26 @@ function mapRegionToCurrency(region) {
   return "TRY";
 }
 
+// Stripe ile başlatılmış ama ödeme tamamlanmamış rezervasyonları gizlemek için ortak filtre
+function stripePaidVisibilityFilter() {
+  // Görünür olsun:
+  // - Stripe değilse (havale/receipt/venue vs.)
+  // - Stripe ise sadece depositStatus === "paid" ise
+  return {
+    $or: [
+      { paymentProvider: { $ne: "stripe" } },
+      { depositStatus: "paid" },
+    ],
+  };
+}
+
+function isStripeUnpaidReservation(r) {
+  return (
+    (r?.paymentProvider || "") === "stripe" &&
+    (r?.depositStatus || "pending") !== "paid"
+  );
+}
+
 /** persons dizisi tam 1..N ve benzersiz ise INDEX, aksi halde COUNT */
 function detectModeStrict(selections = []) {
   const persons = selections.map((s) => Number(s.person) || 0).filter((n) => n > 0);
@@ -523,7 +543,7 @@ export const uploadReceipt = async (req, res, next) => {
 /** GET /api/reservations (kullanıcının listesi) */
 export const listMyReservations = async (req, res, next) => {
   try {
-    const q = { userId: req.user.id };
+    const q = { userId: req.user.id, ...stripePaidVisibilityFilter() };
     if (req.query.status) q.status = req.query.status;
 
     const items = await Reservation.find(q)
@@ -574,6 +594,10 @@ export const getReservation = async (req, res, next) => {
     if (!rDoc) return res.status(404).json({ message: "Reservation not found" });
     if (req.user.role === "customer" && String(rDoc.userId) !== String(req.user.id)) {
       return res.status(403).json({ message: "Forbidden" });
+    }
+    // ✅ Stripe ile başlatılıp ödeme tamamlanmadıysa: görünmesin
+    if (isStripeUnpaidReservation(rDoc)) {
+      return res.status(404).json({ message: "Reservation not found" });
     }
 
     // ✅ totals normalize (FIX)
@@ -1037,11 +1061,16 @@ export const listReservationsByRestaurant = async (req, res, next) => {
     const ridObj = isObjId ? new mongoose.Types.ObjectId(rid) : null;
 
     const q = {
-      $or: [...(ridObj ? [{ restaurantId: ridObj }] : []), { restaurantId: rid }],
+      $and: [
+        {
+          $or: [...(ridObj ? [{ restaurantId: ridObj }] : []), { restaurantId: rid }],
+        },
+        stripePaidVisibilityFilter(),
+      ],
     };
-    if (status) q.status = status;
+    if (status) q.$and.push({ status });
     if (cursor && mongoose.Types.ObjectId.isValid(cursor)) {
-      q._id = { $lt: new mongoose.Types.ObjectId(cursor) };
+      q.$and.push({ _id: { $lt: new mongoose.Types.ObjectId(cursor) } });
     }
 
     const lim = Math.min(100, Number(limit) || 30);
@@ -1132,7 +1161,10 @@ export const reservationStatsByRestaurant = async (req, res, next) => {
     const { rid } = req.params;
     const { start, end } = req.query;
 
-    const match = { restaurantId: new mongoose.Types.ObjectId(rid) };
+    const match = {
+      restaurantId: new mongoose.Types.ObjectId(rid),
+      ...stripePaidVisibilityFilter(),
+    };
 
     // Opsiyonel tarih aralığı (UTC gün başı/sonu)
     if (start || end) {

@@ -320,6 +320,8 @@ export async function createOrder(req, res) {
 
     const total = calcItems.reduce((sum, it) => sum + it.price * it.qty, 0);
 
+    const isCard = paymentMethod === "card";
+
     const o = await Order.create({
       sessionId: sid,
       restaurantId: rid,
@@ -332,8 +334,13 @@ export async function createOrder(req, res) {
       currency,
       paymentMethod,
       paymentStatus: paymentMethod === "venue" ? "not_required" : "pending",
+
+      // ✅ Stripe (card) ödeme tamamlanana kadar mutfak/masa akışına düşmesin
+      status: isCard ? "pending_payment" : "active",
+      kitchenStatus: isCard ? "pending_payment" : "new",
+
       // createOrder mevcutta QR/Rezvix akışı için kullanılıyor → default "qr"
-      kitchenStatus: "new",
+      source: "qr",
     });
 
     // MASAYI order_active yap
@@ -593,6 +600,7 @@ export async function listKitchenTickets(req, res) {
     const orders = await Order.find({
       restaurantId: rid,
       status: { $ne: "cancelled" },
+      paymentStatus: { $in: ["paid", "not_required"] },
       kitchenStatus: { $in: ["new", "preparing", "ready", "delivered"] },
     })
       .sort({ createdAt: 1 })
@@ -652,6 +660,11 @@ export async function updateKitchenStatus(req, res) {
 
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Sipariş bulunamadı." });
+
+    // ✅ Ödeme tamamlanmadan mutfak akışına sokma
+    if (order.paymentStatus && !["paid", "not_required"].includes(String(order.paymentStatus))) {
+      return res.status(400).json({ message: "Ödeme tamamlanmadan sipariş durumu güncellenemez." });
+    }
 
     order.kitchenStatus = status;
     await order.save();

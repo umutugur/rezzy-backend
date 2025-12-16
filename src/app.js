@@ -24,7 +24,9 @@ import tableServiceRoutes from "./routes/tableService.routes.js";
 import { initIntentEmbeddings } from "./ai/intentClassifier.js";
 import assistantRoutes from "./routes/assistant.routes.js";
 import qrPosterRoutes from "./routes/qrPoster.routes.js";
-import orgRoutes from "./routes/org.js";   // ✅ NEW
+import orgRoutes from "./routes/org.js";   
+import orgAnalyticsRoutes from "./routes/org.analytics.routes.js";
+
 dotenv.config();
 const app = express();
 
@@ -98,6 +100,7 @@ app.use("/api/assistant", assistantRoutes);
 app.use("/api", qrPosterRoutes);
 // ✅ Org owner / org_admin org-level endpointler
 app.use("/api/org", orgRoutes);
+app.use("/api/org-analytics", orgAnalyticsRoutes);
 // 404 & error aynı kalsın
 app.use((req, res) => res.status(404).json({ message: "Not found" }));
 app.use(errorHandler);
