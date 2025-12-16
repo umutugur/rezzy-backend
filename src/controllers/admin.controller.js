@@ -731,6 +731,11 @@ export async function addRestaurantMember(req, res, next) {
       });
     }
 
+    // ✅ Legacy uyumluluk: location_manager veya staff atanıyorsa restaurantId de set edilsin
+    if (role === "location_manager" || role === "staff") {
+      user.restaurantId = restaurant._id;
+    }
+
     await user.save();
 
     return res.json({

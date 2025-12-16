@@ -7,6 +7,29 @@ import { generateQRDataURL, signQR } from "../utils/qr.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import Restaurant, { BUSINESS_TYPES } from "../models/Restaurant.js";
 
+// --- AuthZ helper (multi-organization aware) ---
+function canManageRestaurant(user, restaurantId) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+
+  const targetId = String(restaurantId);
+
+  // Legacy single-restaurant binding
+  if (user.restaurantId && String(user.restaurantId) === targetId) return true;
+
+  // New membership binding
+  const rms = Array.isArray(user.restaurantMemberships)
+    ? user.restaurantMemberships
+    : [];
+
+  return rms.some((m) => {
+    const restRef = m?.restaurantId || m?.restaurant || m?.id;
+    const restId = restRef && typeof restRef === "object" && restRef._id ? restRef._id : restRef;
+    const role = String(m?.role || "");
+    return String(restId) === targetId && ["location_manager", "staff"].includes(role);
+  });
+}
+
 /* ---------- CREATE RESTAURANT ---------- */
 export const createRestaurant = async (req, res, next) => {
   try {
@@ -311,10 +334,8 @@ export const getRestaurant = async (req, res, next) => {
 /* ---------- CREATE MENU ---------- */
 export const createMenu = async (req, res, next) => {
   try {
-    if (req.user.role !== "admin") {
-      const r = await Restaurant.findById(req.params.id);
-      if (!r || r.owner.toString() !== req.user.id)
-        throw { status: 403, message: "Forbidden" };
+    if (!canManageRestaurant(req.user, req.params.id)) {
+      throw { status: 403, message: "Forbidden" };
     }
     const m = await Menu.create({
       ...req.body,
@@ -389,10 +410,8 @@ export const updateRestaurant = async (req, res, next) => {
       $set.location = { type: "Point", coordinates: [lng, lat] };
     }
 
-    if (req.user.role !== "admin") {
-      const own = await Restaurant.findById(req.params.id).select("owner");
-      if (!own || own.owner.toString() !== req.user.id)
-        throw { status: 403, message: "Forbidden" };
+    if (!canManageRestaurant(req.user, req.params.id)) {
+      throw { status: 403, message: "Forbidden" };
     }
 
     const updated = await Restaurant.findByIdAndUpdate(
@@ -483,11 +502,8 @@ export const updateOpeningHours = async (req, res, next) => {
   try {
     const { id } = req.params;
     const hours = req.body.openingHours;
-    if (req.user.role !== "admin") {
-      const rest = await Restaurant.findById(id).select("owner");
-      if (!rest || String(rest.owner) !== String(req.user.id)) {
-        throw { status: 403, message: "Forbidden" };
-      }
+    if (!canManageRestaurant(req.user, id)) {
+      throw { status: 403, message: "Forbidden" };
     }
     const updated = await Restaurant.findByIdAndUpdate(
       id,
@@ -509,11 +525,8 @@ export const updateTables = async (req, res, next) => {
   try {
     const { id } = req.params;
     const tables = req.body.tables;
-    if (req.user.role !== "admin") {
-      const rest = await Restaurant.findById(id).select("owner");
-      if (!rest || String(rest.owner) !== String(req.user.id)) {
-        throw { status: 403, message: "Forbidden" };
-      }
+    if (!canManageRestaurant(req.user, id)) {
+      throw { status: 403, message: "Forbidden" };
     }
     const updated = await Restaurant.findByIdAndUpdate(
       id,
@@ -544,11 +557,8 @@ export const updatePolicies = async (req, res, next) => {
       checkinWindowBeforeMinutes,
       checkinWindowAfterMinutes,
     } = req.body;
-    if (req.user.role !== "admin") {
-      const rest = await Restaurant.findById(id).select("owner");
-      if (!rest || String(rest.owner) !== String(req.user.id)) {
-        throw { status: 403, message: "Forbidden" };
-      }
+    if (!canManageRestaurant(req.user, id)) {
+      throw { status: 403, message: "Forbidden" };
     }
     const $set = {};
     if (typeof minPartySize !== "undefined")
@@ -593,11 +603,8 @@ export const updateMenus = async (req, res, next) => {
     const list = Array.isArray(req.body.menus)
       ? req.body.menus
       : [];
-    if (req.user.role !== "admin") {
-      const rest = await Restaurant.findById(id).select("owner");
-      if (!rest || String(rest.owner) !== String(req.user.id)) {
-        throw { status: 403, message: "Forbidden" };
-      }
+    if (!canManageRestaurant(req.user, id)) {
+      throw { status: 403, message: "Forbidden" };
     }
     const existing = await Menu.find({ restaurantId: id });
     const map = new Map();
@@ -647,12 +654,9 @@ export const addPhoto = async (req, res, next) => {
     let { fileUrl } = req.body || {};
     const f = req.file;
 
-    // Yetki kontrolü (aynı)
-    if (req.user.role !== "admin") {
-      const rest = await Restaurant.findById(id).select("owner");
-      if (!rest || String(rest.owner) !== String(req.user.id)) {
-        return res.status(403).json({ message: "Forbidden" });
-      }
+    // Yetki kontrolü (multi-org aware)
+    if (!canManageRestaurant(req.user, id)) {
+      return res.status(403).json({ message: "Forbidden" });
     }
 
     let finalUrl = null;
@@ -719,12 +723,9 @@ export const uploadLogo = async (req, res, next) => {
       return res.status(400).json({ message: "Restaurant id required" });
     }
 
-    // Yetki kontrolü
-    if (req.user.role !== "admin") {
-      const rest = await Restaurant.findById(id).select("owner");
-      if (!rest || String(rest.owner) !== String(req.user.id)) {
-        return res.status(403).json({ message: "Forbidden" });
-      }
+    // Yetki kontrolü (multi-org aware)
+    if (!canManageRestaurant(req.user, id)) {
+      return res.status(403).json({ message: "Forbidden" });
     }
 
     let finalUrl = null;
@@ -795,11 +796,8 @@ export const removePhoto = async (req, res, next) => {
     if (!url) {
       throw { status: 400, message: "url is required" };
     }
-    if (req.user.role !== "admin") {
-      const rest = await Restaurant.findById(id).select("owner");
-      if (!rest || String(rest.owner) !== String(req.user.id)) {
-        throw { status: 403, message: "Forbidden" };
-      }
+    if (!canManageRestaurant(req.user, id)) {
+      throw { status: 403, message: "Forbidden" };
     }
     const updated = await Restaurant.findByIdAndUpdate(
       id,

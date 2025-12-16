@@ -7,8 +7,16 @@ import Order from "../models/Order.js";
 import OrderSession from "../models/OrderSession.js";
 import TableServiceRequest from "../models/TableServiceRequest.js";
 
-/** Yardımcı: param string’ini ObjectId yap */
-const toObjectId = (id) => new mongoose.Types.ObjectId(id);
+/** Yardımcı: param string’ini güvenli ObjectId yap (invalid ise null) */
+const toObjectId = (id) => {
+  try {
+    const v = String(id || "").trim();
+    if (!mongoose.Types.ObjectId.isValid(v)) return null;
+    return new mongoose.Types.ObjectId(v);
+  } catch {
+    return null;
+  }
+};
 
 /** Masaya ait session’ı bulmak için helper */
 const findSessionForTable = (sessions, table) => {
@@ -95,7 +103,12 @@ export const listReservationsForRestaurant = async (req, res, next) => {
       return next({ status: 400, message: "Geçersiz restoran id" });
     }
 
-    const q = { restaurantId: toObjectId(rid) };
+    const ridObj = toObjectId(rid);
+    if (!ridObj) {
+      return next({ status: 400, message: "Geçersiz restoran id" });
+    }
+
+    const q = { restaurantId: ridObj };
     if (status) q.status = status;
 
     if (from || to) {
@@ -187,11 +200,20 @@ export const getInsightsForRestaurant = async (req, res, next) => {
     const { rid } = req.params;
     const { from, to } = req.query;
 
+    if (!mongoose.Types.ObjectId.isValid(rid)) {
+      return next({ status: 400, message: "Geçersiz restoran id" });
+    }
+
+    const ridObj = toObjectId(rid);
+    if (!ridObj) {
+      return next({ status: 400, message: "Geçersiz restoran id" });
+    }
+
     const start = from ? dayjs(from).startOf("day") : dayjs().startOf("month");
     const end = to ? dayjs(to).endOf("day") : dayjs().endOf("month");
 
     const match = {
-      restaurantId: toObjectId(rid),
+      restaurantId: ridObj,
       dateTimeUTC: { $gte: start.toDate(), $lte: end.toDate() },
     };
 
@@ -278,6 +300,11 @@ export const getTablesLive = async (req, res, next) => {
       return next({ status: 400, message: "Geçersiz restoran id" });
     }
 
+    const ridObj = toObjectId(rid);
+    if (!ridObj) {
+      return next({ status: 400, message: "Geçersiz restoran id" });
+    }
+
     const restaurant = await Restaurant.findById(rid).lean();
     if (!restaurant) {
       return next({ status: 404, message: "Restoran bulunamadı" });
@@ -285,11 +312,11 @@ export const getTablesLive = async (req, res, next) => {
 
     const [sessions, requests] = await Promise.all([
       OrderSession.find({
-        restaurantId: toObjectId(rid),
+        restaurantId: ridObj,
         status: "open",
       }).lean(),
       TableServiceRequest.find({
-        restaurantId: toObjectId(rid),
+        restaurantId: ridObj,
         status: "open",
       }).lean(),
     ]);
@@ -464,8 +491,13 @@ export const listLiveOrdersForRestaurant = async (req, res, next) => {
       return next({ status: 400, message: "Geçersiz restoran id" });
     }
 
+    const ridObj = toObjectId(rid);
+    if (!ridObj) {
+      return next({ status: 400, message: "Geçersiz restoran id" });
+    }
+
     const sessions = await OrderSession.find({
-      restaurantId: toObjectId(rid),
+      restaurantId: ridObj,
       status: "open",
     }).lean();
 
@@ -520,6 +552,11 @@ export const getTableDetailForRestaurant = async (req, res, next) => {
       return next({ status: 400, message: "Geçersiz restoran id" });
     }
 
+    const ridObj = toObjectId(rid);
+    if (!ridObj) {
+      return next({ status: 400, message: "Geçersiz restoran id" });
+    }
+
     const restaurant = await Restaurant.findById(rid).lean();
     if (!restaurant) {
       return next({ status: 404, message: "Restoran bulunamadı" });
@@ -539,12 +576,12 @@ export const getTableDetailForRestaurant = async (req, res, next) => {
 
     const [session, requests] = await Promise.all([
       OrderSession.findOne({
-        restaurantId: toObjectId(rid),
+        restaurantId: ridObj,
         status: "open",
         tableId: { $in: tableNames },
       }).lean(),
       TableServiceRequest.find({
-        restaurantId: toObjectId(rid),
+        restaurantId: ridObj,
         status: "open",
         tableId: { $in: tableNames },
       })
@@ -640,6 +677,11 @@ export const closeTableSessionForRestaurant = async (req, res, next) => {
       return next({ status: 400, message: "Geçersiz restoran id" });
     }
 
+    const ridObj = toObjectId(rid);
+    if (!ridObj) {
+      return next({ status: 400, message: "Geçersiz restoran id" });
+    }
+
     const restaurant = await Restaurant.findById(rid).lean();
     if (!restaurant) {
       return next({ status: 404, message: "Restoran bulunamadı" });
@@ -657,7 +699,7 @@ export const closeTableSessionForRestaurant = async (req, res, next) => {
     if (table._id) tableNames.push(String(table._id));
 
     const session = await OrderSession.findOne({
-      restaurantId: toObjectId(rid),
+      restaurantId: ridObj,
       status: "open",
       tableId: { $in: tableNames },
     });
@@ -665,14 +707,14 @@ export const closeTableSessionForRestaurant = async (req, res, next) => {
       return next({ status: 404, message: "Açık adisyon bulunamadı" });
     }
 
-        session.status = "closed";
+    session.status = "closed";
     session.closedAt = new Date();
     await session.save();
 
     // 🔁 Bu adisyona ait mutfak siparişlerini SERVED (delivered) yap
     await Order.updateMany(
       {
-        restaurantId: toObjectId(rid),
+        restaurantId: ridObj,
         sessionId: session._id,
         kitchenStatus: { $ne: "delivered" },
       },
@@ -681,7 +723,7 @@ export const closeTableSessionForRestaurant = async (req, res, next) => {
 
     await TableServiceRequest.updateMany(
       {
-        restaurantId: toObjectId(rid),
+        restaurantId: ridObj,
         tableId: { $in: tableNames },
         status: "open",
       },
@@ -708,6 +750,11 @@ export const resolveTableServiceRequests = async (req, res, next) => {
       return next({ status: 400, message: "Geçersiz restoran id" });
     }
 
+    const ridObj = toObjectId(rid);
+    if (!ridObj) {
+      return next({ status: 400, message: "Geçersiz restoran id" });
+    }
+
     const restaurant = await Restaurant.findById(rid).lean();
     if (!restaurant) {
       return next({ status: 404, message: "Restoran bulunamadı" });
@@ -728,14 +775,14 @@ export const resolveTableServiceRequests = async (req, res, next) => {
       await TableServiceRequest.findOneAndUpdate(
         {
           _id: requestId,
-          restaurantId: toObjectId(rid),
+          restaurantId: ridObj,
         },
         { $set: { status: "handled" } }
       );
     } else {
       await TableServiceRequest.updateMany(
         {
-          restaurantId: toObjectId(rid),
+          restaurantId: ridObj,
           tableId: { $in: tableNames },
           status: "open",
         },
