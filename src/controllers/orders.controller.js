@@ -724,3 +724,29 @@ export async function updateKitchenStatus(req, res) {
     return res.status(500).json({ message: "Durum güncellenemedi." });
   }
 }
+// en sona veya uygun bir yere ekleyin
+export async function cancelOrder(req, res) {
+  try {
+    const { orderId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ message: "Geçersiz order id." });
+    }
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: "Sipariş bulunamadı." });
+    }
+
+    // ödeme yapılmadıysa iptal et, aksi halde iptal ettirmeyin
+    if (order.paymentStatus === "paid" || order.paymentStatus === "not_required") {
+      return res.status(400).json({ message: "Ödenmiş sipariş iptal edilemez." });
+    }
+
+    order.status = "cancelled";
+    order.paymentStatus = "failed";
+    await order.save();
+    return res.json(order);
+  } catch (err) {
+    console.error("[cancelOrder] err", err);
+    return res.status(500).json({ message: "Sipariş iptal edilemedi." });
+  }
+}

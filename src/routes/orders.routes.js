@@ -10,7 +10,8 @@ import {
   createStripeIntent,
   createWalkInOrder,
   listKitchenTickets,
-  updateKitchenStatus
+  updateKitchenStatus,
+  cancelOrder
 } from "../controllers/orders.controller.js";
 
 
@@ -40,5 +41,7 @@ router.post(
 router.get("/restaurants/:restaurantId/kitchen-tickets",listKitchenTickets);
 
 router.patch("/:orderId/kitchen-status",updateKitchenStatus);
+router.post("/:orderId/cancel", cancelOrder);
+
 
 export default router;
