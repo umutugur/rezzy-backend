@@ -8,6 +8,7 @@ export type RestaurantMembershipRole = "location_manager" | "staff";
 export type OrgMembership = {
   id: string | null;
   name: string | null;
+  region: string | null;
   role: OrgMembershipRole | null;
 };
 
@@ -67,7 +68,7 @@ function sanitizeUser(u: any): MeUser {
       ? String(u.restaurantName)
       : null;
 
-  // organizations[] → { id, name, role }
+  // organizations[] → { id, name, region, role }
   const organizationsRaw = Array.isArray(u?.organizations) ? u.organizations : [];
   const organizations: OrgMembership[] = organizationsRaw.map((entry: any) => {
     const id =
@@ -82,9 +83,14 @@ function sanitizeUser(u: any): MeUser {
       entry?.organization?.name ??
       null;
 
+    const region =
+      entry?.region ??
+      entry?.organization?.region ??
+      null;
+
     const role = (entry?.role as OrgMembershipRole) ?? null;
 
-    return { id: id ? String(id) : null, name, role };
+    return { id: id ? String(id) : null, name, region: region ? String(region) : null, role };
   });
 
   // restaurantMemberships[] → { id, name, organizationId, status, role }
