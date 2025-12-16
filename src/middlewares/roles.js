@@ -121,7 +121,7 @@ export function allowLocationManagerOrAdmin(paramName = "rid") {
     });
 
     // ⬇⬇⬇ TAM OLARAK BURAYA EKLİYORSUN ⬇⬇⬇
-    if (process.env.AUTH_DEBUG === "1") {
+   
       console.log("---- allowLocationManagerOrAdmin DEBUG ----");
       console.log("targetId:", targetId);
       console.log("user.restaurantId:", user.restaurantId);
@@ -129,7 +129,7 @@ export function allowLocationManagerOrAdmin(paramName = "rid") {
       console.log("allowedRoles:", allowedRoles);
       console.log("ok:", ok);
       console.log("------------------------------------------");
-    }
+    
     // ⬆⬆⬆ BURAYA ⬆⬆⬆
 
     if (!ok) return next({ status: 403, message: "Forbidden" });
