@@ -13,6 +13,8 @@ import {
   orgGetRestaurantSummary,
 } from "../../api/orgAnalytics";
 
+import { getCurrencySymbolForRegion } from "../../utils/currency";
+
 import {
   ResponsiveContainer,
   AreaChart,
@@ -29,11 +31,17 @@ import {
 type OrgLite = {
   id: string;
   name: string;
-  region?: string | null; // Eğer /me içinde region yoksa null gelir; biz buna göre davranacağız.
+  region?: string | null;
   role?: string;
 };
 
-type Metric = "sales" | "orders" | "reservations" | "no_show" | "cancelled" | "deposits";
+type Metric =
+  | "sales"
+  | "orders"
+  | "reservations"
+  | "no_show"
+  | "cancelled"
+  | "deposits";
 
 /* ---------------- Helpers ---------------- */
 function getUserOrganizations(u: MeUser | null): OrgLite[] {
@@ -41,12 +49,7 @@ function getUserOrganizations(u: MeUser | null): OrgLite[] {
   return (u as any).organizations
     .map((o: any) => {
       const id =
-        o.id ||
-        o.organization?._id ||
-        o.organizationId ||
-        o.organization ||
-        o._id ||
-        null;
+        o.id || o.organization?._id || o.organizationId || o.organization || o._id || null;
 
       if (!id) return null;
 
@@ -76,49 +79,17 @@ function prettyOrgRole(role?: string) {
   }
 }
 
-/**
- * IMPORTANT:
- * - Senin ihtiyacın: UK => GBP, TR => TRY, CY/KKTC => TRY
- * - Eğer region yoksa dashboard “TRY’ye düşüp yanıltmasın”.
- */
-function mapRegionToCurrency(region?: string | null): "GBP" | "TRY" | "EUR" | null {
+function mapRegionToLocale(region?: string | null): string {
   const r = String(region || "").trim().toUpperCase();
-  if (!r) return null;
-
-  if (r === "UK" || r === "GB" || r === "UNITED KINGDOM") return "GBP";
-  if (r === "TR" || r === "TURKEY") return "TRY";
-
-  // Senin iş kuralın: Kıbrıs mekanları TL görsün
-  if (r === "CY" || r === "KKTC" || r === "NCYPRUS" || r === "NORTH CYPRUS") return "TRY";
-
-  // İleride lazım olursa
-  if (["EU", "DE", "FR", "NL", "ES", "IT", "IE", "PT", "GR"].includes(r)) return "EUR";
-
-  return "TRY";
-}
-
-function mapCurrencyToLocale(c: string): string {
-  const cur = String(c || "").toUpperCase();
-  if (cur === "GBP") return "en-GB";
-  if (cur === "EUR") return "en-IE";
+  if (r === "UK" || r === "GB") return "en-GB";
+  if (r === "US" || r === "USA") return "en-US";
   return "tr-TR";
 }
 
-function fmtMoney(n: any, currency: string | null, locale: string) {
-  const v = Number(n || 0);
-
-  // Currency yoksa “TRY’ye düşüp yalan söylemeyelim”
-  if (!currency) return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(v);
-
-  try {
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(v);
-  } catch {
-    return `${v} ${currency}`;
-  }
+function fmtMoneyWithSymbol(value: any, symbol: string, locale = "tr-TR") {
+  const v = Number(value || 0);
+  const n = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(v);
+  return symbol ? `${n} ${symbol}` : n;
 }
 
 function fmtInt(n: any, locale: string) {
@@ -153,10 +124,10 @@ function labelOfPreset(p: string) {
   }
 }
 
-function metricLabel(m: Metric, currency: string | null) {
+function metricLabel(m: Metric, symbol: string) {
   switch (m) {
     case "sales":
-      return currency ? `Satış (${currency})` : "Satış";
+      return symbol ? `Satış (${symbol})` : "Satış";
     case "orders":
       return "Sipariş (adet)";
     case "reservations":
@@ -166,7 +137,7 @@ function metricLabel(m: Metric, currency: string | null) {
     case "cancelled":
       return "İptal (adet)";
     case "deposits":
-      return currency ? `Depozito (${currency})` : "Depozito";
+      return symbol ? `Depozito (${symbol})` : "Depozito";
     default:
       return m;
   }
@@ -276,8 +247,10 @@ export default function OrgDashboardPage() {
     [orgs, selectedOrgId]
   );
 
-  const currency = mapRegionToCurrency(selectedOrg?.region);
-  const locale = mapCurrencyToLocale(currency || "TRY"); // locale için bir fallback lazım
+  const currencySymbol = selectedOrg?.region
+    ? getCurrencySymbolForRegion(selectedOrg.region)
+    : "₺";
+  const locale = mapRegionToLocale(selectedOrg?.region);
 
   const [preset, setPreset] = useState<"day" | "week" | "month" | "year">("month");
   const [useCustomRange, setUseCustomRange] = useState(false);
@@ -292,10 +265,8 @@ export default function OrgDashboardPage() {
   const [tsBucket, setTsBucket] = useState<"day" | "week" | "month">("day");
   const [topMetric, setTopMetric] = useState<"sales" | "orders" | "reservations">("sales");
 
-  // Demo mode artık query’leri KAPATMAYACAK.
   const [demoMode, setDemoMode] = useState(false);
 
-  // Drawer state
   const [openRestaurantId, setOpenRestaurantId] = useState<string | null>(null);
   const [openRestaurantName, setOpenRestaurantName] = useState<string>("");
 
@@ -324,7 +295,9 @@ export default function OrgDashboardPage() {
         ...(rangeParams || { preset }),
         metric: tsMetric,
         bucket: tsBucket,
-        tz: currency === "GBP" ? "Europe/London" : "Europe/Istanbul",
+        tz: ["UK", "GB"].includes(String(selectedOrg?.region || "").trim().toUpperCase())
+          ? "Europe/London"
+          : "Europe/Istanbul",
       }),
     enabled: Boolean(selectedOrgId),
     staleTime: 30_000,
@@ -342,7 +315,6 @@ export default function OrgDashboardPage() {
     staleTime: 30_000,
   });
 
-  // Drawer: restaurant summary
   const restSummaryQ = useQuery({
     queryKey: ["org-analytics", "restaurant-summary", openRestaurantId, rangeParams],
     queryFn: () => orgGetRestaurantSummary(String(openRestaurantId), rangeParams || { preset }),
@@ -366,22 +338,36 @@ export default function OrgDashboardPage() {
   const topRows = demoMode ? makeDemoTop(topMetric) : (topQ.data?.rows ?? []);
 
   const noShowRate =
-    totals && totals.reservationsCount > 0 ? (totals.noShowCount || 0) / totals.reservationsCount : 0;
+    totals && totals.reservationsCount > 0
+      ? (totals.noShowCount || 0) / totals.reservationsCount
+      : 0;
   const cancelRate =
-    totals && totals.reservationsCount > 0 ? (totals.cancelledCount || 0) / totals.reservationsCount : 0;
+    totals && totals.reservationsCount > 0
+      ? (totals.cancelledCount || 0) / totals.reservationsCount
+      : 0;
   const depositConversion =
-    totals && totals.reservationsCount > 0 ? (totals.depositPaidCount || 0) / totals.reservationsCount : 0;
+    totals && totals.reservationsCount > 0
+      ? (totals.depositPaidCount || 0) / totals.reservationsCount
+      : 0;
 
   const kpiCards = useMemo(() => {
     return [
-      { title: "Toplam Satış", value: totals ? fmtMoney(totals.salesTotal, currency, locale) : "-" },
+      {
+        title: "Toplam Satış",
+        value: totals
+          ? fmtMoneyWithSymbol(totals.salesTotal, currencySymbol, locale)
+          : "-",
+      },
       { title: "Sipariş", value: totals ? fmtInt(totals.ordersCount, locale) : "-" },
-      { title: "Rezervasyon", value: totals ? fmtInt(totals.reservationsCount, locale) : "-" },
+      {
+        title: "Rezervasyon",
+        value: totals ? fmtInt(totals.reservationsCount, locale) : "-",
+      },
       { title: "No-show Oranı", value: totals ? pct(noShowRate) : "-" },
       { title: "İptal Oranı", value: totals ? pct(cancelRate) : "-" },
       { title: "Depozito Dönüşüm", value: totals ? pct(depositConversion) : "-" },
     ];
-  }, [totals, currency, locale, noShowRate, cancelRate, depositConversion]);
+  }, [totals, currencySymbol, locale, noShowRate, cancelRate, depositConversion]);
 
   const chartData = useMemo(() => {
     return points.map((p: any) => ({
@@ -391,12 +377,14 @@ export default function OrgDashboardPage() {
   }, [points, locale]);
 
   const valueFormatter = (v: any) => {
-    if (tsMetric === "sales" || tsMetric === "deposits") return fmtMoney(v, currency, locale);
+    if (tsMetric === "sales" || tsMetric === "deposits") {
+      return fmtMoneyWithSymbol(v, currencySymbol, locale);
+    }
     return fmtInt(v, locale);
   };
 
   const topValueFormatter = (v: any) => {
-    if (topMetric === "sales") return fmtMoney(v, currency, locale);
+    if (topMetric === "sales") return fmtMoneyWithSymbol(v, currencySymbol, locale);
     return fmtInt(v, locale);
   };
 
@@ -414,10 +402,7 @@ export default function OrgDashboardPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">Organizasyon Paneli</h2>
-            <div className="text-xs text-gray-500">
-              KPI • Trend • Restoran karşılaştırma •{" "}
-              {currency ? currency : "Para birimi: (org.region yok — /me response’una eklenmeli)"}
-            </div>
+            <div className="text-xs text-gray-500">KPI • Trend • Restoran karşılaştırma</div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -442,7 +427,11 @@ export default function OrgDashboardPage() {
             </div>
 
             <label className="flex items-center gap-2 text-xs text-gray-600">
-              <input type="checkbox" checked={demoMode} onChange={(e) => setDemoMode(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={demoMode}
+                onChange={(e) => setDemoMode(e.target.checked)}
+              />
               Demo aktif (örnek veriler)
             </label>
           </div>
@@ -479,7 +468,6 @@ export default function OrgDashboardPage() {
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                // bu route sende var: /org/organizations/:id/menu
                                 window.history.pushState({}, "", `/org/organizations/${orgId}/menu`);
                                 window.dispatchEvent(new PopStateEvent("popstate"));
                               }}
@@ -558,7 +546,11 @@ export default function OrgDashboardPage() {
             )}
 
             <div className="ml-auto text-xs text-gray-500">
-              {demoMode ? "Demo aktif (örnek veriler)" : summaryQ.isFetching || tsQ.isFetching || topQ.isFetching ? "Güncelleniyor..." : "Canlı veri"}
+              {demoMode
+                ? "Demo aktif (örnek veriler)"
+                : summaryQ.isFetching || tsQ.isFetching || topQ.isFetching
+                ? "Güncelleniyor..."
+                : "Canlı veri"}
             </div>
           </div>
 
@@ -573,9 +565,7 @@ export default function OrgDashboardPage() {
           </div>
 
           {!demoMode && (summaryQ.isError || tsQ.isError || topQ.isError) && (
-            <div className="mt-4 text-sm text-red-600">
-              Rapor verisi alınırken hata oluştu. (Rol / endpoint / auth kontrol et)
-            </div>
+            <div className="mt-4 text-sm text-red-600">Rapor verisi alınırken hata oluştu.</div>
           )}
 
           {/* Charts row */}
@@ -586,7 +576,7 @@ export default function OrgDashboardPage() {
                 <div>
                   <div className="font-semibold text-sm">Trend</div>
                   <div className="text-xs text-gray-500">
-                    {metricLabel(tsMetric, currency)} • bucket: {tsBucket}
+                    {metricLabel(tsMetric, currencySymbol)} • bucket: {tsBucket}
                   </div>
                 </div>
 
@@ -618,7 +608,9 @@ export default function OrgDashboardPage() {
 
               <div className="mt-3 h-64">
                 {chartData.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-sm text-gray-500">Veri yok.</div>
+                  <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                    Veri yok.
+                  </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
@@ -632,7 +624,14 @@ export default function OrgDashboardPage() {
                       <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                       <YAxis tick={{ fontSize: 12 }} />
                       <Tooltip content={<ModernTooltip valueFormatter={valueFormatter} />} />
-                      <Area type="monotone" dataKey="value" stroke="#4F46E5" strokeWidth={2} fill="url(#trendFill)" dot={false} />
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke="#4F46E5"
+                        strokeWidth={2}
+                        fill="url(#trendFill)"
+                        dot={false}
+                      />
                     </AreaChart>
                   </ResponsiveContainer>
                 )}
@@ -650,7 +649,10 @@ export default function OrgDashboardPage() {
                   <div className="text-sm font-semibold">{pct(noShowRate)}</div>
                 </div>
                 <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div className="h-full bg-rose-500" style={{ width: `${Math.min(100, Math.round(noShowRate * 100))}%` }} />
+                  <div
+                    className="h-full bg-rose-500"
+                    style={{ width: `${Math.min(100, Math.round(noShowRate * 100))}%` }}
+                  />
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -658,7 +660,10 @@ export default function OrgDashboardPage() {
                   <div className="text-sm font-semibold">{pct(cancelRate)}</div>
                 </div>
                 <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, Math.round(cancelRate * 100))}%` }} />
+                  <div
+                    className="h-full bg-amber-500"
+                    style={{ width: `${Math.min(100, Math.round(cancelRate * 100))}%` }}
+                  />
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -666,7 +671,10 @@ export default function OrgDashboardPage() {
                   <div className="text-sm font-semibold">{pct(depositConversion)}</div>
                 </div>
                 <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, Math.round(depositConversion * 100))}%` }} />
+                  <div
+                    className="h-full bg-emerald-500"
+                    style={{ width: `${Math.min(100, Math.round(depositConversion * 100))}%` }}
+                  />
                 </div>
               </div>
             </div>
@@ -678,7 +686,12 @@ export default function OrgDashboardPage() {
               <div>
                 <div className="font-semibold text-sm">Top Restoranlar</div>
                 <div className="text-xs text-gray-500">
-                  {topMetric === "sales" ? (currency ? `Ciro (${currency})` : "Ciro") : topMetric === "orders" ? "Sipariş" : "Rezervasyon"} bazlı
+                  {topMetric === "sales"
+                    ? `Ciro (${currencySymbol})`
+                    : topMetric === "orders"
+                    ? "Sipariş"
+                    : "Rezervasyon"}{" "}
+                  bazlı
                 </div>
               </div>
 
@@ -697,7 +710,9 @@ export default function OrgDashboardPage() {
               {/* Chart */}
               <div className="h-72">
                 {topRows.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-sm text-gray-500">Veri yok.</div>
+                  <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                    Veri yok.
+                  </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
@@ -745,10 +760,11 @@ export default function OrgDashboardPage() {
                           <tr key={rid} className="border-t">
                             <td className="py-2 px-3">{rname}</td>
                             <td className="py-2 px-3 text-right">
-                              {topMetric === "sales" ? fmtMoney(r.value, currency, locale) : fmtInt(r.value, locale)}
+                              {topMetric === "sales"
+                                ? fmtMoneyWithSymbol(r.value, currencySymbol, locale)
+                                : fmtInt(r.value, locale)}
                             </td>
                             <td className="py-2 px-3 text-right">
-                              {/* Route’a gitmiyoruz: Drawer açıyoruz -> refresh biter */}
                               <button
                                 type="button"
                                 className="inline-flex items-center px-3 py-1.5 text-xs rounded bg-gray-100 hover:bg-gray-200"
@@ -770,9 +786,7 @@ export default function OrgDashboardPage() {
                   </tbody>
                 </table>
 
-                <div className="p-3 text-xs text-gray-500">
-                  Detay artık route’a gitmiyor; drawer içinde restaurant summary açıyor. “Refresh” problemi burada bitti.
-                </div>
+                <div className="p-3 text-xs text-gray-500">Detay raporu yan panelde açılır.</div>
               </div>
             </div>
           </div>
@@ -791,7 +805,7 @@ export default function OrgDashboardPage() {
         {demoMode ? (
           <div className="space-y-4">
             <div className="text-sm text-gray-600">
-              Demo mode açık olduğu için restoran raporu örneklenmedi. Demo kapatıp tekrar deneyebilirsin.
+              Demo açıkken restoran raporu gösterilmez. Demo’yu kapatıp tekrar deneyin.
             </div>
           </div>
         ) : restSummaryQ.isLoading ? (
@@ -804,7 +818,7 @@ export default function OrgDashboardPage() {
               <div className="rounded-xl border bg-white p-3 shadow-sm">
                 <div className="text-[11px] tracking-wide text-gray-500">Satış</div>
                 <div className="mt-1 text-base font-semibold">
-                  {fmtMoney(restSummaryQ.data?.totals?.salesTotal, currency, locale)}
+                  {fmtMoneyWithSymbol(restSummaryQ.data?.totals?.salesTotal, currencySymbol, locale)}
                 </div>
               </div>
               <div className="rounded-xl border bg-white p-3 shadow-sm">
@@ -834,13 +848,13 @@ export default function OrgDashboardPage() {
               <div className="rounded-xl border bg-white p-3 shadow-sm">
                 <div className="text-[11px] tracking-wide text-gray-500">Depozito</div>
                 <div className="mt-1 text-base font-semibold">
-                  {fmtMoney(restSummaryQ.data?.totals?.depositPaidTotal, currency, locale)}
+                  {fmtMoneyWithSymbol(
+                    restSummaryQ.data?.totals?.depositPaidTotal,
+                    currencySymbol,
+                    locale
+                  )}
                 </div>
               </div>
-            </div>
-
-            <div className="text-xs text-gray-500">
-              Bu drawer, route bağımlılığını kaldırdığı için “Detay refresh” problemini kalıcı kapatır.
             </div>
           </div>
         )}

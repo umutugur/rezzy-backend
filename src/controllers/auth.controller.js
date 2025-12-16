@@ -139,31 +139,34 @@ function toClientUser(u) {
     }
   }
 
-  // 🔹 organizations[] → { id, name, role }
-  let organizations = [];
-  if (Array.isArray(u.organizations)) {
-    organizations = u.organizations.map((entry) => {
-      const role = entry?.role ?? null;
-      let orgId = null;
-      let orgName = null;
+ // 🔹 organizations[] → { id, name, region, role }
+let organizations = [];
+if (Array.isArray(u.organizations)) {
+  organizations = u.organizations.map((entry) => {
+    const role = entry?.role ?? null;
+    let orgId = null;
+    let orgName = null;
+    let orgRegion = null;
 
-      const org = entry?.organization;
-      if (org) {
-        if (org._id) {
-          orgId = org._id.toString();
-          orgName = org.name || null;
-        } else {
-          orgId = org.toString?.() || null;
-        }
+    const org = entry?.organization;
+    if (org) {
+      if (org._id) {
+        orgId = org._id.toString();
+        orgName = org.name || null;
+        orgRegion = org.region || null; // ✅ EKLENDİ
+      } else {
+        orgId = org.toString?.() || null;
       }
+    }
 
-      return {
-        id: orgId,
-        name: orgName,
-        role,
-      };
-    });
-  }
+    return {
+      id: orgId,
+      name: orgName,
+      region: orgRegion, // ✅ EKLENDİ
+      role,
+    };
+  });
+}
 
   // 🔹 restaurantMemberships[] → { id, name, organizationId, status, role }
   let restaurantMemberships = [];
