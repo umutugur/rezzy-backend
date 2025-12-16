@@ -1,26 +1,26 @@
-import React, { useMemo, useState } from "react";
+// rezzy-webpanel/src/pages/org/Dashboard.tsx
+import React from "react";
 import Sidebar from "../../components/Sidebar";
-import { Card } from "../../components/Card";
+import { Card, Stat, StatGrid } from "../../components/Card";
 import { authStore, MeUser } from "../../store/auth";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import {
-  orgGetSummary,
-  orgGetTimeseries,
-  orgGetTopRestaurants,
-} from "../../api/orgAnalytics";
+import { api, orgGetMyOrganization } from "../../api/client";
 
+// Recharts
 import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
   BarChart,
   Bar,
-  Legend,
 } from "recharts";
 
 type OrgLite = {
@@ -32,6 +32,7 @@ type OrgLite = {
 
 function getUserOrganizations(u: MeUser | null): OrgLite[] {
   if (!u || !Array.isArray((u as any).organizations)) return [];
+
   return (u as any).organizations
     .map((o: any) => {
       const id =
@@ -41,6 +42,7 @@ function getUserOrganizations(u: MeUser | null): OrgLite[] {
         o.organization ||
         o._id ||
         null;
+
       if (!id) return null;
 
       return {
@@ -48,7 +50,7 @@ function getUserOrganizations(u: MeUser | null): OrgLite[] {
         name: o.name || o.organizationName || "İsimsiz Organizasyon",
         region: o.region ?? null,
         role: o.role,
-      };
+      } as OrgLite;
     })
     .filter(Boolean) as OrgLite[];
 }
@@ -69,286 +71,246 @@ function prettyOrgRole(role?: string) {
   }
 }
 
-function mapRegionToCurrency(region?: string | null): "GBP" | "TRY" | "EUR" {
+/** Region -> Currency code (gerçek para birimi) */
+function mapRegionToCurrency(region?: string | null): "GBP" | "TRY" | "EUR" | "USD" {
   const r = String(region || "").trim().toUpperCase();
-  if (r === "UK") return "GBP";
-  if (r === "TR" || r === "TURKEY") return "TRY";
-  if (r === "CY" || r === "KKTC") return "EUR"; // burada istersen TRY yaparız
+  if (r === "UK" || r === "GB") return "GBP";
+  if (r === "US" || r === "USA") return "USD";
+  if (["EU", "DE", "FR", "NL", "ES", "IT", "CY", "IE", "PT", "GR"].includes(r)) return "EUR";
   return "TRY";
 }
 
-function mapCurrencyToLocale(c: string): string {
-  const cur = String(c || "").toUpperCase();
+/** Currency -> locale */
+function mapCurrencyToLocale(cur: "GBP" | "TRY" | "EUR" | "USD") {
   if (cur === "GBP") return "en-GB";
-  if (cur === "EUR") return "en-IE";
+  if (cur === "USD") return "en-US";
+  if (cur === "EUR") return "de-DE";
   return "tr-TR";
 }
 
-function fmtMoney(n: any, currency: string, locale: string) {
-  const v = Number(n || 0);
+function formatMoney(v: number, currency: "GBP" | "TRY" | "EUR" | "USD", locale: string) {
   try {
     return new Intl.NumberFormat(locale, {
       style: "currency",
       currency,
       maximumFractionDigits: 0,
-    }).format(v);
+    }).format(Number.isFinite(v) ? v : 0);
   } catch {
-    return `${v} ${currency}`;
+    // fallback
+    const sym = currency === "GBP" ? "£" : currency === "USD" ? "$" : currency === "EUR" ? "€" : "₺";
+    const n = Number.isFinite(v) ? v : 0;
+    return `${sym}${Math.round(n).toLocaleString()}`;
   }
 }
-function fmtInt(n: any, locale: string) {
-  const v = Number(n || 0);
-  return new Intl.NumberFormat(locale).format(v);
-}
-function pct(n: number) {
-  if (!Number.isFinite(n)) return "0%";
-  return `${Math.round(n * 100)}%`;
+
+function formatPct(v: number) {
+  const n = Number.isFinite(v) ? v : 0;
+  return `${Math.round(n)}%`;
 }
 
-function toDateInputValue(d: Date) {
+function toISODate(d: Date) {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function labelOfPreset(p: string) {
-  switch (p) {
-    case "day":
-      return "Günlük";
-    case "week":
-      return "Haftalık";
-    case "month":
-      return "Aylık";
-    case "year":
-      return "Yıllık";
-    default:
-      return p;
+type Period = "daily" | "weekly" | "monthly" | "yearly";
+
+function periodLabel(p: Period) {
+  if (p === "daily") return "Günlük";
+  if (p === "weekly") return "Haftalık";
+  if (p === "monthly") return "Aylık";
+  return "Yıllık";
+}
+
+type OrgOverview = {
+  ok?: boolean;
+  range: { from: string; to: string };
+
+  currency?: string; // opsiyonel backend dönerse
+  totals: {
+    revenueTotal: number;      // toplam satış (order revenue)
+    ordersCount: number;
+
+    reservationsCount: number;
+    noShowCount: number;
+    cancelCount: number;
+
+    depositPaidTotal: number;  // ödenen depozitolar
+    depositPaidCount: number;  // kaç ödeme
+    depositConversionPct?: number; // opsiyonel
+  };
+
+  trend: Array<{ date: string; revenue: number; orders: number; reservations: number }>;
+
+  reservationStatus: {
+    confirmed: number;
+    arrived: number;
+    pending: number;
+    no_show: number;
+    cancelled: number;
+  };
+
+  topRestaurants: Array<{
+    restaurantId: string;
+    name: string;
+    value: number;
+  }>;
+};
+
+async function fetchOrgOverview(orgId: string, params: { from: string; to: string; bucket: "day" | "week" | "month" }) {
+  // ✅ Endpoint’i burada düzelt: sende farklıysa sadece bu satırı değiştir.
+  const { data } = await api.get(`/org/organizations/${orgId}/reports/overview`, { params });
+  return data as OrgOverview;
+}
+
+/** DB boşken UI’yı görmek için demo data */
+function buildDemoOverview(from: string, to: string): OrgOverview {
+  const start = new Date(from);
+  const end = new Date(to);
+  const days: string[] = [];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    days.push(toISODate(new Date(d)));
   }
+
+  const trend = days.slice(-14).map((date, idx) => {
+    const base = 1600 + Math.round(Math.sin(idx / 2) * 300);
+    const bump = idx % 5 === 0 ? 250 : 0;
+    const revenue = base + bump + (idx * 25);
+    return {
+      date,
+      revenue,
+      orders: 120 + idx * 3,
+      reservations: 40 + idx * 2,
+    };
+  });
+
+  return {
+    ok: true,
+    range: { from, to },
+    totals: {
+      revenueTotal: 84500,
+      ordersCount: 3120,
+      reservationsCount: 980,
+      noShowCount: 58,
+      cancelCount: 69,
+      depositPaidTotal: 17800,
+      depositPaidCount: 210,
+      depositConversionPct: 21,
+    },
+    trend,
+    reservationStatus: {
+      confirmed: 620,
+      arrived: 280,
+      pending: 42,
+      no_show: 58,
+      cancelled: 69,
+    },
+    topRestaurants: [
+      { restaurantId: "demo-1", name: "Karya Bistro - Highmspark", value: 19000 },
+      { restaurantId: "demo-2", name: "Karya Bistro - Soho", value: 15200 },
+      { restaurantId: "demo-3", name: "Karya Bistro - Camden", value: 9800 },
+    ],
+  };
 }
 
-type Metric =
-  | "sales"
-  | "orders"
-  | "reservations"
-  | "no_show"
-  | "cancelled"
-  | "deposits";
-
-function metricLabel(m: Metric, currency: string) {
-  switch (m) {
-    case "sales":
-      return `Satış (${currency})`;
-    case "orders":
-      return "Sipariş (adet)";
-    case "reservations":
-      return "Rezervasyon (adet)";
-    case "no_show":
-      return "No-show (adet)";
-    case "cancelled":
-      return "İptal (adet)";
-    case "deposits":
-      return `Depozito (${currency})`;
-    default:
-      return m;
-  }
-}
-
-// --- Demo data (DB boşken bile iyi görünmesi için) ---
-function makeDemoTimeseries(metric: Metric, days = 14) {
-  const now = new Date();
-  const pts: Array<{ t: string; value: number }> = [];
-  const base =
-    metric === "sales" || metric === "deposits"
-      ? 2400
-      : metric === "orders"
-      ? 120
-      : metric === "reservations"
-      ? 40
-      : metric === "no_show"
-      ? 4
-      : 6;
-
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i);
-    const noise = Math.sin(i / 2) * 0.18 + (Math.random() - 0.5) * 0.22;
-    const v = Math.max(0, Math.round(base * (1 + noise)));
-    pts.push({ t: d.toISOString(), value: v });
-  }
-  return pts;
-}
-
-function makeDemoTop(metric: "sales" | "orders" | "reservations") {
-  const names = [
-    "Karya Bistro - Highmspark",
-    "Karya Bistro - London",
-    "Karya Bistro - Manchester",
-    "Karya Bistro - Cambridge",
-    "Karya Bistro - Leeds",
-  ];
-  return names.map((n, i) => ({
-    restaurantId: String(i + 1),
-    restaurantName: n,
-    value:
-      metric === "sales"
-        ? Math.round(19000 - i * 2200 + Math.random() * 900)
-        : metric === "orders"
-        ? Math.round(520 - i * 70 + Math.random() * 20)
-        : Math.round(180 - i * 20 + Math.random() * 10),
-  }));
-}
-
-function ModernTooltip({
-  active,
-  payload,
-  label,
-  valueFormatter,
-}: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-lg border bg-white/95 shadow-sm px-3 py-2">
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className="text-sm font-semibold">{valueFormatter(payload[0].value)}</div>
-    </div>
-  );
+function getRestaurantDetailPath(rid: string) {
+  // Sende restoran detayı hangi route ise onu yaz:
+  // Örn: "/panel/restaurants/:id" ya da "/admin/restaurants/:id"
+  return `/panel/restaurants/${rid}`;
 }
 
 export default function OrgDashboardPage() {
   const user = authStore.getUser();
-  const orgs = useMemo(() => getUserOrganizations(user), [user]);
+  const orgs = getUserOrganizations(user);
   const nav = useNavigate();
 
-  const [selectedOrgId, setSelectedOrgId] = useState<string>(() => orgs?.[0]?.id || "");
+  // -------- Selected org (basit: ilk org) --------
+  const [selectedOrgId, setSelectedOrgId] = React.useState<string>(() => orgs[0]?.id ?? "");
+
   React.useEffect(() => {
-    if (!selectedOrgId && orgs?.[0]?.id) setSelectedOrgId(orgs[0].id);
-  }, [orgs, selectedOrgId]);
+    if (!selectedOrgId && orgs[0]?.id) setSelectedOrgId(orgs[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgs.length]);
 
-  const selectedOrg = useMemo(
-    () => orgs.find((o) => o.id === selectedOrgId) || orgs[0] || null,
-    [orgs, selectedOrgId]
-  );
+  const selectedOrg = orgs.find((o) => o.id === selectedOrgId) ?? null;
 
-  const currency = mapRegionToCurrency(selectedOrg?.region);
+  // Detail çek (region/currency kesinleşsin)
+  const orgDetailQ = useQuery({
+    queryKey: ["org-detail", selectedOrgId],
+    queryFn: () => orgGetMyOrganization(selectedOrgId),
+    enabled: Boolean(selectedOrgId),
+    staleTime: 60_000,
+  });
+
+  const orgRegion =
+    (orgDetailQ.data as any)?.region ??
+    selectedOrg?.region ??
+    null;
+
+  const currency = mapRegionToCurrency(orgRegion);
   const locale = mapCurrencyToLocale(currency);
 
-  const [preset, setPreset] = useState<"day" | "week" | "month" | "year">("month");
-  const [useCustomRange, setUseCustomRange] = useState(false);
-  const [fromDate, setFromDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return toDateInputValue(d);
-  });
-  const [toDate, setToDate] = useState(() => toDateInputValue(new Date()));
+  // -------- Filters --------
+  const [period, setPeriod] = React.useState<Period>("daily");
+  const [useCustomRange, setUseCustomRange] = React.useState(false);
 
-  const [tsMetric, setTsMetric] = useState<Metric>("sales");
-  const [tsBucket, setTsBucket] = useState<"day" | "week" | "month">("day");
-  const [topMetric, setTopMetric] = useState<"sales" | "orders" | "reservations">("sales");
+  const today = new Date();
+  const defaultFrom = React.useMemo(() => {
+    const d = new Date(today);
+    if (period === "daily") d.setDate(d.getDate() - 14);
+    if (period === "weekly") d.setDate(d.getDate() - 56);
+    if (period === "monthly") d.setMonth(d.getMonth() - 6);
+    if (period === "yearly") d.setFullYear(d.getFullYear() - 2);
+    return toISODate(d);
+  }, [period]);
 
-  const [demoMode, setDemoMode] = useState(false);
+  const defaultTo = React.useMemo(() => toISODate(today), []);
 
-  const rangeParams = useMemo(() => {
-    if (!selectedOrgId) return null;
-    if (useCustomRange) {
-      const fromISO = new Date(`${fromDate}T00:00:00.000Z`).toISOString();
-      const toISO = new Date(`${toDate}T23:59:59.999Z`).toISOString();
-      return { from: fromISO, to: toISO };
+  const [from, setFrom] = React.useState(defaultFrom);
+  const [to, setTo] = React.useState(defaultTo);
+
+  React.useEffect(() => {
+    if (!useCustomRange) {
+      setFrom(defaultFrom);
+      setTo(defaultTo);
     }
-    return { preset };
-  }, [selectedOrgId, preset, useCustomRange, fromDate, toDate]);
+  }, [defaultFrom, defaultTo, useCustomRange]);
 
-  const summaryQ = useQuery({
-    queryKey: ["org-analytics", "summary", selectedOrgId, rangeParams],
-    queryFn: () => orgGetSummary(selectedOrgId, rangeParams || { preset }),
-    enabled: Boolean(selectedOrgId) && !demoMode,
+  const bucket: "day" | "week" | "month" =
+    period === "daily" ? "day" : period === "weekly" ? "week" : period === "monthly" ? "day" : "month";
+
+  // Demo toggle (DB boşsa bile UI test)
+  const [demoMode, setDemoMode] = React.useState(true);
+
+  const overviewQ = useQuery({
+    queryKey: ["org-overview", selectedOrgId, from, to, bucket, demoMode],
+    queryFn: async () => {
+      if (!selectedOrgId) return null;
+      if (demoMode) return buildDemoOverview(from, to);
+      return fetchOrgOverview(selectedOrgId, { from, to, bucket });
+    },
+    enabled: Boolean(selectedOrgId),
     staleTime: 30_000,
   });
 
-  const tsQ = useQuery({
-    queryKey: ["org-analytics", "timeseries", selectedOrgId, rangeParams, tsMetric, tsBucket],
-    queryFn: () =>
-      orgGetTimeseries(selectedOrgId, {
-        ...(rangeParams || { preset }),
-        metric: tsMetric,
-        bucket: tsBucket,
-        tz: "Europe/London", // UK ise daha doğru; TR ise fark etmez, sadece bucket sınırlarını etkiler
-      }),
-    enabled: Boolean(selectedOrgId) && !demoMode,
-    staleTime: 30_000,
-  });
+  const ov = overviewQ.data;
 
-  const topQ = useQuery({
-    queryKey: ["org-analytics", "top-restaurants", selectedOrgId, rangeParams, topMetric],
-    queryFn: () =>
-      orgGetTopRestaurants(selectedOrgId, {
-        ...(rangeParams || { preset }),
-        metric: topMetric,
-        limit: 10,
-      }),
-    enabled: Boolean(selectedOrgId) && !demoMode,
-    staleTime: 30_000,
-  });
+  // -------- Derived UI values --------
+  const totals = ov?.totals;
+  const trend = Array.isArray(ov?.trend) ? ov!.trend : [];
+  const rs = ov?.reservationStatus;
 
-  const totals = demoMode
-    ? {
-        salesTotal: 84500,
-        ordersCount: 3120,
-        reservationsCount: 980,
-        noShowCount: 54,
-        cancelledCount: 72,
-        depositPaidTotal: 18600,
-        depositPaidCount: 210,
-      }
-    : summaryQ.data?.totals;
+  const pieData = rs
+    ? [
+        { name: "Başarılı", value: (rs.confirmed ?? 0) + (rs.arrived ?? 0) },
+        { name: "No-show", value: rs.no_show ?? 0 },
+        { name: "İptal", value: rs.cancelled ?? 0 },
+      ]
+    : [];
 
-  const points = demoMode ? makeDemoTimeseries(tsMetric, 14) : (tsQ.data?.points ?? []);
-  const topRows = demoMode ? makeDemoTop(topMetric) : (topQ.data?.rows ?? []);
-
-  const noShowRate =
-    totals && totals.reservationsCount > 0
-      ? (totals.noShowCount || 0) / totals.reservationsCount
-      : 0;
-  const cancelRate =
-    totals && totals.reservationsCount > 0
-      ? (totals.cancelledCount || 0) / totals.reservationsCount
-      : 0;
-  const depositConversion =
-    totals && totals.reservationsCount > 0
-      ? (totals.depositPaidCount || 0) / totals.reservationsCount
-      : 0;
-
-  const kpiCards = useMemo(() => {
-    return [
-      { title: "Toplam Satış", value: totals ? fmtMoney(totals.salesTotal, currency, locale) : "-" },
-      { title: "Sipariş", value: totals ? fmtInt(totals.ordersCount, locale) : "-" },
-      { title: "Rezervasyon", value: totals ? fmtInt(totals.reservationsCount, locale) : "-" },
-      { title: "No-show Oranı", value: totals ? pct(noShowRate) : "-" },
-      { title: "İptal Oranı", value: totals ? pct(cancelRate) : "-" },
-      { title: "Depozito Dönüşüm", value: totals ? pct(depositConversion) : "-" },
-    ];
-  }, [totals, currency, locale, noShowRate, cancelRate, depositConversion]);
-
-  const chartData = useMemo(() => {
-    return points.map((p: any) => ({
-      ...p,
-      label: new Date(p.t).toLocaleDateString(locale, { month: "short", day: "2-digit" }),
-    }));
-  }, [points, locale]);
-
-  const valueFormatter = (v: any) => {
-    if (tsMetric === "sales" || tsMetric === "deposits") return fmtMoney(v, currency, locale);
-    return fmtInt(v, locale);
-  };
-
-  const topValueFormatter = (v: any) => {
-    if (topMetric === "sales") return fmtMoney(v, currency, locale);
-    return fmtInt(v, locale);
-  };
-
-  // --- IMPORTANT: Detay route ---
-  // Senin panel route’un /panel/restaurants/:rid olmayabilir.
-  // Eğer farklıysa bunu tek yerden değiştir.
-  const getRestaurantDetailPath = (rid: string) => `/panel/restaurants/${rid}`;
+  const top = Array.isArray(ov?.topRestaurants) ? ov!.topRestaurants : [];
 
   return (
     <div className="flex gap-6">
@@ -363,48 +325,31 @@ export default function OrgDashboardPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">Organizasyon Paneli</h2>
-            <div className="text-xs text-gray-500">
-              KPI • Trend • Restoran karşılaştırma • {currency}
+            <div className="text-sm text-gray-500">
+              Bağlı organizasyonlarınızı yönetin ve raporları görüntüleyin.
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Organizasyon</span>
-              <select
-                className="text-sm border rounded px-2 py-1 bg-white"
-                value={selectedOrgId}
-                onChange={(e) => setSelectedOrgId(e.target.value)}
-                disabled={orgs.length === 0}
-              >
-                {orgs.length === 0 ? (
-                  <option value="">-</option>
-                ) : (
-                  orgs.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name}
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-
-            <label className="flex items-center gap-2 text-xs text-gray-600">
-              <input
-                type="checkbox"
-                checked={demoMode}
-                onChange={(e) => setDemoMode(e.target.checked)}
-              />
-              Demo aktif (örnek veriler)
-            </label>
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-gray-600">Organizasyon</label>
+            <select
+              className="px-3 py-2 rounded-lg border bg-white text-sm"
+              value={selectedOrgId}
+              onChange={(e) => setSelectedOrgId(e.target.value)}
+              disabled={orgs.length === 0}
+            >
+              {orgs.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
         <Card title="Bağlı Olduğunuz Organizasyonlar">
           {orgs.length === 0 ? (
-            <div className="text-sm text-gray-500">
-              Herhangi bir organizasyona bağlı değilsiniz.
-            </div>
+            <div className="text-sm text-gray-500">Herhangi bir organizasyona bağlı değilsiniz.</div>
           ) : (
             <div className="overflow-auto">
               <table className="min-w-full text-sm">
@@ -422,18 +367,14 @@ export default function OrgDashboardPage() {
                     return (
                       <tr key={orgId} className="border-t">
                         <td className="py-2 px-4">{o.name}</td>
-                        <td className="py-2 px-4">{o.region || "-"}</td>
+                        <td className="py-2 px-4">{o.region || (orgId === selectedOrgId ? (orgRegion || "-") : "-")}</td>
                         <td className="py-2 px-4">{prettyOrgRole(o.role)}</td>
                         <td className="py-2 px-4 text-right">
                           {orgId && (
                             <button
                               type="button"
                               className="inline-flex items-center px-3 py-1.5 text-xs rounded bg-gray-100 hover:bg-gray-200"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                nav(`/org/organizations/${orgId}/menu`);
-                              }}
+                              onClick={() => nav(`/org/organizations/${orgId}/menu`)}
                             >
                               Menüyü Yönet
                             </button>
@@ -447,307 +388,239 @@ export default function OrgDashboardPage() {
             </div>
           )}
 
-          <p className="mt-3 text-xs text-gray-500">
-            Yeni şube açma ihtiyaçlarınızı{" "}
-            <a href="/org/branch-requests" className="text-brand-700 underline">
-              Şube Talepleri
-            </a>{" "}
-            ekranından iletebilirsiniz.
-          </p>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <p className="text-xs text-gray-500">
+              Yeni şube açma ihtiyaçlarınızı{" "}
+              <Link to="/org/branch-requests" className="text-brand-700 underline">
+                Şube Talepleri
+              </Link>{" "}
+              ekranından iletebilirsiniz.
+            </p>
+
+            <label className="flex items-center gap-2 text-xs text-gray-600 select-none">
+              <input
+                type="checkbox"
+                checked={demoMode}
+                onChange={(e) => setDemoMode(e.target.checked)}
+              />
+              Demo aktif (örnek veriler)
+            </label>
+          </div>
         </Card>
 
-        <Card title={`Raporlar (Organizasyon Genel) • ${labelOfPreset(preset)}`}>
-          {/* Range controls */}
-          <div className="flex flex-wrap items-center gap-3">
+        <Card title={`Raporlar (Organizasyon Genel) • ${periodLabel(period)}`}>
+          <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Periyot</span>
+              <div className="text-sm text-gray-600">Periyot</div>
               <select
-                className="text-sm border rounded px-2 py-1 bg-white"
-                value={preset}
-                onChange={(e) => setPreset(e.target.value as any)}
-                disabled={useCustomRange || demoMode}
+                className="px-3 py-2 rounded-lg border bg-white text-sm"
+                value={period}
+                onChange={(e) => setPeriod(e.target.value as Period)}
               >
-                <option value="day">Günlük</option>
-                <option value="week">Haftalık</option>
-                <option value="month">Aylık</option>
-                <option value="year">Yıllık</option>
+                <option value="daily">Günlük</option>
+                <option value="weekly">Haftalık</option>
+                <option value="monthly">Aylık</option>
+                <option value="yearly">Yıllık</option>
               </select>
             </div>
 
-            <label className="flex items-center gap-2 text-xs text-gray-600">
+            <label className="flex items-center gap-2 text-sm text-gray-600">
               <input
                 type="checkbox"
                 checked={useCustomRange}
                 onChange={(e) => setUseCustomRange(e.target.checked)}
-                disabled={demoMode}
               />
               Tarih aralığı seç
             </label>
 
-            {useCustomRange && !demoMode && (
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">Başlangıç</span>
-                  <input
-                    type="date"
-                    className="text-sm border rounded px-2 py-1 bg-white"
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">Bitiş</span>
-                  <input
-                    type="date"
-                    className="text-sm border rounded px-2 py-1 bg-white"
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                  />
-                </div>
+            {useCustomRange && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  className="px-3 py-2 rounded-lg border bg-white text-sm"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                />
+                <span className="text-sm text-gray-400">→</span>
+                <input
+                  type="date"
+                  className="px-3 py-2 rounded-lg border bg-white text-sm"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                />
               </div>
             )}
 
             <div className="ml-auto text-xs text-gray-500">
-              {demoMode
-                ? "Demo aktif (örnek veriler)"
-                : summaryQ.isFetching || tsQ.isFetching || topQ.isFetching
-                ? "Güncelleniyor..."
-                : "Canlı veri"}
+              {orgDetailQ.isLoading ? "Organizasyon bilgisi yükleniyor…" : `Para birimi: ${currency}`}
             </div>
           </div>
 
-          {/* KPI Grid (more modern) */}
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {kpiCards.map((c) => (
-              <div key={c.title} className="rounded-xl border bg-white p-3 shadow-sm">
-                <div className="text-[11px] tracking-wide text-gray-500">{c.title}</div>
-                <div className="mt-1 text-base font-semibold">{c.value}</div>
-              </div>
-            ))}
+          <div className="mt-4">
+            <StatGrid>
+              <Stat
+                label="Toplam Satış"
+                value={formatMoney(totals?.revenueTotal ?? 0, currency, locale)}
+              />
+              <Stat label="Sipariş" value={totals?.ordersCount ?? 0} />
+              <Stat label="Rezervasyon" value={totals?.reservationsCount ?? 0} />
+              <Stat label="No-show" value={totals?.noShowCount ?? 0} />
+              <Stat label="İptal" value={totals?.cancelCount ?? 0} />
+              <Stat
+                label="Depozito (Ödenen)"
+                value={formatMoney(totals?.depositPaidTotal ?? 0, currency, locale)}
+                helper={`${totals?.depositPaidCount ?? 0} ödeme`}
+              />
+              <Stat
+                label="Depozito Dönüşüm"
+                value={formatPct(totals?.depositConversionPct ?? 0)}
+              />
+              <Stat
+                label="Aralık"
+                value={
+                  <span className="text-base font-semibold">
+                    {ov?.range?.from ?? from} → {ov?.range?.to ?? to}
+                  </span>
+                }
+              />
+            </StatGrid>
           </div>
 
-          {!demoMode && (summaryQ.isError || tsQ.isError || topQ.isError) && (
-            <div className="mt-4 text-sm text-red-600">
-              Rapor verisi alınırken hata oluştu. (Rol / endpoint / auth kontrol et)
-            </div>
-          )}
-
-          {/* Modern charts row */}
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Trend (Area + gradient) */}
-            <div className="rounded-xl border bg-white p-4 shadow-sm lg:col-span-2">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 bg-white rounded-2xl shadow-soft p-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <div className="font-semibold text-sm">Trend</div>
-                  <div className="text-xs text-gray-500">
-                    {metricLabel(tsMetric, currency)} • bucket: {tsBucket}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    className="text-sm border rounded px-2 py-1 bg-white"
-                    value={tsMetric}
-                    onChange={(e) => setTsMetric(e.target.value as Metric)}
-                  >
-                    <option value="sales">Satış</option>
-                    <option value="orders">Sipariş</option>
-                    <option value="reservations">Rezervasyon</option>
-                    <option value="no_show">No-show</option>
-                    <option value="cancelled">İptal</option>
-                    <option value="deposits">Depozito</option>
-                  </select>
-
-                  <select
-                    className="text-sm border rounded px-2 py-1 bg-white"
-                    value={tsBucket}
-                    onChange={(e) => setTsBucket(e.target.value as any)}
-                  >
-                    <option value="day">Gün</option>
-                    <option value="week">Hafta</option>
-                    <option value="month">Ay</option>
-                  </select>
+                  <div className="text-sm font-semibold text-gray-700">Trend</div>
+                  <div className="text-xs text-gray-500">Satış ({currency}) • bucket: {bucket}</div>
                 </div>
               </div>
 
               <div className="mt-3 h-64">
-                {chartData.length === 0 ? (
+                {trend.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-sm text-gray-500">
                     Veri yok.
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#4F46E5" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="#4F46E5" stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                    <AreaChart data={trend}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                       <YAxis tick={{ fontSize: 12 }} />
                       <Tooltip
-                        content={
-                          <ModernTooltip
-                            valueFormatter={valueFormatter}
-                          />
-                        }
+                        formatter={(val: any, name: any) => {
+                          if (name === "revenue") return [formatMoney(Number(val), currency, locale), "Satış"];
+                          if (name === "orders") return [Number(val), "Sipariş"];
+                          if (name === "reservations") return [Number(val), "Rezervasyon"];
+                          return [val, name];
+                        }}
                       />
-                      <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke="#4F46E5"
-                        strokeWidth={2}
-                        fill="url(#trendFill)"
-                        dot={false}
-                      />
+                      <Area type="monotone" dataKey="revenue" strokeWidth={2} fillOpacity={0.2} />
                     </AreaChart>
                   </ResponsiveContainer>
                 )}
               </div>
             </div>
 
-            {/* Quick stats (more readable than the old pie) */}
-            <div className="rounded-xl border bg-white p-4 shadow-sm">
-              <div className="font-semibold text-sm">Hızlı İstatistik</div>
-              <div className="mt-1 text-xs text-gray-500">
-                Rezervasyon davranış metrikleri
-              </div>
+            <div className="bg-white rounded-2xl shadow-soft p-4">
+              <div className="text-sm font-semibold text-gray-700">Rezervasyon Dağılımı</div>
+              <div className="text-xs text-gray-500">Başarılı / No-show / İptal</div>
 
-              <div className="mt-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-700">No-show oranı</div>
-                  <div className="text-sm font-semibold">{pct(noShowRate)}</div>
-                </div>
-                <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div
-                    className="h-full bg-rose-500"
-                    style={{ width: `${Math.min(100, Math.round(noShowRate * 100))}%` }}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-700">İptal oranı</div>
-                  <div className="text-sm font-semibold">{pct(cancelRate)}</div>
-                </div>
-                <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div
-                    className="h-full bg-amber-500"
-                    style={{ width: `${Math.min(100, Math.round(cancelRate * 100))}%` }}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-700">Depozito dönüşüm</div>
-                  <div className="text-sm font-semibold">{pct(depositConversion)}</div>
-                </div>
-                <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500"
-                    style={{ width: `${Math.min(100, Math.round(depositConversion * 100))}%` }}
-                  />
-                </div>
-
-                <div className="pt-2 text-xs text-gray-500">
-                  Bu blok “eski pie chart” hissini bitiriyor; daha modern ve okunur.
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Top restaurants (modern bar) */}
-          <div className="mt-4 rounded-xl border bg-white p-4 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="font-semibold text-sm">Top Restoranlar</div>
-                <div className="text-xs text-gray-500">
-                  {topMetric === "sales" ? `Ciro (${currency})` : topMetric === "orders" ? "Sipariş" : "Rezervasyon"} bazlı
-                </div>
-              </div>
-
-              <select
-                className="text-sm border rounded px-2 py-1 bg-white"
-                value={topMetric}
-                onChange={(e) => setTopMetric(e.target.value as any)}
-              >
-                <option value="sales">Satış</option>
-                <option value="orders">Sipariş</option>
-                <option value="reservations">Rezervasyon</option>
-              </select>
-            </div>
-
-            <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="h-72">
-                {topRows.length === 0 ? (
+              <div className="mt-3 h-64">
+                {pieData.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-sm text-gray-500">
                     Veri yok.
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={topRows
-                        .slice(0, 10)
-                        .map((r) => ({
-                          ...r,
-                          name: String(r.restaurantName || r.restaurantId).slice(0, 26),
-                        }))}
-                      layout="vertical"
-                      margin={{ left: 12, right: 18, top: 8, bottom: 8 }}
-                      barCategoryGap={10}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.18} />
-                      <XAxis type="number" tick={{ fontSize: 12 }} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={150} />
-                      <Tooltip content={<ModernTooltip valueFormatter={topValueFormatter} />} />
-                      <Legend />
-                      <Bar dataKey="value" name="Değer" fill="#4F46E5" radius={[8, 8, 8, 8]} />
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={55}
+                        outerRadius={85}
+                        paddingAngle={2}
+                      >
+                        {/* Renk belirtmeyi istemedin ama burada “modern görünüm” için zorunlu.
+                            İstersen renkleri brand palette’ine göre ayarlarız. */}
+                        {pieData.map((_, idx) => (
+                          <Cell key={idx} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+
+              <div className="mt-2 text-xs text-gray-500">
+                Bu grafiği “confirmed/arrived/pending” detayına da genişletebiliriz.
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 bg-white rounded-2xl shadow-soft p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold text-gray-700">Top Restoranlar</div>
+                <div className="text-xs text-gray-500">Ciro bazlı</div>
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="h-72">
+                {top.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                    Veri yok.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={top}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} hide />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip
+                        formatter={(val: any) => [formatMoney(Number(val), currency, locale), "Satış"]}
+                        labelFormatter={(label: any) => String(label)}
+                      />
+                      <Bar dataKey="value" />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
               </div>
 
-              <div className="overflow-auto border rounded-xl">
+              <div className="overflow-auto">
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="text-left text-gray-500">
                       <th className="py-2 px-3">Restoran</th>
-                      <th className="py-2 px-3 text-right">Değer</th>
+                      <th className="py-2 px-3">Değer</th>
                       <th className="py-2 px-3 text-right">İşlem</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {topRows.length === 0 ? (
+                    {top.length === 0 ? (
                       <tr className="border-t">
                         <td className="py-2 px-3 text-gray-500" colSpan={3}>
                           Veri yok.
                         </td>
                       </tr>
                     ) : (
-                      topRows.slice(0, 10).map((r) => (
-                        <tr key={String(r.restaurantId)} className="border-t">
-                          <td className="py-2 px-3">
-                            {r.restaurantName || String(r.restaurantId)}
-                          </td>
+                      top.map((r) => (
+                        <tr key={r.restaurantId} className="border-t">
+                          <td className="py-2 px-3">{r.name}</td>
+                          <td className="py-2 px-3">{formatMoney(r.value, currency, locale)}</td>
                           <td className="py-2 px-3 text-right">
-                            {topMetric === "sales"
-                              ? fmtMoney(r.value, currency, locale)
-                              : fmtInt(r.value, locale)}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            <button
-                              type="button"
-                              className="inline-flex items-center px-3 py-1.5 text-xs rounded bg-gray-100 hover:bg-gray-200"
+                            <Link
+                              to={getRestaurantDetailPath(String(r.restaurantId))}
                               onClick={(e) => {
-                                e.preventDefault();
+                                // “refresh” bug’ını kökten kes
                                 e.stopPropagation();
-                                const path = getRestaurantDetailPath(String(r.restaurantId));
-                                nav(path);
                               }}
-                              title="Restoran detayına git"
+                              className="inline-flex items-center px-3 py-1.5 text-xs rounded bg-gray-100 hover:bg-gray-200"
                             >
                               Detay
-                            </button>
+                            </Link>
                           </td>
                         </tr>
                       ))
@@ -755,13 +628,18 @@ export default function OrgDashboardPage() {
                   </tbody>
                 </table>
 
-                <div className="p-3 text-xs text-gray-500">
-                  Eğer “Detay” tıklayınca sadece refresh oluyorsa:
-                  Deploy tarafında SPA rewrite yok demektir (/* → /index.html).
+                <div className="mt-2 text-xs text-gray-500">
+                  Not: Detay route’un `/panel/restaurants/:id` değilse, `getRestaurantDetailPath()` fonksiyonunu değiştir.
                 </div>
               </div>
             </div>
           </div>
+
+          {overviewQ.isError && (
+            <div className="mt-3 text-sm text-red-600">
+              Rapor alınamadı. Endpoint veya yetki kontrolü gerekiyor.
+            </div>
+          )}
         </Card>
       </div>
     </div>
