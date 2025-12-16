@@ -108,7 +108,10 @@ export function allowLocationManagerOrAdmin(paramName = "rid") {
     }
 
     // 2) Membership
-    const memberships = Array.isArray(user.restaurantMemberships) ? user.restaurantMemberships : [];
+    const memberships = Array.isArray(user.restaurantMemberships)
+      ? user.restaurantMemberships
+      : [];
+
     const allowedRoles = ["location_manager", "staff"];
 
     const ok = memberships.some((m) => {
@@ -116,6 +119,18 @@ export function allowLocationManagerOrAdmin(paramName = "rid") {
       const role = String(m?.role || "");
       return restRef === targetId && allowedRoles.includes(role);
     });
+
+    // ⬇⬇⬇ TAM OLARAK BURAYA EKLİYORSUN ⬇⬇⬇
+    if (process.env.AUTH_DEBUG === "1") {
+      console.log("---- allowLocationManagerOrAdmin DEBUG ----");
+      console.log("targetId:", targetId);
+      console.log("user.restaurantId:", user.restaurantId);
+      console.log("memberships:", memberships);
+      console.log("allowedRoles:", allowedRoles);
+      console.log("ok:", ok);
+      console.log("------------------------------------------");
+    }
+    // ⬆⬆⬆ BURAYA ⬆⬆⬆
 
     if (!ok) return next({ status: 403, message: "Forbidden" });
     return next();
