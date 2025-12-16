@@ -1,11 +1,17 @@
 // src/middlewares/auth.js
 import jwt from "jsonwebtoken";
 
-/**
- * Authorization: Bearer <token>
- * required=true -> token yoksa 401
- * required=false -> token yoksa user=null ile devam
- */
+function toIdString(v) {
+  if (!v) return null;
+  // mongoose ObjectId
+  if (typeof v === "object") {
+    if (v._id) return String(v._id);
+    if (v.$oid) return String(v.$oid);
+    if (v.id) return String(v.id);
+  }
+  return String(v);
+}
+
 export function auth(required = true) {
   return (req, res, next) => {
     const dbg = process.env.AUTH_DEBUG === "1";
@@ -20,30 +26,29 @@ export function auth(required = true) {
         return next();
       }
 
-      // verify throws on invalid/expired
-      const payload = jwt.verify(token, process.env.JWT_SECRET, {
-        // opsiyonel tolerans: clock skew durumlarına karşı
-        clockTolerance: 5,
-      });
-
+      const payload = jwt.verify(token, process.env.JWT_SECRET, { clockTolerance: 5 });
       if (dbg) console.log("[auth] jwt ok:", payload);
 
-      // Beklenen claim’leri normalize et
+      const orgs = Array.isArray(payload.organizations) ? payload.organizations : [];
+      const rms = Array.isArray(payload.restaurantMemberships) ? payload.restaurantMemberships : [];
+
       req.user = {
-        id: payload.id || payload._id || null,
+        id: toIdString(payload.id || payload._id),
         role: payload.role || "customer",
         name: payload.name || null,
-        restaurantId: payload.restaurantId ?? null,
+        restaurantId: toIdString(payload.restaurantId),
 
-        // 🆕 Multi-org membership bilgileri token’dan gelsin
-        organizations: Array.isArray(payload.organizations)
-          ? payload.organizations
-          : [],
-        restaurantMemberships: Array.isArray(payload.restaurantMemberships)
-          ? payload.restaurantMemberships
-          : [],
-        // istersen token’ı da taşı
-        // token,
+        organizations: orgs.map((o) => ({
+          ...o,
+          organization: toIdString(o?.organization) || o?.organization,
+        })),
+
+        restaurantMemberships: rms.map((m) => ({
+          ...m,
+          restaurant: toIdString(m?.restaurantId || m?.restaurant || m?.id),
+          // restaurantId gibi legacy alanlar varsa da normalize et
+          restaurantId: toIdString(m?.restaurantId),
+        })),
       };
 
       return next();
@@ -51,38 +56,19 @@ export function auth(required = true) {
       if (process.env.AUTH_DEBUG === "1") {
         console.log("[auth] verify error:", e?.name, e?.message);
       }
-
-      // jwt hataları için daha açıklayıcı cevaplar üret
-      if (e?.name === "TokenExpiredError") {
-        return next({ status: 401, message: "Token expired" });
-      }
-      if (e?.name === "JsonWebTokenError") {
-        return next({ status: 401, message: "Invalid token" });
-      }
+      if (e?.name === "TokenExpiredError") return next({ status: 401, message: "Token expired" });
+      if (e?.name === "JsonWebTokenError") return next({ status: 401, message: "Invalid token" });
       return next({ status: 401, message: "Unauthorized" });
     }
   };
 }
 
-/**
- * Sadece token’ı doğrular ama yoksa 401 vermez.
- * `req.user` ya payload olur, ya da null.
- */
 export const authOptional = () => auth(false);
 
-/** Yardımcı: header’dan Bearer token’ı güvenle ayıkla */
 function extractBearer(headerValue) {
   if (!headerValue || typeof headerValue !== "string") return null;
-
-  // "Bearer <token>" ya da "bearer <token>" gibi varyasyonları yakala
   const parts = headerValue.trim().split(/\s+/);
-  if (parts.length === 2 && /^Bearer$/i.test(parts[0])) {
-    return parts[1];
-  }
-
-  // Bazı durumlarda doğrudan token gönderilebilir
-  if (parts.length === 1 && parts[0].length > 20) {
-    return parts[0];
-  }
+  if (parts.length === 2 && /^Bearer$/i.test(parts[0])) return parts[1];
+  if (parts.length === 1 && parts[0].length > 20) return parts[0];
   return null;
 }

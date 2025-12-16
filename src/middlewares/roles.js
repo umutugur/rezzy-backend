@@ -80,82 +80,44 @@ export function allowOrgOwnerOrAdmin(paramName = "oid") {
   };
 }
 
-// src/middlewares/roles.js
+function toIdString(v) {
+  if (!v) return null;
+  if (typeof v === "object") {
+    if (v._id) return String(v._id);
+    if (v.$oid) return String(v.$oid);
+    if (v.id) return String(v.id);
+  }
+  return String(v);
+}
 
-/**
- * Şube (restaurant) location_manager, staff veya global admin kontrolü.
- *
- * Kullanım:
- *   router.get(
- *     "/admin/restaurants/:rid",
- *     auth(),
- *     allowLocationManagerOrAdmin("rid"),
- *     handler
- *   );
- *
- * - Eğer req.user.role === "admin" ise her zaman geçer.
- * - Değilse aşağıdaki senaryolarda geçer:
- *   1) Legacy: req.user.restaurantId === params[paramName]
- *   2) Yeni membership:
- *      req.user.restaurantMemberships içinde
- *        { restaurant | restaurantId | id: <params[paramName]>,
- *          role: "location_manager" | "staff" }
- */
 export function allowLocationManagerOrAdmin(paramName = "rid") {
   return (req, res, next) => {
     const user = req.user;
-    if (!user) {
-      return next({ status: 401, message: "Unauthorized" });
-    }
+    if (!user) return next({ status: 401, message: "Unauthorized" });
 
-    // Global admin ise direkt geç
-    if (user.role === "admin") {
-      return next();
-    }
+    if (user.role === "admin") return next();
 
     const restaurantId = req.params?.[paramName];
-    if (!restaurantId) {
-      return next({ status: 403, message: "Forbidden" });
-    }
+    if (!restaurantId) return next({ status: 403, message: "Forbidden" });
 
     const targetId = String(restaurantId);
 
-    // 1) Legacy: user.restaurantId ile bağlanmış tek restoran kullanıcısı
-    if (user.restaurantId && String(user.restaurantId) === targetId) {
+    // 1) Legacy
+    if (user.restaurantId && toIdString(user.restaurantId) === targetId) {
       return next();
     }
 
-    // 2) Yeni membership sistemi
-    const memberships = Array.isArray(user.restaurantMemberships)
-      ? user.restaurantMemberships
-      : [];
-
+    // 2) Membership
+    const memberships = Array.isArray(user.restaurantMemberships) ? user.restaurantMemberships : [];
     const allowedRoles = ["location_manager", "staff"];
 
-    const isManager = memberships.some((m) => {
-      if (!m) return false;
-
-      // Membership içindeki restaurant referansını olabildiğince akıllı çöz
-      const restRefRaw =
-        m.restaurantId ||
-        m.restaurant ||
-        m.id ||
-        (typeof m.restaurant === "object" && m.restaurant?._id
-          ? m.restaurant._id
-          : null);
-
-      if (!restRefRaw) return false;
-
-      const restRef = String(restRefRaw);
-      const role = String(m.role || "");
-
+    const ok = memberships.some((m) => {
+      const restRef = toIdString(m?.restaurantId || m?.restaurant || m?.id);
+      const role = String(m?.role || "");
       return restRef === targetId && allowedRoles.includes(role);
     });
 
-    if (!isManager) {
-      return next({ status: 403, message: "Forbidden" });
-    }
-
+    if (!ok) return next({ status: 403, message: "Forbidden" });
     return next();
   };
 }
