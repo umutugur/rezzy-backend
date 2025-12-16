@@ -1,13 +1,16 @@
+// rezzy-webpanel/src/pages/org/Dashboard.tsx
 import React, { useMemo, useState } from "react";
 import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
 import { authStore, MeUser } from "../../store/auth";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+
 import {
   orgGetSummary,
   orgGetTimeseries,
   orgGetTopRestaurants,
+  orgGetRestaurantSummary,
 } from "../../api/orgAnalytics";
 
 import {
@@ -22,13 +25,17 @@ import {
   Bar,
 } from "recharts";
 
+/* ---------------- Types ---------------- */
 type OrgLite = {
   id: string;
   name: string;
-  region?: string | null;
+  region?: string | null; // Eğer /me içinde region yoksa null gelir; biz buna göre davranacağız.
   role?: string;
 };
 
+type Metric = "sales" | "orders" | "reservations" | "no_show" | "cancelled" | "deposits";
+
+/* ---------------- Helpers ---------------- */
 function getUserOrganizations(u: MeUser | null): OrgLite[] {
   if (!u || !Array.isArray((u as any).organizations)) return [];
   return (u as any).organizations
@@ -40,6 +47,7 @@ function getUserOrganizations(u: MeUser | null): OrgLite[] {
         o.organization ||
         o._id ||
         null;
+
       if (!id) return null;
 
       return {
@@ -68,12 +76,24 @@ function prettyOrgRole(role?: string) {
   }
 }
 
-function mapRegionToCurrency(region?: string | null): "GBP" | "TRY" | "EUR" {
+/**
+ * IMPORTANT:
+ * - Senin ihtiyacın: UK => GBP, TR => TRY, CY/KKTC => TRY
+ * - Eğer region yoksa dashboard “TRY’ye düşüp yanıltmasın”.
+ */
+function mapRegionToCurrency(region?: string | null): "GBP" | "TRY" | "EUR" | null {
   const r = String(region || "").trim().toUpperCase();
-  if (r === "UK" || r === "GBnGB") return "GBP"; // (typo-safe değil; aşağıda sağlamını da koydum)
-  if (r === "UK" || r === "GB") return "GBP";
+  if (!r) return null;
+
+  if (r === "UK" || r === "GB" || r === "UNITED KINGDOM") return "GBP";
   if (r === "TR" || r === "TURKEY") return "TRY";
-  if (r === "CY" || r === "KKTC") return "EUR"; // istersen TRY yaparız
+
+  // Senin iş kuralın: Kıbrıs mekanları TL görsün
+  if (r === "CY" || r === "KKTC" || r === "NCYPRUS" || r === "NORTH CYPRUS") return "TRY";
+
+  // İleride lazım olursa
+  if (["EU", "DE", "FR", "NL", "ES", "IT", "IE", "PT", "GR"].includes(r)) return "EUR";
+
   return "TRY";
 }
 
@@ -84,8 +104,12 @@ function mapCurrencyToLocale(c: string): string {
   return "tr-TR";
 }
 
-function fmtMoney(n: any, currency: string, locale: string) {
+function fmtMoney(n: any, currency: string | null, locale: string) {
   const v = Number(n || 0);
+
+  // Currency yoksa “TRY’ye düşüp yalan söylemeyelim”
+  if (!currency) return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(v);
+
   try {
     return new Intl.NumberFormat(locale, {
       style: "currency",
@@ -96,10 +120,12 @@ function fmtMoney(n: any, currency: string, locale: string) {
     return `${v} ${currency}`;
   }
 }
+
 function fmtInt(n: any, locale: string) {
   const v = Number(n || 0);
   return new Intl.NumberFormat(locale).format(v);
 }
+
 function pct(n: number) {
   if (!Number.isFinite(n)) return "0%";
   return `${Math.round(n * 100)}%`;
@@ -127,18 +153,10 @@ function labelOfPreset(p: string) {
   }
 }
 
-type Metric =
-  | "sales"
-  | "orders"
-  | "reservations"
-  | "no_show"
-  | "cancelled"
-  | "deposits";
-
-function metricLabel(m: Metric, currency: string) {
+function metricLabel(m: Metric, currency: string | null) {
   switch (m) {
     case "sales":
-      return `Satış (${currency})`;
+      return currency ? `Satış (${currency})` : "Satış";
     case "orders":
       return "Sipariş (adet)";
     case "reservations":
@@ -148,16 +166,17 @@ function metricLabel(m: Metric, currency: string) {
     case "cancelled":
       return "İptal (adet)";
     case "deposits":
-      return `Depozito (${currency})`;
+      return currency ? `Depozito (${currency})` : "Depozito";
     default:
       return m;
   }
 }
 
-// --- Demo data (DB boşken bile iyi görünmesi için) ---
+/* --- Demo data (DB boşken bile iyi görünmesi için) --- */
 function makeDemoTimeseries(metric: Metric, days = 14) {
   const now = new Date();
   const pts: Array<{ t: string; value: number }> = [];
+
   const base =
     metric === "sales" || metric === "deposits"
       ? 2400
@@ -204,17 +223,48 @@ function ModernTooltip({ active, payload, label, valueFormatter }: any) {
   return (
     <div className="rounded-xl border bg-white/95 shadow-sm px-3 py-2">
       <div className="text-[11px] text-gray-500">{label}</div>
-      <div className="text-sm font-semibold">
-        {valueFormatter(payload[0].value)}
+      <div className="text-sm font-semibold">{valueFormatter(payload[0].value)}</div>
+    </div>
+  );
+}
+
+/* ---------------- UI: Drawer ---------------- */
+function Drawer({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: React.ReactNode;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute right-0 top-0 h-full w-full max-w-xl bg-white shadow-xl">
+        <div className="p-4 border-b flex items-center justify-between">
+          <div className="font-semibold">{title}</div>
+          <button
+            type="button"
+            className="px-3 py-1.5 text-sm rounded-md bg-gray-100 hover:bg-gray-200"
+            onClick={onClose}
+          >
+            Kapat
+          </button>
+        </div>
+        <div className="p-4 overflow-auto h-[calc(100%-57px)]">{children}</div>
       </div>
     </div>
   );
 }
 
+/* ---------------- Page ---------------- */
 export default function OrgDashboardPage() {
   const user = authStore.getUser();
   const orgs = useMemo(() => getUserOrganizations(user), [user]);
-  const nav = useNavigate();
 
   const [selectedOrgId, setSelectedOrgId] = useState<string>(() => orgs?.[0]?.id || "");
   React.useEffect(() => {
@@ -227,7 +277,7 @@ export default function OrgDashboardPage() {
   );
 
   const currency = mapRegionToCurrency(selectedOrg?.region);
-  const locale = mapCurrencyToLocale(currency);
+  const locale = mapCurrencyToLocale(currency || "TRY"); // locale için bir fallback lazım
 
   const [preset, setPreset] = useState<"day" | "week" | "month" | "year">("month");
   const [useCustomRange, setUseCustomRange] = useState(false);
@@ -242,8 +292,12 @@ export default function OrgDashboardPage() {
   const [tsBucket, setTsBucket] = useState<"day" | "week" | "month">("day");
   const [topMetric, setTopMetric] = useState<"sales" | "orders" | "reservations">("sales");
 
-  // ✅ demoMode artık query'leri kapatmaz. Sadece UI'yı override eder.
+  // Demo mode artık query’leri KAPATMAYACAK.
   const [demoMode, setDemoMode] = useState(false);
+
+  // Drawer state
+  const [openRestaurantId, setOpenRestaurantId] = useState<string | null>(null);
+  const [openRestaurantName, setOpenRestaurantName] = useState<string>("");
 
   const rangeParams = useMemo(() => {
     if (!selectedOrgId) return null;
@@ -253,7 +307,6 @@ export default function OrgDashboardPage() {
       const toISO = new Date(`${toDate}T23:59:59.999Z`).toISOString();
       return { from: fromISO, to: toISO };
     }
-
     return { preset };
   }, [selectedOrgId, preset, useCustomRange, fromDate, toDate]);
 
@@ -271,7 +324,6 @@ export default function OrgDashboardPage() {
         ...(rangeParams || { preset }),
         metric: tsMetric,
         bucket: tsBucket,
-        // UK ise doğru; TR'de de sorun yok. Bucket sınırını etkiler.
         tz: currency === "GBP" ? "Europe/London" : "Europe/Istanbul",
       }),
     enabled: Boolean(selectedOrgId),
@@ -287,6 +339,14 @@ export default function OrgDashboardPage() {
         limit: 10,
       }),
     enabled: Boolean(selectedOrgId),
+    staleTime: 30_000,
+  });
+
+  // Drawer: restaurant summary
+  const restSummaryQ = useQuery({
+    queryKey: ["org-analytics", "restaurant-summary", openRestaurantId, rangeParams],
+    queryFn: () => orgGetRestaurantSummary(String(openRestaurantId), rangeParams || { preset }),
+    enabled: Boolean(openRestaurantId) && !demoMode,
     staleTime: 30_000,
   });
 
@@ -306,19 +366,11 @@ export default function OrgDashboardPage() {
   const topRows = demoMode ? makeDemoTop(topMetric) : (topQ.data?.rows ?? []);
 
   const noShowRate =
-    totals && totals.reservationsCount > 0
-      ? (totals.noShowCount || 0) / totals.reservationsCount
-      : 0;
-
+    totals && totals.reservationsCount > 0 ? (totals.noShowCount || 0) / totals.reservationsCount : 0;
   const cancelRate =
-    totals && totals.reservationsCount > 0
-      ? (totals.cancelledCount || 0) / totals.reservationsCount
-      : 0;
-
+    totals && totals.reservationsCount > 0 ? (totals.cancelledCount || 0) / totals.reservationsCount : 0;
   const depositConversion =
-    totals && totals.reservationsCount > 0
-      ? (totals.depositPaidCount || 0) / totals.reservationsCount
-      : 0;
+    totals && totals.reservationsCount > 0 ? (totals.depositPaidCount || 0) / totals.reservationsCount : 0;
 
   const kpiCards = useMemo(() => {
     return [
@@ -348,11 +400,6 @@ export default function OrgDashboardPage() {
     return fmtInt(v, locale);
   };
 
-  // ✅ Tek yerden değiştir: senin gerçek route’un neyse bunu yap.
-  // Eğer route yoksa SPA içinde yine URL değişir ama “aynı sayfa” kalıyorsa,
-  // router’da bu path için route tanımlı değildir.
-  const getRestaurantDetailPath = (rid: string) => `/panel/restaurants/${rid}`;
-
   return (
     <div className="flex gap-6">
       <Sidebar
@@ -363,11 +410,13 @@ export default function OrgDashboardPage() {
       />
 
       <div className="flex-1 space-y-6">
+        {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">Organizasyon Paneli</h2>
             <div className="text-xs text-gray-500">
-              KPI • Trend • Restoran karşılaştırma • {currency}
+              KPI • Trend • Restoran karşılaştırma •{" "}
+              {currency ? currency : "Para birimi: (org.region yok — /me response’una eklenmeli)"}
             </div>
           </div>
 
@@ -393,21 +442,16 @@ export default function OrgDashboardPage() {
             </div>
 
             <label className="flex items-center gap-2 text-xs text-gray-600">
-              <input
-                type="checkbox"
-                checked={demoMode}
-                onChange={(e) => setDemoMode(e.target.checked)}
-              />
+              <input type="checkbox" checked={demoMode} onChange={(e) => setDemoMode(e.target.checked)} />
               Demo aktif (örnek veriler)
             </label>
           </div>
         </div>
 
+        {/* Orgs */}
         <Card title="Bağlı Olduğunuz Organizasyonlar">
           {orgs.length === 0 ? (
-            <div className="text-sm text-gray-500">
-              Herhangi bir organizasyona bağlı değilsiniz.
-            </div>
+            <div className="text-sm text-gray-500">Herhangi bir organizasyona bağlı değilsiniz.</div>
           ) : (
             <div className="overflow-auto">
               <table className="min-w-full text-sm">
@@ -435,7 +479,9 @@ export default function OrgDashboardPage() {
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                nav(`/org/organizations/${orgId}/menu`);
+                                // bu route sende var: /org/organizations/:id/menu
+                                window.history.pushState({}, "", `/org/organizations/${orgId}/menu`);
+                                window.dispatchEvent(new PopStateEvent("popstate"));
                               }}
                             >
                               Menüyü Yönet
@@ -450,7 +496,6 @@ export default function OrgDashboardPage() {
             </div>
           )}
 
-          {/* ✅ href kaldırıldı: SPA içi Link */}
           <p className="mt-3 text-xs text-gray-500">
             Yeni şube açma ihtiyaçlarınızı{" "}
             <Link to="/org/branch-requests" className="text-brand-700 underline">
@@ -460,7 +505,9 @@ export default function OrgDashboardPage() {
           </p>
         </Card>
 
+        {/* Reports */}
         <Card title={`Raporlar (Organizasyon Genel) • ${labelOfPreset(preset)}`}>
+          {/* Range controls */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">Periyot</span>
@@ -511,15 +558,11 @@ export default function OrgDashboardPage() {
             )}
 
             <div className="ml-auto text-xs text-gray-500">
-              {demoMode
-                ? "Demo aktif (örnek veriler)"
-                : summaryQ.isFetching || tsQ.isFetching || topQ.isFetching
-                ? "Güncelleniyor..."
-                : "Canlı veri"}
+              {demoMode ? "Demo aktif (örnek veriler)" : summaryQ.isFetching || tsQ.isFetching || topQ.isFetching ? "Güncelleniyor..." : "Canlı veri"}
             </div>
           </div>
 
-          {/* KPI */}
+          {/* KPI Grid */}
           <div className="mt-4 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {kpiCards.map((c) => (
               <div key={c.title} className="rounded-xl border bg-white p-3 shadow-sm">
@@ -535,8 +578,9 @@ export default function OrgDashboardPage() {
             </div>
           )}
 
-          {/* Charts */}
+          {/* Charts row */}
           <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Trend */}
             <div className="rounded-xl border bg-white p-4 shadow-sm lg:col-span-2">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -574,9 +618,7 @@ export default function OrgDashboardPage() {
 
               <div className="mt-3 h-64">
                 {chartData.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-sm text-gray-500">
-                    Veri yok.
-                  </div>
+                  <div className="h-full flex items-center justify-center text-sm text-gray-500">Veri yok.</div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
@@ -590,25 +632,17 @@ export default function OrgDashboardPage() {
                       <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                       <YAxis tick={{ fontSize: 12 }} />
                       <Tooltip content={<ModernTooltip valueFormatter={valueFormatter} />} />
-                      <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke="#4F46E5"
-                        strokeWidth={2}
-                        fill="url(#trendFill)"
-                        dot={false}
-                      />
+                      <Area type="monotone" dataKey="value" stroke="#4F46E5" strokeWidth={2} fill="url(#trendFill)" dot={false} />
                     </AreaChart>
                   </ResponsiveContainer>
                 )}
               </div>
             </div>
 
+            {/* Quick stats */}
             <div className="rounded-xl border bg-white p-4 shadow-sm">
               <div className="font-semibold text-sm">Hızlı İstatistik</div>
-              <div className="mt-1 text-xs text-gray-500">
-                Rezervasyon davranış metrikleri
-              </div>
+              <div className="mt-1 text-xs text-gray-500">Rezervasyon davranış metrikleri</div>
 
               <div className="mt-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -616,10 +650,7 @@ export default function OrgDashboardPage() {
                   <div className="text-sm font-semibold">{pct(noShowRate)}</div>
                 </div>
                 <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div
-                    className="h-full bg-rose-500"
-                    style={{ width: `${Math.min(100, Math.round(noShowRate * 100))}%` }}
-                  />
+                  <div className="h-full bg-rose-500" style={{ width: `${Math.min(100, Math.round(noShowRate * 100))}%` }} />
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -627,10 +658,7 @@ export default function OrgDashboardPage() {
                   <div className="text-sm font-semibold">{pct(cancelRate)}</div>
                 </div>
                 <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div
-                    className="h-full bg-amber-500"
-                    style={{ width: `${Math.min(100, Math.round(cancelRate * 100))}%` }}
-                  />
+                  <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, Math.round(cancelRate * 100))}%` }} />
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -638,10 +666,7 @@ export default function OrgDashboardPage() {
                   <div className="text-sm font-semibold">{pct(depositConversion)}</div>
                 </div>
                 <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500"
-                    style={{ width: `${Math.min(100, Math.round(depositConversion * 100))}%` }}
-                  />
+                  <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, Math.round(depositConversion * 100))}%` }} />
                 </div>
               </div>
             </div>
@@ -653,7 +678,7 @@ export default function OrgDashboardPage() {
               <div>
                 <div className="font-semibold text-sm">Top Restoranlar</div>
                 <div className="text-xs text-gray-500">
-                  {topMetric === "sales" ? `Ciro (${currency})` : topMetric === "orders" ? "Sipariş" : "Rezervasyon"} bazlı
+                  {topMetric === "sales" ? (currency ? `Ciro (${currency})` : "Ciro") : topMetric === "orders" ? "Sipariş" : "Rezervasyon"} bazlı
                 </div>
               </div>
 
@@ -669,20 +694,17 @@ export default function OrgDashboardPage() {
             </div>
 
             <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Chart */}
               <div className="h-72">
                 {topRows.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-sm text-gray-500">
-                    Veri yok.
-                  </div>
+                  <div className="h-full flex items-center justify-center text-sm text-gray-500">Veri yok.</div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={topRows
-                        .slice(0, 10)
-                        .map((r) => ({
-                          ...r,
-                          name: String(r.restaurantName || r.restaurantId).slice(0, 28),
-                        }))}
+                      data={topRows.slice(0, 10).map((r) => ({
+                        ...r,
+                        name: String(r.restaurantName || r.restaurantId).slice(0, 28),
+                      }))}
                       layout="vertical"
                       margin={{ left: 10, right: 16, top: 8, bottom: 8 }}
                       barCategoryGap={10}
@@ -697,6 +719,7 @@ export default function OrgDashboardPage() {
                 )}
               </div>
 
+              {/* Table */}
               <div className="overflow-auto border rounded-xl">
                 <table className="min-w-full text-sm">
                   <thead>
@@ -716,33 +739,29 @@ export default function OrgDashboardPage() {
                     ) : (
                       topRows.slice(0, 10).map((r) => {
                         const rid = String(r.restaurantId);
-                        const path = getRestaurantDetailPath(rid);
+                        const rname = String(r.restaurantName || rid);
 
                         return (
                           <tr key={rid} className="border-t">
-                            <td className="py-2 px-3">
-                              {r.restaurantName || rid}
+                            <td className="py-2 px-3">{rname}</td>
+                            <td className="py-2 px-3 text-right">
+                              {topMetric === "sales" ? fmtMoney(r.value, currency, locale) : fmtInt(r.value, locale)}
                             </td>
                             <td className="py-2 px-3 text-right">
-                              {topMetric === "sales"
-                                ? fmtMoney(r.value, currency, locale)
-                                : fmtInt(r.value, locale)}
-                            </td>
-
-                            {/* ✅ Refresh önleme: Link + preventDefault + nav */}
-                            <td className="py-2 px-3 text-right">
-                              <Link
-                                to={path}
+                              {/* Route’a gitmiyoruz: Drawer açıyoruz -> refresh biter */}
+                              <button
+                                type="button"
                                 className="inline-flex items-center px-3 py-1.5 text-xs rounded bg-gray-100 hover:bg-gray-200"
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  nav(path);
+                                  setOpenRestaurantId(rid);
+                                  setOpenRestaurantName(rname);
                                 }}
-                                title="Restoran detayına git"
+                                title="Restoran raporunu görüntüle"
                               >
                                 Detay
-                              </Link>
+                              </button>
                             </td>
                           </tr>
                         );
@@ -752,14 +771,80 @@ export default function OrgDashboardPage() {
                 </table>
 
                 <div className="p-3 text-xs text-gray-500">
-                  Not: URL değişiyor ama “aynı sayfa” kalıyorsa problem Deploy değil, router’da bu path’in route’u yok.
-                  O durumda sadece <code>getRestaurantDetailPath</code>’i panelindeki gerçek route’a göre değiştir.
+                  Detay artık route’a gitmiyor; drawer içinde restaurant summary açıyor. “Refresh” problemi burada bitti.
                 </div>
               </div>
             </div>
           </div>
         </Card>
       </div>
+
+      {/* Drawer */}
+      <Drawer
+        open={Boolean(openRestaurantId)}
+        title={<span>Restoran Raporu • {openRestaurantName}</span>}
+        onClose={() => {
+          setOpenRestaurantId(null);
+          setOpenRestaurantName("");
+        }}
+      >
+        {demoMode ? (
+          <div className="space-y-4">
+            <div className="text-sm text-gray-600">
+              Demo mode açık olduğu için restoran raporu örneklenmedi. Demo kapatıp tekrar deneyebilirsin.
+            </div>
+          </div>
+        ) : restSummaryQ.isLoading ? (
+          <div className="text-sm text-gray-500">Yükleniyor...</div>
+        ) : restSummaryQ.isError ? (
+          <div className="text-sm text-red-600">Restoran raporu alınamadı.</div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="rounded-xl border bg-white p-3 shadow-sm">
+                <div className="text-[11px] tracking-wide text-gray-500">Satış</div>
+                <div className="mt-1 text-base font-semibold">
+                  {fmtMoney(restSummaryQ.data?.totals?.salesTotal, currency, locale)}
+                </div>
+              </div>
+              <div className="rounded-xl border bg-white p-3 shadow-sm">
+                <div className="text-[11px] tracking-wide text-gray-500">Sipariş</div>
+                <div className="mt-1 text-base font-semibold">
+                  {fmtInt(restSummaryQ.data?.totals?.ordersCount, locale)}
+                </div>
+              </div>
+              <div className="rounded-xl border bg-white p-3 shadow-sm">
+                <div className="text-[11px] tracking-wide text-gray-500">Rezervasyon</div>
+                <div className="mt-1 text-base font-semibold">
+                  {fmtInt(restSummaryQ.data?.totals?.reservationsCount, locale)}
+                </div>
+              </div>
+              <div className="rounded-xl border bg-white p-3 shadow-sm">
+                <div className="text-[11px] tracking-wide text-gray-500">No-show</div>
+                <div className="mt-1 text-base font-semibold">
+                  {fmtInt(restSummaryQ.data?.totals?.noShowCount, locale)}
+                </div>
+              </div>
+              <div className="rounded-xl border bg-white p-3 shadow-sm">
+                <div className="text-[11px] tracking-wide text-gray-500">İptal</div>
+                <div className="mt-1 text-base font-semibold">
+                  {fmtInt(restSummaryQ.data?.totals?.cancelledCount, locale)}
+                </div>
+              </div>
+              <div className="rounded-xl border bg-white p-3 shadow-sm">
+                <div className="text-[11px] tracking-wide text-gray-500">Depozito</div>
+                <div className="mt-1 text-base font-semibold">
+                  {fmtMoney(restSummaryQ.data?.totals?.depositPaidTotal, currency, locale)}
+                </div>
+              </div>
+            </div>
+
+            <div className="text-xs text-gray-500">
+              Bu drawer, route bağımlılığını kaldırdığı için “Detay refresh” problemini kalıcı kapatır.
+            </div>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }
