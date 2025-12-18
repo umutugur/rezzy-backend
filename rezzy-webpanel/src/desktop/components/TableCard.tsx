@@ -1,4 +1,6 @@
 import React from "react";
+import { getCurrencySymbolForRegion } from "../../utils/currency";
+import { authStore } from "../../store/auth";
 
 export type TableChannel = "WALK_IN" | "REZVIX" | "QR";
 export type TableStatus = "IDLE" | "OPEN" | "ORDER_READY" | "PAYING" | "NEED_HELP";
@@ -81,6 +83,9 @@ export const TableCard: React.FC<TableCardProps> = ({
   const guestText = guestCount && guestCount > 0 ? `${guestCount} kişi` : "—";
   const sinceText = sinceMinutes!=null ? (sinceMinutes===0?"Şimdi":`+${sinceMinutes} dk`) : "Beklemede";
 
+  const region = (authStore.getUser() as any)?.region;
+  const cur = getCurrencySymbolForRegion(region);
+
   return (
     <article className={rootClass} onClick={onClick}>
       <div className="rezvix-table-card__header" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
@@ -111,7 +116,7 @@ export const TableCard: React.FC<TableCardProps> = ({
 
       <div className="rezvix-table-card__footer">
         <div className="rezvix-table-card__total">
-          {total!=null ? `${total.toLocaleString("tr-TR")}₺`:"—"}
+          {total != null ? `${total.toLocaleString("tr-TR")}${cur}` : "—"}
         </div>
         {channel && (
           <div className="rezvix-table-card__channel">

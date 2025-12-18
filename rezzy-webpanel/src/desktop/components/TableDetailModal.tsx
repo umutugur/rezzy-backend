@@ -1,6 +1,8 @@
 // src/desktop/components/TableDetailModal.tsx
 import React from "react";
 import type { LiveTable } from "../../api/client";
+import { authStore } from "../../store/auth";
+import { getCurrencySymbolForRegion } from "../../utils/currency";
 
 type TableDetail = {
   table: any;
@@ -89,6 +91,25 @@ function channelClass(ch?: string | null): string {
 }
 
 // Servis isteği tipine göre etiket
+function currencySymbolFromSessionCurrency(v?: any): string | null {
+  const c = String(v || "").trim().toUpperCase();
+  if (!c) return null;
+  if (c === "GBP") return "£";
+  if (c === "USD") return "$";
+  if (c === "EUR") return "€";
+  if (c === "TRY") return "₺";
+  return null;
+}
+
+function formatMoney(amount: any, symbol: string): string {
+  const n = Number(amount || 0);
+  // tr-TR formatı korunuyor; sembol sona yazılıyor (mevcut UI alışkanlığı)
+  return `${n.toLocaleString("tr-TR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}${symbol}`;
+}
+
 function serviceRequestLabel(type: string): string {
   if (type === "waiter") return "Garson çağrısı";
   if (type === "bill") return "Hesap istendi";
@@ -114,6 +135,10 @@ export const TableDetailModal: React.FC<Props> = ({
   if (!open || !table) return null;
 
   const mins = minutesSince(table.lastOrderAt ?? null);
+  const user = authStore.getUser();
+  const currencySymbol =
+    currencySymbolFromSessionCurrency((tableDetail as any)?.session?.currency) ||
+    getCurrencySymbolForRegion((user as any)?.region);
   const hasSession = !!tableDetail?.session;
   const hasOrders = !!tableDetail && tableDetail.orders?.length > 0;
   const hasRequests = !!tableDetail && tableDetail.serviceRequests?.length > 0;
@@ -231,10 +256,7 @@ export const TableDetailModal: React.FC<Props> = ({
                       <span>
                         Depozito:{" "}
                         <span className="font-semibold">
-                          {(tableDetail.reservation.depositAmount || 0).toFixed(
-                            2
-                          )}
-                          ₺
+                          {formatMoney(tableDetail.reservation.depositAmount || 0, currencySymbol)}
                         </span>
                       </span>
                       <span>Durum: {tableDetail.reservation.status}</span>
@@ -275,14 +297,14 @@ export const TableDetailModal: React.FC<Props> = ({
                             {formatTime(o.createdAt)}
                           </span>
                           <span className="font-semibold text-[12px] text-slate-800">
-                            {Number(o.total || 0).toFixed(2)}₺
+                            {formatMoney(o.total || 0, currencySymbol)}
                           </span>
                         </div>
                         <div className="text-[11px] text-slate-600">
                           {(o.items || [])
                             .map(
                               (it: any) =>
-                                `${it.qty}× ${it.title} (${it.price}₺)`
+                                `${it.qty}× ${it.title} (${formatMoney(it.price || 0, currencySymbol)})`
                             )
                             .join(", ")}
                         </div>
@@ -337,13 +359,13 @@ export const TableDetailModal: React.FC<Props> = ({
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-slate-300">Kart</span>
                   <span className="font-semibold">
-                    {tableDetail.totals.cardTotal.toFixed(2)}₺
+                    {formatMoney(tableDetail.totals.cardTotal, currencySymbol)}
                   </span>
                 </div>
                 <div className="mt-1 flex items-center justify-between text-[11px]">
                   <span className="text-slate-300">Nakit / Mekanda</span>
                   <span className="font-semibold">
-                    {tableDetail.totals.payAtVenueTotal.toFixed(2)}₺
+                    {formatMoney(tableDetail.totals.payAtVenueTotal, currencySymbol)}
                   </span>
                 </div>
                 <div className="mt-1 flex items-center justify-between text-[11px] border-t border-slate-700 pt-2">
@@ -351,7 +373,7 @@ export const TableDetailModal: React.FC<Props> = ({
                     Genel Toplam
                   </span>
                   <span className="font-semibold text-amber-300">
-                    {tableDetail.totals.grandTotal.toFixed(2)}₺
+                    {formatMoney(tableDetail.totals.grandTotal, currencySymbol)}
                   </span>
                 </div>
               </div>

@@ -68,6 +68,30 @@ function formatMoney(amount: number, currency: CurrencyCode) {
   }
 }
 
+function useHorizontalWheelScroll() {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+
+  const onWheel = React.useCallback((e: React.WheelEvent) => {
+    const el = ref.current;
+    if (!el) return;
+
+    // Trackpad / mouse wheel: convert vertical wheel to horizontal scroll
+    // Only when horizontal overflow exists.
+    const canScrollX = el.scrollWidth > el.clientWidth;
+    if (!canScrollX) return;
+
+    const dy = e.deltaY;
+    const dx = e.deltaX;
+
+    // If the user is mostly scrolling vertically, nudge horizontal.
+    if (Math.abs(dy) > Math.abs(dx)) {
+      el.scrollLeft += dy;
+    }
+  }, []);
+
+  return { ref, onWheel };
+}
+
 export const WalkInOrderModal: React.FC<Props> = ({
   open,
   tableName,
@@ -91,6 +115,8 @@ export const WalkInOrderModal: React.FC<Props> = ({
   submitPending,
 }) => {
   if (!open) return null;
+
+  const catScroll = useHorizontalWheelScroll();
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(7,9,20,0.46)] backdrop-blur-md">
@@ -146,12 +172,16 @@ export const WalkInOrderModal: React.FC<Props> = ({
             )}
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          <div
+            ref={catScroll.ref}
+            onWheel={catScroll.onWheel}
+            className="flex gap-2 overflow-x-auto overflow-y-hidden pb-2 pr-1 whitespace-nowrap overscroll-x-contain scroll-smooth"
+          >
             <button
               type="button"
               onClick={() => onChangeActiveCategoryId("all")}
               className={
-                "min-w-[110px] h-11 px-4 rounded-full border text-[12px] font-medium flex items-center justify-center select-none transition " +
+                "min-w-[110px] shrink-0 h-11 px-4 rounded-full border text-[12px] font-medium flex items-center justify-center select-none transition " +
                 (activeCategoryId === "all"
                   ? "bg-purple-600 text-white border-purple-600 shadow-lg shadow-purple-600/30"
                   : "bg-white/90 text-slate-600 border-slate-200 hover:bg-slate-50")
@@ -166,7 +196,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                 type="button"
                 onClick={() => onChangeActiveCategoryId(cat._id)}
                 className={
-                  "min-w-[110px] h-11 px-4 rounded-full border text-[12px] font-medium flex items-center justify-center select-none transition " +
+                  "min-w-[110px] shrink-0 h-11 px-4 rounded-full border text-[12px] font-medium flex items-center justify-center select-none transition " +
                   (activeCategoryId === cat._id
                     ? "bg-purple-600 text-white border-purple-600 shadow-lg shadow-purple-600/30"
                     : "bg-white/90 text-slate-600 border-slate-200 hover:bg-slate-50")
