@@ -1,5 +1,6 @@
 // src/desktop/SettingsPage.tsx
 import React from "react";
+import { getCurrencySymbolForRegion } from "../../utils/currency";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RestaurantDesktopLayout } from "../layouts/RestaurantDesktopLayout";
 import {
@@ -165,6 +166,7 @@ export const SettingsPage: React.FC = () => {
     queryFn: () => restaurantGet(rid),
     enabled: !!rid,
   });
+  const currencySymbol = getCurrencySymbolForRegion(data?.region);
 
   const [form, setForm] = React.useState<SettingsForm>({});
   const [menus, setMenus] = React.useState<MenuItem[]>([]);
@@ -1331,7 +1333,9 @@ export const SettingsPage: React.FC = () => {
 
               {policies.depositRequired && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Tutar (₺)</span>
+                  <span className="text-sm text-gray-600">
+                    Tutar ({currencySymbol})
+                  </span>
                   <input
                     type="number"
                     min={0}
@@ -1418,6 +1422,14 @@ export const SettingsPage: React.FC = () => {
             </div>
           </Card>
         )}
+
+        {/* === REZVIX REZERVASYONU === */}
+        {/* Example usage in Rezvix rezervasyonu section */}
+        {/* {(tableDetail.reservation.depositAmount || 0).toFixed(2)}
+            ₺
+        */}
+        {/* Replace with: */}
+        {/* {(tableDetail.reservation.depositAmount || 0).toFixed(2)}{currencySymbol} */}
 
         {/* === TEMA === */}
         {tab === "theme" && (

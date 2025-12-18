@@ -1,5 +1,6 @@
 // src/desktop/pages/ReportsPage.tsx
 import React from "react";
+import { getCurrencySymbolForRegion } from "../../utils/currency";
 import { useQuery } from "@tanstack/react-query";
 import { RestaurantDesktopLayout } from "../layouts/RestaurantDesktopLayout";
 import { authStore } from "../../store/auth";
@@ -157,6 +158,13 @@ async function fetchRecentInRange(
 
 export const ReportsPage: React.FC = () => {
   const user = authStore.getUser();
+
+  const region =
+    (user as any)?.region ||
+    user?.organizations?.[0]?.region ||
+    "TR";
+
+  const currencySymbol = getCurrencySymbolForRegion(region);
 
   // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
   const fallbackMembershipRestaurantId =
@@ -338,6 +346,7 @@ export const ReportsPage: React.FC = () => {
                     counts={summary.data!.counts}
                     totals={summary.data!.totals}
                     recent={recent}
+                    currencySymbol={currencySymbol}
                   />
                 )}
             </>
@@ -393,7 +402,10 @@ export const ReportsPage: React.FC = () => {
                 advanced.data &&
                 (advanced.data.reservations.totalCount > 0 ||
                   advanced.data.orders.totalCount > 0) && (
-                  <AdvancedReportsView data={advanced.data as any} />
+                  <AdvancedReportsView
+                    data={advanced.data as any}
+                    currencySymbol={currencySymbol}
+                  />
                 )}
             </>
           )}
@@ -412,6 +424,7 @@ type ReservationSummaryViewProps = {
   counts: Record<string, number>;
   totals: { grossArrived: number; depositConfirmedNoShow: number };
   recent: ReturnType<typeof useQuery<Row[]>>;
+  currencySymbol: string;
 };
 
 const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
@@ -419,6 +432,7 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
   counts,
   totals,
   recent,
+  currencySymbol,
 }) => {
   const totalReservations =
     counts.total ??
@@ -525,7 +539,7 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
                 <span className="rezvix-kitchen-ticket__title">
-                  Toplam Ciro (₺)
+                  {"Toplam Ciro (" + currencySymbol + ")"}
                 </span>
               </div>
               <div className="rezvix-kitchen-ticket__meta">
@@ -539,14 +553,14 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
                   marginTop: 4,
                 }}
               >
-                {Number(totals.grossArrived || 0).toLocaleString("tr-TR")}
+                {Number(totals.grossArrived || 0).toLocaleString("tr-TR")} {currencySymbol}
               </div>
             </div>
 
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
                 <span className="rezvix-kitchen-ticket__title">
-                  Toplam Depozito (₺)
+                  {"Toplam Depozito (" + currencySymbol + ")"}
                 </span>
               </div>
               <div className="rezvix-kitchen-ticket__meta">
@@ -562,7 +576,7 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
               >
                 {Number(
                   totals.depositConfirmedNoShow || 0
-                ).toLocaleString("tr-TR")}
+                ).toLocaleString("tr-TR")} {currencySymbol}
               </div>
             </div>
           </div>
@@ -718,10 +732,12 @@ type AdvancedReportsViewProps = {
       }>;
     };
   };
+  currencySymbol: string;
 };
 
 const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
   data,
+  currencySymbol,
 }) => {
   const { reservations, orders, range, tables } = data;
 
@@ -814,7 +830,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 lineHeight: 1.1,
               }}
             >
-              {totalRevenue.toLocaleString("tr-TR")} ₺
+              {totalRevenue.toLocaleString("tr-TR")} {currencySymbol}
             </div>
             <div
               style={{
@@ -836,8 +852,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 <strong>
                   {Number(
                     reservations.revenueTotal || 0
-                  ).toLocaleString("tr-TR")}{" "}
-                  ₺
+                  ).toLocaleString("tr-TR")} {currencySymbol}
                 </strong>
               </div>
               <div
@@ -851,8 +866,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 <strong>
                   {Number(orders.revenueTotal || 0).toLocaleString(
                     "tr-TR"
-                  )}{" "}
-                  ₺
+                  )} {currencySymbol}
                 </strong>
               </div>
               <div
@@ -864,7 +878,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
               >
                 Toplam depozito:{" "}
                 <strong>
-                  {totalDeposit.toLocaleString("tr-TR")} ₺
+                  {totalDeposit.toLocaleString("tr-TR")} {currencySymbol}
                 </strong>
               </div>
             </div>
@@ -964,8 +978,8 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                     >
                       <th style={{ padding: "6px 8px" }}>Tarih</th>
                       <th style={{ padding: "6px 8px" }}>Rez.</th>
-                      <th style={{ padding: "6px 8px" }}>Depozito</th>
-                      <th style={{ padding: "6px 8px" }}>Ciro</th>
+                      <th style={{ padding: "6px 8px" }}>{`Depozito (${currencySymbol})`}</th>
+                      <th style={{ padding: "6px 8px" }}>{`Ciro (${currencySymbol})`}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -979,10 +993,10 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                           {d.reservations}
                         </td>
                         <td style={{ padding: "6px 8px" }}>
-                          {Number(d.deposits).toLocaleString("tr-TR")}
+                          {Number(d.deposits).toLocaleString("tr-TR")} {currencySymbol}
                         </td>
                         <td style={{ padding: "6px 8px" }}>
-                          {Number(d.revenue).toLocaleString("tr-TR")}
+                          {Number(d.revenue).toLocaleString("tr-TR")} {currencySymbol}
                         </td>
                       </tr>
                     ))}
@@ -1029,7 +1043,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                     >
                       <th style={{ padding: "6px 8px" }}>Ürün</th>
                       <th style={{ padding: "6px 8px" }}>Adet</th>
-                      <th style={{ padding: "6px 8px" }}>Ciro (₺)</th>
+                      <th style={{ padding: "6px 8px" }}>{`Ciro (${currencySymbol})`}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1043,7 +1057,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                         </td>
                         <td style={{ padding: "6px 8px" }}>{it.qty}</td>
                         <td style={{ padding: "6px 8px" }}>
-                          {Number(it.revenue).toLocaleString("tr-TR")}
+                          {Number(it.revenue).toLocaleString("tr-TR")} {currencySymbol}
                         </td>
                       </tr>
                     ))}
@@ -1143,6 +1157,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 amount={walkinRev}
                 count={orders.countsBySource.WALK_IN || 0}
                 share={pct(walkinRev, channelTotal)}
+                currencySymbol={currencySymbol}
               />
               <ChannelLegendItem
                 label="QR Menü"
@@ -1150,6 +1165,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 amount={qrRev}
                 count={orders.countsBySource.QR || 0}
                 share={pct(qrRev, channelTotal)}
+                currencySymbol={currencySymbol}
               />
               <ChannelLegendItem
                 label="Rezvix"
@@ -1157,6 +1173,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 amount={rezvixTableRev}
                 count={orders.countsBySource.REZVIX || 0}
                 share={pct(rezvixTableRev, channelTotal)}
+                currencySymbol={currencySymbol}
               />
               <ChannelLegendItem
                 label="Diğer"
@@ -1164,6 +1181,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 amount={otherRev}
                 count={orders.countsBySource.UNKNOWN || 0}
                 share={pct(otherRev, channelTotal)}
+                currencySymbol={currencySymbol}
               />
             </div>
           </div>
@@ -1219,8 +1237,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
               >
                 {Number(
                   payments.grandTotal || 0
-                ).toLocaleString("tr-TR")}{" "}
-                ₺
+                ).toLocaleString("tr-TR")} {currencySymbol}
               </div>
               <div className="rezvix-kitchen-ticket__meta">
                 Kart + masada ödeme toplamı
@@ -1265,7 +1282,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                     >
                       <th style={{ padding: "6px 8px" }}>Tarih</th>
                       <th style={{ padding: "6px 8px" }}>Sipariş</th>
-                      <th style={{ padding: "6px 8px" }}>Ciro (₺)</th>
+                      <th style={{ padding: "6px 8px" }}>{`Ciro (${currencySymbol})`}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1277,7 +1294,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                         <td style={{ padding: "6px 8px" }}>{d.date}</td>
                         <td style={{ padding: "6px 8px" }}>{d.orders}</td>
                         <td style={{ padding: "6px 8px" }}>
-                          {Number(d.revenue).toLocaleString("tr-TR")}
+                          {Number(d.revenue).toLocaleString("tr-TR")} {currencySymbol}
                         </td>
                       </tr>
                     ))}
@@ -1352,7 +1369,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                           fontSize: 11,
                         }}
                       >
-                        {Number(h.revenue).toLocaleString("tr-TR")} ₺
+                        {Number(h.revenue).toLocaleString("tr-TR")} {currencySymbol}
                       </div>
                     </div>
                   );
@@ -1398,7 +1415,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                     >
                       <th style={{ padding: "6px 8px" }}>Masa</th>
                       <th style={{ padding: "6px 8px" }}>Adisyon</th>
-                      <th style={{ padding: "6px 8px" }}>Ciro (₺)</th>
+                      <th style={{ padding: "6px 8px" }}>{`Ciro (${currencySymbol})`}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1416,7 +1433,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                         <td style={{ padding: "6px 8px" }}>
                           {Number(
                             t.revenueTotal
-                          ).toLocaleString("tr-TR")}
+                          ).toLocaleString("tr-TR")} {currencySymbol}
                         </td>
                       </tr>
                     ))}
@@ -1437,7 +1454,8 @@ const ChannelLegendItem: React.FC<{
   amount: number;
   count: number;
   share: string; // "23.4"
-}> = ({ label, color, amount, count, share }) => {
+  currencySymbol: string;
+}> = ({ label, color, amount, count, share, currencySymbol }) => {
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
       <div
@@ -1452,7 +1470,7 @@ const ChannelLegendItem: React.FC<{
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 600 }}>{label}</div>
         <div style={{ color: "var(--rezvix-text-soft)" }}>
-          {count} sipariş · {amount.toLocaleString("tr-TR")} ₺
+          {count} sipariş · {amount.toLocaleString("tr-TR")} {currencySymbol}
         </div>
         <div style={{ fontSize: 11 }}>{share}% pay</div>
       </div>

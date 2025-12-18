@@ -7,6 +7,7 @@ import { api, restaurantUpdateReservationStatus } from "../../api/client";
 import { authStore } from "../../store/auth";
 import { showToast } from "../../ui/Toast";
 import { asId } from "../../lib/id"; // ✅ EKLENDİ
+import { getCurrencySymbolForRegion } from "../../utils/currency";
 
 // ---- Türler (RestaurantReservationsPage ile aynı model) ----
 type Row = {
@@ -63,6 +64,12 @@ async function fetchRezvixOrders(rid: string): Promise<Resp> {
 
 export const RezvixOrdersPage: React.FC = () => {
   const user = authStore.getUser();
+  const region =
+     (user as any)?.region ||
+     user?.organizations?.[0]?.region ||
+     "TR";
+ 
+   const currencySymbol = getCurrencySymbolForRegion(region);
 
   // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
   const fallbackMembershipRestaurantId =
@@ -176,7 +183,7 @@ export const RezvixOrdersPage: React.FC = () => {
             </span>
             <span className="rezvix-kitchen-ticket__qty">
               {r.totalPrice != null
-                ? `${r.totalPrice.toLocaleString("tr-TR")}₺`
+                ? `${r.totalPrice.toLocaleString("tr-TR")}${currencySymbol}`
                 : "—"}
             </span>
           </li>
@@ -184,7 +191,7 @@ export const RezvixOrdersPage: React.FC = () => {
             <span className="rezvix-kitchen-ticket__name">Depozito</span>
             <span className="rezvix-kitchen-ticket__qty">
               {r.depositAmount != null
-                ? `${r.depositAmount.toLocaleString("tr-TR")}₺`
+                ? `${r.depositAmount.toLocaleString("tr-TR")}${currencySymbol}`
                 : "—"}
             </span>
           </li>
