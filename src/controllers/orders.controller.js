@@ -4,14 +4,15 @@ import Stripe from "stripe";
 import OrderSession from "../models/OrderSession.js";
 import Order from "../models/Order.js";
 import Restaurant from "../models/Restaurant.js";
-import TableServiceRequest from "../models/TableServiceRequest.js"; // 🆕 eklendi
-import dayjs from "dayjs"; // 🆕
-import Reservation from "../models/Reservation.js"; // 🆕
+import TableServiceRequest from "../models/TableServiceRequest.js";
+import dayjs from "dayjs"; // (şu dosyada aktif kullanılmıyorsa kaldırabilirsin)
+import Reservation from "../models/Reservation.js";
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecret
   ? new Stripe(stripeSecret, { apiVersion: "2024-06-20" })
   : null;
+
 function currencyFromRegion(region) {
   if (region === "UK") return "GBP";
   return "TRY";
@@ -89,6 +90,7 @@ async function findClosestReservationForUser(restaurantId, userId) {
     return null;
   }
 }
+
 export async function openSession(req, res) {
   try {
     const { restaurantId, tableId, reservationId } = req.body || {};
@@ -100,6 +102,7 @@ export async function openSession(req, res) {
 
     const rid = String(restaurantId);
     const table = String(tableId);
+    const uid = req.user?._id || req.user?.id;
 
     console.log("---- [openSession] START ----");
     console.log("[openSession] body =", req.body);
@@ -115,12 +118,9 @@ export async function openSession(req, res) {
         "[openSession] using reservationId from body =",
         resolvedReservationId
       );
-    } else if (req.user?._id) {
+    } else if (uid) {
       // b) Kullanıcı varsa → bu restoran için en yakın rezervasyonu bul
-      const matchId = await findClosestReservationForUser(
-        rid,
-        req.user._id
-      );
+      const matchId = await findClosestReservationForUser(rid, uid);
       if (matchId) {
         resolvedReservationId = matchId;
         console.log(
@@ -130,7 +130,7 @@ export async function openSession(req, res) {
       } else {
         console.log(
           "[openSession] NO reservation matched for user",
-          req.user._id?.toString()
+          String(uid)
         );
       }
     } else {
@@ -174,7 +174,8 @@ export async function openSession(req, res) {
       restaurantId: rid,
       tableId: table,
       reservationId:
-        resolvedReservationId && mongoose.Types.ObjectId.isValid(resolvedReservationId)
+        resolvedReservationId &&
+        mongoose.Types.ObjectId.isValid(resolvedReservationId)
           ? resolvedReservationId
           : null,
       currency,
@@ -205,6 +206,7 @@ export async function openSession(req, res) {
     return res.status(500).json({ message: "Session açılamadı." });
   }
 }
+
 export async function getSession(req, res) {
   try {
     const { id } = req.params;
@@ -254,13 +256,9 @@ export async function closeSession(req, res) {
     );
 
     // 🆕 Adisyon kapandığında bu session'a ait TÜM açık TableServiceRequest'leri kapat
-    // (order_ready + waiter_call + bill_request ne varsa)
     try {
       await TableServiceRequest.updateMany(
-        {
-          sessionId: id,
-          status: "open",
-        },
+        { sessionId: id, status: "open" },
         { $set: { status: "handled" } }
       );
     } catch (err) {
@@ -302,6 +300,7 @@ export async function createOrder(req, res) {
 
     const sid = String(sessionId);
     const rid = String(restaurantId);
+    const uid = req.user?._id || req.user?.id;
 
     const s = await OrderSession.findById(sid);
     if (!s || s.status !== "open") {
@@ -316,6 +315,7 @@ export async function createOrder(req, res) {
       title: x.title,
       price: Number(x.price || 0),
       qty: Math.max(1, Number(x.qty || 1)),
+      note: x.note || "",
     }));
 
     const total = calcItems.reduce((sum, it) => sum + it.price * it.qty, 0);
@@ -326,21 +326,30 @@ export async function createOrder(req, res) {
       sessionId: sid,
       restaurantId: rid,
       tableId: String(tableId),
-      userId: req.user?._id ?? null,
-      isGuest: !!isGuest || !req.user,
-      guestName: guestName || "",
+
+      // ✅ userId sabit olsun (jwt payload'da id de gelebiliyor)
+      userId: uid ?? null,
+      isGuest: !!isGuest || !uid,
+      guestName: String(guestName || ""),
+
       items: calcItems,
       total,
       currency,
       paymentMethod,
       paymentStatus: paymentMethod === "venue" ? "not_required" : "pending",
 
-      // ✅ Stripe (card) ödeme tamamlanana kadar mutfak/masa akışına düşmesin
-      status: isCard ? "pending_payment" : "active",
-      kitchenStatus: isCard ? "pending_payment" : "new",
+      /**
+       * ✅ ENUM uyumlu: status sadece ["new","accepted","cancelled"]
+       * Ödeme tamamlanmadan mutfağa düşmeyi paymentStatus filtreliyor (listKitchenTickets).
+       */
+      status: "new",
+      kitchenStatus: "new",
 
       // createOrder mevcutta QR/Rezvix akışı için kullanılıyor → default "qr"
       source: "qr",
+
+      // Stripe PI id set edilecek
+      stripePaymentIntentId: null,
     });
 
     // MASAYI order_active yap
@@ -350,6 +359,7 @@ export async function createOrder(req, res) {
       status: "order_active",
     });
 
+    // Venue ödemede direkt bitir
     if (paymentMethod === "venue") {
       s.totals.payAtVenueTotal += total;
       s.totals.grandTotal += total;
@@ -358,8 +368,9 @@ export async function createOrder(req, res) {
       return res.json({ order: o, payment: null });
     }
 
-    if (!stripe)
+    if (!stripe) {
       return res.status(500).json({ message: "Stripe konfigüre değil." });
+    }
 
     const pi = await stripe.paymentIntents.create({
       amount: Math.round(total * 100),
@@ -425,8 +436,9 @@ export async function createStripeIntent(req, res) {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (!stripe)
+    if (!stripe) {
       return res.status(500).json({ message: "Stripe konfigüre değil." });
+    }
 
     let customerId = order.stripeCustomerId;
     if (!customerId) {
@@ -444,9 +456,7 @@ export async function createStripeIntent(req, res) {
 
     let clientSecret = null;
     if (order.stripePaymentIntentId) {
-      const pi = await stripe.paymentIntents.retrieve(
-        order.stripePaymentIntentId
-      );
+      const pi = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
       clientSecret = pi.client_secret;
     } else {
       const pi = await stripe.paymentIntents.create({
@@ -538,13 +548,14 @@ export async function createWalkInOrder(req, res) {
       tableId: table,
       userId: null,
       isGuest: true,
-      guestName: guestName || "",
+      guestName: String(guestName || ""),
       items: calcItems,
       total,
       currency,
       paymentMethod: "venue",
       paymentStatus: "not_required",
       source: "walk_in",
+      status: "new",
       kitchenStatus: "new",
     });
 
@@ -636,9 +647,7 @@ export async function listKitchenTickets(req, res) {
     return res.json({ tickets });
   } catch (e) {
     console.error("[listKitchenTickets] err", e);
-    return res
-      .status(500)
-      .json({ message: "Mutfak fişleri alınamadı." });
+    return res.status(500).json({ message: "Mutfak fişleri alınamadı." });
   }
 }
 
@@ -652,7 +661,6 @@ export async function updateKitchenStatus(req, res) {
     const { orderId } = req.params;
     const { status } = req.body || {};
 
-    // ❗ Güvenli durumlar
     const allowed = ["new", "preparing", "ready", "delivered"];
     if (!mongoose.Types.ObjectId.isValid(orderId) || !allowed.includes(status)) {
       return res.status(400).json({ message: "Geçersiz parametre." });
@@ -662,8 +670,13 @@ export async function updateKitchenStatus(req, res) {
     if (!order) return res.status(404).json({ message: "Sipariş bulunamadı." });
 
     // ✅ Ödeme tamamlanmadan mutfak akışına sokma
-    if (order.paymentStatus && !["paid", "not_required"].includes(String(order.paymentStatus))) {
-      return res.status(400).json({ message: "Ödeme tamamlanmadan sipariş durumu güncellenemez." });
+    if (
+      order.paymentStatus &&
+      !["paid", "not_required"].includes(String(order.paymentStatus))
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Ödeme tamamlanmadan sipariş durumu güncellenemez." });
     }
 
     order.kitchenStatus = status;
@@ -673,7 +686,6 @@ export async function updateKitchenStatus(req, res) {
     const tableId = String(order.tableId);
     const sessionId = String(order.sessionId);
 
-    /* -------------------- READY OLDUĞUNDA -------------------- */
     if (status === "ready") {
       const existing = await TableServiceRequest.findOne({
         restaurantId: rid,
@@ -683,7 +695,6 @@ export async function updateKitchenStatus(req, res) {
         status: "open",
       });
 
-      // ❗ Zaten açık değilse oluştur
       if (!existing) {
         await TableServiceRequest.create({
           restaurantId: rid,
@@ -693,7 +704,6 @@ export async function updateKitchenStatus(req, res) {
           status: "open",
         });
 
-        // 🔥 Masa UI rengini waiter_call yap
         await Restaurant.updateOne(
           { _id: rid, "tables._id": tableId },
           { $set: { "tables.$.status": "waiter_call" } }
@@ -701,9 +711,7 @@ export async function updateKitchenStatus(req, res) {
       }
     }
 
-    /* -------------------- TESLİM EDİLDİĞİNDE -------------------- */
     if (status === "delivered") {
-      // order_ready isteklerini kapat
       await TableServiceRequest.updateMany(
         {
           restaurantId: rid,
@@ -715,14 +723,12 @@ export async function updateKitchenStatus(req, res) {
         { $set: { status: "handled" } }
       );
 
-      // hâlâ açık başka istek var mı kontrol et
       const stillWaiting = await TableServiceRequest.exists({
         restaurantId: rid,
         tableId,
         status: "open",
       });
 
-      // 🟢 yoksa masa normale dönsün
       if (!stillWaiting) {
         await Restaurant.updateOne(
           { _id: rid, "tables._id": tableId },
@@ -737,26 +743,30 @@ export async function updateKitchenStatus(req, res) {
     return res.status(500).json({ message: "Durum güncellenemedi." });
   }
 }
-// en sona veya uygun bir yere ekleyin
+
 export async function cancelOrder(req, res) {
   try {
     const { orderId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(orderId)) {
       return res.status(400).json({ message: "Geçersiz order id." });
     }
+
     const order = await Order.findById(orderId);
     if (!order) {
       return res.status(404).json({ message: "Sipariş bulunamadı." });
     }
 
-    // ödeme yapılmadıysa iptal et, aksi halde iptal ettirmeyin
-    if (order.paymentStatus === "paid" || order.paymentStatus === "not_required") {
+    if (
+      order.paymentStatus === "paid" ||
+      order.paymentStatus === "not_required"
+    ) {
       return res.status(400).json({ message: "Ödenmiş sipariş iptal edilemez." });
     }
 
     order.status = "cancelled";
     order.paymentStatus = "failed";
     await order.save();
+
     return res.json(order);
   } catch (err) {
     console.error("[cancelOrder] err", err);

@@ -21,8 +21,7 @@ router.post("/sessions/open", auth(), openSession);
 router.get("/sessions/:id", getSession);
 router.post("/sessions/:id/close", closeSession);
 
-router.post("/", createOrder);
-
+router.post("/", auth(), createOrder);
 // frontend şu path’i kullanıyor
 router.get("/sessions/:sessionId", listSessionOrders);
 router.get("/sessions/:sessionId/orders", listSessionOrders);
