@@ -54,19 +54,21 @@ r.post(
 r.post("/", auth(), validate(createReservationSchema), createReservation);
 
 // ✅ Rezervasyon onay (restoran paneli / admin)
+// rid = reservationId ✅
 r.post(
   "/:rid/approve",
   auth(),
-  allowLocationManagerOrAdmin("rid"),
+  allowLocationManagerOrAdmin("rid", { type: "reservation" }),
   validate(approveReservationSchema),
   approveReservation
 );
 
 // ✅ Rezervasyon reddetme (restoran paneli / admin)
+// rid = reservationId ✅
 r.post(
   "/:rid/reject",
   auth(),
-  allowLocationManagerOrAdmin("rid"),
+  allowLocationManagerOrAdmin("rid", { type: "reservation" }),
   validate(rejectReservationSchema),
   rejectReservation
 );
@@ -79,29 +81,36 @@ r.post(
   cancelReservation
 );
 
-// ✅ QR check-in (panel) – burada hala global restaurant/admin rolü kullanıyoruz
-// (body’de restaurantId varsa, ileride membership-aware middleware’e taşınabilir)
+// ✅ QR check-in (panel) – membership-aware (location_manager / staff / admin)
+// Body'den rid (reservationId) geliyor: { rid, mid, ts, sig, ... }
+// allowLocationManagerOrAdmin param okuduğu için, rid'yi req.params'a köprüyoruz.
 r.post(
   "/checkin",
   auth(),
-  allow("restaurant", "admin"),
+  (req, _res, next) => {
+    if (req?.body?.rid) req.params.rid = String(req.body.rid);
+    return next();
+  },
+  allowLocationManagerOrAdmin("rid", { type: "reservation" }),
   validate(checkinSchema),
   checkin
 ); // panel
 
 // ✅ Manuel check-in (masa başı / panel)
+// rid = reservationId ✅
 r.post(
   "/:rid/checkin-manual",
   auth(),
-  allowLocationManagerOrAdmin("rid"),
+  allowLocationManagerOrAdmin("rid", { type: "reservation" }),
   manualCheckin
 );
 
 // ✅ check-in sonrası arrivedCount düzeltme (panel)
+// rid = reservationId ✅
 r.patch(
   "/:rid/arrived-count",
   auth(),
-  allowLocationManagerOrAdmin("rid"),
+  allowLocationManagerOrAdmin("rid", { type: "reservation" }),
   validate(updateArrivedCountSchema),
   updateArrivedCount
 );
@@ -113,6 +122,7 @@ r.get("/:rid", auth(), validate(getReservationSchema), getReservation);
 r.get("/", auth(), listMyReservations);
 
 // ✅ Restoran bazlı rezervasyon listesi (panel)
+// rid = restaurantId ✅ (aynı kalır)
 r.get(
   "/by-restaurant/:rid",
   auth(),
@@ -121,6 +131,7 @@ r.get(
 );
 
 // ✅ Restoran bazlı rezervasyon istatistikleri (panel)
+// rid = restaurantId ✅ (aynı kalır)
 r.get(
   "/by-restaurant/:rid/stats",
   auth(),

@@ -52,6 +52,48 @@ function isStripeUnpaidReservation(r) {
   );
 }
 
+function toIdString(v) {
+  if (!v) return null;
+  if (typeof v === "object") {
+    if (v._id) return String(v._id);
+    if (v.$oid) return String(v.$oid);
+    if (v.id) return String(v.id);
+  }
+  return String(v);
+}
+
+function canManageRestaurant(user, restaurantId, allowedRoles = ["location_manager", "staff"]) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+
+  const targetId = String(restaurantId);
+
+  // 1) Legacy single-restaurant
+  if (user.restaurantId && toIdString(user.restaurantId) === targetId) return true;
+
+  // 2) Membership-based
+  const memberships = Array.isArray(user.restaurantMemberships)
+    ? user.restaurantMemberships
+    : [];
+
+  return memberships.some((m) => {
+    const restRef = toIdString(m?.restaurantId || m?.restaurant || m?.id);
+    const role = String(m?.role || "");
+    return restRef === targetId && allowedRoles.includes(role);
+  });
+}
+
+function assertCanManageReservation(user, reservationDoc, allowedRoles = ["location_manager", "staff"]) {
+  const restId = toIdString(
+    reservationDoc?.restaurantId?._id || reservationDoc?.restaurantId
+  );
+  if (!restId) throw { status: 403, message: "Forbidden" };
+
+  if (!canManageRestaurant(user, restId, allowedRoles)) {
+    throw { status: 403, message: "Forbidden" };
+  }
+}
+
 /** persons dizisi tam 1..N ve benzersiz ise INDEX, aksi halde COUNT */
 function detectModeStrict(selections = []) {
   const persons = selections.map((s) => Number(s.person) || 0).filter((n) => n > 0);
@@ -726,8 +768,7 @@ export const approveReservation = async (req, res, next) => {
   try {
     const r = await Reservation.findById(req.params.rid).populate("restaurantId");
     if (!r) throw { status: 404, message: "Reservation not found" };
-    if (req.user.role !== "admin" && r.restaurantId.owner.toString() !== req.user.id)
-      throw { status: 403, message: "Forbidden" };
+    assertCanManageReservation(req.user, r);
 
     r.status = "confirmed";
 
@@ -766,8 +807,7 @@ export const rejectReservation = async (req, res, next) => {
   try {
     const r = await Reservation.findById(req.params.rid).populate("restaurantId");
     if (!r) throw { status: 404, message: "Reservation not found" };
-    if (req.user.role !== "admin" && r.restaurantId.owner.toString() !== req.user.id)
-      throw { status: 403, message: "Forbidden" };
+    assertCanManageReservation(req.user, r);
 
     r.status = "cancelled";
     r.cancelledAt = new Date();
@@ -817,7 +857,7 @@ export const cancelReservation = async (req, res, next) => {
 
     // Restoran — müşteri iptali
     try {
-      await notifyRestaurantOwner(r.restaurantId._id, {
+      await notifyRestaurantOwner(toIdString(r.restaurantId?._id || r.restaurantId), {
         title: "Rezervasyon iptal edildi",
         body: `${fmtTR(r.dateTimeUTC)} tarihli rezervasyon, müşteri tarafından iptal edildi.`,
         data: { type: "reservation_cancelled", rid: String(r._id), section: "reservations" },
@@ -897,8 +937,11 @@ export const checkin = async (req, res, next) => {
       throw { status: 400, message: "QR restoran/rezervasyon uyuşmuyor" };
     }
 
-    // Yetki
-    if (req.user.role !== "admin" && String(r.restaurantId.owner) !== String(req.user.id)) {
+    // Yetki: admin veya restaurant membership (location_manager/staff)
+    try {
+      assertCanManageReservation(req.user, r);
+    } catch (e) {
+      // checkin endpoint historically returned "Yetkisiz işlem" for non-admin
       throw { status: 403, message: "Yetkisiz işlem" };
     }
 
@@ -997,8 +1040,7 @@ export const updateArrivedCount = async (req, res, next) => {
     if (!r) throw { status: 404, message: "Reservation not found" };
 
     // yetki
-    if (req.user.role !== "admin" && String(r.restaurantId.owner) !== String(req.user.id))
-      throw { status: 403, message: "Forbidden" };
+    assertCanManageReservation(req.user, r);
 
     // pencere
     const rest = await Restaurant.findById(r.restaurantId._id).lean();

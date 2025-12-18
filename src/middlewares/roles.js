@@ -1,4 +1,6 @@
 // src/middlewares/roles.js
+import mongoose from "mongoose";
+import Reservation from "../models/Reservation.js"; // ✅ reservationId → restaurantId resolve için
 
 /**
  * Basit global role kontrolü.
@@ -18,8 +20,6 @@ export function allow(...roles) {
 
 /**
  * Kısayol: Sadece global admin’e izin ver.
- * Şu an admin router’ında zaten allow("admin") kullanılıyor,
- * bunu istersen orada kullanabilirsin.
  */
 export function allowAdmin() {
   return allow("admin");
@@ -27,19 +27,6 @@ export function allowAdmin() {
 
 /**
  * Organizasyon owner’ı veya global admin kontrolü.
- *
- * Kullanım:
- *   router.get(
- *     "/admin/organizations/:oid",
- *     auth(),
- *     allowOrgOwnerOrAdmin("oid"),
- *     handler
- *   );
- *
- * - Eğer req.user.role === "admin" ise her zaman geçer.
- * - Değilse req.user.organizations içinde:
- *     { organization: <params[paramName]>, role: "org_owner" }
- *   kaydı var mı diye bakar.
  */
 export function allowOrgOwnerOrAdmin(paramName = "oid") {
   return (req, res, next) => {
@@ -48,20 +35,16 @@ export function allowOrgOwnerOrAdmin(paramName = "oid") {
       return next({ status: 401, message: "Unauthorized" });
     }
 
-    // Global admin ise direkt geç
     if (user.role === "admin") {
       return next();
     }
 
     const orgId = req.params?.[paramName];
     if (!orgId) {
-      // Parametre yoksa bu guard’ı yanlış kullanıyoruz demektir
       return next({ status: 403, message: "Forbidden" });
     }
 
-    const orgs = Array.isArray(user.organizations)
-      ? user.organizations
-      : [];
+    const orgs = Array.isArray(user.organizations) ? user.organizations : [];
 
     const isOwner = orgs.some((o) => {
       if (!o || !o.organization) return false;
@@ -90,49 +73,89 @@ function toIdString(v) {
   return String(v);
 }
 
-export function allowLocationManagerOrAdmin(paramName = "rid") {
-  return (req, res, next) => {
-    const user = req.user;
-    if (!user) return next({ status: 401, message: "Unauthorized" });
+/**
+ * Location manager / staff veya global admin kontrolü.
+ *
+ * ✅ opts.type:
+ *  - "restaurant" (default): param doğrudan restaurantId’dir
+ *  - "reservation": param reservationId’dir, önce Reservation’dan restaurantId resolve edilir
+ *
+ * Kullanım örnekleri:
+ *  allowLocationManagerOrAdmin("rid") // rid = restaurantId
+ *  allowLocationManagerOrAdmin("rid", { type: "reservation" }) // rid = reservationId
+ */
+export function allowLocationManagerOrAdmin(
+  paramName = "rid",
+  opts = {}
+) {
+  const type = opts.type || "restaurant";
+  const allowedRoles = opts.allowedRoles || ["location_manager", "staff"];
 
-    if (user.role === "admin") return next();
+  return async (req, res, next) => {
+    try {
+      const user = req.user;
+      if (!user) return next({ status: 401, message: "Unauthorized" });
 
-    const restaurantId = req.params?.[paramName];
-    if (!restaurantId) return next({ status: 403, message: "Forbidden" });
+      if (user.role === "admin") return next();
 
-    const targetId = String(restaurantId);
+      const raw = req.params?.[paramName];
+      if (!raw) return next({ status: 403, message: "Forbidden" });
 
-    // 1) Legacy
-    if (user.restaurantId && toIdString(user.restaurantId) === targetId) {
-      return next();
-    }
+      // param geçerli ObjectId mi? (reservationId / restaurantId ikisi için de)
+      if (!mongoose.Types.ObjectId.isValid(String(raw))) {
+        return next({ status: 400, message: "Invalid id" });
+      }
 
-    // 2) Membership
-    const memberships = Array.isArray(user.restaurantMemberships)
-      ? user.restaurantMemberships
-      : [];
+      let targetRestaurantId = String(raw);
 
-    const allowedRoles = ["location_manager", "staff"];
+      // ✅ Eğer reservationId geldiyse restaurantId resolve et
+      if (type === "reservation") {
+        const r = await Reservation.findById(raw).select("restaurantId").lean();
+        if (!r) return next({ status: 404, message: "Reservation not found" });
 
-    const ok = memberships.some((m) => {
-      const restRef = toIdString(m?.restaurantId || m?.restaurant || m?.id);
-      const role = String(m?.role || "");
-      return restRef === targetId && allowedRoles.includes(role);
-    });
+        const rid =
+          r.restaurantId && typeof r.restaurantId === "object" && r.restaurantId._id
+            ? String(r.restaurantId._id)
+            : String(r.restaurantId || "");
 
-    // ⬇⬇⬇ TAM OLARAK BURAYA EKLİYORSUN ⬇⬇⬇
-   
+        if (!rid || !mongoose.Types.ObjectId.isValid(rid)) {
+          return next({ status: 400, message: "Reservation has no valid restaurantId" });
+        }
+
+        targetRestaurantId = rid;
+      }
+
+      // 1) Legacy
+      if (user.restaurantId && toIdString(user.restaurantId) === targetRestaurantId) {
+        return next();
+      }
+
+      // 2) Membership
+      const memberships = Array.isArray(user.restaurantMemberships)
+        ? user.restaurantMemberships
+        : [];
+
+      const ok = memberships.some((m) => {
+        const restRef = toIdString(m?.restaurantId || m?.restaurant || m?.id);
+        const role = String(m?.role || "");
+        return restRef === targetRestaurantId && allowedRoles.includes(role);
+      });
+
+      // Debug istersen açık kalsın (istersen __DEV__ benzeri env ile sararsın)
       console.log("---- allowLocationManagerOrAdmin DEBUG ----");
-      console.log("targetId:", targetId);
+      console.log("type:", type);
+      console.log("param:", raw);
+      console.log("resolvedRestaurantId:", targetRestaurantId);
       console.log("user.restaurantId:", user.restaurantId);
       console.log("memberships:", memberships);
       console.log("allowedRoles:", allowedRoles);
       console.log("ok:", ok);
       console.log("------------------------------------------");
-    
-    // ⬆⬆⬆ BURAYA ⬆⬆⬆
 
-    if (!ok) return next({ status: 403, message: "Forbidden" });
-    return next();
+      if (!ok) return next({ status: 403, message: "Forbidden" });
+      return next();
+    } catch (e) {
+      return next(e);
+    }
   };
 }
