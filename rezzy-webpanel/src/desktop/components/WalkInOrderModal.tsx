@@ -97,6 +97,10 @@ export const WalkInOrderModal: React.FC<Props> = ({
   onSubmit,
   submitPending,
 }) => {
+  const safeCategories = Array.isArray(categories) ? categories : [];
+  const safeVisibleItems = Array.isArray(visibleItems) ? visibleItems : [];
+  const safeDraftItems =
+    draftItems && typeof draftItems === "object" ? draftItems : {};
   const [q, setQ] = React.useState("");
 
   React.useEffect(() => {
@@ -109,12 +113,12 @@ export const WalkInOrderModal: React.FC<Props> = ({
 
   const filteredItems = React.useMemo(() => {
     const query = normalizeText(q);
-    if (!query) return visibleItems;
+    if (!query) return safeVisibleItems;
 
-    return (visibleItems || []).filter((mi) =>
+    return safeVisibleItems.filter((mi) =>
       normalizeText(mi.title).includes(query)
     );
-  }, [visibleItems, q]);
+  }, [safeVisibleItems, q]);
 
   const hasItems = filteredItems.length > 0;
 
@@ -222,7 +226,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                   Tümü
                 </button>
 
-                {categories.map((cat) => {
+                {safeCategories.map((cat) => {
                   const active = activeCategoryId === cat._id;
                   return (
                     <button
@@ -289,7 +293,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                 !menuError &&
                 hasItems &&
                 filteredItems.map((mi) => {
-                  const current = draftItems[mi._id]?.qty ?? 0;
+                  const current = (safeDraftItems as any)[mi._id]?.qty ?? 0;
                   const isUnavailable = mi.isAvailable === false;
 
                   const inc = () => {
