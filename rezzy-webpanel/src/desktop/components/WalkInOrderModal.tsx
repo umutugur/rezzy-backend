@@ -21,6 +21,8 @@ type DraftOrderItem = {
   note?: string;
 };
 
+type CurrencyCode = "TRY" | "GBP";
+
 type Props = {
   open: boolean;
   tableName: string;
@@ -43,10 +45,28 @@ type Props = {
   selectedItemCount: number;
   selectedTotal: number;
 
+  // ✅ yeni
+  currency: CurrencyCode;
+
   onClose: () => void;
   onSubmit: () => void;
   submitPending: boolean;
 };
+
+function formatMoney(amount: number, currency: CurrencyCode) {
+  const n = Number(amount || 0);
+  try {
+    return new Intl.NumberFormat("tr-TR", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    const symbol = currency === "GBP" ? "£" : "₺";
+    return `${n.toFixed(2)}${symbol}`;
+  }
+}
 
 export const WalkInOrderModal: React.FC<Props> = ({
   open,
@@ -65,6 +85,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
   onChangeQty,
   selectedItemCount,
   selectedTotal,
+  currency,
   onClose,
   onSubmit,
   submitPending,
@@ -199,7 +220,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                       </div>
                       <div className="text-[12px] text-slate-500">
                         <span className="font-semibold">
-                          {mi.price.toFixed(2)}₺
+                          {formatMoney(mi.price, currency)}
                         </span>
                         {isUnavailable && (
                           <span className="ml-1 text-[10px] text-red-500">
@@ -245,7 +266,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
             </span>
             &nbsp; · Toplam:&nbsp;
             <span className="font-semibold text-slate-900">
-              {selectedTotal.toFixed(2)}₺
+              {formatMoney(selectedTotal, currency)}
             </span>
           </div>
 

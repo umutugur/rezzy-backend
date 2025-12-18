@@ -8,8 +8,14 @@ import {
   restaurantGetTableDetail,
   restaurantCloseTableSession,
   restaurantResolveTableService,
-  restaurantListItems,
-  restaurantListCategories,
+
+  // ❌ LOKAL MENÜ (kalkıyor)
+  // restaurantListItems,
+  // restaurantListCategories,
+
+  // ✅ RESOLVED MENÜ (tek kapı)
+  restaurantGetResolvedMenu,
+
   restaurantCreateWalkInOrder,
   type LiveTable,
 } from "../../api/client";
@@ -17,7 +23,7 @@ import { authStore } from "../../store/auth";
 import { showToast } from "../../ui/Toast";
 import { TableDetailModal } from "../components/TableDetailModal";
 import { WalkInOrderModal } from "../components/WalkInOrderModal";
-import { asId } from "../../lib/id"; // ✅ EKLENDİ
+import { asId } from "../../lib/id";
 
 // =============== Tipler ===============
 type MockTableLike = {
@@ -53,8 +59,9 @@ type DraftOrderItem = {
   note?: string;
 };
 
+type CurrencyCode = "TRY" | "GBP";
+
 // =============== Yardımcılar ===============
-// TableLiveStatus → TableStatus map’i
 function mapStatusForTable(t: LiveTable): TableStatus {
   const hasOpenReq =
     (t as any).openServiceRequests != null
@@ -69,21 +76,17 @@ function mapStatusForTable(t: LiveTable): TableStatus {
     case "bill_request":
       return "PAYING";
     case "order_ready":
-      // 🟡 Mutfak "order_ready" → kartta "Sipariş Hazır" ve HAZIR etiketi
       return "ORDER_READY";
     case "occupied":
     case "order_active":
     default:
-      // sipariş aktif ama herhangi bir açık servis isteği varsa
       if (hasOpenReq) return "NEED_HELP";
       return "OPEN";
   }
 }
 
 function formatLocation(t: LiveTable): string {
-  if (typeof t.floor === "number") {
-    return `Kat ${t.floor}`;
-  }
+  if (typeof t.floor === "number") return `Kat ${t.floor}`;
   return "Salon";
 }
 
@@ -97,31 +100,26 @@ function minutesSince(iso: string | null): number | undefined {
   return Math.round(diffMs / 60000);
 }
 
-// Şimdilik kullanılmıyor ama dursun
-function statusLabel(status: LiveTable["status"]): string {
-  switch (status) {
-    case "empty":
-      return "Boş";
-    case "occupied":
-      return "Dolu";
-    case "order_active":
-      return "Sipariş Var";
-    case "waiter_call":
-      return "Garson Çağrısı";
-    case "bill_request":
-      return "Hesap İstendi";
-    case "order_ready":
-      return "Sipariş Hazır";
-    default:
-      return status;
-  }
-}
-
 function formatTime(v?: string | null): string {
   if (!v) return "-";
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatMoney(amount: number, currency: CurrencyCode) {
+  const n = Number(amount || 0);
+  try {
+    return new Intl.NumberFormat("tr-TR", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    const symbol = currency === "GBP" ? "£" : "₺";
+    return `${n.toFixed(2)}${symbol}`;
+  }
 }
 
 // 80mm thermal printer için basit yazdırma helper’ı
@@ -134,10 +132,7 @@ function printContent(title: string, html: string) {
       <head>
         <title>${title}</title>
         <style>
-          @page {
-            size: 80mm auto;
-            margin: 4mm 2mm;
-          }
+          @page { size: 80mm auto; margin: 4mm 2mm; }
           body {
             font-family: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
             font-size: 11px;
@@ -145,52 +140,17 @@ function printContent(title: string, html: string) {
             padding: 0;
             width: 72mm;
           }
-          .wrapper {
-            padding: 4px 6px;
-          }
-          .center {
-            text-align: center;
-          }
-          .small {
-            font-size: 10px;
-          }
-          .line {
-            border-top: 1px dashed #000;
-            margin: 4px 0;
-          }
-          .row {
-            display: flex;
-            justify-content: space-between;
-            margin: 2px 0;
-          }
-          .total {
-            font-weight: bold;
-            margin-top: 4px;
-          }
-          .title {
-            font-weight: bold;
-            margin-bottom: 2px;
-          }
-          .header-name {
-            font-weight: 700;
-            font-size: 13px;
-            letter-spacing: 0.5px;
-            margin-bottom: 2px;
-          }
-          .header-sub {
-            font-size: 10px;
-            margin-bottom: 4px;
-          }
-          .tiny {
-            font-size: 9px;
-            opacity: 0.7;
-            margin-top: 4px;
-          }
-          .header-row {
-            font-weight: 600;
-            font-size: 10px;
-            margin-bottom: 2px;
-          }
+          .wrapper { padding: 4px 6px; }
+          .center { text-align: center; }
+          .small { font-size: 10px; }
+          .line { border-top: 1px dashed #000; margin: 4px 0; }
+          .row { display: flex; justify-content: space-between; margin: 2px 0; }
+          .total { font-weight: bold; margin-top: 4px; }
+          .title { font-weight: bold; margin-bottom: 2px; }
+          .header-name { font-weight: 700; font-size: 13px; letter-spacing: 0.5px; margin-bottom: 2px; }
+          .header-sub { font-size: 10px; margin-bottom: 4px; }
+          .tiny { font-size: 9px; opacity: 0.7; margin-top: 4px; }
+          .header-row { font-weight: 600; font-size: 10px; margin-bottom: 2px; }
         </style>
       </head>
       <body>
@@ -214,7 +174,6 @@ function printContent(title: string, html: string) {
 export const LiveTablesPage: React.FC = () => {
   const user = authStore.getUser();
 
-  // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
   const fallbackMembershipRestaurantId =
     user?.restaurantMemberships?.[0]?.id ?? null;
 
@@ -248,8 +207,7 @@ export const LiveTablesPage: React.FC = () => {
   const [activeCategoryId, setActiveCategoryId] =
     React.useState<string | "all">("all");
 
-  const [isDetailModalOpen, setIsDetailModalOpen] =
-    React.useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = React.useState(false);
 
   // Canlı masalar
   const { data, isLoading, isError } = useQuery({
@@ -271,9 +229,7 @@ export const LiveTablesPage: React.FC = () => {
 
     const prev = prevTablesRef.current;
     const currentById: Record<string, LiveTable> = {};
-    tables.forEach((t) => {
-      currentById[t.id] = t;
-    });
+    tables.forEach((t) => (currentById[t.id] = t));
 
     if (!prev) {
       prevTablesRef.current = currentById;
@@ -305,9 +261,7 @@ export const LiveTablesPage: React.FC = () => {
 
         const prevReq = (old as any).openServiceRequests || 0;
         const nextReq = (curr as any).openServiceRequests || 0;
-        if (nextReq > prevReq) {
-          triggeredTables.add(id);
-        }
+        if (nextReq > prevReq) triggeredTables.add(id);
 
         const prevTotal = old.totals?.grandTotal ?? 0;
         const nextTotal = curr.totals?.grandTotal ?? 0;
@@ -326,7 +280,6 @@ export const LiveTablesPage: React.FC = () => {
     });
 
     let shouldPlay = false;
-
     triggeredTables.forEach((tid) => {
       if (shouldPlay) return;
 
@@ -335,10 +288,7 @@ export const LiveTablesPage: React.FC = () => {
         shouldPlay = true;
         return;
       }
-
-      if (now - lastSelfTs > 3_000) {
-        shouldPlay = true;
-      }
+      if (now - lastSelfTs > 3_000) shouldPlay = true;
     });
 
     if (shouldPlay && soundRef.current) {
@@ -353,14 +303,8 @@ export const LiveTablesPage: React.FC = () => {
 
   // Özetler
   const occupiedCount = tables.filter((t) => t.status !== "empty").length;
-
-  // 🔁 Artık sadece gerçek waiter_call sayılıyor
-  const waiterCallCount = tables.filter((t) => t.status === "waiter_call")
-    .length;
-
-  const billRequestCount = tables.filter(
-    (t) => t.status === "bill_request"
-  ).length;
+  const waiterCallCount = tables.filter((t) => t.status === "waiter_call").length;
+  const billRequestCount = tables.filter((t) => t.status === "bill_request").length;
 
   const mapped: MockTableLike[] = tables.map((t) => ({
     id: t.id,
@@ -387,90 +331,86 @@ export const LiveTablesPage: React.FC = () => {
     refetchInterval: isDetailModalOpen ? 5000 : false,
   });
 
+  // ✅ Currency kaynağı: session.currency (yoksa TRY)
+  const currency: CurrencyCode =
+    (tableDetail as any)?.session?.currency === "GBP" ? "GBP" : "TRY";
+
   const closeSessionMut = useMutation({
-    mutationFn: () =>
-      restaurantCloseTableSession(rid, selectedTableId as string),
+    mutationFn: () => restaurantCloseTableSession(rid, selectedTableId as string),
     onSuccess: () => {
-      // 🟢 Canlı masalar
       qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
-      // 🟢 Mutfak ekranı
       qc.invalidateQueries({ queryKey: ["kitchen-tickets", rid] });
-      // Detay modalini taze tut
       refetchDetail();
     },
   });
 
   const resolveServiceMut = useMutation({
-    mutationFn: () =>
-      restaurantResolveTableService(rid, selectedTableId as string),
+    mutationFn: () => restaurantResolveTableService(rid, selectedTableId as string),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
       refetchDetail();
     },
   });
 
-  // ================== MENÜ (Walk-in modal için) ==================
+  // ================== ✅ RESOLVED MENÜ (Walk-in modal için) ==================
   const {
-    data: categoriesData,
-    isLoading: categoriesLoading,
-    error: categoriesError,
+    data: resolvedMenuData,
+    isLoading: resolvedMenuLoading,
+    error: resolvedMenuError,
   } = useQuery({
-    queryKey: ["restaurant-menu-categories", rid],
-    queryFn: () => restaurantListCategories(rid),
+    queryKey: ["desktop-resolved-menu", rid],
+    queryFn: () => restaurantGetResolvedMenu(rid, { includeUnavailable: true }),
     enabled: !!rid && isOrderModalOpen,
   });
 
-  const {
-    data: menuItemsData,
-    isLoading: menuLoading,
-    error: menuError,
-  } = useQuery({
-    queryKey: ["restaurant-menu-items", rid],
-    queryFn: () => restaurantListItems(rid),
-    enabled: !!rid && isOrderModalOpen,
-  });
-
-  const categories: MenuCategory[] = Array.isArray(categoriesData)
-    ? (categoriesData as MenuCategory[])
-    : [];
-
-  const menuItems: MenuItem[] = Array.isArray(menuItemsData)
-    ? (menuItemsData as MenuItem[])
-    : [];
-
-  // Sadece ürünü olan kategoriler (ve aktif olanlar)
+  // resolved → flat categories + items
   const categoriesWithItems: MenuCategory[] = React.useMemo(() => {
-    if (!categories.length || !menuItems.length) return [];
+    const cats = (resolvedMenuData?.categories ?? []) as any[];
+    if (!cats.length) return [];
 
-    const idsWithItems = new Set(
-      menuItems
-        .filter((mi) => mi.categoryId)
-        .map((mi) => String(mi.categoryId))
-    );
+    return cats
+      .filter((c) => Array.isArray(c.items) && c.items.length > 0 && c.isActive !== false)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((c) => ({
+        _id: String(c._id),
+        title: String(c.title || ""),
+        order: c.order ?? 0,
+        isActive: c.isActive !== false,
+      }));
+  }, [resolvedMenuData]);
 
-    return categories
-      .filter(
-        (c) => idsWithItems.has(String(c._id)) && c.isActive !== false
-      )
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }, [categories, menuItems]);
+  const menuItems: MenuItem[] = React.useMemo(() => {
+    const cats = (resolvedMenuData?.categories ?? []) as any[];
+    const out: MenuItem[] = [];
 
-  // İlk açılışta aktif kategori (sadece ürünü olan kategorilerden)
+    for (const c of cats) {
+      if (c?.isActive === false) continue;
+      const cid = String(c._id);
+      const items = Array.isArray(c.items) ? c.items : [];
+      for (const it of items) {
+        out.push({
+          _id: String(it._id),
+          title: String(it.title || ""),
+          price: Number(it.price || 0),
+          isAvailable: it.isAvailable !== false,
+          categoryId: cid,
+        });
+      }
+    }
+    return out;
+  }, [resolvedMenuData]);
+
+  // İlk açılışta aktif kategori
   React.useEffect(() => {
     if (!isOrderModalOpen) return;
     if (activeCategoryId !== "all") return;
     if (categoriesWithItems.length === 0) return;
 
-    const firstActive =
-      categoriesWithItems.find((c) => c.isActive !== false) ??
-      categoriesWithItems[0];
-    if (firstActive?._id) {
-      setActiveCategoryId(firstActive._id);
-    }
+    const first = categoriesWithItems[0];
+    if (first?._id) setActiveCategoryId(first._id);
   }, [isOrderModalOpen, categoriesWithItems, activeCategoryId]);
 
   React.useEffect(() => {
-    // Modal kapandığında taslağı temizle
     if (!isOrderModalOpen) {
       setDraftItems({});
       setGuestName("");
@@ -504,13 +444,10 @@ export const LiveTablesPage: React.FC = () => {
 
   const createWalkInMut = useMutation({
     mutationFn: async () => {
-      if (!rid || !selectedTableId) {
-        throw new Error("Masa veya restoran bilgisi eksik.");
-      }
+      if (!rid || !selectedTableId) throw new Error("Masa veya restoran bilgisi eksik.");
+
       const items = Object.values(draftItems).filter((it) => it.qty > 0);
-      if (items.length === 0) {
-        throw new Error("En az bir ürün seçmelisiniz.");
-      }
+      if (items.length === 0) throw new Error("En az bir ürün seçmelisiniz.");
 
       return restaurantCreateWalkInOrder(rid, selectedTableId, {
         guestName: guestName.trim() || undefined,
@@ -518,9 +455,7 @@ export const LiveTablesPage: React.FC = () => {
       });
     },
     onSuccess: () => {
-      if (selectedTableId) {
-        selfWalkInRef.current[selectedTableId] = Date.now();
-      }
+      if (selectedTableId) selfWalkInRef.current[selectedTableId] = Date.now();
 
       showToast("Yeni sipariş eklendi.", "success");
       setIsOrderModalOpen(false);
@@ -530,15 +465,12 @@ export const LiveTablesPage: React.FC = () => {
       refetchDetail();
     },
     onError: (err: any) => {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        "Walk-in sipariş oluşturulamadı.";
+      const msg = err?.response?.data?.message || err?.message || "Walk-in sipariş oluşturulamadı.";
       showToast(msg, "error");
     },
   });
 
-  // Yazdırma helper’ları (webpanelden uyarlama)
+  // Yazdırma helper’ları (currency düzeltildi)
   function handlePrintLastOrder(td: any) {
     if (!td || !Array.isArray(td.orders) || td.orders.length === 0) return;
 
@@ -547,6 +479,8 @@ export const LiveTablesPage: React.FC = () => {
       td?.table?.restaurant?.name ||
       td?.table?.name ||
       "Restoran";
+
+    const cur: CurrencyCode = td?.session?.currency === "GBP" ? "GBP" : "TRY";
 
     const last = td.orders[td.orders.length - 1];
     const dateStr = new Date(last.createdAt).toLocaleString("tr-TR", {
@@ -557,12 +491,10 @@ export const LiveTablesPage: React.FC = () => {
     const itemsHtml =
       Array.isArray(last.items) && last.items.length > 0
         ? last.items
-            .map(
-              (it: any) =>
-                `<div class="row"><span>${it.qty}× ${it.title}</span><span>${(
-                  Number(it.price || 0) * Number(it.qty || 1)
-                ).toFixed(2)}₺</span></div>`
-            )
+            .map((it: any) => {
+              const line = Number(it.price || 0) * Number(it.qty || 1);
+              return `<div class="row"><span>${it.qty}× ${it.title}</span><span>${formatMoney(line, cur)}</span></div>`;
+            })
             .join("")
         : `<div class="small">Ürün yok.</div>`;
 
@@ -571,16 +503,12 @@ export const LiveTablesPage: React.FC = () => {
       <div class="center header-sub">SON SİPARİŞ ÖZETİ</div>
       <div class="line"></div>
       <div class="row small"><span>Tarih</span><span>${dateStr}</span></div>
-      <div class="row small"><span>Masa</span><span>${
-        td.table?.name ?? "-"
-      }</span></div>
+      <div class="row small"><span>Masa</span><span>${td.table?.name ?? "-"}</span></div>
       <div class="line"></div>
       <div class="row header-row"><span>Ürün</span><span>Tutar</span></div>
       ${itemsHtml}
       <div class="line"></div>
-      <div class="row total"><span>Toplam</span><span>${Number(
-        last.total || 0
-      ).toFixed(2)}₺</span></div>
+      <div class="row total"><span>Toplam</span><span>${formatMoney(Number(last.total || 0), cur)}</span></div>
       <div class="line"></div>
       <div class="center tiny">Bu fiş Rezvix masa yönetim sistemi ile oluşturulmuştur.</div>
     `;
@@ -597,6 +525,8 @@ export const LiveTablesPage: React.FC = () => {
       td?.table?.name ||
       "Restoran";
 
+    const cur: CurrencyCode = td?.session?.currency === "GBP" ? "GBP" : "TRY";
+
     const nowStr = new Date().toLocaleString("tr-TR", {
       dateStyle: "short",
       timeStyle: "short",
@@ -609,38 +539,27 @@ export const LiveTablesPage: React.FC = () => {
         ? `<div class="small">Henüz sipariş yok.</div>`
         : orders
             .map((o: any, index: number) => {
-              const timeStr = new Date(o.createdAt).toLocaleTimeString(
-                "tr-TR",
-                {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }
-              );
+              const timeStr = new Date(o.createdAt).toLocaleTimeString("tr-TR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
 
               const itemsHtml =
                 Array.isArray(o.items) && o.items.length > 0
                   ? o.items
-                      .map(
-                        (it: any) =>
-                          `<div class="row small"><span>${it.qty}× ${
-                            it.title
-                          }</span><span>${(
-                            Number(it.price || 0) * Number(it.qty || 1)
-                          ).toFixed(2)}₺</span></div>`
-                      )
+                      .map((it: any) => {
+                        const line = Number(it.price || 0) * Number(it.qty || 1);
+                        return `<div class="row small"><span>${it.qty}× ${it.title}</span><span>${formatMoney(line, cur)}</span></div>`;
+                      })
                       .join("")
                   : `<div class="small">Ürün yok.</div>`;
 
               return `
                 <div class="small">
                   <div class="line"></div>
-                  <div class="row"><span>Sipariş ${
-                    index + 1
-                  }</span><span>${timeStr}</span></div>
+                  <div class="row"><span>Sipariş ${index + 1}</span><span>${timeStr}</span></div>
                   ${itemsHtml}
-                  <div class="row total"><span>Ara Toplam</span><span>${Number(
-                    o.total || 0
-                  ).toFixed(2)}₺</span></div>
+                  <div class="row total"><span>Ara Toplam</span><span>${formatMoney(Number(o.total || 0), cur)}</span></div>
                 </div>
               `;
             })
@@ -652,15 +571,9 @@ export const LiveTablesPage: React.FC = () => {
 
     const footer = `
       <div class="line"></div>
-      <div class="row small"><span>Kart</span><span>${card.toFixed(
-        2
-      )}₺</span></div>
-      <div class="row small"><span>Nakit / Mekanda</span><span>${payAtVenue.toFixed(
-        2
-      )}₺</span></div>
-      <div class="row total"><span>Genel Toplam</span><span>${grand.toFixed(
-        2
-      )}₺</span></div>
+      <div class="row small"><span>Kart</span><span>${formatMoney(card, cur)}</span></div>
+      <div class="row small"><span>Nakit / Mekanda</span><span>${formatMoney(payAtVenue, cur)}</span></div>
+      <div class="row total"><span>Genel Toplam</span><span>${formatMoney(grand, cur)}</span></div>
       <div class="line"></div>
     `;
 
@@ -669,9 +582,7 @@ export const LiveTablesPage: React.FC = () => {
       <div class="center header-sub">HESAP DÖKÜMÜ</div>
       <div class="line"></div>
       <div class="row small"><span>Tarih</span><span>${nowStr}</span></div>
-      <div class="row small"><span>Masa</span><span>${
-        td.table?.name ?? "-"
-      }</span></div>
+      <div class="row small"><span>Masa</span><span>${td.table?.name ?? "-"}</span></div>
       ${ordersHtml}
       ${footer}
       <div class="center tiny">Rezervasyon ve masa yönetimi Rezvix ile sağlanmaktadır.</div>
@@ -686,15 +597,8 @@ export const LiveTablesPage: React.FC = () => {
 
   const selectedTableName = selectedTable?.name ?? "";
 
-  const selectedItemCount = Object.values(draftItems).reduce(
-    (sum, it) => sum + it.qty,
-    0
-  );
-
-  const selectedTotal = Object.values(draftItems).reduce(
-    (sum, it) => sum + it.qty * it.price,
-    0
-  );
+  const selectedItemCount = Object.values(draftItems).reduce((sum, it) => sum + it.qty, 0);
+  const selectedTotal = Object.values(draftItems).reduce((sum, it) => sum + it.qty * it.price, 0);
 
   return (
     <RestaurantDesktopLayout
@@ -702,62 +606,34 @@ export const LiveTablesPage: React.FC = () => {
       title="Canlı Masalar"
       subtitle="Lokal adisyonlar, Rezvix ve QR siparişleri tek ekranda."
       summaryChips={[
-        {
-          label: "Dolu masa",
-          value: `${occupiedCount} adet`,
-          tone: "success",
-        },
-        {
-          label: "Garson çağrısı",
-          value: `${waiterCallCount} masa`,
-          tone: waiterCallCount > 0 ? "danger" : "neutral",
-        },
-        {
-          label: "Hesap isteyen",
-          value: `${billRequestCount} masa`,
-          tone: billRequestCount > 0 ? "warning" : "neutral",
-        },
+        { label: "Dolu masa", value: `${occupiedCount} adet`, tone: "success" },
+        { label: "Garson çağrısı", value: `${waiterCallCount} masa`, tone: waiterCallCount > 0 ? "danger" : "neutral" },
+        { label: "Hesap isteyen", value: `${billRequestCount} masa`, tone: billRequestCount > 0 ? "warning" : "neutral" },
       ]}
     >
-      {/* Sol: masa grid, Sağ: detay panel */}
       <div className="flex gap-4 items-start">
-        {/* SOL TARAF */}
         <div className="flex-1">
           {isLoading && (
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">⏳</div>
-              <div className="rezvix-empty__title">
-                Masalar getiriliyor…
-              </div>
-              <div className="rezvix-empty__text">
-                Canlı masa durumları birkaç saniye içinde yüklenecek.
-              </div>
+              <div className="rezvix-empty__title">Masalar getiriliyor…</div>
+              <div className="rezvix-empty__text">Canlı masa durumları birkaç saniye içinde yüklenecek.</div>
             </div>
           )}
 
           {isError && !isLoading && (
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">⚠️</div>
-              <div className="rezvix-empty__title">
-                Masalar yüklenemedi
-              </div>
-              <div className="rezvix-empty__text">
-                Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse
-                bağlantınızı kontrol edin.
-              </div>
+              <div className="rezvix-empty__title">Masalar yüklenemedi</div>
+              <div className="rezvix-empty__text">Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı kontrol edin.</div>
             </div>
           )}
 
           {!isLoading && !isError && !hasData && (
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">🪑</div>
-              <div className="rezvix-empty__title">
-                Tanımlı masa bulunamadı
-              </div>
-              <div className="rezvix-empty__text">
-                Masa planı oluşturulduğunda, canlı masa durumu burada
-                görünecek.
-              </div>
+              <div className="rezvix-empty__title">Tanımlı masa bulunamadı</div>
+              <div className="rezvix-empty__text">Masa planı oluşturulduğunda, canlı masa durumu burada görünecek.</div>
             </div>
           )}
 
@@ -787,7 +663,6 @@ export const LiveTablesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* MASA DETAY MODALI */}
       <TableDetailModal
         open={isDetailModalOpen && !!selectedTableId}
         table={selectedTable}
@@ -808,7 +683,7 @@ export const LiveTablesPage: React.FC = () => {
         }}
         resolveServicePending={resolveServiceMut.isPending}
         onCloseSession={() => {
-          if (!selectedTableId || !tableDetail?.session) return;
+          if (!selectedTableId || !(tableDetail as any)?.session) return;
           closeSessionMut.mutate();
         }}
         closeSessionPending={closeSessionMut.isPending}
@@ -822,24 +697,30 @@ export const LiveTablesPage: React.FC = () => {
         }}
       />
 
-      {/* ✅ WALK-IN MODAL (Rezvix POS tarzı, kategori → ürün) */}
       <WalkInOrderModal
         open={isOrderModalOpen}
         tableName={selectedTableName || "Seçili masa"}
         guestName={guestName}
         onChangeGuestName={setGuestName}
-        categoriesLoading={categoriesLoading}
-        categoriesError={!!categoriesError}
+
+        // ✅ resolved menu status
+        categoriesLoading={resolvedMenuLoading}
+        categoriesError={!!resolvedMenuError}
         categories={categoriesWithItems}
         activeCategoryId={activeCategoryId}
         onChangeActiveCategoryId={(id) => setActiveCategoryId(id)}
         visibleItems={visibleItems}
-        menuLoading={menuLoading}
-        menuError={!!menuError}
+        menuLoading={resolvedMenuLoading}
+        menuError={!!resolvedMenuError}
+
         draftItems={draftItems}
         onChangeQty={handleChangeQty}
         selectedItemCount={selectedItemCount}
         selectedTotal={selectedTotal}
+
+        // ✅ currency prop
+        currency={currency}
+
         onClose={() => setIsOrderModalOpen(false)}
         onSubmit={() => createWalkInMut.mutate()}
         submitPending={createWalkInMut.isPending}
