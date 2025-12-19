@@ -1,7 +1,7 @@
 // src/desktop/pages/LiveTablesPage.tsx
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { RestaurantDesktopLayout } from "../layouts/RestaurantDesktopLayout";
+import { RestaurantDesktopLayout, useRestaurantDesktopCurrency } from "../layouts/RestaurantDesktopLayout";
 import { TableCard, TableStatus, TableChannel } from "../components/TableCard";
 import {
   restaurantGetLiveTables,
@@ -171,40 +171,34 @@ function printContent(title: string, html: string) {
 }
 
 // =============== Component ===============
-export const LiveTablesPage: React.FC = () => {
-  const user = authStore.getUser();
+type LiveTablesInnerProps = {
+  rid: string;
+  tables: LiveTable[];
+  mapped: MockTableLike[];
+  isLoading: boolean;
+  isError: boolean;
+  hasData: boolean;
+  occupiedCount: number;
+  waiterCallCount: number;
+  billRequestCount: number;
+};
 
-  // ✅ Region (multi-organization aware) → default currency fallback
-  // Priority:
-  //  1) user.region (if present)
-  //  2) organization region matched by active restaurantMembership.organizationId
-  //  3) first organization region
-  //  4) TR
-  const userRegionRaw = String((user as any)?.region ?? "").trim();
+const LiveTablesInner: React.FC<LiveTablesInnerProps> = ({
+  rid,
+  tables,
+  mapped,
+  isLoading,
+  isError,
+  hasData,
+  occupiedCount,
+  waiterCallCount,
+  billRequestCount,
+}) => {
+  const { region } = useRestaurantDesktopCurrency();
 
-  const membershipOrgId = String(user?.restaurantMemberships?.[0]?.organizationId ?? "").trim();
-  const orgs = Array.isArray(user?.organizations) ? user!.organizations! : [];
-  const matchedOrg = membershipOrgId
-    ? orgs.find((o) => String(o?.id ?? "").trim() === membershipOrgId)
-    : undefined;
-
-  const resolvedRegion = String(
-    userRegionRaw ||
-      matchedOrg?.region ||
-      user?.organizations?.[0]?.region ||
-      "TR"
-  )
-    .trim()
-    .toUpperCase();
-
+  // Default currency derived from the resolved restaurant region in layout context
   const defaultCurrency: CurrencyCode =
-    resolvedRegion === "UK" || resolvedRegion === "GB" ? "GBP" : "TRY";
-
-  const fallbackMembershipRestaurantId =
-    user?.restaurantMemberships?.[0]?.id ?? null;
-
-  const rid =
-    asId(user?.restaurantId || fallbackMembershipRestaurantId) || "";
+    region === "UK" || region === "GB" ? "GBP" : "TRY";
 
   const qc = useQueryClient();
 
@@ -220,31 +214,15 @@ export const LiveTablesPage: React.FC = () => {
   }, []);
 
   // Seçili masa
-  const [selectedTableId, setSelectedTableId] = React.useState<string | null>(
-    null
-  );
+  const [selectedTableId, setSelectedTableId] = React.useState<string | null>(null);
 
   // Walk-in modal state
   const [isOrderModalOpen, setIsOrderModalOpen] = React.useState(false);
   const [guestName, setGuestName] = React.useState("");
-  const [draftItems, setDraftItems] = React.useState<
-    Record<string, DraftOrderItem>
-  >({});
-  const [activeCategoryId, setActiveCategoryId] =
-    React.useState<string | "all">("all");
+  const [draftItems, setDraftItems] = React.useState<Record<string, DraftOrderItem>>({});
+  const [activeCategoryId, setActiveCategoryId] = React.useState<string | "all">("all");
 
   const [isDetailModalOpen, setIsDetailModalOpen] = React.useState(false);
-
-  // Canlı masalar
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["restaurant-live-tables", rid],
-    queryFn: () => restaurantGetLiveTables(rid),
-    enabled: !!rid,
-    refetchInterval: 5000,
-    refetchIntervalInBackground: true,
-  });
-
-  const tables: LiveTable[] = data?.tables ?? [];
 
   // Değişiklik + ses
   React.useEffect(() => {
@@ -327,23 +305,6 @@ export const LiveTablesPage: React.FC = () => {
     prevTablesRef.current = currentById;
   }, [tables]);
 
-  // Özetler
-  const occupiedCount = tables.filter((t) => t.status !== "empty").length;
-  const waiterCallCount = tables.filter((t) => t.status === "waiter_call").length;
-  const billRequestCount = tables.filter((t) => t.status === "bill_request").length;
-
-  const mapped: MockTableLike[] = tables.map((t) => ({
-    id: t.id,
-    name: t.name,
-    location: formatLocation(t),
-    status: mapStatusForTable(t),
-    total: t.totals?.grandTotal ?? undefined,
-    sinceMinutes: minutesSince(t.lastOrderAt),
-    channel: t.channel as TableChannel | undefined,
-  }));
-
-  const hasData = mapped.length > 0;
-
   // ================== MASA DETAYI ==================
   const {
     data: tableDetail,
@@ -357,7 +318,7 @@ export const LiveTablesPage: React.FC = () => {
     refetchInterval: isDetailModalOpen ? 5000 : false,
   });
 
-  // ✅ Currency kaynağı: session.currency (yoksa region'dan türetilen default)
+  // ✅ Currency kaynağı: session.currency (yoksa layout-region'dan türetilen default)
   const currency: CurrencyCode =
     (tableDetail as any)?.session?.currency === "GBP"
       ? "GBP"
@@ -641,16 +602,7 @@ export const LiveTablesPage: React.FC = () => {
   const selectedTotal = Object.values(draftItems).reduce((sum, it) => sum + it.qty * it.price, 0);
 
   return (
-    <RestaurantDesktopLayout
-      activeNav="tables"
-      title="Canlı Masalar"
-      subtitle="Lokal adisyonlar, Rezvix ve QR siparişleri tek ekranda."
-      summaryChips={[
-        { label: "Dolu masa", value: `${occupiedCount} adet`, tone: "success" },
-        { label: "Garson çağrısı", value: `${waiterCallCount} masa`, tone: waiterCallCount > 0 ? "danger" : "neutral" },
-        { label: "Hesap isteyen", value: `${billRequestCount} masa`, tone: billRequestCount > 0 ? "warning" : "neutral" },
-      ]}
-    >
+    <>
       <div className="flex gap-4 items-start">
         <div className="flex-1">
           {isLoading && (
@@ -742,8 +694,6 @@ export const LiveTablesPage: React.FC = () => {
         tableName={selectedTableName || "Seçili masa"}
         guestName={guestName}
         onChangeGuestName={setGuestName}
-
-        // ✅ resolved menu status
         categoriesLoading={resolvedMenuLoading}
         categoriesError={!!resolvedMenuError}
         categories={categoriesWithItems}
@@ -752,18 +702,82 @@ export const LiveTablesPage: React.FC = () => {
         visibleItems={visibleItems}
         menuLoading={resolvedMenuLoading}
         menuError={!!resolvedMenuError}
-
         draftItems={draftItems}
         onChangeQty={handleChangeQty}
         selectedItemCount={selectedItemCount}
         selectedTotal={selectedTotal}
-
-        // ✅ currency prop
         currency={currency}
-
         onClose={() => setIsOrderModalOpen(false)}
         onSubmit={() => createWalkInMut.mutate()}
         submitPending={createWalkInMut.isPending}
+      />
+    </>
+  );
+};
+
+export const LiveTablesPage: React.FC = () => {
+  const user = authStore.getUser();
+
+  const fallbackMembershipRestaurantId = user?.restaurantMemberships?.[0]?.id ?? null;
+  const rid = asId(user?.restaurantId || fallbackMembershipRestaurantId) || "";
+
+  // Canlı masalar
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["restaurant-live-tables", rid],
+    queryFn: () => restaurantGetLiveTables(rid),
+    enabled: !!rid,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
+  });
+
+  const tables: LiveTable[] = data?.tables ?? [];
+
+  // Özetler
+  const occupiedCount = tables.filter((t) => t.status !== "empty").length;
+  const waiterCallCount = tables.filter((t) => t.status === "waiter_call").length;
+  const billRequestCount = tables.filter((t) => t.status === "bill_request").length;
+
+  const mapped: MockTableLike[] = tables.map((t) => ({
+    id: t.id,
+    name: t.name,
+    location: formatLocation(t),
+    status: mapStatusForTable(t),
+    total: t.totals?.grandTotal ?? undefined,
+    sinceMinutes: minutesSince(t.lastOrderAt),
+    channel: t.channel as TableChannel | undefined,
+  }));
+
+  const hasData = mapped.length > 0;
+
+  return (
+    <RestaurantDesktopLayout
+      activeNav="tables"
+      title="Canlı Masalar"
+      subtitle="Lokal adisyonlar, Rezvix ve QR siparişleri tek ekranda."
+      summaryChips={[
+        { label: "Dolu masa", value: `${occupiedCount} adet`, tone: "success" },
+        {
+          label: "Garson çağrısı",
+          value: `${waiterCallCount} masa`,
+          tone: waiterCallCount > 0 ? "danger" : "neutral",
+        },
+        {
+          label: "Hesap isteyen",
+          value: `${billRequestCount} masa`,
+          tone: billRequestCount > 0 ? "warning" : "neutral",
+        },
+      ]}
+    >
+      <LiveTablesInner
+        rid={rid}
+        tables={tables}
+        mapped={mapped}
+        isLoading={isLoading}
+        isError={isError}
+        hasData={hasData}
+        occupiedCount={occupiedCount}
+        waiterCallCount={waiterCallCount}
+        billRequestCount={billRequestCount}
       />
     </RestaurantDesktopLayout>
   );

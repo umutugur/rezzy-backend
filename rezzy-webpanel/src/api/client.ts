@@ -83,7 +83,7 @@ export async function loginWithEmail(input: {
   password: string;
 }) {
   const { data } = await api.post("/auth/login", input);
-  return data as { token: string; user: any };
+return data as { token: string; refreshToken: string | null; user: any };
 }
 
 export async function fetchMe() {
@@ -541,7 +541,8 @@ export async function adminDismissComplaint(id: string) {
 // RESTAURANT — Genel
 // =========================
 export async function restaurantGet(rid: string) {
-  const { data } = await api.get(`/restaurants/${rid}`);
+  // ✅ Restaurant panel (authenticated) endpoint
+  const { data } = await api.get(`/panel/restaurants/${rid}`);
   return data;
 }
 
@@ -580,7 +581,7 @@ export async function restaurantUpdateProfile(rid: string, form: any) {
     };
   }
 
-  const { data } = await api.put(`/restaurants/${rid}`, payload);
+  const { data } = await api.put(`/panel/restaurants/${rid}`, payload);
   return data;
 }
 

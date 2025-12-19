@@ -1,8 +1,8 @@
 // src/desktop/pages/ReportsPage.tsx
 import React from "react";
-import { getCurrencySymbolForRegion } from "../../utils/currency";
+// import { getCurrencySymbolForRegion } from "../../utils/currency";
 import { useQuery } from "@tanstack/react-query";
-import { RestaurantDesktopLayout } from "../layouts/RestaurantDesktopLayout";
+import { RestaurantDesktopLayout, useRestaurantDesktopCurrency } from "../layouts/RestaurantDesktopLayout";
 import { authStore } from "../../store/auth";
 import { api, restaurantGetReportsOverview } from "../../api/client";
 import { asId } from "../../lib/id"; // ✅ EKLENDİ
@@ -158,30 +158,7 @@ async function fetchRecentInRange(
 
 export const ReportsPage: React.FC = () => {
   const user = authStore.getUser();
-
-  // ✅ Currency / region resolution (multi-organization aware)
-  // Priority:
-  //  1) user.region (if present in stored user)
-  //  2) region of the organization that matches the active restaurant membership (if any)
-  //  3) first organization region
-  //  4) fallback TR
-  const userRegion = String((user as any)?.region ?? "").trim();
-
-  const membershipOrgId =
-    user?.restaurantMemberships?.[0]?.organizationId ?? null;
-
-  const membershipOrgRegion = membershipOrgId
-    ? user?.organizations?.find((o) => String(o?.id ?? "") === String(membershipOrgId))
-        ?.region
-    : null;
-
-  const region = String(
-    userRegion || membershipOrgRegion || user?.organizations?.[0]?.region || "TR"
-  )
-    .trim()
-    .toUpperCase();
-
-  const currencySymbol = getCurrencySymbolForRegion(region);
+  const { currencySymbol } = useRestaurantDesktopCurrency();
 
   // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
   const fallbackMembershipRestaurantId =
@@ -419,10 +396,10 @@ export const ReportsPage: React.FC = () => {
                 advanced.data &&
                 (advanced.data.reservations.totalCount > 0 ||
                   advanced.data.orders.totalCount > 0) && (
-                  <AdvancedReportsView
-                    data={advanced.data as any}
-                    currencySymbol={currencySymbol}
-                  />
+              <AdvancedReportsView
+                data={advanced.data as any}
+                currencySymbol={currencySymbol}
+              />
                 )}
             </>
           )}

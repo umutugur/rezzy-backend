@@ -23,10 +23,17 @@ function canManageRestaurant(user, restaurantId) {
     : [];
 
   return rms.some((m) => {
-    const restRef = m?.restaurantId || m?.restaurant || m?.id;
-    const restId = restRef && typeof restRef === "object" && restRef._id ? restRef._id : restRef;
+     // backend token payload'ında "restaurant" olabilir; client user'da "id" var.
+   const restRef = m?.restaurant ?? m?.id ?? null;
+  const restId =
+     restRef && typeof restRef === "object" && restRef._id
+       ? restRef._id
+       : restRef;
     const role = String(m?.role || "");
-    return String(restId) === targetId && ["location_manager", "staff"].includes(role);
+    return (
+     String(restId) === targetId &&
+     ["location_manager", "staff"].includes(role)
+   );
   });
 }
 
@@ -952,13 +959,10 @@ export const updateReservationStatus = async (
         message: "Reservation not found",
       });
 
-    const isOwner =
-      req.user?.role === "admin" ||
-      (req.user?.role === "restaurant" &&
-        String(r?.restaurantId?.owner) ===
-          String(req.user.id));
-    if (!isOwner)
-      return next({ status: 403, message: "Forbidden" });
+    const restId = r?.restaurantId?._id || r?.restaurantId;
+if (!canManageRestaurant(req.user, restId)) {
+  return next({ status: 403, message: "Forbidden" });
+}
 
     r.status = rawStatus;
     if (rawStatus === "confirmed" && !r.qrTs) {

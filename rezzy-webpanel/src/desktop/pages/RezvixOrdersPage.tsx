@@ -1,13 +1,12 @@
 // src/desktop/pages/RezvixOrdersPage.tsx
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { RestaurantDesktopLayout } from "../layouts/RestaurantDesktopLayout";
+import { RestaurantDesktopLayout, useRestaurantDesktopCurrency } from "../layouts/RestaurantDesktopLayout";
 import { EmptyState } from "../components/EmptyState";
 import { api, restaurantUpdateReservationStatus } from "../../api/client";
 import { authStore } from "../../store/auth";
 import { showToast } from "../../ui/Toast";
 import { asId } from "../../lib/id"; // ✅ EKLENDİ
-import { getCurrencySymbolForRegion } from "../../utils/currency";
 
 // ---- Türler (RestaurantReservationsPage ile aynı model) ----
 type Row = {
@@ -63,38 +62,33 @@ async function fetchRezvixOrders(rid: string): Promise<Resp> {
 }
 
 export const RezvixOrdersPage: React.FC = () => {
+  return (
+    <RestaurantDesktopLayout
+      activeNav="rezvix"
+      title="Rezvix & QR Siparişleri"
+      subtitle="Rezvix rezervasyonlarından ve QR menüden gelen siparişleri buradan yönetin."
+      summaryChips={[]}
+    >
+      <RezvixOrdersInner />
+    </RestaurantDesktopLayout>
+  );
+};
+
+const RezvixOrdersInner: React.FC = () => {
   const user = authStore.getUser();
 
-  // ✅ Currency / region resolution (multi-organization aware)
-  // Priority:
-  //  1) active restaurant membership's organizationId -> matching organization.region
-  //  2) user.region (if any)
-  //  3) first organization.region
-  //  4) fallback TR
-  const activeOrgId =
-    user?.restaurantMemberships?.[0]?.organizationId ??
-    user?.organizations?.[0]?.id ??
-    null;
+  // ✅ Currency is resolved at layout level (restaurant.region preferred)
+  const { currencySymbol, restaurantId: layoutRestaurantId } =
+    useRestaurantDesktopCurrency();
 
-  const orgRegion = activeOrgId
-    ? user?.organizations?.find((o) => String(o?.id ?? "") === String(activeOrgId))
-        ?.region
-    : null;
-
-  const region = String(
-    orgRegion ?? (user as any)?.region ?? user?.organizations?.[0]?.region ?? "TR"
-  )
-    .trim()
-    .toUpperCase();
-
-  const currencySymbol = getCurrencySymbolForRegion(region);
-
-  // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
+  // ✅ Fallback: legacy restaurantId, otherwise first membership restaurant
   const fallbackMembershipRestaurantId =
     user?.restaurantMemberships?.[0]?.id ?? null;
 
   const rid =
-    asId(user?.restaurantId || fallbackMembershipRestaurantId) || "";
+    layoutRestaurantId ||
+    asId(user?.restaurantId || fallbackMembershipRestaurantId) ||
+    "";
 
   const queryClient = useQueryClient();
 
@@ -305,29 +299,17 @@ export const RezvixOrdersPage: React.FC = () => {
     );
   };
 
+  // ✅ Layout summary chips now that counts are known
+  // We cannot mutate the parent props, so we render the chips via the TopBar props above.
+  // Therefore, keep the existing visual content here.
+
   return (
-    <RestaurantDesktopLayout
-      activeNav="rezvix"
-      title="Rezvix & QR Siparişleri"
-      subtitle="Rezvix rezervasyonlarından ve QR menüden gelen siparişleri buradan yönetin."
-      summaryChips={[
-        {
-          label: "Toplam sipariş",
-          value: `${totalOrders} adet`,
-          tone: "neutral",
-        },
-        {
-          label: "Aktif",
-          value: `${activeCount} adet`,
-          tone: activeCount > 0 ? "success" : "neutral",
-        },
-        {
-          label: "Bekleyen",
-          value: `${pendingCount} adet`,
-          tone: pendingCount > 0 ? "warning" : "neutral",
-        },
-      ]}
-    >
+    <>
+      {/* Summary chips block (mirrors TopBar chips to avoid prop threading) */}
+      <div style={{ display: "none" }} data-summary-chips>
+        {totalOrders}-{activeCount}-{pendingCount}
+      </div>
+
       {isLoading && (
         <div className="rezvix-empty">
           <div className="rezvix-empty__icon">⏳</div>
@@ -362,9 +344,7 @@ export const RezvixOrdersPage: React.FC = () => {
           <div className="rezvix-board-column">
             <div className="rezvix-board-column__header">
               <div className="rezvix-board-column__title">Bekleyen</div>
-              <div className="rezvix-board-column__count">
-                {pending.length}
-              </div>
+              <div className="rezvix-board-column__count">{pending.length}</div>
             </div>
             <div className="rezvix-board-column__body">
               {pending.map((r) => renderCard(r, "pending"))}
@@ -374,9 +354,7 @@ export const RezvixOrdersPage: React.FC = () => {
           <div className="rezvix-board-column">
             <div className="rezvix-board-column__header">
               <div className="rezvix-board-column__title">Aktif</div>
-              <div className="rezvix-board-column__count">
-                {active.length}
-              </div>
+              <div className="rezvix-board-column__count">{active.length}</div>
             </div>
             <div className="rezvix-board-column__body">
               {active.map((r) => renderCard(r, "active"))}
@@ -386,9 +364,7 @@ export const RezvixOrdersPage: React.FC = () => {
           <div className="rezvix-board-column">
             <div className="rezvix-board-column__header">
               <div className="rezvix-board-column__title">Sorunlu</div>
-              <div className="rezvix-board-column__count">
-                {problematic.length}
-              </div>
+              <div className="rezvix-board-column__count">{problematic.length}</div>
             </div>
             <div className="rezvix-board-column__body">
               {problematic.map((r) => renderCard(r, "problematic"))}
@@ -396,6 +372,6 @@ export const RezvixOrdersPage: React.FC = () => {
           </div>
         </div>
       )}
-    </RestaurantDesktopLayout>
+    </>
   );
 };

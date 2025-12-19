@@ -1,5 +1,6 @@
 // src/desktop/components/WalkInOrderModal.tsx
 import React from "react";
+import { useRestaurantDesktopCurrency } from "../layouts/RestaurantDesktopLayout";
 
 type MenuCategory = {
   _id: string;
@@ -45,8 +46,8 @@ type Props = {
   selectedItemCount: number;
   selectedTotal: number;
 
-  // ✅ yeni
-  currency: CurrencyCode;
+  // ✅ currency (optional): if omitted, derived from layout region
+  currency?: CurrencyCode;
 
   onClose: () => void;
   onSubmit: () => void;
@@ -90,6 +91,13 @@ export const WalkInOrderModal: React.FC<Props> = ({
   submitPending,
 }) => {
   if (!open) return null;
+
+  const { region } = useRestaurantDesktopCurrency();
+
+  const defaultCurrency: CurrencyCode =
+    region === "UK" || region === "GB" ? "GBP" : "TRY";
+
+  const effectiveCurrency: CurrencyCode = currency ?? defaultCurrency;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(7,9,20,0.46)] backdrop-blur-md">
@@ -234,7 +242,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                         </div>
                         <div className="text-[12px] text-slate-500">
                           <span className="font-semibold">
-                            {formatMoney(mi.price, currency)}
+                            {formatMoney(mi.price, effectiveCurrency)}
                           </span>
                           {isUnavailable && (
                             <span className="ml-1 text-[10px] text-red-500">
@@ -281,7 +289,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
             </span>
             &nbsp; · Toplam:&nbsp;
             <span className="font-semibold text-slate-900">
-              {formatMoney(selectedTotal, currency)}
+              {formatMoney(selectedTotal, effectiveCurrency)}
             </span>
           </div>
 

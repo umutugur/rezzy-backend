@@ -1,6 +1,5 @@
 import React from "react";
-import { getCurrencySymbolForRegion } from "../../utils/currency";
-import { authStore } from "../../store/auth";
+import { useRestaurantDesktopCurrency } from "../layouts/RestaurantDesktopLayout";
 
 export type TableChannel = "WALK_IN" | "REZVIX" | "QR";
 export type TableStatus = "IDLE" | "OPEN" | "ORDER_READY" | "PAYING" | "NEED_HELP";
@@ -83,19 +82,7 @@ export const TableCard: React.FC<TableCardProps> = ({
   const guestText = guestCount && guestCount > 0 ? `${guestCount} kişi` : "—";
   const sinceText = sinceMinutes!=null ? (sinceMinutes===0?"Şimdi":`+${sinceMinutes} dk`) : "Beklemede";
 
-  const user = authStore.getUser();
-
-  // ✅ Region çözümü (diğer ekranlarla tutarlı)
-  // Öncelik: user.region → first organization region → TR
-  const region = String(
-    (user as any)?.region ??
-      user?.organizations?.[0]?.region ??
-      "TR"
-  )
-    .trim()
-    .toUpperCase();
-
-  const cur = getCurrencySymbolForRegion(region);
+  const { currencySymbol: cur } = useRestaurantDesktopCurrency();
 
   return (
     <article className={rootClass} onClick={onClick}>

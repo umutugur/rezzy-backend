@@ -271,6 +271,7 @@ export const guestLogin = async (req, res, next) => {
         email: null,
         phone: null,
         role: "guest",
+        region: "CY",
         restaurantId: null,
         restaurantName: null,
         avatarUrl: null,

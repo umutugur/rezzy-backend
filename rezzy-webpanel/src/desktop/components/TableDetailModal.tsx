@@ -137,16 +137,29 @@ export const TableDetailModal: React.FC<Props> = ({
   const mins = minutesSince(table.lastOrderAt ?? null);
   const user = authStore.getUser();
 
-  // ✅ Region zorunlu: önce user.region, yoksa org[0].region, fallback TR
-  const region = String(
-    (user as any)?.region ?? user?.organizations?.[0]?.region ?? "TR"
+  // ✅ Region (multi-organization aware)
+  // Priority:
+  //  1) user.region (if present)
+  //  2) organization region matched by active restaurantMembership.organizationId
+  //  3) first organization region
+  //  4) TR
+  const userRegionRaw = String((user as any)?.region ?? "").trim();
+
+  const membershipOrgId = String((user as any)?.restaurantMemberships?.[0]?.organizationId ?? "").trim();
+  const orgs = Array.isArray((user as any)?.organizations) ? (user as any).organizations : [];
+  const matchedOrg = membershipOrgId
+    ? orgs.find((o: any) => String(o?.id ?? "").trim() === membershipOrgId)
+    : undefined;
+
+  const resolvedRegion = String(
+    userRegionRaw || matchedOrg?.region || orgs?.[0]?.region || "TR"
   )
     .trim()
     .toUpperCase();
 
   const currencySymbol =
     currencySymbolFromSessionCurrency((tableDetail as any)?.session?.currency) ||
-    getCurrencySymbolForRegion(region);
+    getCurrencySymbolForRegion(resolvedRegion);
   const hasSession = !!tableDetail?.session;
   const hasOrders = !!tableDetail && tableDetail.orders?.length > 0;
   const hasRequests = !!tableDetail && tableDetail.serviceRequests?.length > 0;
