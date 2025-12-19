@@ -1,6 +1,5 @@
 // src/desktop/pages/ReportsPage.tsx
 import React from "react";
-// import { getCurrencySymbolForRegion } from "../../utils/currency";
 import { useQuery } from "@tanstack/react-query";
 import { RestaurantDesktopLayout, useRestaurantDesktopCurrency } from "../layouts/RestaurantDesktopLayout";
 import { authStore } from "../../store/auth";
@@ -167,14 +166,21 @@ async function fetchRecentInRange(
 
 export const ReportsPage: React.FC = () => {
   const user = authStore.getUser();
-  const { currencySymbol } = useRestaurantDesktopCurrency();
+  // ✅ Currency + active restaurant context is resolved at layout level
+  const { currencySymbol, restaurantId: layoutRestaurantId } =
+    useRestaurantDesktopCurrency();
 
-  // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
+  // ✅ Önce layout'tan gelen aktif restaurantId, yoksa legacy restaurantId,
+  // yoksa membership'ten ilk restoran.
+  // Not: membership shape farklı olabilir ({ id } veya { restaurant }).
+  const firstMembership: any = user?.restaurantMemberships?.[0] ?? null;
   const fallbackMembershipRestaurantId =
-    user?.restaurantMemberships?.[0]?.id ?? null;
+    firstMembership?.restaurant ?? firstMembership?.id ?? null;
 
   const rid =
-    asId(user?.restaurantId || fallbackMembershipRestaurantId) || "";
+    layoutRestaurantId ||
+    asId(user?.restaurantId || fallbackMembershipRestaurantId) ||
+    "";
 
   const [sel, setSel] = React.useState<"today" | "7" | "30" | "90">("today");
   const [view, setView] = React.useState<ViewMode>("reservations");

@@ -541,8 +541,10 @@ export async function adminDismissComplaint(id: string) {
 // RESTAURANT — Genel
 // =========================
 export async function restaurantGet(rid: string) {
-  // ✅ Restaurant panel (authenticated) endpoint
-  const { data } = await api.get(`/panel/restaurants/${rid}`);
+  // ✅ Restaurant detail endpoint
+  // NOTE: /api/panel/restaurants/:id is currently returning 404 in backend logs,
+  // so we fall back to the public restaurant resource path.
+  const { data } = await api.get(`/restaurants/${rid}`);
   return data;
 }
 
@@ -581,7 +583,7 @@ export async function restaurantUpdateProfile(rid: string, form: any) {
     };
   }
 
-  const { data } = await api.put(`/panel/restaurants/${rid}`, payload);
+  const { data } = await api.put(`/restaurants/${rid}`, payload);
   return data;
 }
 
