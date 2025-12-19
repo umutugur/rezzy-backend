@@ -159,15 +159,24 @@ async function fetchRecentInRange(
 export const ReportsPage: React.FC = () => {
   const user = authStore.getUser();
 
-  // ✅ Currency / region resolution (new multi-organization aware)
+  // ✅ Currency / region resolution (multi-organization aware)
   // Priority:
-  //  1) authStore.getUser().region (normalized in auth store)
-  //  2) first organization region (if present)
-  //  3) fallback TR
+  //  1) user.region (if present in stored user)
+  //  2) region of the organization that matches the active restaurant membership (if any)
+  //  3) first organization region
+  //  4) fallback TR
+  const userRegion = String((user as any)?.region ?? "").trim();
+
+  const membershipOrgId =
+    user?.restaurantMemberships?.[0]?.organizationId ?? null;
+
+  const membershipOrgRegion = membershipOrgId
+    ? user?.organizations?.find((o) => String(o?.id ?? "") === String(membershipOrgId))
+        ?.region
+    : null;
+
   const region = String(
-    (user as any)?.region ??
-      user?.organizations?.[0]?.region ??
-      "TR"
+    userRegion || membershipOrgRegion || user?.organizations?.[0]?.region || "TR"
   )
     .trim()
     .toUpperCase();

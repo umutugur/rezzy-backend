@@ -83,7 +83,18 @@ export const TableCard: React.FC<TableCardProps> = ({
   const guestText = guestCount && guestCount > 0 ? `${guestCount} kişi` : "—";
   const sinceText = sinceMinutes!=null ? (sinceMinutes===0?"Şimdi":`+${sinceMinutes} dk`) : "Beklemede";
 
-  const region = (authStore.getUser() as any)?.region;
+  const user = authStore.getUser();
+
+  // ✅ Region çözümü (diğer ekranlarla tutarlı)
+  // Öncelik: user.region → first organization region → TR
+  const region = String(
+    (user as any)?.region ??
+      user?.organizations?.[0]?.region ??
+      "TR"
+  )
+    .trim()
+    .toUpperCase();
+
   const cur = getCurrencySymbolForRegion(region);
 
   return (

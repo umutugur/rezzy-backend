@@ -136,9 +136,17 @@ export const TableDetailModal: React.FC<Props> = ({
 
   const mins = minutesSince(table.lastOrderAt ?? null);
   const user = authStore.getUser();
+
+  // ✅ Region zorunlu: önce user.region, yoksa org[0].region, fallback TR
+  const region = String(
+    (user as any)?.region ?? user?.organizations?.[0]?.region ?? "TR"
+  )
+    .trim()
+    .toUpperCase();
+
   const currencySymbol =
     currencySymbolFromSessionCurrency((tableDetail as any)?.session?.currency) ||
-    getCurrencySymbolForRegion((user as any)?.region);
+    getCurrencySymbolForRegion(region);
   const hasSession = !!tableDetail?.session;
   const hasOrders = !!tableDetail && tableDetail.orders?.length > 0;
   const hasRequests = !!tableDetail && tableDetail.serviceRequests?.length > 0;

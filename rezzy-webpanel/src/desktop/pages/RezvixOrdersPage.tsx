@@ -65,9 +65,24 @@ async function fetchRezvixOrders(rid: string): Promise<Resp> {
 export const RezvixOrdersPage: React.FC = () => {
   const user = authStore.getUser();
 
-  // ✅ Region zorunlu: önce user.region, yoksa org[0].region, fallback TR
+  // ✅ Currency / region resolution (multi-organization aware)
+  // Priority:
+  //  1) active restaurant membership's organizationId -> matching organization.region
+  //  2) user.region (if any)
+  //  3) first organization.region
+  //  4) fallback TR
+  const activeOrgId =
+    user?.restaurantMemberships?.[0]?.organizationId ??
+    user?.organizations?.[0]?.id ??
+    null;
+
+  const orgRegion = activeOrgId
+    ? user?.organizations?.find((o) => String(o?.id ?? "") === String(activeOrgId))
+        ?.region
+    : null;
+
   const region = String(
-    (user as any)?.region ?? user?.organizations?.[0]?.region ?? "TR"
+    orgRegion ?? (user as any)?.region ?? user?.organizations?.[0]?.region ?? "TR"
   )
     .trim()
     .toUpperCase();

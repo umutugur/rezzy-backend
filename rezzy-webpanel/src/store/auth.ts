@@ -140,11 +140,15 @@ function sanitizeUser(u: any): MeUser {
     }
   );
 
-  // ✅ region (user seviyesinde zorunlu alan) — öncelik: user.region → restaurant.region → organization.region
+  // ✅ region (user seviyesinde zorunlu alan)
+  // Öncelik: user.region → populated restaurant.region → org entry region (organizations[0])
+  // Not: organizations[] sanitize aşamasında region normalize ediliyor.
   const rawRegion =
     u?.region ??
     (u?.restaurant && typeof u.restaurant === "object" ? (u.restaurant as any).region : null) ??
-    (u?.organization && typeof u.organization === "object" ? (u.organization as any).region : null) ??
+    (Array.isArray(u?.organizations) && u.organizations[0]
+      ? u.organizations[0]?.region ?? u.organizations[0]?.organization?.region
+      : null) ??
     organizations?.[0]?.region ??
     null;
 

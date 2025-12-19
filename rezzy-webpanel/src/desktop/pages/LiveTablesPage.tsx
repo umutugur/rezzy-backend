@@ -174,6 +174,32 @@ function printContent(title: string, html: string) {
 export const LiveTablesPage: React.FC = () => {
   const user = authStore.getUser();
 
+  // ✅ Region (multi-organization aware) → default currency fallback
+  // Priority:
+  //  1) user.region (if present)
+  //  2) organization region matched by active restaurantMembership.organizationId
+  //  3) first organization region
+  //  4) TR
+  const userRegionRaw = String((user as any)?.region ?? "").trim();
+
+  const membershipOrgId = String(user?.restaurantMemberships?.[0]?.organizationId ?? "").trim();
+  const orgs = Array.isArray(user?.organizations) ? user!.organizations! : [];
+  const matchedOrg = membershipOrgId
+    ? orgs.find((o) => String(o?.id ?? "").trim() === membershipOrgId)
+    : undefined;
+
+  const resolvedRegion = String(
+    userRegionRaw ||
+      matchedOrg?.region ||
+      user?.organizations?.[0]?.region ||
+      "TR"
+  )
+    .trim()
+    .toUpperCase();
+
+  const defaultCurrency: CurrencyCode =
+    resolvedRegion === "UK" || resolvedRegion === "GB" ? "GBP" : "TRY";
+
   const fallbackMembershipRestaurantId =
     user?.restaurantMemberships?.[0]?.id ?? null;
 
@@ -331,9 +357,13 @@ export const LiveTablesPage: React.FC = () => {
     refetchInterval: isDetailModalOpen ? 5000 : false,
   });
 
-  // ✅ Currency kaynağı: session.currency (yoksa TRY)
+  // ✅ Currency kaynağı: session.currency (yoksa region'dan türetilen default)
   const currency: CurrencyCode =
-    (tableDetail as any)?.session?.currency === "GBP" ? "GBP" : "TRY";
+    (tableDetail as any)?.session?.currency === "GBP"
+      ? "GBP"
+      : (tableDetail as any)?.session?.currency === "TRY"
+      ? "TRY"
+      : defaultCurrency;
 
   const closeSessionMut = useMutation({
     mutationFn: () => restaurantCloseTableSession(rid, selectedTableId as string),
@@ -480,7 +510,12 @@ export const LiveTablesPage: React.FC = () => {
       td?.table?.name ||
       "Restoran";
 
-    const cur: CurrencyCode = td?.session?.currency === "GBP" ? "GBP" : "TRY";
+    const cur: CurrencyCode =
+      td?.session?.currency === "GBP"
+        ? "GBP"
+        : td?.session?.currency === "TRY"
+        ? "TRY"
+        : defaultCurrency;
 
     const last = td.orders[td.orders.length - 1];
     const dateStr = new Date(last.createdAt).toLocaleString("tr-TR", {
@@ -525,7 +560,12 @@ export const LiveTablesPage: React.FC = () => {
       td?.table?.name ||
       "Restoran";
 
-    const cur: CurrencyCode = td?.session?.currency === "GBP" ? "GBP" : "TRY";
+    const cur: CurrencyCode =
+      td?.session?.currency === "GBP"
+        ? "GBP"
+        : td?.session?.currency === "TRY"
+        ? "TRY"
+        : defaultCurrency;
 
     const nowStr = new Date().toLocaleString("tr-TR", {
       dateStyle: "short",

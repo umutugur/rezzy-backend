@@ -55,17 +55,16 @@ type Props = {
 
 function formatMoney(amount: number, currency: CurrencyCode) {
   const n = Number(amount || 0);
-  try {
-    return new Intl.NumberFormat("tr-TR", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n);
-  } catch {
-    const symbol = currency === "GBP" ? "£" : "₺";
-    return `${n.toFixed(2)}${symbol}`;
-  }
+  const symbol = currency === "GBP" ? "£" : "₺";
+
+  // We intentionally avoid Intl currency formatting here to keep
+  // a consistent UI across the app: `1.234,00 ₺` / `1.234,00 £`.
+  const formatted = n.toLocaleString("tr-TR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  return `${formatted} ${symbol}`;
 }
 
 export const WalkInOrderModal: React.FC<Props> = ({
