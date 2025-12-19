@@ -159,9 +159,20 @@ async function fetchRecentInRange(
 export const ReportsPage: React.FC = () => {
   const user = authStore.getUser();
 
-  const rawRegion = (user as any)?.region;
-const region = String(rawRegion ?? "TR").trim().toUpperCase();
-const currencySymbol = getCurrencySymbolForRegion(region);
+  // ✅ Currency / region resolution (new multi-organization aware)
+  // Priority:
+  //  1) authStore.getUser().region (normalized in auth store)
+  //  2) first organization region (if present)
+  //  3) fallback TR
+  const region = String(
+    (user as any)?.region ??
+      user?.organizations?.[0]?.region ??
+      "TR"
+  )
+    .trim()
+    .toUpperCase();
+
+  const currencySymbol = getCurrencySymbolForRegion(region);
 
   // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
   const fallbackMembershipRestaurantId =

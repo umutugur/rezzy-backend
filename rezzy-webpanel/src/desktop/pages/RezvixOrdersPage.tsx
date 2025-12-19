@@ -64,9 +64,16 @@ async function fetchRezvixOrders(rid: string): Promise<Resp> {
 
 export const RezvixOrdersPage: React.FC = () => {
   const user = authStore.getUser();
-  const rawRegion = (user as any)?.region;
-const region = String(rawRegion ?? "TR").trim().toUpperCase();
-const currencySymbol = getCurrencySymbolForRegion(region);
+
+  // ✅ Region zorunlu: önce user.region, yoksa org[0].region, fallback TR
+  const region = String(
+    (user as any)?.region ?? user?.organizations?.[0]?.region ?? "TR"
+  )
+    .trim()
+    .toUpperCase();
+
+  const currencySymbol = getCurrencySymbolForRegion(region);
+
   // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
   const fallbackMembershipRestaurantId =
     user?.restaurantMemberships?.[0]?.id ?? null;
@@ -135,10 +142,6 @@ const currencySymbol = getCurrencySymbolForRegion(region);
   const totalOrders = rows.length;
   const activeCount = active.length;
   const pendingCount = pending.length;
-  const todayTotalAmount = rows.reduce(
-    (sum, r) => sum + (r.totalPrice ?? 0),
-    0
-  );
 
   const hasData = totalOrders > 0;
 

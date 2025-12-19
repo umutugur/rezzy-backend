@@ -26,6 +26,7 @@ export type MeUser = {
   email?: string | null;
   phone?: string | null;
   role: Role;
+  region?: string | null;
 
   // Legacy
   restaurantId?: string | null;
@@ -139,12 +140,23 @@ function sanitizeUser(u: any): MeUser {
     }
   );
 
+  // ✅ region (user seviyesinde zorunlu alan) — öncelik: user.region → restaurant.region → organization.region
+  const rawRegion =
+    u?.region ??
+    (u?.restaurant && typeof u.restaurant === "object" ? (u.restaurant as any).region : null) ??
+    (u?.organization && typeof u.organization === "object" ? (u.organization as any).region : null) ??
+    organizations?.[0]?.region ??
+    null;
+
+  const region = rawRegion == null ? null : String(rawRegion).trim().toUpperCase();
+
   return {
     id: String(u.id ?? u._id ?? ""),
     name: String(u.name ?? ""),
     email: u.email ?? null,
     phone: u.phone ?? null,
     role: (u.role as Role) ?? "customer",
+    region,
     restaurantId: rid,
     restaurantName,
     avatarUrl: u.avatarUrl ?? null,
