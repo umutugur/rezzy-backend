@@ -159,12 +159,9 @@ async function fetchRecentInRange(
 export const ReportsPage: React.FC = () => {
   const user = authStore.getUser();
 
-  const region =
-    (user as any)?.region ||
-    user?.organizations?.[0]?.region ||
-    "TR";
-
-  const currencySymbol = getCurrencySymbolForRegion(region);
+  const rawRegion = (user as any)?.region;
+const region = String(rawRegion ?? "TR").trim().toUpperCase();
+const currencySymbol = getCurrencySymbolForRegion(region);
 
   // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
   const fallbackMembershipRestaurantId =

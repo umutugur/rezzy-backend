@@ -64,13 +64,9 @@ async function fetchRezvixOrders(rid: string): Promise<Resp> {
 
 export const RezvixOrdersPage: React.FC = () => {
   const user = authStore.getUser();
-  const region =
-     (user as any)?.region ||
-     user?.organizations?.[0]?.region ||
-     "TR";
- 
-   const currencySymbol = getCurrencySymbolForRegion(region);
-
+  const rawRegion = (user as any)?.region;
+const region = String(rawRegion ?? "TR").trim().toUpperCase();
+const currencySymbol = getCurrencySymbolForRegion(region);
   // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
   const fallbackMembershipRestaurantId =
     user?.restaurantMemberships?.[0]?.id ?? null;
