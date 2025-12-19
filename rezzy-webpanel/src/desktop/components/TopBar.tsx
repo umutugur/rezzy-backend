@@ -20,9 +20,10 @@ export const TopBar: React.FC<TopBarProps> = ({
   summaryChips,
 }) => {
   // Varsayılan mock özet (hiç summaryChips gelmezse)
+  // NOTE: Currency is resolved at layout/page level. Keep this mock currency-agnostic.
   const todaySummary = {
     covers: 86,
-    total: "24.380₺",
+    total: "24.380",
     rezvixRate: 38,
   };
 
@@ -44,6 +45,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         },
         {
           label: "Toplam hesap",
+          // Currency symbol should be injected via `summaryChips` by the calling page.
           value: todaySummary.total,
           tone: "warning",
         },

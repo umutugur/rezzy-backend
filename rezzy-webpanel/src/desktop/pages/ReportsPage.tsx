@@ -165,8 +165,22 @@ async function fetchRecentInRange(
 // ---- Component ----
 
 export const ReportsPage: React.FC = () => {
+  return (
+    <RestaurantDesktopLayout
+      activeNav="reports"
+      title="Raporlar"
+      subtitle="Ciro, depozito ve kanal bazlı özetler."
+    >
+      <ReportsInner />
+    </RestaurantDesktopLayout>
+  );
+};
+
+const ReportsInner: React.FC = () => {
   const user = authStore.getUser();
+
   // ✅ Currency + active restaurant context is resolved at layout level
+  // IMPORTANT: this hook must run inside RestaurantDesktopLayout tree.
   const { currencySymbol, restaurantId: layoutRestaurantId } =
     useRestaurantDesktopCurrency();
 
@@ -205,222 +219,207 @@ export const ReportsPage: React.FC = () => {
     enabled: !!rid && view === "advanced",
   });
 
-  return (
-    <RestaurantDesktopLayout
-      activeNav="reports"
-      title="Raporlar"
-      subtitle="Ciro, depozito ve kanal bazlı özetler."
-    >
-      {!rid && (
-        <div className="rezvix-empty">
-          <div className="rezvix-empty__icon">⚠️</div>
-          <div className="rezvix-empty__title">Restoran bulunamadı</div>
-          <div className="rezvix-empty__text">
-            Bu ekranı kullanmak için oturum açmış bir restoran hesabı gerekir.
-          </div>
+  if (!rid) {
+    return (
+      <div className="rezvix-empty">
+        <div className="rezvix-empty__icon">⚠️</div>
+        <div className="rezvix-empty__title">Restoran bulunamadı</div>
+        <div className="rezvix-empty__text">
+          Bu ekranı kullanmak için oturum açmış bir restoran hesabı gerekir.
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {rid && (
+  return (
+    <>
+      {/* Tab switcher */}
+      <div
+        style={{
+          display: "inline-flex",
+          borderRadius: 999,
+          padding: 4,
+          border: "1px solid var(--rezvix-border-subtle)",
+          marginBottom: 16,
+          background: "rgba(255,255,255,0.7)",
+        }}
+      >
+        <button
+          onClick={() => setView("reservations")}
+          style={{
+            border: "none",
+            borderRadius: 999,
+            padding: "6px 14px",
+            fontSize: 12,
+            cursor: "pointer",
+            background:
+              view === "reservations"
+                ? "var(--rezvix-primary-soft)"
+                : "transparent",
+            color:
+              view === "reservations" ? "#fff" : "var(--rezvix-text-main)",
+          }}
+        >
+          Rezervasyon Özeti
+        </button>
+        <button
+          onClick={() => setView("advanced")}
+          style={{
+            border: "none",
+            borderRadius: 999,
+            padding: "6px 14px",
+            fontSize: 12,
+            cursor: "pointer",
+            background:
+              view === "advanced"
+                ? "var(--rezvix-primary-soft)"
+                : "transparent",
+            color: view === "advanced" ? "#fff" : "var(--rezvix-text-main)",
+          }}
+        >
+          Gelişmiş Raporlar
+        </button>
+      </div>
+
+      {/* Ortak tarih filtresi */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <select
+          value={sel}
+          onChange={(e) =>
+            setSel(e.target.value as "today" | "7" | "30" | "90")
+          }
+          style={{
+            padding: "6px 10px",
+            borderRadius: 12,
+            border: "1px solid var(--rezvix-border-subtle)",
+            fontSize: 12,
+          }}
+        >
+          <option value="today">Bugün</option>
+          <option value="7">Son 7 gün</option>
+          <option value="30">Son 30 gün</option>
+          <option value="90">Son 90 gün</option>
+        </select>
+      </div>
+
+      {/* -------- View: Rezervasyon Özeti (eski mantık) -------- */}
+      {view === "reservations" && (
         <>
-          {/* Tab switcher */}
-          <div
-            style={{
-              display: "inline-flex",
-              borderRadius: 999,
-              padding: 4,
-              border: "1px solid var(--rezvix-border-subtle)",
-              marginBottom: 16,
-              background: "rgba(255,255,255,0.7)",
-            }}
-          >
-            <button
-              onClick={() => setView("reservations")}
-              style={{
-                border: "none",
-                borderRadius: 999,
-                padding: "6px 14px",
-                fontSize: 12,
-                cursor: "pointer",
-                background:
-                  view === "reservations"
-                    ? "var(--rezvix-primary-soft)"
-                    : "transparent",
-                color:
-                  view === "reservations"
-                    ? "#fff"
-                    : "var(--rezvix-text-main)",
-              }}
-            >
-              Rezervasyon Özeti
-            </button>
-            <button
-              onClick={() => setView("advanced")}
-              style={{
-                border: "none",
-                borderRadius: 999,
-                padding: "6px 14px",
-                fontSize: 12,
-                cursor: "pointer",
-                background:
-                  view === "advanced"
-                    ? "var(--rezvix-primary-soft)"
-                    : "transparent",
-                color:
-                  view === "advanced"
-                    ? "#fff"
-                    : "var(--rezvix-text-main)",
-              }}
-            >
-              Gelişmiş Raporlar
-            </button>
-          </div>
-
-          {/* Ortak tarih filtresi */}
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              marginBottom: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            <select
-              value={sel}
-              onChange={(e) =>
-                setSel(e.target.value as "today" | "7" | "30" | "90")
-              }
-              style={{
-                padding: "6px 10px",
-                borderRadius: 12,
-                border: "1px solid var(--rezvix-border-subtle)",
-                fontSize: 12,
-              }}
-            >
-              <option value="today">Bugün</option>
-              <option value="7">Son 7 gün</option>
-              <option value="30">Son 30 gün</option>
-              <option value="90">Son 90 gün</option>
-            </select>
-          </div>
-
-          {/* -------- View: Rezervasyon Özeti (eski mantık) -------- */}
-          {view === "reservations" && (
-            <>
-              {summary.isLoading && (
-                <div className="rezvix-empty">
-                  <div className="rezvix-empty__icon">⏳</div>
-                  <div className="rezvix-empty__title">
-                    Raporlar getiriliyor…
-                  </div>
-                  <div className="rezvix-empty__text">
-                    Seçili tarih aralığındaki rezervasyonlar analiz ediliyor.
-                  </div>
-                </div>
-              )}
-
-              {summary.error && !summary.isLoading && (
-                <div className="rezvix-empty">
-                  <div className="rezvix-empty__icon">⚠️</div>
-                  <div className="rezvix-empty__title">
-                    Raporlar yüklenemedi
-                  </div>
-                  <div className="rezvix-empty__text">
-                    Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse
-                    bağlantınızı kontrol edin.
-                  </div>
-                </div>
-              )}
-
-              {!summary.isLoading &&
-                !summary.error &&
-                (summary.data?.rows?.length ?? 0) === 0 && (
-                  <div className="rezvix-empty">
-                    <div className="rezvix-empty__icon">📊</div>
-                    <div className="rezvix-empty__title">
-                      Seçili tarih aralığında rezervasyon yok
-                    </div>
-                    <div className="rezvix-empty__text">
-                      Üstten tarih aralığını değiştirerek farklı bir dönem
-                      görüntüleyebilirsiniz.
-                    </div>
-                  </div>
-                )}
-
-              {!summary.isLoading &&
-                !summary.error &&
-                (summary.data?.rows?.length ?? 0) > 0 && (
-                  <ReservationSummaryView
-                    summaryRows={summary.data!.rows}
-                    counts={summary.data!.counts}
-                    totals={summary.data!.totals}
-                    recent={recent}
-                    currencySymbol={currencySymbol}
-                  />
-                )}
-            </>
+          {summary.isLoading && (
+            <div className="rezvix-empty">
+              <div className="rezvix-empty__icon">⏳</div>
+              <div className="rezvix-empty__title">Raporlar getiriliyor…</div>
+              <div className="rezvix-empty__text">
+                Seçili tarih aralığındaki rezervasyonlar analiz ediliyor.
+              </div>
+            </div>
           )}
 
-          {/* -------- View: Gelişmiş Raporlar (yeni endpoint) -------- */}
-          {view === "advanced" && (
-            <>
-              {advanced.isLoading && (
-                <div className="rezvix-empty">
-                  <div className="rezvix-empty__icon">⏳</div>
-                  <div className="rezvix-empty__title">
-                    Gelişmiş raporlar hazırlanıyor…
-                  </div>
-                  <div className="rezvix-empty__text">
-                    Rezervasyon ve sipariş verileri derleniyor.
-                  </div>
+          {summary.error && !summary.isLoading && (
+            <div className="rezvix-empty">
+              <div className="rezvix-empty__icon">⚠️</div>
+              <div className="rezvix-empty__title">Raporlar yüklenemedi</div>
+              <div className="rezvix-empty__text">
+                Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı
+                kontrol edin.
+              </div>
+            </div>
+          )}
+
+          {!summary.isLoading &&
+            !summary.error &&
+            (summary.data?.rows?.length ?? 0) === 0 && (
+              <div className="rezvix-empty">
+                <div className="rezvix-empty__icon">📊</div>
+                <div className="rezvix-empty__title">
+                  Seçili tarih aralığında rezervasyon yok
                 </div>
-              )}
-
-              {advanced.error && !advanced.isLoading && (
-                <div className="rezvix-empty">
-                  <div className="rezvix-empty__icon">⚠️</div>
-                  <div className="rezvix-empty__title">
-                    Gelişmiş raporlar yüklenemedi
-                  </div>
-                  <div className="rezvix-empty__text">
-                    Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse
-                    bağlantınızı kontrol edin.
-                  </div>
+                <div className="rezvix-empty__text">
+                  Üstten tarih aralığını değiştirerek farklı bir dönem
+                  görüntüleyebilirsiniz.
                 </div>
-              )}
+              </div>
+            )}
 
-              {!advanced.isLoading &&
-                !advanced.error &&
-                advanced.data &&
-                advanced.data.reservations.totalCount === 0 &&
-                advanced.data.orders.totalCount === 0 && (
-                  <div className="rezvix-empty">
-                    <div className="rezvix-empty__icon">📊</div>
-                    <div className="rezvix-empty__title">
-                      Seçili aralıkta veri bulunamadı
-                    </div>
-                    <div className="rezvix-empty__text">
-                      Rezervasyon ya da sipariş kaydı yok. Tarih aralığını
-                      genişletebilirsiniz.
-                    </div>
-                  </div>
-                )}
+          {!summary.isLoading &&
+            !summary.error &&
+            (summary.data?.rows?.length ?? 0) > 0 && (
+              <ReservationSummaryView
+                summaryRows={summary.data!.rows}
+                counts={summary.data!.counts}
+                totals={summary.data!.totals}
+                recent={recent}
+                currencySymbol={currencySymbol}
+              />
+            )}
+        </>
+      )}
 
-              {!advanced.isLoading &&
-                !advanced.error &&
-                advanced.data &&
-                (advanced.data.reservations.totalCount > 0 ||
-                  advanced.data.orders.totalCount > 0) && (
+      {/* -------- View: Gelişmiş Raporlar (yeni endpoint) -------- */}
+      {view === "advanced" && (
+        <>
+          {advanced.isLoading && (
+            <div className="rezvix-empty">
+              <div className="rezvix-empty__icon">⏳</div>
+              <div className="rezvix-empty__title">
+                Gelişmiş raporlar hazırlanıyor…
+              </div>
+              <div className="rezvix-empty__text">
+                Rezervasyon ve sipariş verileri derleniyor.
+              </div>
+            </div>
+          )}
+
+          {advanced.error && !advanced.isLoading && (
+            <div className="rezvix-empty">
+              <div className="rezvix-empty__icon">⚠️</div>
+              <div className="rezvix-empty__title">
+                Gelişmiş raporlar yüklenemedi
+              </div>
+              <div className="rezvix-empty__text">
+                Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı
+                kontrol edin.
+              </div>
+            </div>
+          )}
+
+          {!advanced.isLoading &&
+            !advanced.error &&
+            advanced.data &&
+            advanced.data.reservations.totalCount === 0 &&
+            advanced.data.orders.totalCount === 0 && (
+              <div className="rezvix-empty">
+                <div className="rezvix-empty__icon">📊</div>
+                <div className="rezvix-empty__title">
+                  Seçili aralıkta veri bulunamadı
+                </div>
+                <div className="rezvix-empty__text">
+                  Rezervasyon ya da sipariş kaydı yok. Tarih aralığını
+                  genişletebilirsiniz.
+                </div>
+              </div>
+            )}
+
+          {!advanced.isLoading &&
+            !advanced.error &&
+            advanced.data &&
+            (advanced.data.reservations.totalCount > 0 ||
+              advanced.data.orders.totalCount > 0) && (
               <AdvancedReportsView
                 data={advanced.data as any}
                 currencySymbol={currencySymbol}
               />
-                )}
-            </>
-          )}
+            )}
         </>
       )}
-    </RestaurantDesktopLayout>
+    </>
   );
 };
 
