@@ -51,6 +51,15 @@ function fmtStatus(s: string) {
   return trStatus[s] ?? s;
 }
 
+// Helper: Formats money with currency symbol (always uses tr-TR locale)
+function fmtMoney(amount: any, currencySymbol: string) {
+  const n = Number(amount || 0);
+  return `${n.toLocaleString("tr-TR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })} ${currencySymbol}`;
+}
+
 // ---- Range & API yardımcıları ----
 // Default: Bugün, Son 7 gün, Son 30 gün, Son 90 gün
 function rangeParams(sel: string): Range {
@@ -547,7 +556,7 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
                   marginTop: 4,
                 }}
               >
-                {Number(totals.grossArrived || 0).toLocaleString("tr-TR")} {currencySymbol}
+                {fmtMoney(totals.grossArrived || 0, currencySymbol)}
               </div>
             </div>
 
@@ -568,9 +577,7 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
                   marginTop: 4,
                 }}
               >
-                {Number(
-                  totals.depositConfirmedNoShow || 0
-                ).toLocaleString("tr-TR")} {currencySymbol}
+                {fmtMoney(totals.depositConfirmedNoShow || 0, currencySymbol)}
               </div>
             </div>
           </div>
@@ -824,7 +831,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 lineHeight: 1.1,
               }}
             >
-              {totalRevenue.toLocaleString("tr-TR")} {currencySymbol}
+              {fmtMoney(totalRevenue, currencySymbol)}
             </div>
             <div
               style={{
@@ -844,9 +851,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
               >
                 Rezervasyon cirosu:{" "}
                 <strong>
-                  {Number(
-                    reservations.revenueTotal || 0
-                  ).toLocaleString("tr-TR")} {currencySymbol}
+                  {fmtMoney(reservations.revenueTotal || 0, currencySymbol)}
                 </strong>
               </div>
               <div
@@ -858,9 +863,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
               >
                 Masa siparişi cirosu:{" "}
                 <strong>
-                  {Number(orders.revenueTotal || 0).toLocaleString(
-                    "tr-TR"
-                  )} {currencySymbol}
+                  {fmtMoney(orders.revenueTotal || 0, currencySymbol)}
                 </strong>
               </div>
               <div
@@ -872,7 +875,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
               >
                 Toplam depozito:{" "}
                 <strong>
-                  {totalDeposit.toLocaleString("tr-TR")} {currencySymbol}
+                  {fmtMoney(totalDeposit, currencySymbol)}
                 </strong>
               </div>
             </div>
@@ -987,10 +990,10 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                           {d.reservations}
                         </td>
                         <td style={{ padding: "6px 8px" }}>
-                          {Number(d.deposits).toLocaleString("tr-TR")} {currencySymbol}
+                          {fmtMoney(d.deposits, currencySymbol)}
                         </td>
                         <td style={{ padding: "6px 8px" }}>
-                          {Number(d.revenue).toLocaleString("tr-TR")} {currencySymbol}
+                          {fmtMoney(d.revenue, currencySymbol)}
                         </td>
                       </tr>
                     ))}
@@ -1051,7 +1054,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                         </td>
                         <td style={{ padding: "6px 8px" }}>{it.qty}</td>
                         <td style={{ padding: "6px 8px" }}>
-                          {Number(it.revenue).toLocaleString("tr-TR")} {currencySymbol}
+                          {fmtMoney(it.revenue, currencySymbol)}
                         </td>
                       </tr>
                     ))}
@@ -1229,9 +1232,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
               <div
                 style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
               >
-                {Number(
-                  payments.grandTotal || 0
-                ).toLocaleString("tr-TR")} {currencySymbol}
+                {fmtMoney(payments.grandTotal || 0, currencySymbol)}
               </div>
               <div className="rezvix-kitchen-ticket__meta">
                 Kart + masada ödeme toplamı
@@ -1288,7 +1289,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                         <td style={{ padding: "6px 8px" }}>{d.date}</td>
                         <td style={{ padding: "6px 8px" }}>{d.orders}</td>
                         <td style={{ padding: "6px 8px" }}>
-                          {Number(d.revenue).toLocaleString("tr-TR")} {currencySymbol}
+                          {fmtMoney(d.revenue, currencySymbol)}
                         </td>
                       </tr>
                     ))}
@@ -1363,7 +1364,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                           fontSize: 11,
                         }}
                       >
-                        {Number(h.revenue).toLocaleString("tr-TR")} {currencySymbol}
+                        {fmtMoney(h.revenue, currencySymbol)}
                       </div>
                     </div>
                   );
@@ -1425,9 +1426,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                           {t.sessionCount}
                         </td>
                         <td style={{ padding: "6px 8px" }}>
-                          {Number(
-                            t.revenueTotal
-                          ).toLocaleString("tr-TR")} {currencySymbol}
+                          {fmtMoney(t.revenueTotal, currencySymbol)}
                         </td>
                       </tr>
                     ))}
@@ -1464,7 +1463,7 @@ const ChannelLegendItem: React.FC<{
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 600 }}>{label}</div>
         <div style={{ color: "var(--rezvix-text-soft)" }}>
-          {count} sipariş · {amount.toLocaleString("tr-TR")} {currencySymbol}
+          {count} sipariş · {fmtMoney(amount, currencySymbol)}
         </div>
         <div style={{ fontSize: 11 }}>{share}% pay</div>
       </div>
