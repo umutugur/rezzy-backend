@@ -123,9 +123,9 @@ function signRefreshToken(user) {
 
 /** Client’a dönecek user şekli */
 function toClientUser(u) {
-  const preferredRegion = u.preferredRegion || "CY";
+  const preferredRegion = u.preferredRegion ?? null;
   const preferredLanguage =
-    u.preferredLanguage || (preferredRegion === "UK" ? "en" : "tr");
+    u.preferredLanguage ?? null;
 
   // restaurantId hem ObjectId hem populate edilmiş obje olabilir
   let restaurantId = null;
