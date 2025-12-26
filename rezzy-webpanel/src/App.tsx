@@ -232,6 +232,21 @@ function LoginPage() {
   const computeRedirect = (u: MeUser | null): string => {
     if (!u) return "/login";
 
+    // 🔥 Desktop mode detection (Electron / hash-based)
+    // URL example: https://rezzywebpanel.onrender.com/#/login?mode=desktop
+    const search =
+      window.location.search ||
+      window.location.hash.split("?")[1] ||
+      "";
+
+    const sp = new URLSearchParams(search);
+    const isDesktopMode = sp.get("mode") === "desktop";
+
+    // 🔥 Desktop users always land on desktop tables
+    if (isDesktopMode) {
+      return "/restaurant-desktop/tables";
+    }
+
     const isOrgUser = hasOrgPanelAccess(u);
     const isRestaurantUser = hasRestaurantPanelAccess(u);
 

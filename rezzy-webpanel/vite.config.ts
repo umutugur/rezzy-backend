@@ -7,14 +7,23 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+
+    // ✅ Electron prod (loadFile) için kritik
+    base: "./",
+
+    build: {
+      outDir: "dist",
+      assetsDir: "assets",
+    },
+
     server: {
       port: 5173,
       proxy: {
         "/api": {
           target,
-          changeOrigin: true
-        }
-      }
-    }
+          changeOrigin: true,
+        },
+      },
+    },
   };
 });
