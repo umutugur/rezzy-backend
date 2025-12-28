@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-14, windows-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -32,7 +32,7 @@ jobs:
         working-directory: rezzy-webpanel
         run: npm ci
 
-      # ✅ macOS codesign cert import (sadece mac)
+      # ✅ macOS codesign cert import
       - name: Import Apple Developer ID Certificate
         if: runner.os == 'macOS'
         env:
@@ -47,7 +47,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
           security find-identity -v -p codesigning
 
-      # ✅ Apple tarafına gerçekten erişim var mı? (sadece mac)
+      # ✅ Apple connectivity check
       - name: Network check (Apple)
         if: runner.os == 'macOS'
         run: |

@@ -1,8 +1,10 @@
 {
   "name": "rezvix-webpanel",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "private": true,
   "type": "module",
+  "description": "Rezvix Web Panel Desktop",
+  "author": "Umut Ugur",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -44,31 +46,31 @@
   },
   "main": "electron/main.cjs",
   "build": {
-  "appId": "com.umutugur.rezvix.desktop",
-  "productName": "Rezvix",
-  "files": ["dist/**", "electron/**", "package.json"],
+    "appId": "com.umutugur.rezvix.desktop",
+    "productName": "Rezvix",
+    "files": ["dist/**", "electron/**", "package.json"],
 
-  "afterSign": "electron/notarize.cjs",
-
-  "mac": {
-    "target": ["dmg", "zip"],
-    "hardenedRuntime": true,
-    "gatekeeperAssess": false,
-    "entitlements": "electron/entitlements.mac.plist",
-    "entitlementsInherit": "electron/entitlements.mac.plist"
+    "mac": {
+      "target": ["dmg", "zip"],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "electron/entitlements.mac.plist",
+      "entitlementsInherit": "electron/entitlements.mac.plist"
     },
 
-  "win": { "target": "nsis" },
+    "win": {
+      "target": "nsis"
+    },
 
-  "publish": [
-    {
-      "provider": "github",
-      "owner": "umutugur",
-      "repo": "rezzy-backend",
-      "releaseType": "release"
-    }
-  ]
-},
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "umutugur",
+        "repo": "rezzy-backend",
+        "releaseType": "release"
+      }
+    ],
+
     "afterSign": "electron/notarize.cjs"
   }
-
+}
