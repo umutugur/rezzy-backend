@@ -26,6 +26,7 @@
     "recharts": "^3.6.0"
   },
   "devDependencies": {
+    "@electron/notarize": "^3.1.1",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^5.0.4",
@@ -42,27 +43,39 @@
     "wait-on": "^9.0.3"
   },
   "main": "electron/main.cjs",
- "build": {
-  "appId": "com.umutugur.rezvix.desktop",
-  "productName": "Rezvix",
-  "files": [
-    "dist/**",
-    "electron/**",
-    "package.json"
-  ],
-  "mac": {
-    "target": ["dmg", "zip"]
-  },
-  "win": {
-    "target": "nsis"
-  },
-  "publish": [
-    {
-      "provider": "github",
-      "owner": "umutugur",
-      "repo": "rezzy-backend",
-      "releaseType": "release"
-    }
-  ]
-}
+  "build": {
+    "appId": "com.umutugur.rezvix.desktop",
+    "productName": "Rezvix",
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "electron/entitlements.mac.plist",
+      "entitlementsInherit": "electron/entitlements.mac.plist",
+      "identity": "Developer ID Application"
+    },
+    "dmg": {
+      "sign": true
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "umutugur",
+        "repo": "rezzy-backend",
+        "releaseType": "release"
+      }
+    ],
+    "afterSign": "electron/notarize.cjs"
+  }
 }
