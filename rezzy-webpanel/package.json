@@ -1,6 +1,6 @@
 {
   "name": "rezvix-webpanel",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "type": "module",
   "scripts": {
@@ -55,9 +55,8 @@
     "hardenedRuntime": true,
     "gatekeeperAssess": false,
     "entitlements": "electron/entitlements.mac.plist",
-    "entitlementsInherit": "electron/entitlements.mac.plist",
-    "identity": "Developer ID Application: Umut Ugur"
-  },
+    "entitlementsInherit": "electron/entitlements.mac.plist"
+    },
 
   "win": { "target": "nsis" },
 
