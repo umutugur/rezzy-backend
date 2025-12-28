@@ -34,7 +34,7 @@ jobs:
 
       # ✅ macOS codesign cert import (sadece mac)
       - name: Import Apple Developer ID Certificate
-        if: matrix.os == 'macos-latest'
+        if: runner.os == 'macOS'
         env:
           MAC_CERTS_B64: ${{ secrets.MAC_CERTS_B64 }}
           MAC_CERTS_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
@@ -47,6 +47,14 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
           security find-identity -v -p codesigning
 
+      # ✅ Apple tarafına gerçekten erişim var mı? (sadece mac)
+      - name: Network check (Apple)
+        if: runner.os == 'macOS'
+        run: |
+          echo "Checking Apple connectivity..."
+          curl -I --max-time 20 https://appstoreconnect.apple.com || true
+          curl -I --max-time 20 https://developer.apple.com || true
+
       - name: Build + Publish to GitHub Releases
         working-directory: rezzy-webpanel
         run: npx electron-builder --publish always
@@ -55,7 +63,7 @@ jobs:
           CI: true
 
           # ✅ mac only: codesign + notarize
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && 'true' || '' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && 'true' || '' }}
 
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
