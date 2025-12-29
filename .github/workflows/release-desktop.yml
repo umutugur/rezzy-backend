@@ -38,17 +38,40 @@ jobs:
           MAC_CERTS_B64: ${{ secrets.MAC_CERTS_B64 }}
           MAC_CERTS_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
         run: |
+          set -euo pipefail
+
+          # 1) Secret gerçekten geliyor mu?
+          if [ -z "${MAC_CERTS_B64:-}" ]; then
+            echo "MAC_CERTS_B64 is empty. Secrets are not available to this run."
+            exit 1
+          fi
+
+          # 2) p12 üret
           echo "$MAC_CERTS_B64" | base64 --decode > /tmp/mac-certs.p12
 
+          # 3) p12 boş mu?
+          if [ ! -s /tmp/mac-certs.p12 ]; then
+            echo "/tmp/mac-certs.p12 is empty after base64 decode."
+            exit 1
+          fi
+
+          # 4) Keychain oluştur/aktif et
           security create-keychain -p "" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "" build.keychain
           security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "" build.keychain
 
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          # 5) Keychain'i search list + default yap (kritik)
           security list-keychains -d user -s build.keychain
+          security default-keychain -s build.keychain
 
-          security find-identity -v -p codesigning
+          # 6) Import (CI için stabil: -A)
+          security import /tmp/mac-certs.p12 -k build.keychain -P "$MAC_CERTS_PASSWORD" -A
+
+          # 7) codesign erişimi
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+
+          # 8) Doğrula
+          security find-identity -v -p codesigning build.keychain
           security show-keychain-info build.keychain || true
 
       - name: Network check (Apple)
@@ -71,7 +94,6 @@ jobs:
         working-directory: rezzy-webpanel
         run: npx electron-builder --publish always
         env:
-          
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: true
 
@@ -84,5 +106,6 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
           CSC_KEYCHAIN: build.keychain
           CSC_KEYCHAIN_PASSWORD: ""
