@@ -88,14 +88,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: true
 
-          DEBUG: "electron-builder,electron-builder:*,app-builder-lib:*,@electron/notarize*"
+          DEBUG: "electron-builder,electron-builder:*,app-builder-lib:*,electron-osx-sign*"
           ELECTRON_BUILDER_LOG_LEVEL: debug
           CSC_DEBUG: "true"
 
-          # ✅ mac only: codesign + notarize
+          # ✅ mac only: codesign (keychain'i zorla)
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && 'true' || '' }}
-
-          # notarize envs (mac'te afterSign çalışacak)
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_KEYCHAIN: ${{ runner.os == 'macOS' && 'build.keychain' || '' }}
+          CSC_KEYCHAIN_PASSWORD: ${{ runner.os == 'macOS' && '' || '' }}
