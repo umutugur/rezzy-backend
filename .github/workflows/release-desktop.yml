@@ -101,8 +101,8 @@ jobs:
           set -e
           npx electron-builder --mac dmg zip --publish never
 
-      # -------------------- macOS: notarize + staple --------------------
-      - name: Notarize + Staple (macOS)
+      # -------------------- macOS: notarize + staple (resilient) --------------------
+      - name: Notarize + Staple (macOS) - resilient
         if: runner.os == 'macOS'
         shell: bash
         working-directory: rezzy-webpanel
@@ -122,30 +122,101 @@ jobs:
           ls -la dist || true
 
           DMG_PATH="$(ls -1 dist/*.dmg | head -n 1 || true)"
-          ZIP_PATH="$(ls -1 dist/*.zip | head -n 1 || true)"
+          ZIP_PATH="$(ls -1 dist/*-mac.zip | head -n 1 || true)"
 
-          if [ -z "$DMG_PATH" ] || [ -z "$ZIP_PATH" ]; then
-            echo "DMG/ZIP not found under rezzy-webpanel/dist"
+          if [ -z "${DMG_PATH:-}" ]; then
+            echo "DMG not found under rezzy-webpanel/dist"
             exit 1
           fi
 
           echo "DMG: $DMG_PATH"
-          echo "ZIP: $ZIP_PATH"
+          echo "ZIP: ${ZIP_PATH:-<none>}"
 
+          # Credentials profile (idempotent)
           xcrun notarytool store-credentials "rezvix-notary" \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD"
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" || true
 
-          # Notarize DMG
-          xcrun notarytool submit "$DMG_PATH" --keychain-profile "rezvix-notary" --wait
+          submit_and_get_id () {
+            local file="$1"
+            xcrun notarytool submit "$file" \
+              --keychain-profile "rezvix-notary" \
+              --output-format json | /usr/bin/python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])'
+          }
 
-          # Staple DMG
+          poll_until_done () {
+            local id="$1"
+            local label="$2"
+            local max_minutes=90
+            local start_ts
+            start_ts=$(date +%s)
+
+            echo "Polling notarization ($label) id=$id ..."
+
+            while true; do
+              local now_ts elapsed
+              now_ts=$(date +%s)
+              elapsed=$(( (now_ts - start_ts) / 60 ))
+
+              if [ "$elapsed" -ge "$max_minutes" ]; then
+                echo "Notary polling timed out after ${max_minutes} minutes. (id=$id)"
+                xcrun notarytool log "$id" --keychain-profile "rezvix-notary" || true
+                exit 1
+              fi
+
+              set +e
+              INFO_JSON="$(xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json 2>/tmp/notary_err.txt)"
+              RC=$?
+              set -e
+
+              if [ "$RC" -ne 0 ]; then
+                ERR="$(cat /tmp/notary_err.txt || true)"
+                echo "notarytool info failed (will retry): $ERR"
+                sleep 20
+                continue
+              fi
+
+              STATUS="$(echo "$INFO_JSON" | /usr/bin/python3 -c 'import sys,json; print(json.load(sys.stdin).get("status",""))')"
+              echo "Current status ($label): $STATUS"
+
+              case "$STATUS" in
+                "Accepted")
+                  return 0
+                  ;;
+                "Invalid")
+                  echo "Notarization INVALID ($label). Printing log:"
+                  xcrun notarytool log "$id" --keychain-profile "rezvix-notary" || true
+                  exit 1
+                  ;;
+                "In Progress"|"InProgress"|"Submitted")
+                  sleep 20
+                  ;;
+                *)
+                  echo "Unknown status '$STATUS' ($label). Will keep polling."
+                  sleep 20
+                  ;;
+              esac
+            done
+          }
+
+          echo "Submitting DMG..."
+          DMG_ID="$(submit_and_get_id "$DMG_PATH")"
+          echo "DMG submission id: $DMG_ID"
+          poll_until_done "$DMG_ID" "DMG"
+
+          echo "Stapling DMG..."
           xcrun stapler staple -v "$DMG_PATH"
           xcrun stapler validate -v "$DMG_PATH"
 
-          # Notarize ZIP (opsiyonel ama iyi)
-          xcrun notarytool submit "$ZIP_PATH" --keychain-profile "rezvix-notary" --wait
+          if [ -n "${ZIP_PATH:-}" ]; then
+            echo "Submitting ZIP..."
+            ZIP_ID="$(submit_and_get_id "$ZIP_PATH")"
+            echo "ZIP submission id: $ZIP_ID"
+            poll_until_done "$ZIP_ID" "ZIP"
+          fi
+
+          echo "Notarization flow completed."
 
       # -------------------- macOS: upload to GitHub Release --------------------
       - name: Upload mac artifacts to GitHub Release
