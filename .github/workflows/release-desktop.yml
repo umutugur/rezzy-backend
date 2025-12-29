@@ -32,6 +32,7 @@ jobs:
         working-directory: rezzy-webpanel
         run: npm ci
 
+      # ✅ macOS codesign cert import + keychain hardening
       - name: Import Apple Developer ID Certificate
         if: runner.os == 'macOS'
         env:
@@ -39,13 +40,26 @@ jobs:
           MAC_CERTS_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
         run: |
           echo "$MAC_CERTS_B64" | base64 --decode > /tmp/mac-certs.p12
+
           security create-keychain -p "" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "" build.keychain
-          security import /tmp/mac-certs.p12 -k build.keychain -P "$MAC_CERTS_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
-          security find-identity -v -p codesigning
 
+          # ✅ Auto-lock'u kapat (CI'da codesign takılmasını genelde bu çözer)
+          security set-keychain-settings -lut 21600 build.keychain
+
+          security import /tmp/mac-certs.p12 -k build.keychain -P "$MAC_CERTS_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+
+          # ✅ codesign erişimi için
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+
+          # ✅ keychain'i user listesine sabitle
+          security list-keychains -d user -s build.keychain
+
+          security find-identity -v -p codesigning
+          security show-keychain-info build.keychain || true
+
+      # ✅ Apple connectivity check (sadece mac)
       - name: Network check (Apple)
         if: runner.os == 'macOS'
         run: |
@@ -53,17 +67,35 @@ jobs:
           curl -I --max-time 20 https://appstoreconnect.apple.com || true
           curl -I --max-time 20 https://developer.apple.com || true
 
+      # ✅ Codesign erişimi gerçekten var mı? (sadece mac)
+      - name: Codesign sanity check (mac)
+        if: runner.os == 'macOS'
+        run: |
+          set -e
+          echo "Keychain list:"
+          security list-keychains -d user
+          echo "Identities:"
+          security find-identity -v -p codesigning
+          echo "Signing a dummy file to verify codesign can access the key..."
+          echo "test" > /tmp/codesign-test.txt
+          codesign -s "Developer ID Application" --timestamp /tmp/codesign-test.txt || true
+          echo "Dummy sign done."
+
       - name: Build + Publish to GitHub Releases
         working-directory: rezzy-webpanel
         run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: true
+
           DEBUG: "electron-builder,electron-builder:*,app-builder-lib:*,@electron/notarize*"
           ELECTRON_BUILDER_LOG_LEVEL: debug
+          CSC_DEBUG: "true"
 
-          # mac only: codesign + notarize
+          # ✅ mac only: codesign + notarize
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && 'true' || '' }}
+
+          # notarize envs (mac'te afterSign çalışacak)
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
