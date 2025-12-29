@@ -32,6 +32,7 @@ jobs:
         working-directory: rezzy-webpanel
         run: npm ci
 
+      # -------------------- mac: cert import --------------------
       - name: Import Apple Developer ID Certificate
         if: runner.os == 'macOS'
         env:
@@ -41,13 +42,13 @@ jobs:
           set -euo pipefail
 
           if [ -z "${MAC_CERTS_B64:-}" ]; then
-            echo "MAC_CERTS_B64 is empty. Secrets are not available to this run."
+            echo "MAC_CERTS_B64 is empty."
             exit 1
           fi
 
           echo "$MAC_CERTS_B64" | base64 --decode > /tmp/mac-certs.p12
           if [ ! -s /tmp/mac-certs.p12 ]; then
-            echo "/tmp/mac-certs.p12 is empty after base64 decode."
+            echo "/tmp/mac-certs.p12 is empty after decode."
             exit 1
           fi
 
@@ -58,36 +59,75 @@ jobs:
           security list-keychains -d user -s build.keychain
           security default-keychain -s build.keychain
 
+          # Import (CI’da en stabil)
           security import /tmp/mac-certs.p12 -k build.keychain -P "$MAC_CERTS_PASSWORD" -A
+
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
 
           security find-identity -v -p codesigning build.keychain
-          security show-keychain-info build.keychain || true
+        shell: bash
 
-      - name: Network check (Apple + timestamp)
-        if: runner.os == 'macOS'
-        run: |
-          echo "Checking Apple connectivity..."
-          curl -I --max-time 20 https://appstoreconnect.apple.com || true
-          curl -I --max-time 20 https://developer.apple.com || true
-          echo "Checking timestamp server..."
-          curl -I --max-time 20 http://timestamp.apple.com/ts01 || true
-
-      - name: Build + Publish to GitHub Releases
+      # -------------------- build --------------------
+      - name: Build (win publish, mac build only)
         working-directory: rezzy-webpanel
-        run: npx electron-builder --publish always
+        run: |
+          set -e
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            npx electron-builder --publish always
+          else
+            # mac: önce sadece build al (publish yok) -> notarize/staple sonrası release’e yükleyeceğiz
+            npx electron-builder --mac dmg zip --publish never
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: true
-
-          DEBUG: "electron-builder,electron-builder:*,app-builder-lib:*,@electron/notarize*"
-          ELECTRON_BUILDER_LOG_LEVEL: debug
-          CSC_DEBUG: "true"
-
-          CSC_IDENTITY_AUTO_DISCOVERY: "true"
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && 'true' || '' }}
           CSC_KEYCHAIN: build.keychain
           CSC_KEYCHAIN_PASSWORD: ""
 
+      # -------------------- mac: notarize + staple --------------------
+      - name: Notarize DMG & ZIP (mac)
+        if: runner.os == 'macOS'
+        working-directory: rezzy-webpanel
+        env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          ls -la dist || true
+
+          # dist içinde dmg/zip adlarını yakala
+          DMG_PATH="$(ls -1 dist/*.dmg | head -n 1)"
+          ZIP_PATH="$(ls -1 dist/*.zip | head -n 1)"
+
+          echo "DMG: $DMG_PATH"
+          echo "ZIP: $ZIP_PATH"
+
+          # notarytool credentials profile
+          xcrun notarytool store-credentials "rezvix-notary" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD"
+
+          # ✅ Notarize DMG (wait)
+          xcrun notarytool submit "$DMG_PATH" --keychain-profile "rezvix-notary" --wait
+
+          # ✅ Staple DMG
+          xcrun stapler staple -v "$DMG_PATH"
+          xcrun stapler validate -v "$DMG_PATH"
+
+          # (Opsiyonel ama tavsiye: zip’i de notarize et)
+          xcrun notarytool submit "$ZIP_PATH" --keychain-profile "rezvix-notary" --wait
+
+      # -------------------- mac: upload artifacts to GitHub Release --------------------
+      - name: Upload mac artifacts to GitHub Release
+        if: runner.os == 'macOS'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rezzy-webpanel/dist/*.dmg
+            rezzy-webpanel/dist/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
