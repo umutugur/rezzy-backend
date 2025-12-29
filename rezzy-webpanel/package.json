@@ -1,6 +1,6 @@
 {
   "name": "rezvix-webpanel",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "type": "module",
   "description": "Rezvix Web Panel Desktop",
@@ -49,7 +49,6 @@
   "appId": "com.umutugur.rezvix.desktop",
   "productName": "Rezvix",
   "files": ["dist/**", "electron/**", "package.json"],
-  "afterSign": "electron/notarize.cjs",
   "mac": {
   "target": ["dmg", "zip"],
   "hardenedRuntime": true,

@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -32,9 +34,10 @@ jobs:
         working-directory: rezzy-webpanel
         run: npm ci
 
-      # -------------------- mac: cert import --------------------
-      - name: Import Apple Developer ID Certificate
+      # -------------------- macOS: cert import + keychain --------------------
+      - name: Import Apple Developer ID Certificate (mac)
         if: runner.os == 'macOS'
+        shell: bash
         env:
           MAC_CERTS_B64: ${{ secrets.MAC_CERTS_B64 }}
           MAC_CERTS_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
@@ -59,35 +62,49 @@ jobs:
           security list-keychains -d user -s build.keychain
           security default-keychain -s build.keychain
 
-          # Import (CI’da en stabil)
+          # CI’da en stabil import
           security import /tmp/mac-certs.p12 -k build.keychain -P "$MAC_CERTS_PASSWORD" -A
-
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
 
           security find-identity -v -p codesigning build.keychain
-        shell: bash
 
-      # -------------------- build --------------------
-      - name: Build (win publish, mac build only)
-        working-directory: rezzy-webpanel
+      - name: Network check (Apple) (mac)
+        if: runner.os == 'macOS'
+        shell: bash
         run: |
-          set -e
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            npx electron-builder --publish always
-          else
-            # mac: önce sadece build al (publish yok) -> notarize/staple sonrası release’e yükleyeceğiz
-            npx electron-builder --mac dmg zip --publish never
-          fi
+          echo "Checking Apple connectivity..."
+          curl -I --max-time 20 https://appstoreconnect.apple.com || true
+          curl -I --max-time 20 https://developer.apple.com || true
+
+      # -------------------- Windows: build + publish --------------------
+      - name: Build + Publish (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: rezzy-webpanel
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: true
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && 'true' || '' }}
+        run: |
+          npx electron-builder --win --x64 --publish always
+
+      # -------------------- macOS: build (NO publish here) --------------------
+      - name: Build (macOS) - dmg+zip (no publish)
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: rezzy-webpanel
+        env:
+          CI: true
+          CSC_IDENTITY_AUTO_DISCOVERY: "true"
           CSC_KEYCHAIN: build.keychain
           CSC_KEYCHAIN_PASSWORD: ""
+        run: |
+          set -e
+          npx electron-builder --mac dmg zip --publish never
 
-      # -------------------- mac: notarize + staple --------------------
-      - name: Notarize DMG & ZIP (mac)
+      # -------------------- macOS: notarize + staple --------------------
+      - name: Notarize + Staple (macOS)
         if: runner.os == 'macOS'
+        shell: bash
         working-directory: rezzy-webpanel
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -96,34 +113,43 @@ jobs:
         run: |
           set -euo pipefail
 
+          if [ -z "${APPLE_ID:-}" ] || [ -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
+            echo "Missing APPLE notarization secrets."
+            exit 1
+          fi
+
+          echo "== dist listing =="
           ls -la dist || true
 
-          # dist içinde dmg/zip adlarını yakala
-          DMG_PATH="$(ls -1 dist/*.dmg | head -n 1)"
-          ZIP_PATH="$(ls -1 dist/*.zip | head -n 1)"
+          DMG_PATH="$(ls -1 dist/*.dmg | head -n 1 || true)"
+          ZIP_PATH="$(ls -1 dist/*.zip | head -n 1 || true)"
+
+          if [ -z "$DMG_PATH" ] || [ -z "$ZIP_PATH" ]; then
+            echo "DMG/ZIP not found under rezzy-webpanel/dist"
+            exit 1
+          fi
 
           echo "DMG: $DMG_PATH"
           echo "ZIP: $ZIP_PATH"
 
-          # notarytool credentials profile
           xcrun notarytool store-credentials "rezvix-notary" \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD"
 
-          # ✅ Notarize DMG (wait)
+          # Notarize DMG
           xcrun notarytool submit "$DMG_PATH" --keychain-profile "rezvix-notary" --wait
 
-          # ✅ Staple DMG
+          # Staple DMG
           xcrun stapler staple -v "$DMG_PATH"
           xcrun stapler validate -v "$DMG_PATH"
 
-          # (Opsiyonel ama tavsiye: zip’i de notarize et)
+          # Notarize ZIP (opsiyonel ama iyi)
           xcrun notarytool submit "$ZIP_PATH" --keychain-profile "rezvix-notary" --wait
 
-      # -------------------- mac: upload artifacts to GitHub Release --------------------
+      # -------------------- macOS: upload to GitHub Release --------------------
       - name: Upload mac artifacts to GitHub Release
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
