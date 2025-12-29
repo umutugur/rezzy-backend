@@ -75,6 +75,7 @@ jobs:
           echo "Checking Apple connectivity..."
           curl -I --max-time 20 https://appstoreconnect.apple.com || true
           curl -I --max-time 20 https://developer.apple.com || true
+          curl -I --max-time 20 https://timestamp.apple.com/ts01 || true
 
       # -------------------- Windows: build + publish --------------------
       - name: Build + Publish (Windows)
@@ -97,6 +98,8 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "true"
           CSC_KEYCHAIN: build.keychain
           CSC_KEYCHAIN_PASSWORD: ""
+          # timestampsa Apple TSA kullan (senin önceki hatayı burada netleştiriyoruz)
+          CSC_FORCED_TIMESTAMP: "http://timestamp.apple.com/ts01"
         run: |
           set -e
           npx electron-builder --mac dmg zip --publish never
@@ -115,6 +118,11 @@ jobs:
 
           if [ -z "${APPLE_ID:-}" ] || [ -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
             echo "Missing APPLE notarization secrets."
+            exit 1
+          fi
+
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "jq is required but not found on runner."
             exit 1
           fi
 
@@ -140,61 +148,71 @@ jobs:
 
           submit_and_get_id () {
             local file="$1"
-            xcrun notarytool submit "$file" \
-              --keychain-profile "rezvix-notary" \
-              --output-format json | /usr/bin/python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])'
+            local out rc
+            set +e
+            out="$(xcrun notarytool submit "$file" --keychain-profile "rezvix-notary" --output-format json 2>&1)"
+            rc=$?
+            set -e
+            if [ "$rc" -ne 0 ]; then
+              echo "submit failed: $out"
+              return 1
+            fi
+            echo "$out" | jq -r '.id // empty'
           }
 
           poll_until_done () {
             local id="$1"
             local label="$2"
-            local max_minutes=90
-            local start_ts
+
+            # Apple yoğun olabiliyor -> 180 dk
+            local max_minutes=180
+            local sleep_sec=25
+            local start_ts now_ts elapsed_min
             start_ts=$(date +%s)
 
             echo "Polling notarization ($label) id=$id ..."
 
             while true; do
-              local now_ts elapsed
               now_ts=$(date +%s)
-              elapsed=$(( (now_ts - start_ts) / 60 ))
+              elapsed_min=$(( (now_ts - start_ts) / 60 ))
 
-              if [ "$elapsed" -ge "$max_minutes" ]; then
+              if [ "$elapsed_min" -ge "$max_minutes" ]; then
                 echo "Notary polling timed out after ${max_minutes} minutes. (id=$id)"
                 xcrun notarytool log "$id" --keychain-profile "rezvix-notary" || true
                 exit 1
               fi
 
+              local info rc status
               set +e
-              INFO_JSON="$(xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json 2>/tmp/notary_err.txt)"
-              RC=$?
+              info="$(xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json 2>&1)"
+              rc=$?
               set -e
 
-              if [ "$RC" -ne 0 ]; then
-                ERR="$(cat /tmp/notary_err.txt || true)"
-                echo "notarytool info failed (will retry): $ERR"
-                sleep 20
+              if [ "$rc" -ne 0 ]; then
+                # Burada -1009/no route gibi şeyler gelirse patlamayalım
+                echo "notarytool info failed (will retry): $info"
+                sleep "$sleep_sec"
                 continue
               fi
 
-              STATUS="$(echo "$INFO_JSON" | /usr/bin/python3 -c 'import sys,json; print(json.load(sys.stdin).get("status",""))')"
-              echo "Current status ($label): $STATUS"
+              status="$(echo "$info" | jq -r '.status // empty')"
+              echo "Current status ($label): ${status:-<unknown>} (t=${elapsed_min}m)"
 
-              case "$STATUS" in
-                "Accepted")
+              case "$status" in
+                Accepted)
                   return 0
                   ;;
-                "Invalid")
+                Invalid)
                   echo "Notarization INVALID ($label). Printing log:"
                   xcrun notarytool log "$id" --keychain-profile "rezvix-notary" || true
                   exit 1
                   ;;
                 "In Progress"|"InProgress"|"Submitted")
-                  sleep 20
+                  sleep "$sleep_sec"
                   ;;
                 *)
-                  echo "Unknown status '$STATUS' ($label). Will keep polling."
-                  sleep 20
+                  # bazen boş/unknown döner, retry et
+                  sleep "$sleep_sec"
                   ;;
               esac
             done
@@ -202,6 +220,10 @@ jobs:
 
           echo "Submitting DMG..."
           DMG_ID="$(submit_and_get_id "$DMG_PATH")"
+          if [ -z "${DMG_ID:-}" ]; then
+            echo "Failed to obtain DMG submission id."
+            exit 1
+          fi
           echo "DMG submission id: $DMG_ID"
           poll_until_done "$DMG_ID" "DMG"
 
@@ -212,6 +234,10 @@ jobs:
           if [ -n "${ZIP_PATH:-}" ]; then
             echo "Submitting ZIP..."
             ZIP_ID="$(submit_and_get_id "$ZIP_PATH")"
+            if [ -z "${ZIP_ID:-}" ]; then
+              echo "Failed to obtain ZIP submission id."
+              exit 1
+            fi
             echo "ZIP submission id: $ZIP_ID"
             poll_until_done "$ZIP_ID" "ZIP"
           fi
