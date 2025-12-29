@@ -45,7 +45,6 @@ jobs:
           security unlock-keychain -p "" build.keychain
           security set-keychain-settings -lut 21600 build.keychain
 
-          security import /tmp/mac-certs.p12 -k build.keychain -P "$MAC_CERTS_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
           security list-keychains -d user -s build.keychain
 
@@ -72,6 +71,7 @@ jobs:
         working-directory: rezzy-webpanel
         run: npx electron-builder --publish always
         env:
+          
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: true
 
@@ -84,3 +84,5 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_KEYCHAIN: build.keychain
+          CSC_KEYCHAIN_PASSWORD: ""

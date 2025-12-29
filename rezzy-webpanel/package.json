@@ -1,6 +1,6 @@
 {
   "name": "rezvix-webpanel",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "private": true,
   "type": "module",
   "description": "Rezvix Web Panel Desktop",
@@ -51,6 +51,7 @@
     "files": ["dist/**", "electron/**", "package.json"],
 
     "mac": {
+      "timestamp": true,
       "target": ["dmg", "zip"],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
