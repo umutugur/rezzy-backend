@@ -51,12 +51,13 @@
     "files": ["dist/**", "electron/**", "package.json"],
 
     "mac": {
-      "timestamp": true,
       "target": ["dmg", "zip"],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "electron/entitlements.mac.plist",
-      "entitlementsInherit": "electron/entitlements.mac.plist"
+      "entitlementsInherit": "electron/entitlements.mac.plist",
+      "timestamp": "http://timestamp.apple.com/ts01"
+
     },
 
     "dmg": {
