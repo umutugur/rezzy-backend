@@ -24,20 +24,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.12.0
           cache: npm
           cache-dependency-path: rezzy-webpanel/package-lock.json
-
-      # ✅ electron-builder cache (çok hızlandırır)
-      - name: Cache electron-builder
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/electron
-            ~/.cache/electron-builder
-            ~/Library/Caches/electron
-            ~/Library/Caches/electron-builder
-          key: ${{ runner.os }}-electron-builder-${{ hashFiles('rezzy-webpanel/package-lock.json') }}
 
       - name: Install
         working-directory: rezzy-webpanel
@@ -66,16 +55,14 @@ jobs:
 
       - name: Build + Publish to GitHub Releases
         working-directory: rezzy-webpanel
-        run: npx electron-builder --publish always --verbose
+        run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: true
-
-          # log
           DEBUG: "electron-builder,electron-builder:*,app-builder-lib:*,@electron/notarize*"
           ELECTRON_BUILDER_LOG_LEVEL: debug
 
-          # mac only notarize (electron-builder built-in)
+          # mac only: codesign + notarize
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && 'true' || '' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
