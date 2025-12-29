@@ -46,7 +46,6 @@ jobs:
           fi
 
           echo "$MAC_CERTS_B64" | base64 --decode > /tmp/mac-certs.p12
-
           if [ ! -s /tmp/mac-certs.p12 ]; then
             echo "/tmp/mac-certs.p12 is empty after base64 decode."
             exit 1
@@ -56,35 +55,23 @@ jobs:
           security set-keychain-settings -lut 21600 build.keychain
           security unlock-keychain -p "" build.keychain
 
-          # search list + default (kritik)
           security list-keychains -d user -s build.keychain
           security default-keychain -s build.keychain
 
-          # import (CI için stabil)
           security import /tmp/mac-certs.p12 -k build.keychain -P "$MAC_CERTS_PASSWORD" -A
-
-          # codesign erişimi
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
 
           security find-identity -v -p codesigning build.keychain
           security show-keychain-info build.keychain || true
 
-      - name: Network check (Apple)
+      - name: Network check (Apple + timestamp)
         if: runner.os == 'macOS'
         run: |
           echo "Checking Apple connectivity..."
           curl -I --max-time 20 https://appstoreconnect.apple.com || true
-          curl -I --max-time 20 https://appstoreconnect.apple.com/notary/v2/ || true
           curl -I --max-time 20 https://developer.apple.com || true
-
-      - name: Codesign sanity check (mac)
-        if: runner.os == 'macOS'
-        run: |
-          set -e
-          security list-keychains -d user
-          security find-identity -v -p codesigning
-          echo "test" > /tmp/codesign-test.txt
-          codesign -s "Developer ID Application" --timestamp /tmp/codesign-test.txt || true
+          echo "Checking timestamp server..."
+          curl -I --max-time 20 http://timestamp.apple.com/ts01 || true
 
       - name: Build + Publish to GitHub Releases
         working-directory: rezzy-webpanel
@@ -93,17 +80,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: true
 
-          DEBUG: "electron-builder,electron-builder:*,app-builder-lib:*"
+          DEBUG: "electron-builder,electron-builder:*,app-builder-lib:*,@electron/notarize*"
           ELECTRON_BUILDER_LOG_LEVEL: debug
           CSC_DEBUG: "true"
 
-          # codesign
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && 'true' || '' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "true"
           CSC_KEYCHAIN: build.keychain
           CSC_KEYCHAIN_PASSWORD: ""
 
-          # notarize (afterSign -> electron/notarize.cjs)
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          NOTARY_RETRIES: "6"

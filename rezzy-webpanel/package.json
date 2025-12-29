@@ -1,6 +1,6 @@
 {
   "name": "rezvix-webpanel",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "private": true,
   "type": "module",
   "description": "Rezvix Web Panel Desktop",
@@ -51,13 +51,13 @@
   "files": ["dist/**", "electron/**", "package.json"],
   "afterSign": "electron/notarize.cjs",
   "mac": {
-    "target": ["dmg", "zip"],
-    "hardenedRuntime": true,
-    "gatekeeperAssess": false,
-    "entitlements": "electron/entitlements.mac.plist",
-    "entitlementsInherit": "electron/entitlements.mac.plist",
-    "timestamp": "http://timestamp.apple.com/ts01"
-  },
+  "target": ["dmg", "zip"],
+  "hardenedRuntime": true,
+  "gatekeeperAssess": false,
+  "entitlements": "electron/entitlements.mac.plist",
+  "entitlementsInherit": "electron/entitlements.mac.inherit.plist",
+  "timestamp": "http://timestamp.apple.com/ts01"
+},
   "win": { "target": "nsis" },
   "publish": [
     { "provider": "github", "owner": "umutugur", "repo": "rezzy-backend", "releaseType": "release" }
