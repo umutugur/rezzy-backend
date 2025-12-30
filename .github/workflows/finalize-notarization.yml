@@ -116,13 +116,12 @@ jobs:
           set -euo pipefail
           mkdir -p rezzy-webpanel/dist
 
-          # Artifacts bazen iç içe klasörle gelebiliyor; o yüzden find ile kopyalıyoruz.
           DMG_SRC="$(find /tmp/mac-dist -type f -name '*.dmg' | head -n 1 || true)"
           ZIP_SRC="$(find /tmp/mac-dist -type f -name '*-mac.zip' | head -n 1 || true)"
 
           if [ -z "${DMG_SRC:-}" ]; then
             echo "No .dmg found inside mac-dist artifact"
-            find /tmp/mac-dist -maxdepth 3 -type f | head -n 50 || true
+            find /tmp/mac-dist -maxdepth 3 -type f | head -n 80 || true
             exit 1
           fi
 
@@ -134,7 +133,7 @@ jobs:
           echo "Dist contents:"
           ls -la rezzy-webpanel/dist
 
-      - name: Poll until Accepted + Staple + Validate (long wait, non-failing on timeout)
+      - name: Poll until Accepted + Staple + Validate (logs on reject/invalid)
         shell: bash
         working-directory: rezzy-webpanel
         env:
@@ -156,6 +155,18 @@ jobs:
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" || true
 
+          show_info () {
+            local id="$1"
+            xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json || true
+          }
+
+          show_log () {
+            local id="$1"
+            echo "========== NOTARY LOG ($id) =========="
+            xcrun notarytool log "$id" --keychain-profile "rezvix-notary" || true
+            echo "========== END NOTARY LOG ($id) =========="
+          }
+
           poll () {
             local id="$1"
             local label="$2"
@@ -175,17 +186,28 @@ jobs:
               echo "Status ($label): ${status:-<unknown>} (t=${elapsed}m)"
 
               case "$status" in
-                Accepted) return 0 ;;
+                Accepted)
+                  return 0
+                  ;;
                 Invalid)
-                  echo "INVALID ($label). Log:"
-                  xcrun notarytool log "$id" --keychain-profile "rezvix-notary" || true
+                  echo "INVALID ($label). Info:"
+                  show_info "$id"
+                  echo "INVALID ($label). Fetching log..."
+                  show_log "$id"
+                  exit 1
+                  ;;
+                Rejected)
+                  echo "REJECTED ($label). Info:"
+                  show_info "$id"
+                  echo "REJECTED ($label). Fetching log..."
+                  show_log "$id"
                   exit 1
                   ;;
               esac
 
               if [ "$elapsed" -ge "$max_minutes" ]; then
                 echo "Still In Progress after ${max_minutes}m. Exiting 0 so you can rerun later."
-                xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json || true
+                show_info "$id"
                 exit 0
               fi
 
