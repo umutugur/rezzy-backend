@@ -339,9 +339,67 @@
   color: var(--rezvix-text-main);
 }
 
+
 .rezvix-topbar__user-role {
   font-size: 11px;
   color: var(--rezvix-text-soft);
+}
+
+/* ---------- TopBar: Logout ---------- */
+
+.rezvix-topbar__logout {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 7px 12px;
+  border-radius: var(--rezvix-radius-pill);
+  border: 1px solid var(--rezvix-border-subtle);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--rezvix-text-muted);
+  cursor: pointer;
+  transition:
+    background 0.15s ease-out,
+    border-color 0.15s ease-out,
+    transform 0.08s ease-out,
+    box-shadow 0.15s ease-out,
+    color 0.15s ease-out;
+}
+
+.rezvix-topbar__logout:hover {
+  background: #ffffff;
+  border-color: var(--rezvix-border-strong);
+  color: var(--rezvix-text-main);
+  transform: translateY(-0.5px);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
+}
+
+.rezvix-topbar__logout:active {
+  transform: translateY(0.5px) scale(0.98);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.16) inset;
+}
+
+.rezvix-topbar__logout:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--rezvix-primary-soft);
+  border-color: var(--rezvix-primary-soft);
+}
+
+.rezvix-topbar__logout--danger {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.22);
+  color: #8b1a1a;
+}
+
+.rezvix-topbar__logout--danger:hover {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.3);
+  color: #5f1212;
+}
+
+.rezvix-topbar__logout:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* ---------- Content wrapper ---------- */
