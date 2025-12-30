@@ -1,21 +1,19 @@
-name: Release Desktop (mac + win)
+name: Finalize Notarization (mac)
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*.*.*"
+    inputs:
+      tag:
+        description: "Tag name (e.g. v1.2.4)"
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-14, windows-latest]
-    runs-on: ${{ matrix.os }}
+  finalize:
+    runs-on: macos-14
 
     steps:
       - name: Checkout
@@ -27,70 +25,43 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
-          cache: npm
-          cache-dependency-path: rezzy-webpanel/package-lock.json
 
-      - name: Install
+      - name: Install deps
         working-directory: rezzy-webpanel
         run: npm ci
 
-      # -------------------- macOS: cert import + keychain --------------------
-      - name: Import Apple Developer ID Certificate (mac)
-        if: runner.os == 'macOS'
+      - name: Download notarization ids artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: notarization-ids
+          path: /tmp/notary
+
+      - name: Read IDs
+        id: ids
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat /tmp/notary/notary-ids.txt
+          echo "DMG_ID=$(grep -E '^DMG_SUBMISSION_ID=' /tmp/notary/notary-ids.txt | cut -d= -f2)" >> $GITHUB_OUTPUT
+          echo "ZIP_ID=$(grep -E '^ZIP_SUBMISSION_ID=' /tmp/notary/notary-ids.txt | cut -d= -f2 || true)" >> $GITHUB_OUTPUT
+
+      - name: Import Apple Developer ID Certificate
         shell: bash
         env:
           MAC_CERTS_B64: ${{ secrets.MAC_CERTS_B64 }}
           MAC_CERTS_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
         run: |
           set -euo pipefail
-
-          if [ -z "${MAC_CERTS_B64:-}" ]; then
-            echo "MAC_CERTS_B64 is empty."
-            exit 1
-          fi
-
           echo "$MAC_CERTS_B64" | base64 --decode > /tmp/mac-certs.p12
-          if [ ! -s /tmp/mac-certs.p12 ]; then
-            echo "/tmp/mac-certs.p12 is empty after decode."
-            exit 1
-          fi
-
           security create-keychain -p "" build.keychain
           security set-keychain-settings -lut 21600 build.keychain
           security unlock-keychain -p "" build.keychain
-
           security list-keychains -d user -s build.keychain
           security default-keychain -s build.keychain
-
           security import /tmp/mac-certs.p12 -k build.keychain -P "$MAC_CERTS_PASSWORD" -A
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
 
-          security find-identity -v -p codesigning build.keychain
-
-      - name: Network check (Apple) (mac)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          echo "Checking Apple connectivity..."
-          curl -I --max-time 20 https://appstoreconnect.apple.com || true
-          curl -I --max-time 20 https://developer.apple.com || true
-          curl -I --max-time 20 https://timestamp.apple.com/ts01 || true
-          curl -I --max-time 20 https://timestamp.digicert.com || true
-
-      # -------------------- Windows: build + publish --------------------
-      - name: Build + Publish (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        working-directory: rezzy-webpanel
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CI: true
-        run: |
-          npx electron-builder --win --x64 --publish always
-
-      # -------------------- macOS: build + notarize (electron-builder) --------------------
-      - name: Build + Notarize (macOS) - dmg+zip (no publish)
-        if: runner.os == 'macOS'
+      - name: Build again (mac) to get same DMG/ZIP
         shell: bash
         working-directory: rezzy-webpanel
         env:
@@ -98,35 +69,83 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "true"
           CSC_KEYCHAIN: build.keychain
           CSC_KEYCHAIN_PASSWORD: ""
+        run: |
+          set -euo pipefail
+          npx electron-builder --mac dmg zip --publish never
 
-          # ✅ notarization env'leri build sırasında verilmek zorunda
+      - name: Poll until Accepted + Staple
+        shell: bash
+        working-directory: rezzy-webpanel
+        env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          DMG_ID: ${{ steps.ids.outputs.DMG_ID }}
+          ZIP_ID: ${{ steps.ids.outputs.ZIP_ID }}
         run: |
           set -euo pipefail
-
-          if [ -z "${APPLE_ID:-}" ] || [ -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
-            echo "Missing APPLE notarization secrets."
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "jq is required but not found."
             exit 1
           fi
 
-          echo "Selecting TSA endpoint..."
-          if curl -I --max-time 5 https://timestamp.apple.com/ts01 >/dev/null 2>&1; then
-            export CSC_FORCED_TIMESTAMP="https://timestamp.apple.com/ts01"
-            echo "TSA: Apple"
-          else
-            export CSC_FORCED_TIMESTAMP="https://timestamp.digicert.com"
-            echo "TSA: DigiCert (fallback)"
+          xcrun notarytool store-credentials "rezvix-notary" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" || true
+
+          poll () {
+            local id="$1"
+            local label="$2"
+            local max_minutes=30
+            local sleep_sec=20
+            local start_ts now_ts elapsed
+
+            start_ts=$(date +%s)
+            echo "Polling $label id=$id"
+
+            while true; do
+              now_ts=$(date +%s)
+              elapsed=$(( (now_ts - start_ts) / 60 ))
+              if [ "$elapsed" -ge "$max_minutes" ]; then
+                echo "Still not Accepted after ${max_minutes}m. Stop here and rerun later."
+                xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json || true
+                exit 1
+              fi
+
+              info="$(xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json 2>/dev/null || true)"
+              status="$(echo "$info" | jq -r '.status // empty')"
+              echo "Status ($label): ${status:-<unknown>} (t=${elapsed}m)"
+
+              case "$status" in
+                Accepted) return 0 ;;
+                Invalid)
+                  echo "INVALID ($label). Log:"
+                  xcrun notarytool log "$id" --keychain-profile "rezvix-notary" || true
+                  exit 1
+                  ;;
+                *) sleep "$sleep_sec" ;;
+              esac
+            done
+          }
+
+          DMG_PATH="$(ls -1 dist/*.dmg | head -n 1)"
+          ZIP_PATH="$(ls -1 dist/*-mac.zip | head -n 1 || true)"
+
+          poll "$DMG_ID" "DMG"
+          echo "Stapling DMG..."
+          xcrun stapler staple -v "$DMG_PATH"
+          xcrun stapler validate -v "$DMG_PATH"
+
+          if [ -n "${ZIP_ID:-}" ] && [ -n "${ZIP_PATH:-}" ]; then
+            poll "$ZIP_ID" "ZIP"
           fi
 
-          npx electron-builder --mac dmg zip --publish never
-
-      # -------------------- macOS: upload to GitHub Release --------------------
-      - name: Upload mac artifacts to GitHub Release
-        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/')
+      - name: Upload notarized mac artifacts to GitHub Release (still draft)
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag }}
+          draft: true
           files: |
             rezzy-webpanel/dist/*.dmg
             rezzy-webpanel/dist/*.zip

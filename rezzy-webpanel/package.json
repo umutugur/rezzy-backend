@@ -1,6 +1,6 @@
 {
   "name": "rezvix-webpanel",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "private": true,
   "type": "module",
   "description": "Rezvix Web Panel Desktop",
@@ -54,7 +54,9 @@
   "hardenedRuntime": true,
   "gatekeeperAssess": false,
   "entitlements": "electron/entitlements.mac.plist",
-  "entitlementsInherit": "electron/entitlements.mac.inherit.plist"
+  "entitlementsInherit": "electron/entitlements.mac.inherit.plist",
+  "timestamp": false
+
 },
   "win": { "target": "nsis" },
   "publish": [
