@@ -73,8 +73,8 @@ jobs:
         run: |
           npx electron-builder --win --x64 --publish always
 
-      # -------------------- macOS: build ONLY (no notarize) --------------------
-      - name: Build (macOS) - dmg+zip (no publish, no notarize)
+      # -------------------- macOS: build DMG + produce custom app.zip --------------------
+      - name: Build (macOS) - dmg + app.zip (NO notarize for dmg)
         if: runner.os == 'macOS'
         shell: bash
         working-directory: rezzy-webpanel
@@ -85,11 +85,32 @@ jobs:
           CSC_KEYCHAIN_PASSWORD: ""
         run: |
           set -euo pipefail
-          npx electron-builder --mac dmg zip --publish never
+
+          # DMG üret (sadece dağıtım taşıyıcısı)
+          npx electron-builder --mac dmg --publish never
+
+          # .app bulun
+          APP_PATH="$(find dist -maxdepth 3 -type d -name '*.app' | head -n 1 || true)"
+          if [ -z "${APP_PATH:-}" ]; then
+            echo "No .app found under rezzy-webpanel/dist"
+            find dist -maxdepth 4 -type f | head -n 80 || true
+            exit 1
+          fi
+
+          VERSION="$(node -p "require('./package.json').version")"
+          APP_ZIP="dist/Rezvix-${VERSION}-app.zip"
+
+          echo "APP_PATH=$APP_PATH"
+          echo "Creating app.zip => $APP_ZIP"
+
+          # Apple’ın sevdiği zip formatı (ditto)
+          ditto -c -k --keepParent "$APP_PATH" "$APP_ZIP"
+
+          echo "Dist contents:"
           ls -la dist || true
 
-      # -------------------- macOS: submit notarization WITHOUT WAIT --------------------
-      - name: Submit Notarization (macOS) - non-blocking
+      # -------------------- macOS: submit notarization ONLY for app.zip --------------------
+      - name: Submit Notarization (macOS) - app.zip (non-blocking)
         if: runner.os == 'macOS'
         shell: bash
         working-directory: rezzy-webpanel
@@ -110,36 +131,24 @@ jobs:
             exit 1
           fi
 
-          DMG_PATH="$(ls -1 dist/*.dmg | head -n 1 || true)"
-          ZIP_PATH="$(ls -1 dist/*-mac.zip | head -n 1 || true)"
-
-          if [ -z "${DMG_PATH:-}" ]; then
-            echo "DMG not found under rezzy-webpanel/dist"
+          APP_ZIP_PATH="$(ls -1 dist/*-app.zip | head -n 1 || true)"
+          if [ -z "${APP_ZIP_PATH:-}" ]; then
+            echo "app.zip not found under rezzy-webpanel/dist"
+            ls -la dist || true
             exit 1
           fi
 
-          echo "DMG: $DMG_PATH"
-          echo "ZIP: ${ZIP_PATH:-<none>}"
+          echo "APP_ZIP: $APP_ZIP_PATH"
 
           xcrun notarytool store-credentials "rezvix-notary" \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" || true
 
-          submit_id () {
-            local file="$1"
-            local out
-            out="$(xcrun notarytool submit "$file" --keychain-profile "rezvix-notary" --output-format json)"
-            echo "$out" | jq -r '.id'
-          }
+          out="$(xcrun notarytool submit "$APP_ZIP_PATH" --keychain-profile "rezvix-notary" --output-format json)"
+          APP_ZIP_ID="$(echo "$out" | jq -r '.id')"
 
-          DMG_ID="$(submit_id "$DMG_PATH")"
-          echo "DMG_SUBMISSION_ID=$DMG_ID" | tee dist/notary-ids.txt
-
-          if [ -n "${ZIP_PATH:-}" ]; then
-            ZIP_ID="$(submit_id "$ZIP_PATH")"
-            echo "ZIP_SUBMISSION_ID=$ZIP_ID" | tee -a dist/notary-ids.txt
-          fi
+          echo "APP_ZIP_SUBMISSION_ID=$APP_ZIP_ID" | tee dist/notary-ids.txt
 
           echo "== notary-ids.txt =="
           cat dist/notary-ids.txt
@@ -153,7 +162,7 @@ jobs:
           name: mac-dist
           path: |
             rezzy-webpanel/dist/*.dmg
-            rezzy-webpanel/dist/*.zip
+            rezzy-webpanel/dist/*-app.zip
           if-no-files-found: error
 
       - name: Upload notarization ids artifact (mac)
@@ -172,7 +181,7 @@ jobs:
           draft: true
           files: |
             rezzy-webpanel/dist/*.dmg
-            rezzy-webpanel/dist/*.zip
+            rezzy-webpanel/dist/*-app.zip
             rezzy-webpanel/dist/notary-ids.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
