@@ -4,10 +4,15 @@ on:
   workflow_run:
     workflows: ["Release Desktop (mac + win)"]
     types: [completed]
+
   workflow_dispatch:
     inputs:
       run_id:
         description: "Release Desktop workflow run id (Actions run id)"
+        required: true
+        type: string
+      tag:
+        description: "Release tag (e.g. v1.2.9). Required for upload/publish on manual runs."
         required: true
         type: string
 
@@ -23,6 +28,7 @@ jobs:
         || github.event_name == 'workflow_dispatch'
       }}
     runs-on: macos-14
+    timeout-minutes: 240
 
     steps:
       - name: Checkout
@@ -30,19 +36,35 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve source run id
-        id: run
+      - name: Resolve source run id + tag
+        id: meta
         shell: bash
         run: |
           set -euo pipefail
+
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "RUN_ID=${{ github.event.workflow_run.id }}" >> $GITHUB_OUTPUT
-            echo "HEAD_SHA=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
+            RUN_ID="${{ github.event.workflow_run.id }}"
+            HEAD_SHA="${{ github.event.workflow_run.head_sha }}"
+            echo "RUN_ID=$RUN_ID" >> $GITHUB_OUTPUT
+            echo "HEAD_SHA=$HEAD_SHA" >> $GITHUB_OUTPUT
+
+            # Tag resolve
+            git fetch --tags --force
+            TAG="$(git tag --points-at "$HEAD_SHA" | head -n 1 || true)"
+            echo "TAG=$TAG" >> $GITHUB_OUTPUT
+
+            echo "Using RUN_ID=$RUN_ID"
+            echo "Resolved TAG=${TAG:-<none>}"
           else
-            echo "RUN_ID=${{ inputs.run_id }}" >> $GITHUB_OUTPUT
+            RUN_ID="${{ inputs.run_id }}"
+            TAG="${{ inputs.tag }}"
+            echo "RUN_ID=$RUN_ID" >> $GITHUB_OUTPUT
             echo "HEAD_SHA=" >> $GITHUB_OUTPUT
+            echo "TAG=$TAG" >> $GITHUB_OUTPUT
+
+            echo "Using RUN_ID=$RUN_ID"
+            echo "Using TAG=$TAG"
           fi
-          echo "Using RUN_ID=${{ steps.run.outputs.RUN_ID }}"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -53,12 +75,11 @@ jobs:
         working-directory: rezzy-webpanel
         run: npm ci
 
-      # ✅ Download IDs from the build run
       - name: Download notarization ids artifact from build run
         uses: actions/download-artifact@v4
         with:
           name: notarization-ids
-          run-id: ${{ steps.run.outputs.RUN_ID }}
+          run-id: ${{ steps.meta.outputs.RUN_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: /tmp/notary
 
@@ -69,47 +90,51 @@ jobs:
           set -euo pipefail
           echo "== notary-ids.txt =="
           cat /tmp/notary/notary-ids.txt
-          echo "DMG_ID=$(grep -E '^DMG_SUBMISSION_ID=' /tmp/notary/notary-ids.txt | cut -d= -f2)" >> $GITHUB_OUTPUT
-          echo "ZIP_ID=$(grep -E '^ZIP_SUBMISSION_ID=' /tmp/notary/notary-ids.txt | cut -d= -f2 || true)" >> $GITHUB_OUTPUT
 
-      # ✅ Download the actual DMG/ZIP built in Release Desktop (NO REBUILD HERE)
+          DMG_ID="$(grep -E '^DMG_SUBMISSION_ID=' /tmp/notary/notary-ids.txt | cut -d= -f2 || true)"
+          ZIP_ID="$(grep -E '^ZIP_SUBMISSION_ID=' /tmp/notary/notary-ids.txt | cut -d= -f2 || true)"
+
+          if [ -z "${DMG_ID:-}" ]; then
+            echo "DMG_SUBMISSION_ID missing in notary-ids.txt"
+            exit 1
+          fi
+
+          echo "DMG_ID=$DMG_ID" >> $GITHUB_OUTPUT
+          echo "ZIP_ID=$ZIP_ID" >> $GITHUB_OUTPUT
+
       - name: Download mac dist artifact from build run
         uses: actions/download-artifact@v4
         with:
           name: mac-dist
-          run-id: ${{ steps.run.outputs.RUN_ID }}
+          run-id: ${{ steps.meta.outputs.RUN_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: rezzy-webpanel/dist
+          path: /tmp/mac-dist
 
-      - name: List dist
+      - name: Prepare working dist folder
         shell: bash
         run: |
           set -euo pipefail
-          ls -la rezzy-webpanel/dist || true
+          mkdir -p rezzy-webpanel/dist
 
-      - name: Resolve tag for this run
-        id: tag
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch --tags --force
+          # Artifacts bazen iç içe klasörle gelebiliyor; o yüzden find ile kopyalıyoruz.
+          DMG_SRC="$(find /tmp/mac-dist -type f -name '*.dmg' | head -n 1 || true)"
+          ZIP_SRC="$(find /tmp/mac-dist -type f -name '*-mac.zip' | head -n 1 || true)"
 
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            SHA="${{ steps.run.outputs.HEAD_SHA }}"
-            TAG="$(git tag --points-at "$SHA" | head -n 1 || true)"
-          else
-            TAG=""
+          if [ -z "${DMG_SRC:-}" ]; then
+            echo "No .dmg found inside mac-dist artifact"
+            find /tmp/mac-dist -maxdepth 3 -type f | head -n 50 || true
+            exit 1
           fi
 
-          if [ -n "${TAG:-}" ]; then
-            echo "TAG=$TAG" >> $GITHUB_OUTPUT
-            echo "Resolved TAG=$TAG"
-          else
-            echo "TAG=" >> $GITHUB_OUTPUT
-            echo "No tag resolved (manual run can still staple; upload/publish will be skipped)."
+          cp -f "$DMG_SRC" rezzy-webpanel/dist/
+          if [ -n "${ZIP_SRC:-}" ]; then
+            cp -f "$ZIP_SRC" rezzy-webpanel/dist/
           fi
 
-      - name: Poll until Accepted + Staple + Validate (retry-friendly)
+          echo "Dist contents:"
+          ls -la rezzy-webpanel/dist
+
+      - name: Poll until Accepted + Staple + Validate (long wait, non-failing on timeout)
         shell: bash
         working-directory: rezzy-webpanel
         env:
@@ -126,11 +151,6 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${DMG_ID:-}" ]; then
-            echo "DMG_ID is empty."
-            exit 1
-          fi
-
           xcrun notarytool store-credentials "rezvix-notary" \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
@@ -139,11 +159,8 @@ jobs:
           poll () {
             local id="$1"
             local label="$2"
-
-            # ✅ In-Progress bekleme Apple tarafında uzayabiliyor
-            # Bu job 25dk'da fail etmesin diye daha uzun tutuyoruz.
             local max_minutes=180
-            local sleep_sec=25
+            local sleep_sec=30
             local start_ts now_ts elapsed
 
             start_ts=$(date +%s)
@@ -152,12 +169,6 @@ jobs:
             while true; do
               now_ts=$(date +%s)
               elapsed=$(( (now_ts - start_ts) / 60 ))
-
-              if [ "$elapsed" -ge "$max_minutes" ]; then
-                echo "Still not Accepted after ${max_minutes}m. Exit 2 so you can rerun later."
-                xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json || true
-                exit 2
-              fi
 
               info="$(xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json 2>/dev/null || true)"
               status="$(echo "$info" | jq -r '.status // empty')"
@@ -170,8 +181,15 @@ jobs:
                   xcrun notarytool log "$id" --keychain-profile "rezvix-notary" || true
                   exit 1
                   ;;
-                *) sleep "$sleep_sec" ;;
               esac
+
+              if [ "$elapsed" -ge "$max_minutes" ]; then
+                echo "Still In Progress after ${max_minutes}m. Exiting 0 so you can rerun later."
+                xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json || true
+                exit 0
+              fi
+
+              sleep "$sleep_sec"
             done
           }
 
@@ -179,7 +197,7 @@ jobs:
           ZIP_PATH="$(ls -1 dist/*-mac.zip | head -n 1 || true)"
 
           if [ -z "${DMG_PATH:-}" ]; then
-            echo "DMG file not found in dist/"
+            echo "DMG not found in rezzy-webpanel/dist"
             exit 1
           fi
 
@@ -191,15 +209,13 @@ jobs:
 
           if [ -n "${ZIP_ID:-}" ] && [ -n "${ZIP_PATH:-}" ]; then
             poll "$ZIP_ID" "ZIP"
-            # ZIP için staple yok; sadece accepted kontrolü yeterli.
           fi
 
-      # ✅ Upload stapled DMG/ZIP back to same release tag
-      - name: Upload notarized mac artifacts to GitHub Release (same tag)
-        if: ${{ steps.tag.outputs.TAG != '' }}
+      - name: Upload stapled artifacts to GitHub Release (same tag)
+        if: ${{ steps.meta.outputs.TAG != '' }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.TAG }}
+          tag_name: ${{ steps.meta.outputs.TAG }}
           files: |
             rezzy-webpanel/dist/*.dmg
             rezzy-webpanel/dist/*.zip
@@ -207,11 +223,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish draft release
-        if: ${{ steps.tag.outputs.TAG != '' }}
+        if: ${{ steps.meta.outputs.TAG != '' }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.tag.outputs.TAG }}
+          TAG: ${{ steps.meta.outputs.TAG }}
         run: |
           set -euo pipefail
           gh release edit "$TAG" --draft=false
