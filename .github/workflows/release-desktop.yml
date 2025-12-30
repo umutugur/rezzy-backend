@@ -62,7 +62,6 @@ jobs:
           security list-keychains -d user -s build.keychain
           security default-keychain -s build.keychain
 
-          # CI’da en stabil import
           security import /tmp/mac-certs.p12 -k build.keychain -P "$MAC_CERTS_PASSWORD" -A
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
 
@@ -76,6 +75,7 @@ jobs:
           curl -I --max-time 20 https://appstoreconnect.apple.com || true
           curl -I --max-time 20 https://developer.apple.com || true
           curl -I --max-time 20 https://timestamp.apple.com/ts01 || true
+          curl -I --max-time 20 https://timestamp.digicert.com || true
 
       # -------------------- Windows: build + publish --------------------
       - name: Build + Publish (Windows)
@@ -88,8 +88,8 @@ jobs:
         run: |
           npx electron-builder --win --x64 --publish always
 
-      # -------------------- macOS: build (NO publish here) --------------------
-      - name: Build (macOS) - dmg+zip (no publish)
+      # -------------------- macOS: build + notarize (electron-builder) --------------------
+      - name: Build + Notarize (macOS) - dmg+zip (no publish)
         if: runner.os == 'macOS'
         shell: bash
         working-directory: rezzy-webpanel
@@ -98,18 +98,8 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "true"
           CSC_KEYCHAIN: build.keychain
           CSC_KEYCHAIN_PASSWORD: ""
-          # timestampsa Apple TSA kullan (senin önceki hatayı burada netleştiriyoruz)
-          CSC_FORCED_TIMESTAMP: "http://timestamp.apple.com/ts01"
-        run: |
-          set -e
-          npx electron-builder --mac dmg zip --publish never
 
-      # -------------------- macOS: notarize + staple (resilient) --------------------
-      - name: Notarize + Staple (macOS) - resilient
-        if: runner.os == 'macOS'
-        shell: bash
-        working-directory: rezzy-webpanel
-        env:
+          # ✅ notarization env'leri build sırasında verilmek zorunda
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -121,128 +111,16 @@ jobs:
             exit 1
           fi
 
-          if ! command -v jq >/dev/null 2>&1; then
-            echo "jq is required but not found on runner."
-            exit 1
+          echo "Selecting TSA endpoint..."
+          if curl -I --max-time 5 https://timestamp.apple.com/ts01 >/dev/null 2>&1; then
+            export CSC_FORCED_TIMESTAMP="https://timestamp.apple.com/ts01"
+            echo "TSA: Apple"
+          else
+            export CSC_FORCED_TIMESTAMP="https://timestamp.digicert.com"
+            echo "TSA: DigiCert (fallback)"
           fi
 
-          echo "== dist listing =="
-          ls -la dist || true
-
-          DMG_PATH="$(ls -1 dist/*.dmg | head -n 1 || true)"
-          ZIP_PATH="$(ls -1 dist/*-mac.zip | head -n 1 || true)"
-
-          if [ -z "${DMG_PATH:-}" ]; then
-            echo "DMG not found under rezzy-webpanel/dist"
-            exit 1
-          fi
-
-          echo "DMG: $DMG_PATH"
-          echo "ZIP: ${ZIP_PATH:-<none>}"
-
-          # Credentials profile (idempotent)
-          xcrun notarytool store-credentials "rezvix-notary" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD" || true
-
-          submit_and_get_id () {
-            local file="$1"
-            local out rc
-            set +e
-            out="$(xcrun notarytool submit "$file" --keychain-profile "rezvix-notary" --output-format json 2>&1)"
-            rc=$?
-            set -e
-            if [ "$rc" -ne 0 ]; then
-              echo "submit failed: $out"
-              return 1
-            fi
-            echo "$out" | jq -r '.id // empty'
-          }
-
-          poll_until_done () {
-            local id="$1"
-            local label="$2"
-
-            # Apple yoğun olabiliyor -> 180 dk
-            local max_minutes=180
-            local sleep_sec=25
-            local start_ts now_ts elapsed_min
-            start_ts=$(date +%s)
-
-            echo "Polling notarization ($label) id=$id ..."
-
-            while true; do
-              now_ts=$(date +%s)
-              elapsed_min=$(( (now_ts - start_ts) / 60 ))
-
-              if [ "$elapsed_min" -ge "$max_minutes" ]; then
-                echo "Notary polling timed out after ${max_minutes} minutes. (id=$id)"
-                xcrun notarytool log "$id" --keychain-profile "rezvix-notary" || true
-                exit 1
-              fi
-
-              local info rc status
-              set +e
-              info="$(xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json 2>&1)"
-              rc=$?
-              set -e
-
-              if [ "$rc" -ne 0 ]; then
-                # Burada -1009/no route gibi şeyler gelirse patlamayalım
-                echo "notarytool info failed (will retry): $info"
-                sleep "$sleep_sec"
-                continue
-              fi
-
-              status="$(echo "$info" | jq -r '.status // empty')"
-              echo "Current status ($label): ${status:-<unknown>} (t=${elapsed_min}m)"
-
-              case "$status" in
-                Accepted)
-                  return 0
-                  ;;
-                Invalid)
-                  echo "Notarization INVALID ($label). Printing log:"
-                  xcrun notarytool log "$id" --keychain-profile "rezvix-notary" || true
-                  exit 1
-                  ;;
-                "In Progress"|"InProgress"|"Submitted")
-                  sleep "$sleep_sec"
-                  ;;
-                *)
-                  # bazen boş/unknown döner, retry et
-                  sleep "$sleep_sec"
-                  ;;
-              esac
-            done
-          }
-
-          echo "Submitting DMG..."
-          DMG_ID="$(submit_and_get_id "$DMG_PATH")"
-          if [ -z "${DMG_ID:-}" ]; then
-            echo "Failed to obtain DMG submission id."
-            exit 1
-          fi
-          echo "DMG submission id: $DMG_ID"
-          poll_until_done "$DMG_ID" "DMG"
-
-          echo "Stapling DMG..."
-          xcrun stapler staple -v "$DMG_PATH"
-          xcrun stapler validate -v "$DMG_PATH"
-
-          if [ -n "${ZIP_PATH:-}" ]; then
-            echo "Submitting ZIP..."
-            ZIP_ID="$(submit_and_get_id "$ZIP_PATH")"
-            if [ -z "${ZIP_ID:-}" ]; then
-              echo "Failed to obtain ZIP submission id."
-              exit 1
-            fi
-            echo "ZIP submission id: $ZIP_ID"
-            poll_until_done "$ZIP_ID" "ZIP"
-          fi
-
-          echo "Notarization flow completed."
+          npx electron-builder --mac dmg zip --publish never
 
       # -------------------- macOS: upload to GitHub Release --------------------
       - name: Upload mac artifacts to GitHub Release
