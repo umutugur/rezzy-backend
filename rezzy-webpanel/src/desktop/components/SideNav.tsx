@@ -1,6 +1,12 @@
 import React from "react";
 
-export type DesktopNavKey = "tables" | "kitchen" | "rezvix" | "reports" | "settings";
+export type DesktopNavKey =
+  | "tables"
+  | "kitchen"
+  | "rezvix"
+  | "menu"
+  | "reports"
+  | "settings";
 
 export type SideNavProps = {
   active: DesktopNavKey;
@@ -26,10 +32,12 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate }) => {
       <nav className="rezvix-sidenav__nav">
         <div>
           <div className="rezvix-sidenav__group-label">Servis</div>
+
           <button
             type="button"
             className={
-              "rezvix-sidenav__item" + (active === "tables" ? " rezvix-sidenav__item--active" : "")
+              "rezvix-sidenav__item" +
+              (active === "tables" ? " rezvix-sidenav__item--active" : "")
             }
             onClick={() => handleClick("tables")}
           >
@@ -43,7 +51,8 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate }) => {
           <button
             type="button"
             className={
-              "rezvix-sidenav__item" + (active === "kitchen" ? " rezvix-sidenav__item--active" : "")
+              "rezvix-sidenav__item" +
+              (active === "kitchen" ? " rezvix-sidenav__item--active" : "")
             }
             onClick={() => handleClick("kitchen")}
           >
@@ -56,10 +65,12 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate }) => {
 
         <div style={{ marginTop: 10 }}>
           <div className="rezvix-sidenav__group-label">Rezvix</div>
+
           <button
             type="button"
             className={
-              "rezvix-sidenav__item" + (active === "rezvix" ? " rezvix-sidenav__item--active" : "")
+              "rezvix-sidenav__item" +
+              (active === "rezvix" ? " rezvix-sidenav__item--active" : "")
             }
             onClick={() => handleClick("rezvix")}
           >
@@ -72,7 +83,22 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate }) => {
           <button
             type="button"
             className={
-              "rezvix-sidenav__item" + (active === "reports" ? " rezvix-sidenav__item--active" : "")
+              "rezvix-sidenav__item" +
+              (active === "menu" ? " rezvix-sidenav__item--active" : "")
+            }
+            onClick={() => handleClick("menu")}
+          >
+            <div className="rezvix-sidenav__icon">🧾</div>
+            <div className="rezvix-sidenav__label">
+              <span>Menü Yönetimi</span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            className={
+              "rezvix-sidenav__item" +
+              (active === "reports" ? " rezvix-sidenav__item--active" : "")
             }
             onClick={() => handleClick("reports")}
           >
@@ -85,10 +111,12 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate }) => {
 
         <div style={{ marginTop: 10 }}>
           <div className="rezvix-sidenav__group-label">Sistem</div>
+
           <button
             type="button"
             className={
-              "rezvix-sidenav__item" + (active === "settings" ? " rezvix-sidenav__item--active" : "")
+              "rezvix-sidenav__item" +
+              (active === "settings" ? " rezvix-sidenav__item--active" : "")
             }
             onClick={() => handleClick("settings")}
           >

@@ -174,6 +174,9 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
       case "rezvix":
         navigate("/restaurant-desktop/rezvix");
         break;
+        case "menu":
+  navigate("/restaurant-desktop/menu");
+  break;
       case "reports":
         navigate("/restaurant-desktop/reports");
         break;

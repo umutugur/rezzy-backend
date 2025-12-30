@@ -46,7 +46,7 @@ import { KitchenBoardPage } from "./desktop/pages/KitchenBoardPage";
 import { RezvixOrdersPage } from "./desktop/pages/RezvixOrdersPage";
 import { ReportsPage } from "./desktop/pages/ReportsPage";
 import { SettingsPage } from "./desktop/pages/SettingsPage";
-
+import { DesktopMenuManagerPage } from "./desktop/pages/DesktopMenuManagerPage";
 // ---- Helpers ----
 
 // 🔑 Artık sadece “restaurant rolü var mı?” değil,
@@ -584,6 +584,7 @@ export default function App() {
         <Route path="/restaurant-desktop/rezvix" element={<RezvixOrdersPage />} />
         <Route path="/restaurant-desktop/reports" element={<ReportsPage />} />
         <Route path="/restaurant-desktop/settings" element={<SettingsPage />} />
+        <Route path="/restaurant-desktop/menu" element={<DesktopMenuManagerPage />} />
       </Route>
 
       {/* Kök rota */}

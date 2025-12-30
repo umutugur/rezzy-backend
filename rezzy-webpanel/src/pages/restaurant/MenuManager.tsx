@@ -18,7 +18,9 @@ import { Card } from "../../components/Card";
 /* =======================
    Types
 ======================= */
-
+type MenuManagerPageProps = {
+  restaurantId?: string;
+};
 type LocalCategory = {
   _id?: string;
   id?: string;
@@ -475,9 +477,12 @@ type CategoryVM = {
   kind: "resolved";
 };
 
-export default function MenuManagerPage() {
-  const rid = authStore.getUser()?.restaurantId || "";
+export default function MenuManagerPage({
+  restaurantId,
+}: MenuManagerPageProps) {
+  const rid = restaurantId || authStore.getUser()?.restaurantId || "";
   const qc = useQueryClient();
+
 
   const [mode, setMode] = React.useState<"manage" | "preview">("manage");
 
