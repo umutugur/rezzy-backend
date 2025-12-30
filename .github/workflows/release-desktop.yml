@@ -43,14 +43,23 @@ jobs:
           MAC_CERTS_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
         run: |
           set -euo pipefail
+          if [ -z "${MAC_CERTS_B64:-}" ] || [ -z "${MAC_CERTS_PASSWORD:-}" ]; then
+            echo "Missing MAC cert secrets."
+            exit 1
+          fi
+
           echo "$MAC_CERTS_B64" | base64 --decode > /tmp/mac-certs.p12
+
           security create-keychain -p "" build.keychain
           security set-keychain-settings -lut 21600 build.keychain
           security unlock-keychain -p "" build.keychain
+
           security list-keychains -d user -s build.keychain
           security default-keychain -s build.keychain
+
           security import /tmp/mac-certs.p12 -k build.keychain -P "$MAC_CERTS_PASSWORD" -A
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+
           security find-identity -v -p codesigning build.keychain
 
       # -------------------- Windows: build + publish --------------------
@@ -77,6 +86,7 @@ jobs:
         run: |
           set -euo pipefail
           npx electron-builder --mac dmg zip --publish never
+          ls -la dist || true
 
       # -------------------- macOS: submit notarization WITHOUT WAIT --------------------
       - name: Submit Notarization (macOS) - non-blocking
@@ -111,7 +121,6 @@ jobs:
           echo "DMG: $DMG_PATH"
           echo "ZIP: ${ZIP_PATH:-<none>}"
 
-          # Credentials profile (idempotent)
           xcrun notarytool store-credentials "rezvix-notary" \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
@@ -132,10 +141,21 @@ jobs:
             echo "ZIP_SUBMISSION_ID=$ZIP_ID" | tee -a dist/notary-ids.txt
           fi
 
-          echo "Notary submission IDs written to dist/notary-ids.txt"
+          echo "== notary-ids.txt =="
+          cat dist/notary-ids.txt
           echo "Do NOT wait here."
 
-      # Store IDs for finalize workflow
+      # -------------------- macOS: upload artifacts (needed by finalize) --------------------
+      - name: Upload mac dist artifact (mac)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-dist
+          path: |
+            rezzy-webpanel/dist/*.dmg
+            rezzy-webpanel/dist/*.zip
+          if-no-files-found: error
+
       - name: Upload notarization ids artifact (mac)
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
@@ -144,7 +164,7 @@ jobs:
           path: rezzy-webpanel/dist/notary-ids.txt
           if-no-files-found: error
 
-      # -------------------- macOS: upload artifacts to GitHub Release (DRAFT) --------------------
+      # -------------------- macOS: upload to GitHub Release (draft) --------------------
       - name: Upload mac artifacts to GitHub Release (draft)
         if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
