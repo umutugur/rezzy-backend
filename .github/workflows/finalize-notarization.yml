@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       tag:
-        description: "Release tag (e.g. v1.2.9). Required for upload/publish on manual runs."
+        description: "Release tag (e.g. v1.3.0). Required for upload/publish on manual runs."
         required: true
         type: string
 
@@ -48,7 +48,6 @@ jobs:
             echo "RUN_ID=$RUN_ID" >> $GITHUB_OUTPUT
             echo "HEAD_SHA=$HEAD_SHA" >> $GITHUB_OUTPUT
 
-            # Tag resolve
             git fetch --tags --force
             TAG="$(git tag --points-at "$HEAD_SHA" | head -n 1 || true)"
             echo "TAG=$TAG" >> $GITHUB_OUTPUT
@@ -91,16 +90,13 @@ jobs:
           echo "== notary-ids.txt =="
           cat /tmp/notary/notary-ids.txt
 
-          DMG_ID="$(grep -E '^DMG_SUBMISSION_ID=' /tmp/notary/notary-ids.txt | cut -d= -f2 || true)"
-          ZIP_ID="$(grep -E '^ZIP_SUBMISSION_ID=' /tmp/notary/notary-ids.txt | cut -d= -f2 || true)"
-
-          if [ -z "${DMG_ID:-}" ]; then
-            echo "DMG_SUBMISSION_ID missing in notary-ids.txt"
+          APP_ZIP_ID="$(grep -E '^APP_ZIP_SUBMISSION_ID=' /tmp/notary/notary-ids.txt | cut -d= -f2 || true)"
+          if [ -z "${APP_ZIP_ID:-}" ]; then
+            echo "APP_ZIP_SUBMISSION_ID missing in notary-ids.txt"
             exit 1
           fi
 
-          echo "DMG_ID=$DMG_ID" >> $GITHUB_OUTPUT
-          echo "ZIP_ID=$ZIP_ID" >> $GITHUB_OUTPUT
+          echo "APP_ZIP_ID=$APP_ZIP_ID" >> $GITHUB_OUTPUT
 
       - name: Download mac dist artifact from build run
         uses: actions/download-artifact@v4
@@ -116,33 +112,31 @@ jobs:
           set -euo pipefail
           mkdir -p rezzy-webpanel/dist
 
-          # Artifacts bazen iç içe klasörle gelebiliyor; o yüzden find ile kopyalıyoruz.
           DMG_SRC="$(find /tmp/mac-dist -type f -name '*.dmg' | head -n 1 || true)"
-          ZIP_SRC="$(find /tmp/mac-dist -type f -name '*-mac.zip' | head -n 1 || true)"
+          APP_ZIP_SRC="$(find /tmp/mac-dist -type f -name '*-app.zip' | head -n 1 || true)"
 
-          if [ -z "${DMG_SRC:-}" ]; then
-            echo "No .dmg found inside mac-dist artifact"
-            find /tmp/mac-dist -maxdepth 3 -type f | head -n 50 || true
+          if [ -z "${APP_ZIP_SRC:-}" ]; then
+            echo "No *-app.zip found inside mac-dist artifact"
+            find /tmp/mac-dist -maxdepth 3 -type f | head -n 80 || true
             exit 1
           fi
 
-          cp -f "$DMG_SRC" rezzy-webpanel/dist/
-          if [ -n "${ZIP_SRC:-}" ]; then
-            cp -f "$ZIP_SRC" rezzy-webpanel/dist/
+          cp -f "$APP_ZIP_SRC" rezzy-webpanel/dist/
+          if [ -n "${DMG_SRC:-}" ]; then
+            cp -f "$DMG_SRC" rezzy-webpanel/dist/
           fi
 
           echo "Dist contents:"
           ls -la rezzy-webpanel/dist
 
-      - name: Poll until Accepted + Staple + Validate (long wait, non-failing on timeout)
+      - name: Poll until Accepted + Staple .app + Re-zip (logs on reject/invalid)
         shell: bash
         working-directory: rezzy-webpanel
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          DMG_ID: ${{ steps.ids.outputs.DMG_ID }}
-          ZIP_ID: ${{ steps.ids.outputs.ZIP_ID }}
+          APP_ZIP_ID: ${{ steps.ids.outputs.APP_ZIP_ID }}
         run: |
           set -euo pipefail
 
@@ -155,6 +149,18 @@ jobs:
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" || true
+
+          show_info () {
+            local id="$1"
+            xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json || true
+          }
+
+          show_log () {
+            local id="$1"
+            echo "========== NOTARY LOG ($id) =========="
+            xcrun notarytool log "$id" --keychain-profile "rezvix-notary" || true
+            echo "========== END NOTARY LOG ($id) =========="
+          }
 
           poll () {
             local id="$1"
@@ -177,15 +183,24 @@ jobs:
               case "$status" in
                 Accepted) return 0 ;;
                 Invalid)
-                  echo "INVALID ($label). Log:"
-                  xcrun notarytool log "$id" --keychain-profile "rezvix-notary" || true
+                  echo "INVALID ($label). Info:"
+                  show_info "$id"
+                  echo "INVALID ($label). Fetching log..."
+                  show_log "$id"
+                  exit 1
+                  ;;
+                Rejected)
+                  echo "REJECTED ($label). Info:"
+                  show_info "$id"
+                  echo "REJECTED ($label). Fetching log..."
+                  show_log "$id"
                   exit 1
                   ;;
               esac
 
               if [ "$elapsed" -ge "$max_minutes" ]; then
                 echo "Still In Progress after ${max_minutes}m. Exiting 0 so you can rerun later."
-                xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json || true
+                show_info "$id"
                 exit 0
               fi
 
@@ -193,32 +208,56 @@ jobs:
             done
           }
 
-          DMG_PATH="$(ls -1 dist/*.dmg | head -n 1 || true)"
-          ZIP_PATH="$(ls -1 dist/*-mac.zip | head -n 1 || true)"
-
-          if [ -z "${DMG_PATH:-}" ]; then
-            echo "DMG not found in rezzy-webpanel/dist"
+          APP_ZIP_PATH="$(ls -1 dist/*-app.zip | head -n 1 || true)"
+          if [ -z "${APP_ZIP_PATH:-}" ]; then
+            echo "app.zip not found in rezzy-webpanel/dist"
+            ls -la dist || true
             exit 1
           fi
 
-          poll "$DMG_ID" "DMG"
+          poll "$APP_ZIP_ID" "APP_ZIP"
 
-          echo "Stapling DMG..."
-          xcrun stapler staple -v "$DMG_PATH"
-          xcrun stapler validate -v "$DMG_PATH"
+          # Accepted -> unzip -> staple .app -> rezip
+          WORK="/tmp/rezvix_staple"
+          rm -rf "$WORK"
+          mkdir -p "$WORK/unzip" "$WORK/out"
 
-          if [ -n "${ZIP_ID:-}" ] && [ -n "${ZIP_PATH:-}" ]; then
-            poll "$ZIP_ID" "ZIP"
+          echo "Unzipping: $APP_ZIP_PATH"
+          ditto -x -k "$APP_ZIP_PATH" "$WORK/unzip"
+
+          APP_PATH="$(find "$WORK/unzip" -maxdepth 3 -type d -name '*.app' | head -n 1 || true)"
+          if [ -z "${APP_PATH:-}" ]; then
+            echo "No .app found inside app.zip after unzip"
+            find "$WORK/unzip" -maxdepth 4 -type f | head -n 80 || true
+            exit 1
           fi
 
-      - name: Upload stapled artifacts to GitHub Release (same tag)
+          echo "Stapling .app => $APP_PATH"
+          xcrun stapler staple -v "$APP_PATH"
+          xcrun stapler validate -v "$APP_PATH"
+
+          TAG="${{ steps.meta.outputs.TAG }}"
+          if [ -z "${TAG:-}" ]; then
+            # manual run already provides tag; workflow_run resolves it
+            echo "TAG is empty; cannot name output reliably."
+            exit 1
+          fi
+
+          OUT_ZIP="dist/Rezvix-${TAG#v}-app-notarized.zip"
+          echo "Creating notarized app zip => $OUT_ZIP"
+          ditto -c -k --keepParent "$APP_PATH" "$OUT_ZIP"
+
+          echo "Final dist:"
+          ls -la dist || true
+
+      - name: Upload notarized artifacts to GitHub Release (same tag)
         if: ${{ steps.meta.outputs.TAG != '' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.TAG }}
           files: |
+            rezzy-webpanel/dist/*-app-notarized.zip
             rezzy-webpanel/dist/*.dmg
-            rezzy-webpanel/dist/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
