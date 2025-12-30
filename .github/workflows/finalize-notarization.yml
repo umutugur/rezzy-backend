@@ -1,18 +1,17 @@
 name: Finalize Notarization (mac)
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag name (e.g. v1.2.4)"
-        required: true
-        type: string
+  workflow_run:
+    workflows: ["Release Desktop (mac + win)"]
+    types: [completed]
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   finalize:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: macos-14
 
     steps:
@@ -30,10 +29,13 @@ jobs:
         working-directory: rezzy-webpanel
         run: npm ci
 
-      - name: Download notarization ids artifact
+      # ✅ Bu, artifact'i DOĞRU run'dan indirir
+      - name: Download notarization ids artifact from build run
         uses: actions/download-artifact@v4
         with:
           name: notarization-ids
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           path: /tmp/notary
 
       - name: Read IDs
@@ -45,7 +47,7 @@ jobs:
           echo "DMG_ID=$(grep -E '^DMG_SUBMISSION_ID=' /tmp/notary/notary-ids.txt | cut -d= -f2)" >> $GITHUB_OUTPUT
           echo "ZIP_ID=$(grep -E '^ZIP_SUBMISSION_ID=' /tmp/notary/notary-ids.txt | cut -d= -f2 || true)" >> $GITHUB_OUTPUT
 
-      - name: Import Apple Developer ID Certificate
+      - name: Import Apple Developer ID Certificate (mac)
         shell: bash
         env:
           MAC_CERTS_B64: ${{ secrets.MAC_CERTS_B64 }}
@@ -61,7 +63,7 @@ jobs:
           security import /tmp/mac-certs.p12 -k build.keychain -P "$MAC_CERTS_PASSWORD" -A
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
 
-      - name: Build again (mac) to get same DMG/ZIP
+      - name: Build again (mac) to get DMG/ZIP paths
         shell: bash
         working-directory: rezzy-webpanel
         env:
@@ -73,7 +75,7 @@ jobs:
           set -euo pipefail
           npx electron-builder --mac dmg zip --publish never
 
-      - name: Poll until Accepted + Staple
+      - name: Poll until Accepted + Staple + Validate
         shell: bash
         working-directory: rezzy-webpanel
         env:
@@ -97,7 +99,7 @@ jobs:
           poll () {
             local id="$1"
             local label="$2"
-            local max_minutes=30
+            local max_minutes=25
             local sleep_sec=20
             local start_ts now_ts elapsed
 
@@ -108,7 +110,7 @@ jobs:
               now_ts=$(date +%s)
               elapsed=$(( (now_ts - start_ts) / 60 ))
               if [ "$elapsed" -ge "$max_minutes" ]; then
-                echo "Still not Accepted after ${max_minutes}m. Stop here and rerun later."
+                echo "Still not Accepted after ${max_minutes}m. Rerun later."
                 xcrun notarytool info "$id" --keychain-profile "rezvix-notary" --output-format json || true
                 exit 1
               fi
@@ -141,11 +143,11 @@ jobs:
             poll "$ZIP_ID" "ZIP"
           fi
 
-      - name: Upload notarized mac artifacts to GitHub Release (still draft)
+      # ✅ Release'e notarized dosyaları tekrar yükler (aynı tag)
+      - name: Upload notarized mac artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.tag }}
-          draft: true
+          tag_name: ${{ github.event.workflow_run.head_branch }}
           files: |
             rezzy-webpanel/dist/*.dmg
             rezzy-webpanel/dist/*.zip
