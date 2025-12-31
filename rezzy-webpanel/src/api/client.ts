@@ -1554,10 +1554,12 @@ export async function restaurantCreateWalkInOrder(
 }
 
 /**
- * ✅ WALK-IN sipariş iptal
- * POST /api/panel/restaurants/:rid/orders/:orderId/cancel
- * - Yanlış girilen siparişi iptal eder (soft cancel). 
- * - Backend bu endpointi yoksa, karşılığı olan route'a göre güncelle.
+ * ✅ Sipariş iptal (WALK-IN / QR / Rezvix)
+ * POST /api/orders/:orderId/cancel
+ *
+ * Not:
+ * - Backend tarafında çalışan cancel endpoint'i bu path.
+ * - `rid` parametresi mevcut çağrıları kırmamak için korunur; server tarafında gerekli değildir.
  */
 export async function restaurantCancelOrder(
   rid: string,
@@ -1565,11 +1567,14 @@ export async function restaurantCancelOrder(
   input?: { reason?: string }
 ): Promise<{ ok: boolean; order?: any }> {
   const { data } = await api.post(
-    `/panel/restaurants/${rid}/orders/${orderId}/cancel`,
-    input ?? {}
+    `/orders/${orderId}/cancel`,
+    { ...(input ?? {}), restaurantId: rid }
   );
   return data as { ok: boolean; order?: any };
 }
+
+// Backward-compatible alias (some screens may import this name)
+export const cancelOrder = restaurantCancelOrder;
 
 /**
  * ✅ Mutfak fişleri (opsiyonel: todayOnly)

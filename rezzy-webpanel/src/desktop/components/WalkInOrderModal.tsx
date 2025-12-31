@@ -103,7 +103,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(7,9,20,0.46)] backdrop-blur-md">
-      <div className="w-[min(980px,100%-80px)] h-[600px] max-h-[90vh] rounded-[26px] border border-black/10 bg-[radial-gradient(circle_at_top_left,rgba(88,57,255,0.10),rgba(255,255,255,0.98))] shadow-[0_24px_70px_rgba(15,23,42,0.55)] px-6 py-5 flex flex-col gap-3">
+      <div className="w-[min(1160px,100%-56px)] h-[660px] max-h-[92vh] rounded-[26px] border border-black/10 bg-[radial-gradient(circle_at_top_left,rgba(88,57,255,0.10),rgba(255,255,255,0.98))] shadow-[0_24px_70px_rgba(15,23,42,0.55)] px-6 py-5 flex flex-col gap-3">
         {/* Başlık */}
         <div className="flex items-start justify-between gap-3 mb-1">
           <div>
@@ -140,7 +140,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
         {/* Kategoriler */}
         <div className="mt-1 flex-1 min-h-0 grid grid-cols-12 gap-3">
           {/* Sol: kategori listesi */}
-          <div className="col-span-4 min-h-0">
+          <div className="col-span-3 min-h-0">
             <div className="flex items-center justify-between mb-1">
               <div className="text-[11px] font-medium text-slate-600">
                 Kategoriler
@@ -195,7 +195,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
           </div>
 
           {/* Sağ: ürün listesi */}
-          <div className="col-span-5 min-h-0 flex flex-col">
+          <div className="col-span-6 min-h-0 flex flex-col">
             <div className="text-[11px] font-medium text-slate-600 mb-1">
               Ürünler
               {menuLoading && (
@@ -283,11 +283,22 @@ export const WalkInOrderModal: React.FC<Props> = ({
 
           {/* Sağ: seçilenler (taslak) */}
           <div className="col-span-3 min-h-0 flex flex-col">
-            <div className="text-[11px] font-medium text-slate-600 mb-1">Seçilenler</div>
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-[11px] font-semibold text-slate-700">Seçilenler</div>
+              <div className="text-[10px] text-slate-500">
+                <span className="font-semibold text-slate-700">{selectedItemCount}</span> ürün ·{" "}
+                <span className="font-semibold text-slate-700">{formatMoney(selectedTotal, effectiveCurrency)}</span>
+              </div>
+            </div>
 
-            <div className="rounded-2xl border border-slate-200/80 bg-white/95 flex-1 min-h-0 overflow-y-auto">
+            <div className="rounded-2xl border border-purple-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(245,243,255,0.92))] flex-1 min-h-0 overflow-y-auto shadow-[0_14px_34px_rgba(15,23,42,0.10)]">
               {Object.keys(draftItems || {}).length === 0 ? (
-                <div className="px-4 py-3 text-[12px] text-slate-500">Henüz ürün eklenmedi.</div>
+                <div className="px-4 py-4 text-[12px] text-slate-500">
+                  <div className="font-medium text-slate-600">Henüz ürün eklenmedi.</div>
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    Soldan ürüne tıklayarak veya “+” ile ekleyebilirsin.
+                  </div>
+                </div>
               ) : (
                 <div className="p-3 space-y-2">
                   {Object.values(draftItems)
@@ -300,20 +311,25 @@ export const WalkInOrderModal: React.FC<Props> = ({
                       return (
                         <div
                           key={di.itemId}
-                          className="rounded-2xl border border-slate-200 bg-white px-3 py-2"
+                          className="rounded-2xl border border-purple-100 bg-white/95 px-3 py-2 shadow-[0_10px_22px_rgba(15,23,42,0.06)]"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <div className="text-[12px] font-semibold text-slate-900 truncate">{di.title}</div>
-                              <div className="text-[11px] text-slate-500 mt-0.5">
-                                {formatMoney(lineTotal, effectiveCurrency)}
+                              <div className="text-[12px] font-semibold text-slate-900 leading-snug break-words">{di.title}</div>
+                              <div className="mt-0.5 text-[11px] text-slate-500">
+                                <span className="mr-2">
+                                  Birim: <span className="font-semibold text-slate-700">{formatMoney(Number(di.price || 0), effectiveCurrency)}</span>
+                                </span>
+                                <span>
+                                  Ara: <span className="font-semibold text-slate-700">{formatMoney(lineTotal, effectiveCurrency)}</span>
+                                </span>
                               </div>
                             </div>
 
-                            <div className="shrink-0 flex items-center gap-1">
+                            <div className="shrink-0 flex items-center gap-1.5 pl-2">
                               <button
                                 type="button"
-                                className="w-9 h-9 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center text-[16px] font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition"
+                                className="w-8 h-8 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center text-[15px] font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition"
                                 onClick={() => onChangeQty({ _id: di.itemId, title: di.title, price: di.price }, -1)}
                                 disabled={!canDec}
                                 aria-label="Azalt"
@@ -325,7 +341,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                               </div>
                               <button
                                 type="button"
-                                className="w-9 h-9 rounded-full border border-purple-500 bg-purple-600 text-white flex items-center justify-center text-[16px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-purple-700 transition"
+                                className="w-8 h-8 rounded-full border border-purple-500 bg-purple-600 text-white flex items-center justify-center text-[15px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-purple-700 transition"
                                 onClick={() => onChangeQty({ _id: di.itemId, title: di.title, price: di.price }, 1)}
                                 aria-label="Arttır"
                               >
@@ -334,7 +350,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
 
                               <button
                                 type="button"
-                                className="ml-1 w-9 h-9 rounded-full border border-red-200 bg-red-50 text-red-700 flex items-center justify-center text-[14px] font-semibold hover:bg-red-100 transition"
+                                className="ml-1 w-8 h-8 rounded-full border border-red-200 bg-red-50 text-red-700 flex items-center justify-center text-[13px] font-semibold hover:bg-red-100 transition"
                                 onClick={() => {
                                   const currentQty = Number(di.qty || 0);
                                   if (currentQty > 0) {
@@ -383,7 +399,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
             <span className="font-semibold text-slate-900">
               {formatMoney(selectedTotal, effectiveCurrency)}
             </span>
-            <span className="ml-2 text-[10px] text-slate-400">(detay sağda)</span>
+            <span className="ml-2 text-[10px] text-slate-400">(seçilenler panelinden düzenleyebilirsin)</span>
           </div>
 
           <div className="flex items-center gap-2">

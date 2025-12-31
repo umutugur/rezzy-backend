@@ -42,16 +42,5 @@ router.get("/restaurants/:restaurantId/kitchen-tickets",listKitchenTickets);
 router.patch("/:orderId/kitchen-status",updateKitchenStatus);
 router.post("/:orderId/cancel", cancelOrder);
 
-// =========================
-// PANEL — Restaurant order cancel
-// Frontend uses:
-// POST /api/panel/restaurants/:restaurantId/orders/:orderId/cancel
-// =========================
-router.post(
-  "/panel/restaurants/:restaurantId/orders/:orderId/cancel",
-  auth(),
-  cancelOrder
-);
-
 
 export default router;

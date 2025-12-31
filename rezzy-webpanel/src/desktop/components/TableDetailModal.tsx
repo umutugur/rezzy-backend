@@ -147,15 +147,32 @@ export const TableDetailModal: React.FC<Props> = ({
 
   const qc = useQueryClient();
 
-  const rid = String((user as any)?.restaurantId ?? "").trim();
 
   const [localCancelPendingId, setLocalCancelPendingId] = React.useState<string | null>(null);
 
   const cancelOrderMut = useMutation({
     mutationFn: async (orderId: string) => {
-      if (!rid) throw new Error("RestaurantId bulunamadı.");
       setLocalCancelPendingId(orderId);
-      return restaurantCancelOrder(rid, orderId, { reason: "panel_cancel" } as any);
+
+      // Resolve restaurantId defensively (legacy + multi-membership)
+      const userAny: any = user as any;
+      const ridResolved = String(
+        userAny?.restaurantId ||
+          userAny?.restaurantMemberships?.[0]?.restaurantId ||
+          userAny?.restaurantMemberships?.[0]?.restaurant ||
+          ""
+      ).trim();
+
+      // Use panel cancel endpoint through client helper (it already contains the correct path)
+      // If rid is missing, fall back to direct orders cancel route.
+      if (ridResolved) {
+        return await restaurantCancelOrder(ridResolved, orderId, { reason: "panel_cancel" });
+      }
+
+      // Fallback: legacy /api/orders/:orderId/cancel
+      const { api } = await import("../../api/client");
+      const { data } = await api.post(`/orders/${orderId}/cancel`, { reason: "panel_cancel" });
+      return data;
     },
     onSuccess: async () => {
       // Broad invalidation (project query keys can vary between pages)
@@ -174,13 +191,9 @@ export const TableDetailModal: React.FC<Props> = ({
   const handleCancelOrder = React.useCallback(
     (orderId: string) => {
       if (!orderId) return;
-      if (typeof onCancelOrder === "function") {
-        onCancelOrder(orderId);
-        return;
-      }
       cancelOrderMut.mutate(orderId);
     },
-    [onCancelOrder, cancelOrderMut]
+    [cancelOrderMut]
   );
 
   // ✅ Region (multi-organization aware)
