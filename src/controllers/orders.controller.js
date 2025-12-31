@@ -18,6 +18,30 @@ function currencyFromRegion(region) {
   return "TRY";
 }
 
+function hasRestaurantAccess(reqUser, rid) {
+  if (!reqUser) return false;
+  const role = String(reqUser.role || "").toLowerCase();
+  const ridStr = String(rid || "");
+
+  if (role === "admin") return true;
+
+  if (role === "restaurant") {
+    // legacy user.restaurantId
+    if (String(reqUser.restaurantId || "") === ridStr) return true;
+
+    // multi-membership: req.user.restaurantMemberships[].restaurantId
+    const rms = Array.isArray(reqUser.restaurantMemberships)
+      ? reqUser.restaurantMemberships
+      : [];
+
+    return rms.some(
+      (m) => String(m?.restaurantId || m?.restaurant || "") === ridStr
+    );
+  }
+
+  return false;
+}
+
 /** Masa güncelleme helper */
 async function updateTable(restaurantId, tableId, patch) {
   if (!restaurantId || !tableId) return;
@@ -744,32 +768,113 @@ export async function updateKitchenStatus(req, res) {
   }
 }
 
-export async function cancelOrder(req, res) {
+export async function cancelOrder(req, res, next) {
+  const orderId = String(req.params.orderId || "").trim();
+  const ridParam = String(req.params.restaurantId || req.params.rid || "").trim();
+
+  if (!mongoose.Types.ObjectId.isValid(orderId)) {
+    return res.status(400).json({ message: "Geçersiz order id." });
+  }
+
+  // Panel endpoint ise restaurant access kontrolü
+  if (ridParam) {
+    if (!hasRestaurantAccess(req.user, ridParam)) {
+      return res.status(403).json({ message: "Bu restoran için yetkin yok." });
+    }
+  }
+
+  const session = await mongoose.startSession();
+
   try {
-    const { orderId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(orderId)) {
-      return res.status(400).json({ message: "Geçersiz order id." });
-    }
+    let outOrder = null;
 
-    const order = await Order.findById(orderId);
-    if (!order) {
-      return res.status(404).json({ message: "Sipariş bulunamadı." });
-    }
+    await session.withTransaction(async () => {
+      const order = await Order.findById(orderId).session(session);
+      if (!order) {
+        throw { status: 404, message: "Sipariş bulunamadı." };
+      }
 
-    if (
-      order.paymentStatus === "paid" ||
-      order.paymentStatus === "not_required"
-    ) {
-      return res.status(400).json({ message: "Ödenmiş sipariş iptal edilemez." });
-    }
+      const rid = String(order.restaurantId);
 
-    order.status = "cancelled";
-    order.paymentStatus = "failed";
-    await order.save();
+      // Panelde rid param geldi ise order'ın restoranı ile uyuşmalı
+      if (ridParam && rid !== ridParam) {
+        throw { status: 403, message: "Bu sipariş bu restorana ait değil." };
+      }
 
-    return res.json(order);
+      // /api/orders/:orderId/cancel gibi eski path'te de restaurant user'ı kısıtlayalım
+      if (!ridParam) {
+        const role = String(req.user?.role || "").toLowerCase();
+        if (role === "restaurant" && !hasRestaurantAccess(req.user, rid)) {
+          throw { status: 403, message: "Bu restoran için yetkin yok." };
+        }
+      }
+
+      // Zaten iptalse idempotent
+      if (order.status === "cancelled") {
+        outOrder = order;
+        return;
+      }
+
+      // Teslim edilmiş sipariş iptal edilemez
+      if (String(order.kitchenStatus || "") === "delivered") {
+        throw { status: 400, message: "Teslim edilmiş sipariş iptal edilemez." };
+      }
+
+      // Kart ile PAID olmuş sipariş iptal edilemez (refund akışı ayrı)
+      if (String(order.paymentMethod || "") === "card" && String(order.paymentStatus || "") === "paid") {
+        throw { status: 400, message: "Ödenmiş (kart) sipariş iptal edilemez." };
+      }
+
+      // Soft cancel
+      order.status = "cancelled";
+      await order.save({ session });
+
+      // Session totals düzelt
+      const os = await OrderSession.findById(order.sessionId).session(session);
+      if (os) {
+        const amt = Number(order.total || 0);
+
+        if (String(order.paymentMethod || "") === "card") {
+          os.totals.cardTotal = Math.max(0, Number(os.totals.cardTotal || 0) - amt);
+        } else {
+          // venue
+          os.totals.payAtVenueTotal = Math.max(0, Number(os.totals.payAtVenueTotal || 0) - amt);
+        }
+
+        os.totals.grandTotal = Math.max(
+          0,
+          Number(os.totals.cardTotal || 0) + Number(os.totals.payAtVenueTotal || 0)
+        );
+
+        // lastOrderAt: iptal edilmeyen son sipariş
+        const last = await Order.findOne({
+          sessionId: os._id,
+          status: { $ne: "cancelled" },
+        })
+          .sort({ createdAt: -1 })
+          .select({ createdAt: 1 })
+          .session(session);
+
+        os.lastOrderAt = last?.createdAt ?? null;
+
+        await os.save({ session });
+      }
+
+      outOrder = order;
+    });
+
+    return res.json({ ok: true, order: outOrder });
   } catch (err) {
+    // mevcut pattern: bazı controller'lar next kullanmıyor, ama global handler varsa destekleyelim
+    if (typeof next === "function" && err && typeof err === "object" && "status" in err) {
+      return next(err);
+    }
+
+    const status = Number(err?.status || 500);
+    const message = err?.message || "Sipariş iptal edilemedi.";
     console.error("[cancelOrder] err", err);
-    return res.status(500).json({ message: "Sipariş iptal edilemedi." });
+    return res.status(status).json({ message });
+  } finally {
+    session.endSession();
   }
 }

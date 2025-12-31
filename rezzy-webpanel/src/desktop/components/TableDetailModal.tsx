@@ -1,5 +1,7 @@
 // src/desktop/components/TableDetailModal.tsx
 import React from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { restaurantCancelOrder } from "../../api/client";
 import type { LiveTable } from "../../api/client";
 import { authStore } from "../../store/auth";
 import { getCurrencySymbolForRegion } from "../../utils/currency";
@@ -31,6 +33,9 @@ type Props = {
   closeSessionPending: boolean;
   onPrintLastOrder: () => void;
   onPrintFullBill: () => void;
+  onCancelOrder?: (orderId: string) => void;
+  cancelOrderPendingId?: string | null;
+  hideCancelledOrders?: boolean;
 };
 
 function formatTime(v?: string | null): string {
@@ -131,11 +136,52 @@ export const TableDetailModal: React.FC<Props> = ({
   closeSessionPending,
   onPrintLastOrder,
   onPrintFullBill,
+  onCancelOrder,
+  cancelOrderPendingId,
+  hideCancelledOrders,
 }) => {
   if (!open || !table) return null;
 
   const mins = minutesSince(table.lastOrderAt ?? null);
   const user = authStore.getUser();
+
+  const qc = useQueryClient();
+
+  const rid = String((user as any)?.restaurantId ?? "").trim();
+
+  const [localCancelPendingId, setLocalCancelPendingId] = React.useState<string | null>(null);
+
+  const cancelOrderMut = useMutation({
+    mutationFn: async (orderId: string) => {
+      if (!rid) throw new Error("RestaurantId bulunamadı.");
+      setLocalCancelPendingId(orderId);
+      return restaurantCancelOrder(rid, orderId, { reason: "panel_cancel" } as any);
+    },
+    onSuccess: async () => {
+      // Broad invalidation (project query keys can vary between pages)
+      await qc.invalidateQueries();
+    },
+    onError: () => {
+      // Toast is already handled globally in api interceptor
+    },
+    onSettled: () => {
+      setLocalCancelPendingId(null);
+    },
+  });
+
+  const effectiveCancelPendingId = cancelOrderPendingId ?? localCancelPendingId;
+
+  const handleCancelOrder = React.useCallback(
+    (orderId: string) => {
+      if (!orderId) return;
+      if (typeof onCancelOrder === "function") {
+        onCancelOrder(orderId);
+        return;
+      }
+      cancelOrderMut.mutate(orderId);
+    },
+    [onCancelOrder, cancelOrderMut]
+  );
 
   // ✅ Region (multi-organization aware)
   // Priority:
@@ -161,8 +207,39 @@ export const TableDetailModal: React.FC<Props> = ({
     currencySymbolFromSessionCurrency((tableDetail as any)?.session?.currency) ||
     getCurrencySymbolForRegion(resolvedRegion);
   const hasSession = !!tableDetail?.session;
-  const hasOrders = !!tableDetail && tableDetail.orders?.length > 0;
+  const rawOrders = Array.isArray(tableDetail?.orders) ? tableDetail!.orders : [];
+  const visibleOrders = React.useMemo(() => {
+    if (!hideCancelledOrders) return rawOrders;
+    return rawOrders.filter((o: any) => {
+      const st = String(o?.status ?? "").trim().toLowerCase();
+      const cancelled = o?.isCancelled === true || st === "cancelled" || st === "canceled";
+      return !cancelled;
+    });
+  }, [rawOrders, hideCancelledOrders]);
+
+  const hasOrders = visibleOrders.length > 0;
   const hasRequests = !!tableDetail && tableDetail.serviceRequests?.length > 0;
+
+  const canCancelOrder = React.useCallback((o: any) => {
+    const st = String(o?.status ?? "").trim().toLowerCase();
+    const cancelled = o?.isCancelled === true || st === "cancelled" || st === "canceled";
+    if (cancelled) return false;
+
+    // Delivered / completed variants should not be cancellable
+    if (
+      st === "delivered" ||
+      st === "completed" ||
+      st === "closed" ||
+      st === "paid" ||
+      st === "refunded"
+    ) {
+      return false;
+    }
+
+    // Default: cancellable
+    return true;
+  }, []);
+
   const hasError = !!error;
   const errorMessage =
     error instanceof Error ? error.message : "Masa detayı getirilemedi.";
@@ -291,11 +368,11 @@ export const TableDetailModal: React.FC<Props> = ({
                     <div className="text-[11px] font-semibold text-slate-700">
                       Siparişler
                     </div>
-                    {hasOrders && (
-                      <div className="text-[10px] text-slate-400">
-                        {tableDetail.orders.length} kayıt
-                      </div>
-                    )}
+                  {hasOrders && (
+                    <div className="text-[10px] text-slate-400">
+                      {visibleOrders.length} kayıt
+                    </div>
+                  )}
                   </div>
 
                   {!hasOrders && (
@@ -304,7 +381,7 @@ export const TableDetailModal: React.FC<Props> = ({
                     </div>
                   )}
 
-                  {tableDetail.orders.map((o: any, idx: number) => (
+                  {visibleOrders.map((o: any, idx: number) => (
                     <div
                       key={o._id}
                       className="rounded-xl border border-slate-200 bg-white/95 px-3 py-2 flex gap-2 items-start shadow-[0_10px_26px_rgba(15,23,42,0.08)]"
@@ -313,15 +390,58 @@ export const TableDetailModal: React.FC<Props> = ({
                         {idx + 1}
                       </div>
                       <div className="flex-1">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="font-medium text-[12px] text-slate-900">
-                            {formatTime(o.createdAt)}
-                          </span>
-                          <span className="font-semibold text-[12px] text-slate-800">
-                            {formatMoney(o.total || 0, currencySymbol)}
-                          </span>
+                        <div className="flex items-center justify-between mb-0.5 gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-medium text-[12px] text-slate-900 shrink-0">
+                              {formatTime(o.createdAt)}
+                            </span>
+
+                            {/* Status */}
+                            {String(o?.status ?? "").trim() ? (
+                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 border border-slate-200">
+                                {String(o.status)}
+                              </span>
+                            ) : null}
+
+                            {/* Cancelled marker */}
+                            {(o?.isCancelled === true || String(o?.status ?? "").toLowerCase() === "cancelled" || String(o?.status ?? "").toLowerCase() === "canceled") ? (
+                              <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] text-red-700 border border-red-200">
+                                İptal
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="font-semibold text-[12px] text-slate-800">
+                              {formatMoney(o.total || 0, currencySymbol)}
+                            </span>
+
+                            {canCancelOrder(o) ? (
+                              <button
+                                type="button"
+                                className="px-2 py-1 text-[10px] rounded-full bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-60"
+                                disabled={
+                                  !!effectiveCancelPendingId &&
+                                  effectiveCancelPendingId === String(o?._id ?? o?.id ?? "")
+                                }
+                                onClick={() => {
+                                  const oid = String(o?._id ?? o?.id ?? "");
+                                  if (!oid) return;
+                                  if (confirm("Bu siparişi iptal etmek istiyor musun?")) {
+                                    handleCancelOrder(oid);
+                                  }
+                                }}
+                                title="Siparişi iptal et"
+                              >
+                                {effectiveCancelPendingId &&
+                                effectiveCancelPendingId === String(o?._id ?? o?.id ?? "")
+                                  ? "İptal ediliyor…"
+                                  : "İptal"}
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
-                        <div className="text-[11px] text-slate-600">
+                        <div className="text-[11px] text-slate-600 break-words">
                           {(o.items || [])
                             .map(
                               (it: any) =>

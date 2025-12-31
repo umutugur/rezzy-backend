@@ -42,6 +42,7 @@ type Props = {
 
   draftItems: Record<string, DraftOrderItem>;
   onChangeQty: (item: MenuItem, delta: number) => void;
+  onChangeItemNote?: (itemId: string, note: string) => void;
 
   selectedItemCount: number;
   selectedTotal: number;
@@ -83,6 +84,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
   menuError,
   draftItems,
   onChangeQty,
+  onChangeItemNote,
   selectedItemCount,
   selectedTotal,
   currency,
@@ -193,7 +195,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
           </div>
 
           {/* Sağ: ürün listesi */}
-          <div className="col-span-8 min-h-0 flex flex-col">
+          <div className="col-span-5 min-h-0 flex flex-col">
             <div className="text-[11px] font-medium text-slate-600 mb-1">
               Ürünler
               {menuLoading && (
@@ -278,6 +280,96 @@ export const WalkInOrderModal: React.FC<Props> = ({
                 })}
             </div>
           </div>
+
+          {/* Sağ: seçilenler (taslak) */}
+          <div className="col-span-3 min-h-0 flex flex-col">
+            <div className="text-[11px] font-medium text-slate-600 mb-1">Seçilenler</div>
+
+            <div className="rounded-2xl border border-slate-200/80 bg-white/95 flex-1 min-h-0 overflow-y-auto">
+              {Object.keys(draftItems || {}).length === 0 ? (
+                <div className="px-4 py-3 text-[12px] text-slate-500">Henüz ürün eklenmedi.</div>
+              ) : (
+                <div className="p-3 space-y-2">
+                  {Object.values(draftItems)
+                    .slice()
+                    .sort((a, b) => a.title.localeCompare(b.title, "tr"))
+                    .map((di) => {
+                      const lineTotal = Number(di.price || 0) * Number(di.qty || 0);
+                      const canDec = (di.qty ?? 0) > 0;
+
+                      return (
+                        <div
+                          key={di.itemId}
+                          className="rounded-2xl border border-slate-200 bg-white px-3 py-2"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="text-[12px] font-semibold text-slate-900 truncate">{di.title}</div>
+                              <div className="text-[11px] text-slate-500 mt-0.5">
+                                {formatMoney(lineTotal, effectiveCurrency)}
+                              </div>
+                            </div>
+
+                            <div className="shrink-0 flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="w-9 h-9 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center text-[16px] font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition"
+                                onClick={() => onChangeQty({ _id: di.itemId, title: di.title, price: di.price }, -1)}
+                                disabled={!canDec}
+                                aria-label="Azalt"
+                              >
+                                –
+                              </button>
+                              <div className="min-w-[22px] text-center text-[12px] font-semibold text-slate-900">
+                                {di.qty}
+                              </div>
+                              <button
+                                type="button"
+                                className="w-9 h-9 rounded-full border border-purple-500 bg-purple-600 text-white flex items-center justify-center text-[16px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-purple-700 transition"
+                                onClick={() => onChangeQty({ _id: di.itemId, title: di.title, price: di.price }, 1)}
+                                aria-label="Arttır"
+                              >
+                                +
+                              </button>
+
+                              <button
+                                type="button"
+                                className="ml-1 w-9 h-9 rounded-full border border-red-200 bg-red-50 text-red-700 flex items-center justify-center text-[14px] font-semibold hover:bg-red-100 transition"
+                                onClick={() => {
+                                  const currentQty = Number(di.qty || 0);
+                                  if (currentQty > 0) {
+                                    onChangeQty({ _id: di.itemId, title: di.title, price: di.price }, -currentQty);
+                                  }
+                                }}
+                                aria-label="Kaldır"
+                                title="Kaldır"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Not (opsiyonel) */}
+                          {typeof onChangeItemNote === "function" ? (
+                            <div className="mt-2">
+                              <input
+                                type="text"
+                                value={di.note ?? ""}
+                                onChange={(e) => onChangeItemNote(di.itemId, e.target.value)}
+                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
+                                placeholder="Not (opsiyonel)"
+                              />
+                            </div>
+                          ) : di.note ? (
+                            <div className="mt-2 text-[11px] text-slate-500">Not: {di.note}</div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Footer / Özet */}
@@ -291,6 +383,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
             <span className="font-semibold text-slate-900">
               {formatMoney(selectedTotal, effectiveCurrency)}
             </span>
+            <span className="ml-2 text-[10px] text-slate-400">(detay sağda)</span>
           </div>
 
           <div className="flex items-center gap-2">

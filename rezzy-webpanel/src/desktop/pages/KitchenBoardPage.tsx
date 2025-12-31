@@ -116,6 +116,16 @@ export const KitchenBoardPage: React.FC = () => {
     }));
   }, [data]);
 
+  const todayTicketIdSet = React.useMemo(() => {
+    const set = new Set<string>();
+    if (!data?.tickets) return set;
+    const now = new Date();
+    data.tickets.forEach((t) => {
+      if (isTodayFromAnyTimestamp(t, now)) set.add(t.id);
+    });
+    return set;
+  }, [data]);
+
   const todayTicketCount = React.useMemo(() => {
     if (!data?.tickets) return 0;
     const now = new Date();
@@ -126,6 +136,11 @@ export const KitchenBoardPage: React.FC = () => {
   const inProgress = groupByStatus(tickets, "IN_PROGRESS");
   const ready = groupByStatus(tickets, "READY");
   const served = groupByStatus(tickets, "SERVED");
+
+  const servedToday = React.useMemo(() => {
+    if (!todayTicketIdSet.size) return [] as KitchenTicketWithStatus[];
+    return served.filter((t) => todayTicketIdSet.has(t.id));
+  }, [served, todayTicketIdSet]);
 
   const totalTickets = tickets.length;
 
@@ -287,11 +302,11 @@ export const KitchenBoardPage: React.FC = () => {
           <div className="rezvix-board-column__header">
             <div className="rezvix-board-column__title">Teslim edildi</div>
             <div className="rezvix-board-column__count">
-              {served.length}
+              {servedToday.length}
             </div>
           </div>
           <div className="rezvix-board-column__body">
-            {served.length === 0 ? (
+            {servedToday.length === 0 ? (
               <div className="rezvix-empty">
                 <div className="rezvix-empty__icon">🍽️</div>
                 <div className="rezvix-empty__title">
@@ -302,7 +317,7 @@ export const KitchenBoardPage: React.FC = () => {
                 </div>
               </div>
             ) : (
-              served.map((t) => (
+              servedToday.map((t) => (
                 <div key={t.id} className="rezvix-kitchen-card-wrapper">
                   <KitchenTicket {...t} />
                 </div>

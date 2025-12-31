@@ -89,6 +89,8 @@ app.use("/api/panel/restaurants", menuRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/reservations", reservationRoutes);
 app.use("/api/orders", ordersRoutes);
+// ✅ Panel — orders (cancel, future panel-specific order actions)
+app.use("/api/panel/restaurants", ordersRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/users", userRoutes);

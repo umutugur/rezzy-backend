@@ -1552,3 +1552,50 @@ export async function restaurantCreateWalkInOrder(
   );
   return data as { order: any; sessionId: string; totals: any };
 }
+
+/**
+ * ✅ WALK-IN sipariş iptal
+ * POST /api/panel/restaurants/:rid/orders/:orderId/cancel
+ * - Yanlış girilen siparişi iptal eder (soft cancel). 
+ * - Backend bu endpointi yoksa, karşılığı olan route'a göre güncelle.
+ */
+export async function restaurantCancelOrder(
+  rid: string,
+  orderId: string,
+  input?: { reason?: string }
+): Promise<{ ok: boolean; order?: any }> {
+  const { data } = await api.post(
+    `/panel/restaurants/${rid}/orders/${orderId}/cancel`,
+    input ?? {}
+  );
+  return data as { ok: boolean; order?: any };
+}
+
+/**
+ * ✅ Mutfak fişleri (opsiyonel: todayOnly)
+ * GET /api/panel/restaurants/:rid/kitchen/orders
+ * - Kitchen ekranında kullanılan fiş listesini çeker.
+ */
+export async function restaurantGetKitchenOrders(
+  rid: string,
+  params?: { todayOnly?: boolean; status?: string }
+): Promise<{ items: any[] }> {
+  const { data } = await api.get(`/panel/restaurants/${rid}/kitchen/orders`, {
+    params,
+  });
+  const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+  return { items };
+}
+
+/**
+ * ✅ Bugünkü fiş sayısı (kitchen topbar için)
+ * GET /api/panel/restaurants/:rid/kitchen/orders/today-count
+ */
+export async function restaurantGetTodayKitchenOrderCount(
+  rid: string
+): Promise<{ ok: boolean; count: number }> {
+  const { data } = await api.get(
+    `/panel/restaurants/${rid}/kitchen/orders/today-count`
+  );
+  return data as { ok: boolean; count: number };
+}
