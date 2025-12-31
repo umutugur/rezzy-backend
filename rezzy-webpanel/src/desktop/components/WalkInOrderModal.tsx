@@ -103,9 +103,10 @@ export const WalkInOrderModal: React.FC<Props> = ({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(7,9,20,0.46)] backdrop-blur-md">
-      <div className="w-[min(1160px,100%-56px)] h-[660px] max-h-[92vh] rounded-[26px] border border-black/10 bg-[radial-gradient(circle_at_top_left,rgba(88,57,255,0.10),rgba(255,255,255,0.98))] shadow-[0_24px_70px_rgba(15,23,42,0.55)] px-6 py-5 flex flex-col gap-3">
+      <div className="w-[min(1280px,100%-48px)] h-[740px] max-h-[92vh] rounded-[28px] border border-slate-200/70 bg-white/80 shadow-[0_28px_90px_rgba(15,23,42,0.55)] overflow-hidden">
+        <div className="h-full w-full px-6 py-5 bg-[radial-gradient(circle_at_top_left,rgba(88,57,255,0.10),rgba(255,255,255,0.92))] flex flex-col gap-3">
         {/* Başlık */}
-        <div className="flex items-start justify-between gap-3 mb-1">
+        <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-[11px] tracking-[0.18em] uppercase text-slate-400 mb-1">
               WALK-IN SİPARİŞ
@@ -122,9 +123,10 @@ export const WalkInOrderModal: React.FC<Props> = ({
             Kapat
           </button>
         </div>
+        <div className="h-px w-full bg-gradient-to-r from-slate-200/40 via-slate-200/80 to-slate-200/40" />
 
         {/* Müşteri / Not */}
-        <div className="mb-1">
+        <div className="">
           <div className="text-[11px] font-medium text-slate-600 mb-1">
             Müşteri / Not
           </div>
@@ -132,13 +134,13 @@ export const WalkInOrderModal: React.FC<Props> = ({
             type="text"
             value={guestName}
             onChange={(e) => onChangeGuestName(e.target.value)}
-            className="w-full rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-[12px] text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
+            className="w-full rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-[13px] text-slate-900 shadow-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
             placeholder="İsteğe bağlı; örn. 4 kişi, rezervasyonsuz masa"
           />
         </div>
 
         {/* Kategoriler */}
-        <div className="mt-1 flex-1 min-h-0 grid grid-cols-12 gap-3">
+        <div className="flex-1 min-h-0 grid grid-cols-12 gap-4">
           {/* Sol: kategori listesi */}
           <div className="col-span-3 min-h-0">
             <div className="flex items-center justify-between mb-1">
@@ -157,13 +159,13 @@ export const WalkInOrderModal: React.FC<Props> = ({
               )}
             </div>
 
-            <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-2 h-full overflow-y-auto">
+            <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-2 h-full overflow-y-auto shadow-sm">
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => onChangeActiveCategoryId("all")}
                   className={
-                    "h-12 px-3 rounded-2xl border text-[12px] font-medium flex items-center justify-center text-center select-none transition " +
+                    "h-11 px-3 rounded-2xl border text-[12px] font-medium flex items-center justify-center text-center select-none transition " +
                     (activeCategoryId === "all"
                       ? "bg-purple-600 text-white border-purple-600 shadow-lg shadow-purple-600/25"
                       : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50")
@@ -178,7 +180,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                     type="button"
                     onClick={() => onChangeActiveCategoryId(cat._id)}
                     className={
-                      "h-12 px-3 rounded-2xl border text-[12px] font-medium flex items-center justify-center text-center select-none transition " +
+                      "h-11 px-3 rounded-2xl border text-[12px] font-medium flex items-center justify-center text-center select-none transition " +
                       (activeCategoryId === cat._id
                         ? "bg-purple-600 text-white border-purple-600 shadow-lg shadow-purple-600/25"
                         : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50")
@@ -206,7 +208,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
               )}
             </div>
 
-            <div className="rounded-2xl border border-slate-200/80 bg-white/95 flex-1 min-h-0 overflow-y-auto">
+            <div className="rounded-2xl border border-slate-200/80 bg-white/95 flex-1 min-h-0 overflow-y-auto shadow-sm">
               {!menuLoading && !menuError && visibleItems.length === 0 && (
                 <div className="px-4 py-3 text-[12px] text-slate-500">
                   Bu kategori için henüz ürün yok.
@@ -239,10 +241,10 @@ export const WalkInOrderModal: React.FC<Props> = ({
                         className="flex-1 mr-4 text-left"
                         style={{ background: "transparent" }}
                       >
-                        <div className="text-[14px] font-medium text-slate-900">
+                        <div className="text-[13px] font-semibold text-slate-900 leading-snug break-words">
                           {mi.title}
                         </div>
-                        <div className="text-[12px] text-slate-500">
+                        <div className="text-[12px] text-slate-500 flex items-center gap-2">
                           <span className="font-semibold">
                             {formatMoney(mi.price, effectiveCurrency)}
                           </span>
@@ -291,7 +293,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-purple-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(245,243,255,0.92))] flex-1 min-h-0 overflow-y-auto shadow-[0_14px_34px_rgba(15,23,42,0.10)]">
+            <div className="rounded-2xl border border-purple-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(245,243,255,0.90))] flex-1 min-h-0 overflow-y-auto shadow-[0_18px_46px_rgba(15,23,42,0.14)]">
               {Object.keys(draftItems || {}).length === 0 ? (
                 <div className="px-4 py-4 text-[12px] text-slate-500">
                   <div className="font-medium text-slate-600">Henüz ürün eklenmedi.</div>
@@ -311,13 +313,13 @@ export const WalkInOrderModal: React.FC<Props> = ({
                       return (
                         <div
                           key={di.itemId}
-                          className="rounded-2xl border border-purple-100 bg-white/95 px-3 py-2 shadow-[0_10px_22px_rgba(15,23,42,0.06)]"
+                          className="rounded-2xl border border-purple-100 bg-white/95 px-3 py-2.5 shadow-[0_12px_26px_rgba(15,23,42,0.07)]"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <div className="text-[12px] font-semibold text-slate-900 leading-snug break-words">{di.title}</div>
-                              <div className="mt-0.5 text-[11px] text-slate-500">
-                                <span className="mr-2">
+                              <div className="text-[12.5px] font-semibold text-slate-900 leading-snug break-words">{di.title}</div>
+                              <div className="mt-1 text-[11px] text-slate-500 grid grid-cols-2 gap-x-2 gap-y-0.5">
+                                <span>
                                   Birim: <span className="font-semibold text-slate-700">{formatMoney(Number(di.price || 0), effectiveCurrency)}</span>
                                 </span>
                                 <span>
@@ -389,7 +391,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
         </div>
 
         {/* Footer / Özet */}
-        <div className="mt-2 flex items-center justify-between gap-3">
+        <div className="mt-2 flex items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/75 px-4 py-3 shadow-sm">
           <div className="text-[11px] text-slate-500">
             Seçili ürün:&nbsp;
             <span className="font-semibold text-slate-900">
@@ -399,7 +401,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
             <span className="font-semibold text-slate-900">
               {formatMoney(selectedTotal, effectiveCurrency)}
             </span>
-            <span className="ml-2 text-[10px] text-slate-400">(seçilenler panelinden düzenleyebilirsin)</span>
+            <span className="ml-2 text-[10px] text-slate-400">(düzenleme: sağ panel)</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -419,6 +421,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
               {submitPending ? "Kaydediliyor…" : "Siparişi Kaydet"}
             </button>
           </div>
+        </div>
         </div>
       </div>
     </div>
