@@ -48,16 +48,25 @@ function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+function isTodayLocal(isoUtc: string) {
+  const d = new Date(isoUtc);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
 async function fetchRezvixOrders(rid: string): Promise<Resp> {
-  const today = new Date();
+  // We need ALL pending requests (not only today's) for the "Bekleyen" column.
+  // We'll fetch without a date lower-bound and slice client-side for "today" buckets.
   const params = {
-    from: ymd(today),
     page: 1,
-    limit: 50,
+    limit: 200,
   };
-  const { data } = await api.get(`/restaurants/${rid}/reservations`, {
-    params,
-  });
+
+  const { data } = await api.get(`/restaurants/${rid}/reservations`, { params });
   return data as Resp;
 }
 
@@ -140,12 +149,18 @@ const RezvixOrdersInner: React.FC = () => {
 
   const rows: Row[] = data?.items ?? [];
 
+  // Buckets:
+  // - Bekleyen: all pending requests (any date)
+  // - Aktif: only today's confirmed/arrived
+  // - Sorunlu: only today's cancelled/no_show
   const pending = rows.filter((r) => r.status === "pending");
+
   const active = rows.filter(
-    (r) => r.status === "confirmed" || r.status === "arrived"
+    (r) => isTodayLocal(r.dateTimeUTC) && (r.status === "confirmed" || r.status === "arrived")
   );
+
   const problematic = rows.filter(
-    (r) => r.status === "cancelled" || r.status === "no_show"
+    (r) => isTodayLocal(r.dateTimeUTC) && (r.status === "cancelled" || r.status === "no_show")
   );
 
   const totalOrders = rows.length;

@@ -64,6 +64,16 @@ function groupByStatus(
 
 type KitchenStatusPayload = "new" | "preparing" | "ready" | "delivered";
 
+function isTodayFromAnyTimestamp(ticket: BackendKitchenTicket, now: Date): boolean {
+  // Since BackendKitchenTicket only has minutesAgo, use that to estimate if ticket is from today
+  // Assume minutesAgo is minutes since creation
+  // If minutesAgo is less than minutes passed since start of today, consider it today
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const minutesSinceStartOfToday = (now.getTime() - startOfToday.getTime()) / 60000;
+  return ticket.minutesAgo <= minutesSinceStartOfToday;
+}
+
 export const KitchenBoardPage: React.FC = () => {
   const user = authStore.getUser();
 
@@ -104,6 +114,12 @@ export const KitchenBoardPage: React.FC = () => {
         ? t.items.map((it) => it.note).join(" • ")
         : undefined,
     }));
+  }, [data]);
+
+  const todayTicketCount = React.useMemo(() => {
+    if (!data?.tickets) return 0;
+    const now = new Date();
+    return data.tickets.filter((t) => isTodayFromAnyTimestamp(t, now)).length;
   }, [data]);
 
   const newOrders = groupByStatus(tickets, "NEW");
@@ -160,8 +176,8 @@ export const KitchenBoardPage: React.FC = () => {
       subtitle="Yeni siparişler, hazırlananlar ve servise hazır tabaklar."
       summaryChips={[
         {
-          label: "Toplam fiş",
-          value: isLoading ? "Yükleniyor…" : `${totalTickets} adet`,
+          label: "Bugünkü fiş",
+          value: isLoading ? "Yükleniyor…" : `${todayTicketCount} adet`,
           tone: "success",
         },
         {

@@ -32,16 +32,16 @@ function roleLabelFromUser(user: MeUser | null): string {
   if (user.role === "admin") return "Admin";
 
   const orgOwner = user.organizations?.find((o) => o.role === "org_owner");
-  if (orgOwner) return `Org Owner • ${orgOwner.name ?? "—"}`;
+  if (orgOwner) return "Org Owner";
 
   const orgAdmin = user.organizations?.find((o) => o.role === "org_admin");
-  if (orgAdmin) return `Org Admin • ${orgAdmin.name ?? "—"}`;
+  if (orgAdmin) return "Org Admin";
 
   const locManager = user.restaurantMemberships?.find((m) => m.role === "location_manager");
-  if (locManager) return `Lokasyon Müdürü • ${locManager.name ?? "—"}`;
+  if (locManager) return "Lokasyon Müdürü";
 
   const staff = user.restaurantMemberships?.find((m) => m.role === "staff");
-  if (staff) return `Personel • ${staff.name ?? "—"}`;
+  if (staff) return "Personel";
 
   if (user.role === "restaurant") return "Restaurant Kullanıcısı";
   return user.role;
