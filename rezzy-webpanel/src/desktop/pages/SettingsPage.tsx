@@ -72,6 +72,7 @@ type Restaurant = {
   googleMapsUrl?: string;
   location?: GeoPoint;
 
+  deliveryEnabled?: boolean;
   deliveryZones?: DeliveryZone[];
   menus?: any[];
   tables?: TableItem[];
@@ -189,6 +190,7 @@ export const SettingsPage: React.FC = () => {
   const [hours, setHours] = React.useState<OpeningHour[]>(DEFAULT_OPENING_HOURS);
   const [policies, setPolicies] = React.useState<Policies>(DEFAULT_POLICIES);
   const [newBlackout, setNewBlackout] = React.useState("");
+  const [deliveryEnabled, setDeliveryEnabled] = React.useState<boolean>(false);
   const [deliveryZones, setDeliveryZones] = React.useState<DeliveryZone[]>([]);
   const [editingZoneIndex, setEditingZoneIndex] = React.useState<number>(0);
 
@@ -262,7 +264,12 @@ export const SettingsPage: React.FC = () => {
           : DEFAULT_POLICIES.checkinWindowAfterMinutes,
     });
 
-    setDeliveryZones(Array.isArray((data as any).deliveryZones) ? ((data as any).deliveryZones as DeliveryZone[]) : []);
+    setDeliveryEnabled(!!(data as any).deliveryEnabled);
+    setDeliveryZones(
+      Array.isArray((data as any).deliveryZones)
+        ? ((data as any).deliveryZones as DeliveryZone[])
+        : []
+    );
     setEditingZoneIndex(0);
   }, [data]);
 
@@ -375,7 +382,10 @@ export const SettingsPage: React.FC = () => {
         },
       }));
 
-      await api.put(`/restaurants/${rid}/delivery-zones`, { deliveryZones: payload });
+      await api.put(`/restaurants/${rid}/delivery-settings`, {
+        deliveryEnabled: !!deliveryEnabled,
+        deliveryZones: payload,
+      });
     },
     onSuccess: () => {
       showToast("Teslimat bölgeleri güncellendi", "success");
@@ -1475,6 +1485,22 @@ export const SettingsPage: React.FC = () => {
         {/* === TESLİMAT BÖLGELERİ === */}
         {tab === "delivery" && (
           <Card title="Teslimat Bölgeleri">
+            <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={deliveryEnabled}
+                  onChange={(e) => setDeliveryEnabled(e.target.checked)}
+                />
+                <span className="text-gray-700 font-medium">Paket servis aktif</span>
+              </label>
+
+              {!deliveryEnabled && (
+                <span className="text-xs text-gray-500">
+                  Paket servis kapalıyken teslimat bölgeleri zorunlu değildir.
+                </span>
+              )}
+            </div>
             <div className="text-sm text-gray-600 mb-4">
               Harita üzerinde poligon çizerek teslimat bölgelerini oluşturun. Her bölge için isim ve ücret belirleyebilirsiniz.
             </div>
@@ -1485,7 +1511,7 @@ export const SettingsPage: React.FC = () => {
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 value={String(editingZoneIndex)}
                 onChange={(e) => setEditingZoneIndex(Number(e.target.value) || 0)}
-                disabled={deliveryZones.length === 0}
+                disabled={!deliveryEnabled || deliveryZones.length === 0}
               >
                 {deliveryZones.map((z, idx) => (
                   <option key={z._id || `${z.name}-${idx}`} value={String(idx)}>
@@ -1498,10 +1524,11 @@ export const SettingsPage: React.FC = () => {
               )}
             </div>
 
-            <div className="rounded-xl border overflow-hidden">
+            <div className={"rounded-xl border overflow-hidden " + (!deliveryEnabled ? "opacity-60 pointer-events-none" : "")}>
               <DeliveryZoneMap
                 value={deliveryZones[editingZoneIndex]?.polygon ?? null}
                 onChange={(poly: any) => {
+                  if (!deliveryEnabled) return;
                   setDeliveryZones((prev) => {
                     if (!prev.length) return prev;
                     const idx = Math.min(Math.max(0, editingZoneIndex), prev.length - 1);
@@ -1521,19 +1548,24 @@ export const SettingsPage: React.FC = () => {
                 type="button"
                 className="rounded-lg bg-gray-100 hover:bg-gray-200 px-4 py-2"
                 onClick={() => {
-                  setDeliveryZones((prev) => [
-                    ...prev,
-                    {
-                      name: `Bölge ${prev.length + 1}`,
-                      fee: 0,
-                      minOrder: 0,
-                      isActive: true,
-                      polygon: { type: "Polygon", coordinates: [] },
-                    },
-                  ]);
-                  setEditingZoneIndex((prevIdx) => {
-                    const nextIdx = deliveryZones.length; // new item index
-                    return Number.isFinite(nextIdx) ? nextIdx : prevIdx;
+                  if (!deliveryEnabled) {
+                    showToast("Önce paket servisi aktif edin", "error");
+                    return;
+                  }
+
+                  const newZone: DeliveryZone = {
+                    name: `Bölge ${deliveryZones.length + 1}`,
+                    fee: 0,
+                    minOrder: 0,
+                    isActive: true,
+                    polygon: { type: "Polygon", coordinates: [] },
+                  };
+
+                  setDeliveryZones((prev) => {
+                    const next = [...prev, newZone];
+                    // Yeni eklenen bölgeyi düzenlemeye al
+                    setEditingZoneIndex(next.length - 1);
+                    return next;
                   });
                 }}
               >
@@ -1543,7 +1575,7 @@ export const SettingsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => saveDeliveryZonesMut.mutate()}
-                disabled={saveDeliveryZonesMut.isPending}
+                disabled={saveDeliveryZonesMut.isPending || !rid}
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 disabled:opacity-60"
               >
                 {saveDeliveryZonesMut.isPending ? "Kaydediliyor…" : "Kaydet"}
