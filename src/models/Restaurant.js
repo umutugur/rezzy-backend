@@ -114,7 +114,13 @@ const RestaurantSchema = new mongoose.Schema(
         hasActiveSession: { type: Boolean, default: false },
         status: {
           type: String,
-          enum: ["empty", "occupied", "waiter_call", "bill_request", "order_active"],
+          enum: [
+            "empty",
+            "occupied",
+            "waiter_call",
+            "bill_request",
+            "order_active",
+          ],
           default: "empty",
         },
         sessionId: {
@@ -160,7 +166,7 @@ const RestaurantSchema = new mongoose.Schema(
       default: 80,
     },
 
-    // ✅ Konum bilgisi (GeoJSON)
+    // ✅ Konum bilgisi (GeoJSON) - (restoran pini / merkez nokta)
     location: {
       type: {
         type: String,
@@ -172,6 +178,43 @@ const RestaurantSchema = new mongoose.Schema(
         index: "2dsphere",
       },
     },
+
+   // ✅ Paket servis (Delivery)
+delivery: {
+  enabled: { type: Boolean, default: false, index: true },
+
+  paymentOptions: {
+    online: { type: Boolean, default: true },
+    cashOnDelivery: { type: Boolean, default: true },
+    cardOnDelivery: { type: Boolean, default: true },
+  },
+
+  minOrderAmount: { type: Number, default: 0 },
+  feeAmount: { type: Number, default: 0 },
+
+  // ✅ ETA (dakika)
+  etaMinMinutes: { type: Number, default: 0, min: 0 },
+  etaMaxMinutes: { type: Number, default: 0, min: 0 },
+
+  serviceArea: {
+    type: {
+      type: String,
+      enum: ["radius", "polygon"],
+      default: "radius",
+    },
+    radiusMeters: { type: Number, default: 0 },
+
+    polygon: {
+      type: {
+        type: String,
+        enum: ["Polygon"],
+      },
+      coordinates: {
+        type: [[[Number]]],
+      },
+    },
+  },
+},
 
     mapAddress: String,
     placeId: String,
@@ -193,6 +236,12 @@ RestaurantSchema.index(
 RestaurantSchema.index(
   { organizationId: 1, status: 1 },
   { name: "organization_status" }
+);
+
+// ✅ Polygon sorguları için (userPoint intersects)
+RestaurantSchema.index(
+  { "delivery.serviceArea.polygon": "2dsphere" },
+  { name: "delivery_polygon_2dsphere" }
 );
 
 export default mongoose.model("Restaurant", RestaurantSchema);

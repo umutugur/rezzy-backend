@@ -7,6 +7,7 @@ const objectId = (value, helpers) => {
   }
   return value;
 };
+
 const BUSINESS_TYPES = [
   "restaurant",
   "meyhane",
@@ -21,16 +22,66 @@ const BUSINESS_TYPES = [
 
 const anyObject = Joi.object({}).unknown(true);
 
+// ✅ [lng, lat] doğrulaması doğru aralıklarla
+const coordinatesSchema = Joi.array()
+  .length(2)
+  .items(
+    Joi.number().min(-180).max(180).required(), // lng
+    Joi.number().min(-90).max(90).required()    // lat
+  )
+  .required()
+  .messages({
+    "array.length": "Koordinatlar [lng, lat] biçiminde olmalıdır.",
+  });
+
 const locationSchema = Joi.object({
   type: Joi.string().valid("Point").default("Point"),
-  coordinates: Joi.array()
-    .items(Joi.number().min(-180).max(180))
-    .length(2)
-    .required()
-    .messages({
-      "array.length": "Koordinatlar [lng, lat] biçiminde olmalıdır.",
-    }),
+  coordinates: coordinatesSchema,
 });
+
+// ✅ Polygon (GeoJSON) => coordinates: [[[lng,lat],...]]
+// Basit ama işe yarar doğrulama:
+// - coordinates array
+// - ilk ring array
+// - ring içinde en az 4 nokta (Polygon kapalı ring için pratik minimum)
+const polygonSchema = Joi.object({
+  type: Joi.string().valid("Polygon").required(),
+  coordinates: Joi.array()
+    .items(
+      Joi.array()
+        .items(coordinatesSchema)
+        .min(4)
+        .required()
+    )
+    .min(1)
+    .required(),
+});
+
+// ✅ Delivery serviceArea
+const deliveryServiceAreaSchema = Joi.object({
+  type: Joi.string().valid("radius", "polygon").optional(),
+  radiusMeters: Joi.number().min(1).optional(),
+  polygon: polygonSchema.optional(),
+}).unknown(false);
+
+// ✅ Delivery payment options
+const deliveryPaymentOptionsSchema = Joi.object({
+  online: Joi.boolean().optional(),
+  cashOnDelivery: Joi.boolean().optional(),
+  cardOnDelivery: Joi.boolean().optional(),
+}).unknown(false);
+
+// ✅ Delivery (model ile uyumlu)
+const deliverySchema = Joi.object({
+  enabled: Joi.boolean().optional(),
+
+  paymentOptions: deliveryPaymentOptionsSchema.optional(),
+
+  minOrderAmount: Joi.number().min(0).optional(),
+  feeAmount: Joi.number().min(0).optional(),
+
+  serviceArea: deliveryServiceAreaSchema.optional(),
+}).unknown(false);
 
 /* ---------- CREATE RESTAURANT ---------- */
 export const createRestaurantSchema = Joi.object({
@@ -79,6 +130,9 @@ export const createRestaurantSchema = Joi.object({
     businessType: Joi.string()
       .valid(...BUSINESS_TYPES)
       .default("restaurant"),
+
+    // ✅ NEW: Delivery ayarları (opsiyonel)
+    delivery: deliverySchema.optional(),
   }),
 });
 
@@ -126,6 +180,9 @@ export const createOrganizationRestaurantAdminSchema = Joi.object({
     businessType: Joi.string()
       .valid(...BUSINESS_TYPES)
       .default("restaurant"),
+
+    // ✅ NEW: Delivery ayarları (opsiyonel)
+    delivery: deliverySchema.optional(),
   }),
 });
 
@@ -194,7 +251,88 @@ export const updateRestaurantSchema = Joi.object({
     placeId: Joi.string().allow("", null),
     googleMapsUrl: Joi.string().allow("", null),
     businessType: Joi.string().valid(...BUSINESS_TYPES),
+
+    // ✅ NEW: Delivery ayarları (opsiyonel)
+    delivery: deliverySchema.optional(),
   }).min(1),
+});
+
+/* ---------- DELIVERY SETTINGS (NEW) ---------- */
+export const updateDeliverySettingsSchema = Joi.object({
+  query: anyObject,
+  params: Joi.object({
+    id: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object({
+    enabled: Joi.boolean().optional(),
+
+    paymentOptions: deliveryPaymentOptionsSchema.optional(),
+
+    minOrderAmount: Joi.number().min(0).optional(),
+    feeAmount: Joi.number().min(0).optional(),
+    etaMinMinutes: Joi.number().min(0).optional(),
+etaMaxMinutes: Joi.number().min(0).optional(),
+    // İstersen panel bu uçtan restoran pinini de güncelleyebilir
+    location: locationSchema.optional(),
+
+    serviceArea: deliveryServiceAreaSchema.optional(),
+  })
+    .min(1)
+    .custom((value, helpers) => {
+      // Eğer enabled true gönderiliyorsa, minimum doğrulamalar:
+      // - en az 1 ödeme seçeneği (paymentOptions içinde true)
+      // - serviceArea.type + ilgili alan (radiusMeters / polygon)
+      // Not: DB’de eski değerler olabilir. Bu kontrol "bu request ile açıyorsan"
+      // minimum payload istemek için var.
+      if (value.enabled === true) {
+        const po = value.paymentOptions || {};
+        const anyPay = !!(po.online || po.cashOnDelivery || po.cardOnDelivery);
+        if (!anyPay) {
+          return helpers.error("any.custom", {
+            message: "enabled=true için en az 1 ödeme seçeneği (online/cashOnDelivery/cardOnDelivery) gereklidir.",
+          });
+        }
+        const emin = value.etaMinMinutes;
+  const emax = value.etaMaxMinutes;
+
+  if (!Number.isFinite(emin) || !Number.isFinite(emax)) {
+    return helpers.error("any.custom", {
+      message: "enabled=true için etaMinMinutes ve etaMaxMinutes gereklidir.",
+    });
+  }
+  if (emin <= 0 || emax <= 0 || emin > emax) {
+    return helpers.error("any.custom", {
+      message: "ETA geçersiz. etaMinMinutes > 0, etaMaxMinutes > 0 ve min <= max olmalı.",
+    });
+  }
+        const sa = value.serviceArea || {};
+        const t = sa.type;
+
+        if (!t) {
+          return helpers.error("any.custom", {
+            message: "enabled=true için serviceArea.type (radius|polygon) gereklidir.",
+          });
+        }
+
+        if (t === "radius") {
+          if (!Number.isFinite(sa.radiusMeters) || sa.radiusMeters <= 0) {
+            return helpers.error("any.custom", {
+              message: "serviceArea.type=radius için radiusMeters (>0) gereklidir.",
+            });
+          }
+        }
+
+        if (t === "polygon") {
+          if (!sa.polygon || sa.polygon.type !== "Polygon") {
+            return helpers.error("any.custom", {
+              message: "serviceArea.type=polygon için polygon (GeoJSON) gereklidir.",
+            });
+          }
+        }
+      }
+
+      return value;
+    }),
 });
 
 /* ---------- AVAILABILITY ---------- */

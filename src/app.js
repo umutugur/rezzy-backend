@@ -26,6 +26,9 @@ import assistantRoutes from "./routes/assistant.routes.js";
 import qrPosterRoutes from "./routes/qrPoster.routes.js";
 import orgRoutes from "./routes/org.js";   
 import orgAnalyticsRoutes from "./routes/org.analytics.routes.js";
+import addressRoutes from "./routes/address.js";
+import deliveryRoutes from "./routes/delivery.js";
+
 
 dotenv.config();
 const app = express();
@@ -103,6 +106,11 @@ app.use("/api", qrPosterRoutes);
 // ✅ Org owner / org_admin org-level endpointler
 app.use("/api/org", orgRoutes);
 app.use("/api/org-analytics", orgAnalyticsRoutes);
+
+//adress control and delivery
+app.use("/api/addresses", addressRoutes);
+app.use("/api/delivery", deliveryRoutes);
+
 // 404 & error aynı kalsın
 app.use((req, res) => res.status(404).json({ message: "Not found" }));
 app.use(errorHandler);

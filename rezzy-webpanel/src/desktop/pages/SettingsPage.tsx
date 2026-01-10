@@ -20,6 +20,7 @@ import {
 import { showToast } from "../../ui/Toast";
 import { parseLatLngFromGoogleMaps } from "../../utils/geo";
 import { Card } from "../../components/Card";
+import DeliveryZoneMap from "../components/DeliveryZoneMap";
 
 // === Tipler ===
 type OpeningHour = { day: number; open: string; close: string; isClosed?: boolean };
@@ -35,7 +36,19 @@ type Policies = {
   checkinWindowBeforeMinutes: number;
   checkinWindowAfterMinutes: number;
 };
+
 type GeoPoint = { type?: "Point"; coordinates: [number, number] }; // [lng, lat]
+
+type GeoPolygon = { type: "Polygon"; coordinates: [number, number][][] }; // [[[lng,lat],...]]
+
+type DeliveryZone = {
+  _id?: string;
+  name: string;
+  fee: number;
+  minOrder?: number;
+  isActive?: boolean;
+  polygon: GeoPolygon;
+};
 
 type Restaurant = {
   _id: string;
@@ -59,6 +72,7 @@ type Restaurant = {
   googleMapsUrl?: string;
   location?: GeoPoint;
 
+  deliveryZones?: DeliveryZone[];
   menus?: any[];
   tables?: TableItem[];
   openingHours?: OpeningHour[];
@@ -103,6 +117,7 @@ type TabKey =
   | "tables"
   | "hours"
   | "policies"
+  | "delivery"
   | "theme";
 
 type SettingsForm = Partial<
@@ -174,6 +189,8 @@ export const SettingsPage: React.FC = () => {
   const [hours, setHours] = React.useState<OpeningHour[]>(DEFAULT_OPENING_HOURS);
   const [policies, setPolicies] = React.useState<Policies>(DEFAULT_POLICIES);
   const [newBlackout, setNewBlackout] = React.useState("");
+  const [deliveryZones, setDeliveryZones] = React.useState<DeliveryZone[]>([]);
+  const [editingZoneIndex, setEditingZoneIndex] = React.useState<number>(0);
 
   // 🔹 QR poster indirme durumları
   const [isDownloadingAllPosters, setIsDownloadingAllPosters] = React.useState(false);
@@ -244,6 +261,9 @@ export const SettingsPage: React.FC = () => {
           ? data.checkinWindowAfterMinutes
           : DEFAULT_POLICIES.checkinWindowAfterMinutes,
     });
+
+    setDeliveryZones(Array.isArray((data as any).deliveryZones) ? ((data as any).deliveryZones as DeliveryZone[]) : []);
+    setEditingZoneIndex(0);
   }, [data]);
 
   // === Yardımcı: Content-Disposition başlığından dosya adı çek ===
@@ -339,6 +359,34 @@ export const SettingsPage: React.FC = () => {
   };
 
   // === Mutations ===
+
+  const saveDeliveryZonesMut = useMutation({
+    mutationFn: async () => {
+      // Normalize a minimal payload the backend can persist
+      const payload = (deliveryZones || []).map((z) => ({
+        _id: z._id,
+        name: String(z.name || "").trim() || "Bölge",
+        fee: Number(z.fee || 0),
+        minOrder: z.minOrder == null ? undefined : Number(z.minOrder),
+        isActive: z.isActive ?? true,
+        polygon: {
+          type: "Polygon" as const,
+          coordinates: Array.isArray(z.polygon?.coordinates) ? z.polygon.coordinates : [],
+        },
+      }));
+
+      await api.put(`/restaurants/${rid}/delivery-zones`, { deliveryZones: payload });
+    },
+    onSuccess: () => {
+      showToast("Teslimat bölgeleri güncellendi", "success");
+      qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
+    },
+    onError: (e: any) =>
+      showToast(
+        e?.response?.data?.message || e?.message || "Teslimat bölgeleri kaydedilemedi",
+        "error"
+      ),
+  });
 
   const saveGeneralMut = useMutation({
     mutationFn: () => {
@@ -514,6 +562,7 @@ export const SettingsPage: React.FC = () => {
           ["tables", "Masalar"],
           ["hours", "Saatler"],
           ["policies", "Politikalar"],
+          ["delivery", "Teslimat"],
           ["theme", "Tema"],
         ] as Array<[TabKey, string]>
       ).map(([k, label]) => (
@@ -1418,6 +1467,86 @@ export const SettingsPage: React.FC = () => {
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
               >
                 {savePoliciesMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+              </button>
+            </div>
+          </Card>
+        )}
+
+        {/* === TESLİMAT BÖLGELERİ === */}
+        {tab === "delivery" && (
+          <Card title="Teslimat Bölgeleri">
+            <div className="text-sm text-gray-600 mb-4">
+              Harita üzerinde poligon çizerek teslimat bölgelerini oluşturun. Her bölge için isim ve ücret belirleyebilirsiniz.
+            </div>
+
+            <div className="mb-3 flex items-center gap-3 flex-wrap">
+              <label className="text-sm text-gray-600">Haritada düzenlenen bölge:</label>
+              <select
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                value={String(editingZoneIndex)}
+                onChange={(e) => setEditingZoneIndex(Number(e.target.value) || 0)}
+                disabled={deliveryZones.length === 0}
+              >
+                {deliveryZones.map((z, idx) => (
+                  <option key={z._id || `${z.name}-${idx}`} value={String(idx)}>
+                    {z.name || `Bölge ${idx + 1}`}
+                  </option>
+                ))}
+              </select>
+              {deliveryZones.length === 0 && (
+                <span className="text-xs text-gray-500">Önce bir bölge ekleyin.</span>
+              )}
+            </div>
+
+            <div className="rounded-xl border overflow-hidden">
+              <DeliveryZoneMap
+                value={deliveryZones[editingZoneIndex]?.polygon ?? null}
+                onChange={(poly: any) => {
+                  setDeliveryZones((prev) => {
+                    if (!prev.length) return prev;
+                    const idx = Math.min(Math.max(0, editingZoneIndex), prev.length - 1);
+                    const next = [...prev];
+                    next[idx] = {
+                      ...next[idx],
+                      polygon: poly ?? { type: "Polygon", coordinates: [] },
+                    };
+                    return next;
+                  });
+                }}
+              />
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
+              <button
+                type="button"
+                className="rounded-lg bg-gray-100 hover:bg-gray-200 px-4 py-2"
+                onClick={() => {
+                  setDeliveryZones((prev) => [
+                    ...prev,
+                    {
+                      name: `Bölge ${prev.length + 1}`,
+                      fee: 0,
+                      minOrder: 0,
+                      isActive: true,
+                      polygon: { type: "Polygon", coordinates: [] },
+                    },
+                  ]);
+                  setEditingZoneIndex((prevIdx) => {
+                    const nextIdx = deliveryZones.length; // new item index
+                    return Number.isFinite(nextIdx) ? nextIdx : prevIdx;
+                  });
+                }}
+              >
+                Yeni Bölge
+              </button>
+
+              <button
+                type="button"
+                onClick={() => saveDeliveryZonesMut.mutate()}
+                disabled={saveDeliveryZonesMut.isPending}
+                className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 disabled:opacity-60"
+              >
+                {saveDeliveryZonesMut.isPending ? "Kaydediliyor…" : "Kaydet"}
               </button>
             </div>
           </Card>

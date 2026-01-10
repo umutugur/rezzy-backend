@@ -21,6 +21,9 @@ import {
   fetchReservationsByRestaurantSchema,
   updateReservationStatusSchema,
   getReservationQRSchema,
+
+  // ✅ NEW
+  updateDeliverySettingsSchema,
 } from "../validators/restaurant.schema.js";
 
 // Controller fonksiyonları
@@ -41,6 +44,9 @@ import {
   updateReservationStatus,
   getReservationQR,
   uploadLogo,
+
+  // ✅ NEW
+  updateDeliverySettings,
 } from "../controllers/restaurant.controller.js";
 
 const r = Router();
@@ -86,6 +92,15 @@ r.put(
 // ----------------------------
 // Panel spesifik güncellemeler
 // ----------------------------
+
+// ✅ Delivery (paket servis) ayarlarını güncelle
+r.put(
+  "/:id/delivery-settings",
+  auth(),
+  allowLocationManagerOrAdmin("id"),
+  validate(updateDeliverySettingsSchema),
+  updateDeliverySettings
+);
 
 // Çalışma saatlerini güncelle
 r.put(

@@ -32,6 +32,8 @@
     "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.2",
     "jszip": "^3.10.1",
+    "leaflet": "^1.9.4",
+    "leaflet-draw": "^1.0.4",
     "mongoose": "^8.18.0",
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
@@ -39,6 +41,7 @@
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.17.2",
     "qrcode": "^1.5.4",
+    "react-leaflet": "^5.0.0",
     "stripe": "^20.0.0",
     "zod": "^4.1.4"
   },
