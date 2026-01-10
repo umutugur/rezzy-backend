@@ -1,5 +1,5 @@
 import React from "react";
-import { MapContainer, TileLayer, Polygon, CircleMarker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Polygon, CircleMarker, Popup, Pane } from "react-leaflet";
 
 // NOTE:
 // Hex netleştiği için bu bileşen artık polygon çizdirmez.
@@ -208,85 +208,98 @@ export default function DeliveryZoneMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* Restaurant location pin (always visible) */}
-        {Number.isFinite(center?.lat) && Number.isFinite(center?.lng) ? (
-          <CircleMarker center={[center.lat, center.lng]} radius={10} pathOptions={{ weight: 2 }}>
-            <Popup>
-              <div style={{ fontSize: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Restoran Konumu</div>
-                <div>
-                  Lat: {center.lat.toFixed(6)} / Lng: {center.lng.toFixed(6)}
-                </div>
-              </div>
-            </Popup>
-          </CircleMarker>
-        ) : null}
-
-        {/* Hex cells */}
-        {effectiveZones.map((z, i) => {
-          const ax = computed.coords[i] || { q: 0, r: 0 };
-          const pts = axialHexToLatLngPolygon(center, ax, safeSize);
-          const isSelected = String(selectedZoneId || "") === String(z.id);
-
-          const base = {
-            weight: isSelected ? 3 : 2,
-            opacity: z.isActive ? 0.9 : 0.5,
-            fillOpacity: z.isActive ? (isSelected ? 0.35 : 0.2) : 0.08,
-          } as any;
-
-          const title = typeof z.name === "string" && z.name.trim() ? z.name : z.id;
-
-          return (
-            <Polygon
-              key={z.id}
-              positions={pts}
-              pathOptions={base}
-              eventHandlers={{
-                click: () => onSelectZone(z.id),
-                dblclick: () => onToggleZone(z.id, !z.isActive),
-              }}
+        <Pane name="hexPane" style={{ zIndex: 650 }}>
+          {/* Restaurant location pin (always visible) */}
+          {Number.isFinite(center?.lat) && Number.isFinite(center?.lng) ? (
+            <CircleMarker
+              center={[center.lat, center.lng]}
+              radius={10}
+              pane="hexPane"
+              pathOptions={{ color: "#111827", fillColor: "#F59E0B", fillOpacity: 0.95, weight: 2 }}
             >
               <Popup>
-                <div style={{ fontSize: 12, minWidth: 200 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 6 }}>{title}</div>
-                  <div style={{ marginBottom: 6 }}>
-                    Durum: <b>{z.isActive ? "Açık" : "Kapalı"}</b>
-                  </div>
-                  <div style={{ marginBottom: 6 }}>
-                    Minimum sepet: <b>{Number(z.minOrderAmount || 0).toFixed(0)}</b>
-                  </div>
-                  <div style={{ marginBottom: 8 }}>
-                    Teslimat ücreti: <b>{Number(z.feeAmount || 0).toFixed(0)}</b>
-                  </div>
-
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      type="button"
-                      onClick={() => onToggleZone(z.id, !z.isActive)}
-                      style={{
-                        fontSize: 12,
-                        padding: "6px 10px",
-                        borderRadius: 10,
-                        border: "1px solid rgba(0,0,0,0.12)",
-                        background: "white",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {z.isActive ? "Kapat" : "Aç"}
-                    </button>
-                    <span style={{ fontSize: 11, opacity: 0.75, alignSelf: "center" }}>
-                      Çift tık: hızlı aç/kapat
-                    </span>
-                  </div>
-
-                  <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>
-                    Hex index: q={ax.q}, r={ax.r}
+                <div style={{ fontSize: 12 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>Restoran Konumu</div>
+                  <div>
+                    Lat: {center.lat.toFixed(6)} / Lng: {center.lng.toFixed(6)}
                   </div>
                 </div>
               </Popup>
-            </Polygon>
-          );
-        })}
+            </CircleMarker>
+          ) : null}
+
+          {/* Hex cells */}
+          {effectiveZones.map((z, i) => {
+            const ax = computed.coords[i] || { q: 0, r: 0 };
+            const pts = axialHexToLatLngPolygon(center, ax, safeSize);
+            const isSelected = String(selectedZoneId || "") === String(z.id);
+
+            const strokeColor = isSelected ? "#6D28D9" : z.isActive ? "#16A34A" : "#64748B";
+            const fillColor = isSelected ? "#8B5CF6" : z.isActive ? "#22C55E" : "#94A3B8";
+
+            const base = {
+              color: strokeColor,
+              fillColor,
+              weight: isSelected ? 3.5 : 2.5,
+              opacity: z.isActive ? 0.95 : 0.85,
+              fillOpacity: z.isActive ? (isSelected ? 0.28 : 0.18) : (isSelected ? 0.14 : 0.08),
+            } as any;
+
+            const title = typeof z.name === "string" && z.name.trim() ? z.name : z.id;
+
+            return (
+              <Polygon
+                key={z.id}
+                positions={pts}
+                pathOptions={base}
+                pane="hexPane"
+                eventHandlers={{
+                  click: () => onSelectZone(z.id),
+                  dblclick: () => onToggleZone(z.id, !z.isActive),
+                }}
+              >
+                <Popup>
+                  <div style={{ fontSize: 12, minWidth: 200 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>{title}</div>
+                    <div style={{ marginBottom: 6 }}>
+                      Durum: <b>{z.isActive ? "Açık" : "Kapalı"}</b>
+                    </div>
+                    <div style={{ marginBottom: 6 }}>
+                      Minimum sepet: <b>{Number(z.minOrderAmount || 0).toFixed(0)}</b>
+                    </div>
+                    <div style={{ marginBottom: 8 }}>
+                      Teslimat ücreti: <b>{Number(z.feeAmount || 0).toFixed(0)}</b>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => onToggleZone(z.id, !z.isActive)}
+                        style={{
+                          fontSize: 12,
+                          padding: "6px 10px",
+                          borderRadius: 10,
+                          border: "1px solid rgba(0,0,0,0.12)",
+                          background: "white",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {z.isActive ? "Kapat" : "Aç"}
+                      </button>
+                      <span style={{ fontSize: 11, opacity: 0.75, alignSelf: "center" }}>
+                        Çift tık: hızlı aç/kapat
+                      </span>
+                    </div>
+
+                    <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>
+                      Hex index: q={ax.q}, r={ax.r}
+                    </div>
+                  </div>
+                </Popup>
+              </Polygon>
+            );
+          })}
+        </Pane>
       </MapContainer>
     </div>
   );
