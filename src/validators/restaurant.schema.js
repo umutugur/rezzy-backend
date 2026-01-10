@@ -258,81 +258,137 @@ export const updateRestaurantSchema = Joi.object({
 });
 
 /* ---------- DELIVERY SETTINGS (NEW) ---------- */
+
+// ✅ Delivery settings endpoint accepts BOTH shapes:
+// 1) root-level fields: { enabled, paymentOptions, minOrderAmount, ... }
+// 2) nested: { delivery: { enabled, paymentOptions, ... } }
+// Also accepts flexible location formats (GeoJSON or {lat,lng} etc.)
+const flexibleLocationSchema = Joi.alternatives().try(
+  // GeoJSON Point
+  locationSchema,
+
+  // { lat, lng } or { latitude, longitude }
+  Joi.object({
+    lat: Joi.number().min(-90).max(90).optional(),
+    lng: Joi.number().min(-180).max(180).optional(),
+    latitude: Joi.number().min(-90).max(90).optional(),
+    longitude: Joi.number().min(-180).max(180).optional(),
+  })
+    .min(2)
+    .unknown(false)
+);
+
+const deliverySettingsBodySchema = Joi.object({
+  enabled: Joi.boolean().optional(),
+
+  paymentOptions: deliveryPaymentOptionsSchema.optional(),
+
+  minOrderAmount: Joi.number().min(0).optional(),
+  feeAmount: Joi.number().min(0).optional(),
+
+  etaMinMinutes: Joi.number().min(0).optional(),
+  etaMaxMinutes: Joi.number().min(0).optional(),
+
+  // İstersen panel bu uçtan restoran pinini de güncelleyebilir
+  // Kabul: GeoJSON Point veya {lat,lng}/{latitude,longitude}
+  location: flexibleLocationSchema.optional(),
+
+  // serviceArea root-level gönderilebilir
+  serviceArea: deliveryServiceAreaSchema.optional(),
+
+  // Alternatif: location root-level lat/lng olarak da gelebilir
+  lat: Joi.number().min(-90).max(90).optional(),
+  lng: Joi.number().min(-180).max(180).optional(),
+  latitude: Joi.number().min(-90).max(90).optional(),
+  longitude: Joi.number().min(-180).max(180).optional(),
+
+  // Alternatif: her şeyi `delivery` altında gönderen client'lar
+  delivery: Joi.object({
+    enabled: Joi.boolean().optional(),
+    paymentOptions: deliveryPaymentOptionsSchema.optional(),
+    minOrderAmount: Joi.number().min(0).optional(),
+    feeAmount: Joi.number().min(0).optional(),
+    etaMinMinutes: Joi.number().min(0).optional(),
+    etaMaxMinutes: Joi.number().min(0).optional(),
+    location: flexibleLocationSchema.optional(),
+    serviceArea: deliveryServiceAreaSchema.optional(),
+  })
+    .unknown(false)
+    .optional(),
+})
+  .min(1)
+  .unknown(false)
+  .custom((value, helpers) => {
+    // Merge nested delivery -> root (root wins)
+    const d = value.delivery && typeof value.delivery === "object" ? value.delivery : {};
+    const merged = {
+      ...d,
+      ...value,
+      // Merge nested location/serviceArea if root missing
+      location: typeof value.location !== "undefined" ? value.location : d.location,
+      serviceArea: typeof value.serviceArea !== "undefined" ? value.serviceArea : d.serviceArea,
+      paymentOptions: typeof value.paymentOptions !== "undefined" ? value.paymentOptions : d.paymentOptions,
+    };
+
+    // If enabled true => require sane minimum payload (as per product rules)
+    if (merged.enabled === true) {
+      const po = merged.paymentOptions || {};
+      const anyPay = !!(po.online || po.cashOnDelivery || po.cardOnDelivery);
+      if (!anyPay) {
+        return helpers.error("any.custom", {
+          message:
+            "enabled=true için en az 1 ödeme seçeneği (online/cashOnDelivery/cardOnDelivery) gereklidir.",
+        });
+      }
+
+      const emin = merged.etaMinMinutes;
+      const emax = merged.etaMaxMinutes;
+      if (!Number.isFinite(emin) || !Number.isFinite(emax)) {
+        return helpers.error("any.custom", {
+          message: "enabled=true için etaMinMinutes ve etaMaxMinutes gereklidir.",
+        });
+      }
+      if (emin <= 0 || emax <= 0 || emin > emax) {
+        return helpers.error("any.custom", {
+          message:
+            "ETA geçersiz. etaMinMinutes > 0, etaMaxMinutes > 0 ve min <= max olmalı.",
+        });
+      }
+
+      const sa = merged.serviceArea || {};
+      const t = sa.type;
+      if (!t) {
+        return helpers.error("any.custom", {
+          message: "enabled=true için serviceArea.type (radius|polygon) gereklidir.",
+        });
+      }
+
+      if (t === "radius") {
+        if (!Number.isFinite(sa.radiusMeters) || sa.radiusMeters <= 0) {
+          return helpers.error("any.custom", {
+            message: "serviceArea.type=radius için radiusMeters (>0) gereklidir.",
+          });
+        }
+      }
+
+      if (t === "polygon") {
+        if (!sa.polygon || sa.polygon.type !== "Polygon") {
+          return helpers.error("any.custom", {
+            message: "serviceArea.type=polygon için polygon (GeoJSON) gereklidir.",
+          });
+        }
+      }
+    }
+
+    return value;
+  });
+
 export const updateDeliverySettingsSchema = Joi.object({
   query: anyObject,
   params: Joi.object({
     id: Joi.string().custom(objectId).required(),
   }),
-  body: Joi.object({
-    enabled: Joi.boolean().optional(),
-
-    paymentOptions: deliveryPaymentOptionsSchema.optional(),
-
-    minOrderAmount: Joi.number().min(0).optional(),
-    feeAmount: Joi.number().min(0).optional(),
-    etaMinMinutes: Joi.number().min(0).optional(),
-etaMaxMinutes: Joi.number().min(0).optional(),
-    // İstersen panel bu uçtan restoran pinini de güncelleyebilir
-    location: locationSchema.optional(),
-
-    serviceArea: deliveryServiceAreaSchema.optional(),
-  })
-    .min(1)
-    .custom((value, helpers) => {
-      // Eğer enabled true gönderiliyorsa, minimum doğrulamalar:
-      // - en az 1 ödeme seçeneği (paymentOptions içinde true)
-      // - serviceArea.type + ilgili alan (radiusMeters / polygon)
-      // Not: DB’de eski değerler olabilir. Bu kontrol "bu request ile açıyorsan"
-      // minimum payload istemek için var.
-      if (value.enabled === true) {
-        const po = value.paymentOptions || {};
-        const anyPay = !!(po.online || po.cashOnDelivery || po.cardOnDelivery);
-        if (!anyPay) {
-          return helpers.error("any.custom", {
-            message: "enabled=true için en az 1 ödeme seçeneği (online/cashOnDelivery/cardOnDelivery) gereklidir.",
-          });
-        }
-        const emin = value.etaMinMinutes;
-  const emax = value.etaMaxMinutes;
-
-  if (!Number.isFinite(emin) || !Number.isFinite(emax)) {
-    return helpers.error("any.custom", {
-      message: "enabled=true için etaMinMinutes ve etaMaxMinutes gereklidir.",
-    });
-  }
-  if (emin <= 0 || emax <= 0 || emin > emax) {
-    return helpers.error("any.custom", {
-      message: "ETA geçersiz. etaMinMinutes > 0, etaMaxMinutes > 0 ve min <= max olmalı.",
-    });
-  }
-        const sa = value.serviceArea || {};
-        const t = sa.type;
-
-        if (!t) {
-          return helpers.error("any.custom", {
-            message: "enabled=true için serviceArea.type (radius|polygon) gereklidir.",
-          });
-        }
-
-        if (t === "radius") {
-          if (!Number.isFinite(sa.radiusMeters) || sa.radiusMeters <= 0) {
-            return helpers.error("any.custom", {
-              message: "serviceArea.type=radius için radiusMeters (>0) gereklidir.",
-            });
-          }
-        }
-
-        if (t === "polygon") {
-          if (!sa.polygon || sa.polygon.type !== "Polygon") {
-            return helpers.error("any.custom", {
-              message: "serviceArea.type=polygon için polygon (GeoJSON) gereklidir.",
-            });
-          }
-        }
-      }
-
-      return value;
-    }),
+  body: deliverySettingsBodySchema,
 });
 
 /* ---------- AVAILABILITY ---------- */

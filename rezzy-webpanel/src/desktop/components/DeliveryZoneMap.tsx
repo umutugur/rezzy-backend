@@ -1,5 +1,5 @@
 import React from "react";
-import { MapContainer, TileLayer, FeatureGroup } from "react-leaflet";
+import { MapContainer, TileLayer, FeatureGroup, useMap } from "react-leaflet";
 import { EditControl } from "react-leaflet-draw";
 import L from "leaflet";
 import type { LeafletEvent } from "leaflet";
@@ -18,6 +18,50 @@ type Props = {
   onChange: (poly: DeliveryPolygon | null) => void;
   height?: number;
 };
+
+function RecenterMap({ center, zoom }: { center: { lat: number; lng: number }; zoom?: number }) {
+  const map = useMap();
+
+  React.useEffect(() => {
+    if (!center?.lat || !center?.lng) return;
+    // Keep current zoom unless a specific zoom is provided
+    const z = typeof zoom === "number" ? zoom : map.getZoom();
+    map.setView([center.lat, center.lng], z, { animate: false });
+  }, [map, center.lat, center.lng, zoom]);
+
+  // When this component is rendered inside a tab/accordion, Leaflet can mount with zero size.
+  // This forces it to recompute layout.
+  React.useEffect(() => {
+    const t = window.setTimeout(() => {
+      try {
+        map.invalidateSize();
+      } catch {}
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [map]);
+
+  return null;
+}
+
+function FitPolygonBounds({ polygon }: { polygon: DeliveryPolygon | null }) {
+  const map = useMap();
+
+  React.useEffect(() => {
+    if (!polygon) return;
+
+    try {
+      const layer = L.polygon(geoToLeaflet(polygon));
+      const b = layer.getBounds();
+      if (b && b.isValid()) {
+        map.fitBounds(b, { padding: [16, 16] });
+      }
+    } catch {
+      // ignore
+    }
+  }, [map, polygon]);
+
+  return null;
+}
 
 function geoToLeaflet(poly: DeliveryPolygon): L.LatLngExpression[] {
   const ring = poly.coordinates[0] || [];
@@ -71,6 +115,8 @@ export default function DeliveryZoneMap({
         zoom={13}
         style={{ height: "100%", width: "100%", borderRadius: 12 }}
       >
+        <RecenterMap center={center} />
+        <FitPolygonBounds polygon={effective} />
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
