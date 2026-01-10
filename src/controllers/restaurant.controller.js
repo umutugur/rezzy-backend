@@ -991,6 +991,13 @@ export const getReservationQR = async (req, res, next) => {
 -------------------------------------------------- */
 export const updateDeliverySettings = async (req, res, next) => {
   try {
+    console.log("[updateDeliverySettings] content-type:", req.headers["content-type"]);
+    console.log("[updateDeliverySettings] raw body:", req.body);
+    console.log("[updateDeliverySettings] keys:", req.body ? Object.keys(req.body) : null);
+    console.log("[updateDeliverySettings] enabled typeof:", typeof req.body?.enabled, "value:", req.body?.enabled);
+    console.log("[updateDeliverySettings] serviceArea typeof:", typeof req.body?.serviceArea, "value:", req.body?.serviceArea);
+    console.log("[updateDeliverySettings] location typeof:", typeof req.body?.location, "value:", req.body?.location);
+
     const { id } = req.params;
 
     if (!canManageRestaurant(req.user, id)) {
