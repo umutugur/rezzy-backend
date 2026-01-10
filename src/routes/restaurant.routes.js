@@ -89,10 +89,6 @@ r.put(
   updateRestaurant
 );
 
-// ----------------------------
-// Panel spesifik güncellemeler
-// ----------------------------
-
 // ✅ Delivery (paket servis) ayarlarını güncelle
 r.put(
   "/:id/delivery-settings",
@@ -101,6 +97,10 @@ r.put(
   validate(updateDeliverySettingsSchema),
   updateDeliverySettings
 );
+
+// ----------------------------
+// Panel spesifik güncellemeler
+// ----------------------------
 
 // Çalışma saatlerini güncelle
 r.put(

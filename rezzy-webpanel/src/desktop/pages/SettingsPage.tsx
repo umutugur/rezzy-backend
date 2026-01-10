@@ -1505,6 +1505,108 @@ export const SettingsPage: React.FC = () => {
               Harita üzerinde poligon çizerek teslimat bölgelerini oluşturun. Her bölge için isim ve ücret belirleyebilirsiniz.
             </div>
 
+            {/* Bölge detayları */}
+            {deliveryZones.length > 0 ? (
+              <div className="mb-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Bölge adı</label>
+                  <input
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={deliveryZones[editingZoneIndex]?.name || ""}
+                    disabled={!deliveryEnabled}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setDeliveryZones((prev) => {
+                        const idx = Math.min(Math.max(0, editingZoneIndex), prev.length - 1);
+                        const next = [...prev];
+                        next[idx] = { ...next[idx], name: v };
+                        return next;
+                      });
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Teslimat ücreti</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={String(deliveryZones[editingZoneIndex]?.fee ?? 0)}
+                    disabled={!deliveryEnabled}
+                    onChange={(e) => {
+                      const n = Number(e.target.value) || 0;
+                      setDeliveryZones((prev) => {
+                        const idx = Math.min(Math.max(0, editingZoneIndex), prev.length - 1);
+                        const next = [...prev];
+                        next[idx] = { ...next[idx], fee: n };
+                        return next;
+                      });
+                    }}
+                  />
+                  <div className="mt-1 text-[11px] text-gray-500">Para birimi: {currencySymbol}</div>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Minimum sipariş tutarı</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={String(deliveryZones[editingZoneIndex]?.minOrder ?? 0)}
+                    disabled={!deliveryEnabled}
+                    onChange={(e) => {
+                      const n = Number(e.target.value) || 0;
+                      setDeliveryZones((prev) => {
+                        const idx = Math.min(Math.max(0, editingZoneIndex), prev.length - 1);
+                        const next = [...prev];
+                        next[idx] = { ...next[idx], minOrder: n };
+                        return next;
+                      });
+                    }}
+                  />
+                  <div className="mt-1 text-[11px] text-gray-500">Bu bölge için alt limit (0 = limitsiz)</div>
+                </div>
+
+                <div className="flex items-end gap-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={deliveryZones[editingZoneIndex]?.isActive ?? true}
+                      disabled={!deliveryEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setDeliveryZones((prev) => {
+                          const idx = Math.min(Math.max(0, editingZoneIndex), prev.length - 1);
+                          const next = [...prev];
+                          next[idx] = { ...next[idx], isActive: checked };
+                          return next;
+                        });
+                      }}
+                    />
+                    <span className="text-gray-700">Aktif</span>
+                  </label>
+
+                  <button
+                    type="button"
+                    className="ml-auto rounded-lg bg-red-50 hover:bg-red-100 text-red-700 px-3 py-2 text-sm disabled:opacity-60"
+                    disabled={!deliveryEnabled}
+                    onClick={() => {
+                      const idx = Math.min(Math.max(0, editingZoneIndex), deliveryZones.length - 1);
+                      setDeliveryZones((prev) => prev.filter((_, i) => i !== idx));
+                      setEditingZoneIndex((prevIdx) => {
+                        const nextLen = Math.max(0, deliveryZones.length - 1);
+                        if (nextLen === 0) return 0;
+                        return Math.min(prevIdx, nextLen - 1);
+                      });
+                    }}
+                  >
+                    Bölgeyi sil
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="mb-3 flex items-center gap-3 flex-wrap">
               <label className="text-sm text-gray-600">Haritada düzenlenen bölge:</label>
               <select
@@ -1519,7 +1621,7 @@ export const SettingsPage: React.FC = () => {
                   </option>
                 ))}
               </select>
-              {deliveryZones.length === 0 && (
+              {deliveryEnabled && deliveryZones.length === 0 && (
                 <span className="text-xs text-gray-500">Önce bir bölge ekleyin.</span>
               )}
             </div>
@@ -1561,12 +1663,8 @@ export const SettingsPage: React.FC = () => {
                     polygon: { type: "Polygon", coordinates: [] },
                   };
 
-                  setDeliveryZones((prev) => {
-                    const next = [...prev, newZone];
-                    // Yeni eklenen bölgeyi düzenlemeye al
-                    setEditingZoneIndex(next.length - 1);
-                    return next;
-                  });
+                  setDeliveryZones((prev) => [...prev, newZone]);
+                  setEditingZoneIndex(deliveryZones.length); // new zone index (current length)
                 }}
               >
                 Yeni Bölge

@@ -1033,8 +1033,35 @@ export const updateDeliverySettings = async (req, res, next) => {
     if (typeof etaMaxMinutes !== "undefined") $set["delivery.etaMaxMinutes"] = Math.max(0, etaMaxMinutes);
 
     // (opsiyonel) restoran pini de güncellenebilsin
-    if (body.location && Array.isArray(body.location.coordinates)) {
-      const [lng, lat] = body.location.coordinates.map(Number);
+    // Kabul edilen formatlar:
+    // 1) { location: { type: 'Point', coordinates: [lng, lat] } }
+    // 2) { location: { coordinates: [lng, lat] } }
+    // 3) { location: { lat, lng } } / { location: { latitude, longitude } }
+    // 4) { lat, lng } / { latitude, longitude } (root-level)
+    const readLngLat = (input) => {
+      if (!input || typeof input !== "object") return null;
+
+      // GeoJSON-ish
+      if (Array.isArray(input.coordinates) && input.coordinates.length === 2) {
+        const [lng, lat] = input.coordinates.map(Number);
+        if (
+          Number.isFinite(lng) &&
+          Number.isFinite(lat) &&
+          lng >= -180 &&
+          lng <= 180 &&
+          lat >= -90 &&
+          lat <= 90
+        ) {
+          return { lng, lat };
+        }
+      }
+
+      // { lat, lng } or { latitude, longitude }
+      const lngRaw = typeof input.lng !== "undefined" ? input.lng : input.longitude;
+      const latRaw = typeof input.lat !== "undefined" ? input.lat : input.latitude;
+      const lng = Number(lngRaw);
+      const lat = Number(latRaw);
+
       if (
         Number.isFinite(lng) &&
         Number.isFinite(lat) &&
@@ -1043,8 +1070,23 @@ export const updateDeliverySettings = async (req, res, next) => {
         lat >= -90 &&
         lat <= 90
       ) {
-        $set["location"] = { type: "Point", coordinates: [lng, lat] };
+        return { lng, lat };
       }
+
+      return null;
+    };
+
+    const locFromNested = readLngLat(body.location);
+    const locFromRoot = readLngLat({
+      lng: body.lng,
+      lat: body.lat,
+      longitude: body.longitude,
+      latitude: body.latitude,
+    });
+
+    const loc = locFromNested || locFromRoot;
+    if (loc) {
+      $set["location"] = { type: "Point", coordinates: [loc.lng, loc.lat] };
     }
 
     // serviceArea
@@ -1148,7 +1190,7 @@ export const updateDeliverySettings = async (req, res, next) => {
     }
 
     const updated = await Restaurant.findByIdAndUpdate(id, { $set }, { new: true })
-      .select("delivery location updatedAt")
+      .select("delivery location mapAddress updatedAt")
       .lean();
 
     if (!updated) return next({ status: 404, message: "Restaurant not found" });
@@ -1158,6 +1200,7 @@ export const updateDeliverySettings = async (req, res, next) => {
       restaurantId: id,
       delivery: updated.delivery,
       location: updated.location,
+      mapAddress: updated.mapAddress || null,
       updatedAt: updated.updatedAt,
     });
   } catch (e) {

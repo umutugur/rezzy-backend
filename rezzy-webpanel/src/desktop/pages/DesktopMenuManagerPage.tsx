@@ -1,6 +1,23 @@
 import React from "react";
 import MenuManagerPage from "../../pages/restaurant/MenuManager";
-import { RestaurantDesktopLayout } from "../layouts/RestaurantDesktopLayout";
+import {
+  RestaurantDesktopLayout,
+  useRestaurantDesktopCurrency,
+} from "../layouts/RestaurantDesktopLayout";
+
+function DesktopMenuInner() {
+  const { restaurantId } = useRestaurantDesktopCurrency();
+
+  if (!restaurantId) {
+    return (
+      <div className="p-4">
+        <div className="text-sm text-red-600">RestaurantId bulunamadı.</div>
+      </div>
+    );
+  }
+
+  return <MenuManagerPage restaurantId={restaurantId} />;
+}
 
 export function DesktopMenuManagerPage() {
   return (
@@ -9,7 +26,7 @@ export function DesktopMenuManagerPage() {
       title="Menü Yönetimi"
       subtitle="Kategoriler ve ürünler"
     >
-      <MenuManagerPage />
+      <DesktopMenuInner />
     </RestaurantDesktopLayout>
   );
 }
