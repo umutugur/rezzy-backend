@@ -369,26 +369,45 @@ export const SettingsPage: React.FC = () => {
 
   const saveDeliveryZonesMut = useMutation({
     mutationFn: async () => {
-      // Normalize a minimal payload the backend can persist
-      const payload = (deliveryZones || []).map((z) => ({
-        _id: z._id,
-        name: String(z.name || "").trim() || "Bölge",
-        fee: Number(z.fee || 0),
-        minOrder: z.minOrder == null ? undefined : Number(z.minOrder),
-        isActive: z.isActive ?? true,
-        polygon: {
-          type: "Polygon" as const,
-          coordinates: Array.isArray(z.polygon?.coordinates) ? z.polygon.coordinates : [],
-        },
-      }));
+      // Backend delivery-settings validator does NOT accept `deliveryEnabled` / `deliveryZones`.
+      // It expects `enabled` + `serviceArea` (+ optionally `location`).
 
-      await api.put(`/restaurants/${rid}/delivery-settings`, {
-        deliveryEnabled: !!deliveryEnabled,
-        deliveryZones: payload,
-      });
+      const zones = Array.isArray(deliveryZones) ? deliveryZones : [];
+      const active = zones.filter((z) => z?.isActive !== false);
+      const chosen = (active[0] ?? zones[0]) || null;
+
+      // We currently send a single polygon service area (first active zone).
+      const coordinates =
+        chosen && Array.isArray(chosen.polygon?.coordinates)
+          ? chosen.polygon.coordinates
+          : [];
+
+      const lng = Number(form.location?.coordinates?.[0] ?? 0);
+      const lat = Number(form.location?.coordinates?.[1] ?? 0);
+
+      const payload: any = {
+        enabled: !!deliveryEnabled,
+        serviceArea: {
+          type: "polygon",
+          polygon: {
+            type: "Polygon",
+            coordinates,
+          },
+        },
+      };
+
+      // If a location is present, persist it too (so the map can be centered/pinned consistently)
+      if (Number.isFinite(lng) && Number.isFinite(lat) && (lng !== 0 || lat !== 0)) {
+        payload.location = {
+          type: "Point",
+          coordinates: [lng, lat],
+        };
+      }
+
+      await api.put(`/restaurants/${rid}/delivery-settings`, payload);
     },
     onSuccess: () => {
-      showToast("Teslimat bölgeleri güncellendi", "success");
+      showToast("Teslimat ayarları güncellendi", "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
     onError: (e: any) =>

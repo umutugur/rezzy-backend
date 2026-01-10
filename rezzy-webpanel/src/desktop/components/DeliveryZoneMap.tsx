@@ -1,5 +1,5 @@
 import React from "react";
-import { MapContainer, TileLayer, FeatureGroup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, FeatureGroup, useMap, CircleMarker, Popup } from "react-leaflet";
 import { EditControl } from "react-leaflet-draw";
 import L from "leaflet";
 import type { LeafletEvent } from "leaflet";
@@ -121,6 +121,24 @@ export default function DeliveryZoneMap({
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+
+        {/* Restaurant location pin (always visible) */}
+        {Number.isFinite(center?.lat) && Number.isFinite(center?.lng) ? (
+          <CircleMarker
+            center={[center.lat, center.lng]}
+            radius={10}
+            pathOptions={{ weight: 2 }}
+          >
+            <Popup>
+              <div style={{ fontSize: 12 }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>Restoran Konumu</div>
+                <div>
+                  Lat: {center.lat.toFixed(6)} / Lng: {center.lng.toFixed(6)}
+                </div>
+              </div>
+            </Popup>
+          </CircleMarker>
+        ) : null}
 
         <FeatureGroup ref={fgRef}>
           <EditControl
