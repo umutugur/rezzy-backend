@@ -216,35 +216,44 @@ export const SettingsPage: React.FC = () => {
   const [selectedZoneId, setSelectedZoneId] = React.useState<string | null>(null);
 
   // === Helper: Varsayılan HEX grid hücreleri (Bölge 1..N) ===
-  const ensurePlaceholderZones = () => {
-    if (!deliveryEnabled) {
-      showToast("Önce paket servisi aktif edin", "error");
-      return;
-    }
+  const placeholderZonesCreatedRef = React.useRef(false);
 
-    setDeliveryZones((prev) => {
-      if (Array.isArray(prev) && prev.length > 0) {
-        showToast("Bölgeler zaten mevcut. Mevcut liste korunuyor.", "error");
-        return prev;
-      }
+  const createPlaceholderZones = React.useCallback((): DeliveryZoneState[] => {
+    // Getir benzeri başlangıç grid’i (merkez + 2 halka ≈ 19 hücre)
+    return Array.from({ length: 19 }, (_, i) => ({
+      id: `hex-${i + 1}`,
+      name: `Bölge ${i + 1}`,
+      isActive: false,
+      minOrderAmount: 0,
+      feeAmount: 0,
+    }));
+  }, []);
 
-      // Getir benzeri başlangıç grid’i (merkez + 2 halka ≈ 19 hücre)
-      const created: DeliveryZoneState[] = Array.from({ length: 19 }, (_, i) => ({
-        id: `hex-${i + 1}`,
-        name: `Bölge ${i + 1}`,
-        isActive: false,
-        minOrderAmount: 0,
-        feeAmount: 0,
-      }));
+  // Delivery map center (prefer saved restaurant location)
+  const deliveryMapCenter = React.useMemo(() => {
+    const lng = Number((form as any)?.location?.coordinates?.[0] ?? 0);
+    const lat = Number((form as any)?.location?.coordinates?.[1] ?? 0);
+    const hasLoc = Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0);
+    return hasLoc ? { lat, lng } : undefined;
+  }, [form]);
 
+  // ✅ Paket servis açık + konum var + bölgeler yoksa, placeholder grid otomatik oluştur
+  React.useEffect(() => {
+    if (!deliveryEnabled) return;
+    if (!deliveryMapCenter) return;
+    if (deliveryZones.length > 0) return;
+
+    setDeliveryZones(createPlaceholderZones());
+
+    // Kullanıcıyı her render'da rahatsız etmemek için sadece ilk seferde bilgi ver
+    if (!placeholderZonesCreatedRef.current) {
+      placeholderZonesCreatedRef.current = true;
       showToast(
-        "Varsayılan teslimat bölgeleri oluşturuldu. Haritadan açmak istediğiniz bölgeleri aktif edin.",
+        "Varsayılan teslimat bölgeleri oluşturuldu. Haritada tıklayıp aktif/pasif yapabilir ve düzenleyebilirsiniz.",
         "success"
       );
-
-      return created;
-    });
-  };
+    }
+  }, [deliveryEnabled, deliveryMapCenter, deliveryZones.length, createPlaceholderZones]);
 
   // 🔹 QR poster indirme durumları
   const [isDownloadingAllPosters, setIsDownloadingAllPosters] = React.useState(false);
@@ -434,7 +443,7 @@ export const SettingsPage: React.FC = () => {
       if (deliveryEnabled) {
         if (!Number.isFinite(lng) || !Number.isFinite(lat) || (lng === 0 && lat === 0)) {
           showToast("Paket servis için önce restoran konumunu kaydedin (Lat/Lng)", "error");
-          return;
+          throw new Error("Missing restaurant location for delivery");
         }
       }
 
@@ -465,17 +474,20 @@ export const SettingsPage: React.FC = () => {
         payload.location = { type: "Point", coordinates: [lng, lat] };
       }
 
-      await api.put(`/restaurants/${rid}/delivery-zones`, payload);
+      await api.put(`/restaurants/${rid}/delivery-settings`, payload);
     },
     onSuccess: () => {
       showToast("Teslimat bölgeleri güncellendi", "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
-    onError: (e: any) =>
-      showToast(
-        e?.response?.data?.message || e?.message || "Teslimat bölgeleri kaydedilemedi",
-        "error"
-      ),
+    onError: (e: any) => {
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        (typeof e === "string" ? e : null) ||
+        "Teslimat bölgeleri kaydedilemedi";
+      showToast(msg, "error");
+    },
   });
 
   const saveGeneralMut = useMutation({
@@ -672,13 +684,6 @@ export const SettingsPage: React.FC = () => {
     </div>
   );
 
-  // Delivery map center (prefer saved restaurant location)
-  const deliveryMapCenter = React.useMemo(() => {
-    const lng = Number((form as any)?.location?.coordinates?.[0] ?? 0);
-    const lat = Number((form as any)?.location?.coordinates?.[1] ?? 0);
-    const hasLoc = Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0);
-    return hasLoc ? { lat, lng } : undefined;
-  }, [form]);
 
   // --- Delivery zone helpers (map/table shared) ---
   const toggleZoneActive = React.useCallback((zoneId: string) => {
@@ -1708,61 +1713,6 @@ export const SettingsPage: React.FC = () => {
                   </div>
                 </div>
               )}
-            </div>
-            {/* Varsayılan grid hücrelerini oluştur */}
-            <div className="mb-3">
-              <button
-                type="button"
-                className="rounded-lg bg-gray-100 hover:bg-gray-200 px-4 py-2"
-                disabled={!deliveryEnabled}
-                onClick={() => ensurePlaceholderZones()}
-              >
-                Varsayılan Grid'den Hücreleri Oluştur
-              </button>
-            </div>
-            {/* Zone listesi */}
-            <div className="overflow-x-auto mb-4">
-              <table className="min-w-full border rounded-lg text-sm">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-2 py-1 border">ID</th>
-                    <th className="px-2 py-1 border">Ad</th>
-                    <th className="px-2 py-1 border">Aktif</th>
-                    <th className="px-2 py-1 border">Min Sipariş</th>
-                    <th className="px-2 py-1 border">Teslimat Ücreti</th>
-                    <th className="px-2 py-1 border"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deliveryZones.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="text-center text-gray-400 py-2">
-                        Hiç bölge yok.
-                      </td>
-                    </tr>
-                  )}
-                  {deliveryZones.map((z) => (
-                    <tr key={z.id}>
-                      <td className="px-2 py-1 border font-mono">{z.id}</td>
-                      <td className="px-2 py-1 border">{z.name || ""}</td>
-                      <td className="px-2 py-1 border text-center">
-                        {z.isActive ? "✓" : ""}
-                      </td>
-                      <td className="px-2 py-1 border">{z.minOrderAmount}</td>
-                      <td className="px-2 py-1 border">{z.feeAmount} {currencySymbol}</td>
-                      <td className="px-2 py-1 border">
-                        <button
-                          type="button"
-                          className="rounded bg-brand-50 hover:bg-brand-100 text-brand-700 px-2 py-1 text-xs"
-                          onClick={() => selectZone(z.id)}
-                        >
-                          Düzenle
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
             {/* Seçili zone editörü */}
             {selectedZoneId && (
