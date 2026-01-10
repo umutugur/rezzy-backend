@@ -947,63 +947,133 @@ export const updateDeliveryZones = async (req, res, next) => {
     // Accept both payload shapes:
     // 1) { enabled, gridSettings, zones, location }
     // 2) { delivery: { enabled, gridSettings, zones }, location }
-    const input = body && typeof body === "object" && body.delivery && typeof body.delivery === "object"
-      ? { ...body.delivery, location: body.location ?? body.delivery.location }
-      : body;
+    const input =
+      body &&
+      typeof body === "object" &&
+      body.delivery &&
+      typeof body.delivery === "object"
+        ? { ...body.delivery, location: body.location ?? body.delivery.location }
+        : body;
+
+    // Helpers: permissive parsing (frontend may send strings)
+    const toBool = (v) => {
+      if (typeof v === "boolean") return v;
+      if (typeof v === "string") {
+        const s = v.trim().toLowerCase();
+        if (s === "true" || s === "1" || s === "yes" || s === "on") return true;
+        if (s === "false" || s === "0" || s === "no" || s === "off") return false;
+      }
+      return undefined;
+    };
+
+    const toNum = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    };
+
+    const normZoneId = (z) => {
+      const raw = z?.id ?? z?.hexId ?? z?._id ?? z?.zoneId ?? "";
+      const id = String(raw || "").trim();
+      return id || null;
+    };
+
+    const normLocation = (loc) => {
+      // Accept GeoJSON { type: 'Point', coordinates: [lng, lat] }
+      if (loc && typeof loc === "object" && Array.isArray(loc.coordinates)) {
+        const [lng, lat] = loc.coordinates.map(Number);
+        if (
+          Number.isFinite(lng) &&
+          Number.isFinite(lat) &&
+          lng >= -180 &&
+          lng <= 180 &&
+          lat >= -90 &&
+          lat <= 90
+        ) {
+          return { type: "Point", coordinates: [lng, lat] };
+        }
+      }
+
+      // Accept { lat, lng } or { latitude, longitude }
+      if (loc && typeof loc === "object") {
+        const lat = Number(loc.lat ?? loc.latitude);
+        const lng = Number(loc.lng ?? loc.longitude);
+        if (
+          Number.isFinite(lng) &&
+          Number.isFinite(lat) &&
+          lng >= -180 &&
+          lng <= 180 &&
+          lat >= -90 &&
+          lat <= 90
+        ) {
+          return { type: "Point", coordinates: [lng, lat] };
+        }
+      }
+
+      return undefined;
+    };
 
     const $set = {};
 
-    // enabled
-    if (typeof input.enabled === "boolean") {
-      $set["delivery.enabled"] = input.enabled;
+    // enabled (accept boolean or string)
+    const enabled = toBool(input.enabled);
+    if (typeof enabled === "boolean") {
+      $set["delivery.enabled"] = enabled;
     }
 
     // gridSettings
     if (input.gridSettings && typeof input.gridSettings === "object") {
       const gs = input.gridSettings;
-      const cellSizeMeters = Number(gs.cellSizeMeters);
-      const radiusMeters = Number(gs.radiusMeters);
+      const cellSizeMeters = toNum(gs.cellSizeMeters);
+      const radiusMeters = toNum(gs.radiusMeters);
       const orientationRaw = typeof gs.orientation === "string" ? gs.orientation.trim() : "";
       const orientation = orientationRaw === "pointy" ? "pointy" : "flat";
 
-      if (Number.isFinite(cellSizeMeters)) $set["delivery.gridSettings.cellSizeMeters"] = Math.max(50, cellSizeMeters);
-      if (Number.isFinite(radiusMeters)) $set["delivery.gridSettings.radiusMeters"] = Math.max(200, radiusMeters);
+      if (typeof cellSizeMeters !== "undefined")
+        $set["delivery.gridSettings.cellSizeMeters"] = Math.max(50, cellSizeMeters);
+      if (typeof radiusMeters !== "undefined")
+        $set["delivery.gridSettings.radiusMeters"] = Math.max(200, radiusMeters);
       $set["delivery.gridSettings.orientation"] = orientation;
     }
 
     // zones
-    if (Array.isArray(input.zones)) {
-      const zones = input.zones
+    // IMPORTANT: Do not wipe existing zones on accidental empty payload.
+    // Only overwrite zones if we receive a NON-empty array, or if clearZones=true is explicitly provided.
+    const clearZones = toBool(body.clearZones ?? input.clearZones) === true;
+    const incomingZonesRaw =
+      Array.isArray(input.zones) ? input.zones : Array.isArray(input.deliveryZones) ? input.deliveryZones : null;
+
+    if (incomingZonesRaw) {
+      const zones = incomingZonesRaw
         .map((z) => {
           if (!z || typeof z !== "object") return null;
-          const zid = String(z.id || "").trim();
+          const zid = normZoneId(z);
           if (!zid) return null;
+
+          const isActive = toBool(z.isActive);
+          const minOrderAmount = toNum(z.minOrderAmount ?? z.minOrder ?? z.minOrderValue);
+          const feeAmount = toNum(z.feeAmount ?? z.fee ?? z.deliveryFee);
+
           return {
             id: zid,
             name: typeof z.name === "string" ? z.name : undefined,
-            isActive: z.isActive !== false,
-            minOrderAmount: Math.max(0, Number(z.minOrderAmount) || 0),
-            feeAmount: Math.max(0, Number(z.feeAmount) || 0),
+            isActive: typeof isActive === "boolean" ? isActive : z.isActive !== false,
+            minOrderAmount: Math.max(0, typeof minOrderAmount === "undefined" ? 0 : minOrderAmount),
+            feeAmount: Math.max(0, typeof feeAmount === "undefined" ? 0 : feeAmount),
           };
         })
         .filter(Boolean);
 
-      $set["delivery.zones"] = zones;
+      if (zones.length > 0) {
+        $set["delivery.zones"] = zones;
+      } else if (clearZones) {
+        $set["delivery.zones"] = [];
+      }
     }
 
     // optional restaurant location update
-    if (input.location && typeof input.location === "object" && Array.isArray(input.location.coordinates)) {
-      const [lng, lat] = input.location.coordinates.map(Number);
-      if (
-        Number.isFinite(lng) &&
-        Number.isFinite(lat) &&
-        lng >= -180 &&
-        lng <= 180 &&
-        lat >= -90 &&
-        lat <= 90
-      ) {
-        $set["location"] = { type: "Point", coordinates: [lng, lat] };
-      }
+    const loc = normLocation(input.location ?? body.location);
+    if (loc) {
+      $set["location"] = loc;
     }
 
     if (Object.keys($set).length === 0) {
