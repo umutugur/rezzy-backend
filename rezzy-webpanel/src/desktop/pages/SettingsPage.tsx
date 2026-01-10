@@ -72,8 +72,23 @@ type Restaurant = {
   googleMapsUrl?: string;
   location?: GeoPoint;
 
-  deliveryEnabled?: boolean;
-  deliveryZones?: DeliveryZone[];
+  delivery?: {
+  enabled?: boolean;
+  paymentOptions?: {
+    online?: boolean;
+    cashOnDelivery?: boolean;
+    cardOnDelivery?: boolean;
+  };
+  minOrderAmount?: number;
+  feeAmount?: number;
+  etaMinMinutes?: number;
+  etaMaxMinutes?: number;
+  serviceArea?: {
+    type?: "radius" | "polygon";
+    radiusMeters?: number;
+    polygon?: GeoPolygon;
+  };
+};
   menus?: any[];
   tables?: TableItem[];
   openingHours?: OpeningHour[];
@@ -264,12 +279,26 @@ export const SettingsPage: React.FC = () => {
           : DEFAULT_POLICIES.checkinWindowAfterMinutes,
     });
 
-    setDeliveryEnabled(!!(data as any).deliveryEnabled);
-    setDeliveryZones(
-      Array.isArray((data as any).deliveryZones)
-        ? ((data as any).deliveryZones as DeliveryZone[])
-        : []
-    );
+   const enabled = !!data.delivery?.enabled;
+setDeliveryEnabled(enabled);
+
+// Backend tek bir serviceArea tutuyor (polygon/radius).
+// UI ise "zones" bekliyor. Bu yüzden tek zone'a mapliyoruz.
+const poly =
+  data.delivery?.serviceArea?.type === "polygon"
+    ? data.delivery?.serviceArea?.polygon
+    : undefined;
+
+const fallbackZone: DeliveryZone = {
+  name: "Bölge 1",
+  fee: Number(data.delivery?.feeAmount ?? 0),
+  minOrder: Number(data.delivery?.minOrderAmount ?? 0),
+  isActive: true,
+  polygon: poly ?? { type: "Polygon", coordinates: [] },
+};
+
+setDeliveryZones(poly ? [fallbackZone] : []);
+setEditingZoneIndex(0);
     setEditingZoneIndex(0);
   }, [data]);
 
@@ -385,17 +414,19 @@ export const SettingsPage: React.FC = () => {
       const lng = Number(form.location?.coordinates?.[0] ?? 0);
       const lat = Number(form.location?.coordinates?.[1] ?? 0);
 
-      const payload: any = {
-        enabled: !!deliveryEnabled,
-        serviceArea: {
-          type: "polygon",
-          polygon: {
-            type: "Polygon",
-            coordinates,
-          },
-        },
-      };
+      const payload: any = { enabled: !!deliveryEnabled };
 
+if (deliveryEnabled) {
+  payload.serviceArea = {
+    type: "polygon",
+    polygon: { type: "Polygon", coordinates },
+  };
+}
+
+// location varsa yine gönder
+if (Number.isFinite(lng) && Number.isFinite(lat) && (lng !== 0 || lat !== 0)) {
+  payload.location = { type: "Point", coordinates: [lng, lat] };
+}
       // If a location is present, persist it too (so the map can be centered/pinned consistently)
       if (Number.isFinite(lng) && Number.isFinite(lat) && (lng !== 0 || lat !== 0)) {
         payload.location = {
