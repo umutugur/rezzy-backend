@@ -20,7 +20,7 @@ import {
 import { showToast } from "../../ui/Toast";
 import { parseLatLngFromGoogleMaps } from "../../utils/geo";
 import { Card } from "../../components/Card";
-import DeliveryZoneMap from "../components/DeliveryZoneMap";
+// import DeliveryZoneMap from "../components/DeliveryZoneMap";
 
 // === Tipler ===
 type OpeningHour = { day: number; open: string; close: string; isClosed?: boolean };
@@ -39,15 +39,18 @@ type Policies = {
 
 type GeoPoint = { type?: "Point"; coordinates: [number, number] }; // [lng, lat]
 
-type GeoPolygon = { type: "Polygon"; coordinates: [number, number][][] }; // [[[lng,lat],...]]
+type DeliveryGridSettings = {
+  cellSizeMeters: number; // hex radius/size in meters
+  radiusMeters: number; // how far to generate grid from restaurant center
+  orientation?: "flat" | "pointy";
+};
 
-type DeliveryZone = {
-  _id?: string;
-  name: string;
-  fee: number;
-  minOrder?: number;
-  isActive?: boolean;
-  polygon: GeoPolygon;
+type DeliveryZoneState = {
+  id: string; // deterministic hex id (q:r or similar)
+  name?: string; // optional label shown in UI (e.g., Bölge 1)
+  isActive: boolean;
+  minOrderAmount: number;
+  feeAmount: number;
 };
 
 type Restaurant = {
@@ -66,29 +69,27 @@ type Restaurant = {
   ibanName?: string;
   bankName?: string;
 
-  // konum
   mapAddress?: string;
   placeId?: string;
   googleMapsUrl?: string;
   location?: GeoPoint;
 
   delivery?: {
-  enabled?: boolean;
-  paymentOptions?: {
-    online?: boolean;
-    cashOnDelivery?: boolean;
-    cardOnDelivery?: boolean;
+    enabled?: boolean;
+    paymentOptions?: {
+      online?: boolean;
+      cashOnDelivery?: boolean;
+      cardOnDelivery?: boolean;
+    };
+    // Global defaults (optional)
+    minOrderAmount?: number;
+    feeAmount?: number;
+    // Hex grid settings
+    gridSettings?: DeliveryGridSettings;
+    // Per-hex overrides
+    zones?: DeliveryZoneState[];
   };
-  minOrderAmount?: number;
-  feeAmount?: number;
-  etaMinMinutes?: number;
-  etaMaxMinutes?: number;
-  serviceArea?: {
-    type?: "radius" | "polygon";
-    radiusMeters?: number;
-    polygon?: GeoPolygon;
-  };
-};
+
   menus?: any[];
   tables?: TableItem[];
   openingHours?: OpeningHour[];
@@ -206,8 +207,44 @@ export const SettingsPage: React.FC = () => {
   const [policies, setPolicies] = React.useState<Policies>(DEFAULT_POLICIES);
   const [newBlackout, setNewBlackout] = React.useState("");
   const [deliveryEnabled, setDeliveryEnabled] = React.useState<boolean>(false);
-  const [deliveryZones, setDeliveryZones] = React.useState<DeliveryZone[]>([]);
-  const [editingZoneIndex, setEditingZoneIndex] = React.useState<number>(0);
+  const [deliveryZones, setDeliveryZones] = React.useState<DeliveryZoneState[]>([]);
+  const [gridSettings, setGridSettings] = React.useState<DeliveryGridSettings>({
+    cellSizeMeters: 450,
+    radiusMeters: 3000,
+    orientation: "flat",
+  });
+  const [selectedZoneId, setSelectedZoneId] = React.useState<string | null>(null);
+
+  // === Helper: Varsayılan HEX grid hücreleri (Bölge 1..N) ===
+  const ensurePlaceholderZones = () => {
+    if (!deliveryEnabled) {
+      showToast("Önce paket servisi aktif edin", "error");
+      return;
+    }
+
+    setDeliveryZones((prev) => {
+      if (Array.isArray(prev) && prev.length > 0) {
+        showToast("Bölgeler zaten mevcut. Mevcut liste korunuyor.", "error");
+        return prev;
+      }
+
+      // Getir benzeri başlangıç grid’i (merkez + 2 halka ≈ 19 hücre)
+      const created: DeliveryZoneState[] = Array.from({ length: 19 }, (_, i) => ({
+        id: `hex-${i + 1}`,
+        name: `Bölge ${i + 1}`,
+        isActive: false,
+        minOrderAmount: 0,
+        feeAmount: 0,
+      }));
+
+      showToast(
+        "Varsayılan teslimat bölgeleri oluşturuldu. Haritadan açmak istediğiniz bölgeleri aktif edin.",
+        "success"
+      );
+
+      return created;
+    });
+  };
 
   // 🔹 QR poster indirme durumları
   const [isDownloadingAllPosters, setIsDownloadingAllPosters] = React.useState(false);
@@ -227,7 +264,6 @@ export const SettingsPage: React.FC = () => {
       iban: data.iban,
       ibanName: data.ibanName,
       bankName: data.bankName,
-
       mapAddress: data.mapAddress ?? "",
       placeId: data.placeId ?? "",
       googleMapsUrl: data.googleMapsUrl ?? "",
@@ -279,27 +315,20 @@ export const SettingsPage: React.FC = () => {
           : DEFAULT_POLICIES.checkinWindowAfterMinutes,
     });
 
-   const enabled = !!data.delivery?.enabled;
-setDeliveryEnabled(enabled);
-
-// Backend tek bir serviceArea tutuyor (polygon/radius).
-// UI ise "zones" bekliyor. Bu yüzden tek zone'a mapliyoruz.
-const poly =
-  data.delivery?.serviceArea?.type === "polygon"
-    ? data.delivery?.serviceArea?.polygon
-    : undefined;
-
-const fallbackZone: DeliveryZone = {
-  name: "Bölge 1",
-  fee: Number(data.delivery?.feeAmount ?? 0),
-  minOrder: Number(data.delivery?.minOrderAmount ?? 0),
-  isActive: true,
-  polygon: poly ?? { type: "Polygon", coordinates: [] },
-};
-
-setDeliveryZones(poly ? [fallbackZone] : []);
-setEditingZoneIndex(0);
-    setEditingZoneIndex(0);
+    setDeliveryEnabled(!!data.delivery?.enabled);
+    setGridSettings({
+      cellSizeMeters: Number(data.delivery?.gridSettings?.cellSizeMeters ?? 450),
+      radiusMeters: Number(data.delivery?.gridSettings?.radiusMeters ?? 3000),
+      orientation: (data.delivery?.gridSettings?.orientation === "pointy" ? "pointy" : "flat"),
+    });
+    setDeliveryZones(Array.isArray(data.delivery?.zones) ? data.delivery!.zones!.map(z => ({
+      id: String((z as any).id ?? ""),
+      name: typeof (z as any).name === "string" ? (z as any).name : undefined,
+      isActive: (z as any).isActive !== false,
+      minOrderAmount: Number((z as any).minOrderAmount ?? 0),
+      feeAmount: Number((z as any).feeAmount ?? 0),
+    })).filter(z => !!z.id) : []);
+    setSelectedZoneId(null);
   }, [data]);
 
   // === Yardımcı: Content-Disposition başlığından dosya adı çek ===
@@ -318,7 +347,8 @@ setEditingZoneIndex(0);
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+    // Some browsers can cancel the download if the object URL is revoked too quickly.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   // === Tek masa için A5 QR poster indir ===
@@ -398,47 +428,47 @@ setEditingZoneIndex(0);
 
   const saveDeliveryZonesMut = useMutation({
     mutationFn: async () => {
-      // Backend delivery-settings validator does NOT accept `deliveryEnabled` / `deliveryZones`.
-      // It expects `enabled` + `serviceArea` (+ optionally `location`).
-
-      const zones = Array.isArray(deliveryZones) ? deliveryZones : [];
-      const active = zones.filter((z) => z?.isActive !== false);
-      const chosen = (active[0] ?? zones[0]) || null;
-
-      // We currently send a single polygon service area (first active zone).
-      const coordinates =
-        chosen && Array.isArray(chosen.polygon?.coordinates)
-          ? chosen.polygon.coordinates
-          : [];
-
       const lng = Number(form.location?.coordinates?.[0] ?? 0);
       const lat = Number(form.location?.coordinates?.[1] ?? 0);
 
-      const payload: any = { enabled: !!deliveryEnabled };
-
-if (deliveryEnabled) {
-  payload.serviceArea = {
-    type: "polygon",
-    polygon: { type: "Polygon", coordinates },
-  };
-}
-
-// location varsa yine gönder
-if (Number.isFinite(lng) && Number.isFinite(lat) && (lng !== 0 || lat !== 0)) {
-  payload.location = { type: "Point", coordinates: [lng, lat] };
-}
-      // If a location is present, persist it too (so the map can be centered/pinned consistently)
-      if (Number.isFinite(lng) && Number.isFinite(lat) && (lng !== 0 || lat !== 0)) {
-        payload.location = {
-          type: "Point",
-          coordinates: [lng, lat],
-        };
+      if (deliveryEnabled) {
+        if (!Number.isFinite(lng) || !Number.isFinite(lat) || (lng === 0 && lat === 0)) {
+          showToast("Paket servis için önce restoran konumunu kaydedin (Lat/Lng)", "error");
+          return;
+        }
       }
 
-      await api.put(`/restaurants/${rid}/delivery-settings`, payload);
+      const payload: any = {
+        enabled: !!deliveryEnabled,
+        gridSettings: {
+          cellSizeMeters: Math.max(50, Number(gridSettings.cellSizeMeters) || 450),
+          radiusMeters: Math.max(200, Number(gridSettings.radiusMeters) || 3000),
+          orientation: gridSettings.orientation === "pointy" ? "pointy" : "flat",
+        },
+        zones: Array.isArray(deliveryZones)
+          ? deliveryZones.map((z) => ({
+              id: String(z.id),
+              name: typeof z.name === "string" ? z.name : undefined,
+              isActive: z.isActive !== false,
+              minOrderAmount: Math.max(0, Number(z.minOrderAmount) || 0),
+              feeAmount: Math.max(0, Number(z.feeAmount) || 0),
+            }))
+          : [],
+      };
+
+      // also update restaurant location if we have it
+      if (
+        Number.isFinite(lng) &&
+        Number.isFinite(lat) &&
+        (lng !== 0 || lat !== 0)
+      ) {
+        payload.location = { type: "Point", coordinates: [lng, lat] };
+      }
+
+      await api.put(`/restaurants/${rid}/delivery-zones`, payload);
     },
     onSuccess: () => {
-      showToast("Teslimat ayarları güncellendi", "success");
+      showToast("Teslimat bölgeleri güncellendi", "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
     onError: (e: any) =>
@@ -954,7 +984,15 @@ if (Number.isFinite(lng) && Number.isFinite(lat) && (lng !== 0 || lat !== 0)) {
             {/* === Logo Yükleme Alanı === */}
             <div className="mb-4 border p-3 rounded-lg bg-gray-50">
               <div className="mb-2 font-medium">Restoran Logosu</div>
-              <input type="file" accept="image/*" onChange={(e)=> uploadLogoMut.mutate(e.target.files?.[0] as File)} />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadLogoMut.mutate(f);
+                  e.currentTarget.value = "";
+                }}
+              />
               {uploadLogoMut.isPending && <span className="text-sm text-gray-500 ml-2">Yükleniyor…</span>}
               {data?.logo && (
                 <div className="mt-3">
@@ -1543,6 +1581,7 @@ if (Number.isFinite(lng) && Number.isFinite(lat) && (lng !== 0 || lat !== 0)) {
         {/* === TESLİMAT BÖLGELERİ === */}
         {tab === "delivery" && (
           <Card title="Teslimat Bölgeleri">
+            {/* Paket servis aktif */}
             <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -1552,183 +1591,225 @@ if (Number.isFinite(lng) && Number.isFinite(lat) && (lng !== 0 || lat !== 0)) {
                 />
                 <span className="text-gray-700 font-medium">Paket servis aktif</span>
               </label>
-
               {!deliveryEnabled && (
                 <span className="text-xs text-gray-500">
                   Paket servis kapalıyken teslimat bölgeleri zorunlu değildir.
                 </span>
               )}
             </div>
-            <div className="text-sm text-gray-600 mb-4">
-              Harita üzerinde poligon çizerek teslimat bölgelerini oluşturun. Her bölge için isim ve ücret belirleyebilirsiniz.
-            </div>
-
-            {/* Bölge detayları */}
-            {deliveryZones.length > 0 ? (
-              <div className="mb-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+            {/* Grid Ayarları */}
+            <div className="border rounded-lg p-3 mb-4 bg-gray-50">
+              <div className="font-medium mb-2">Grid Ayarları</div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Bölge adı</label>
-                  <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    value={deliveryZones[editingZoneIndex]?.name || ""}
-                    disabled={!deliveryEnabled}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setDeliveryZones((prev) => {
-                        const idx = Math.min(Math.max(0, editingZoneIndex), prev.length - 1);
-                        const next = [...prev];
-                        next[idx] = { ...next[idx], name: v };
-                        return next;
-                      });
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Teslimat ücreti</label>
+                  <label className="block text-xs text-gray-500 mb-1">Hücre Boyutu (metre)</label>
                   <input
                     type="number"
-                    min={0}
+                    min={50}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    value={String(deliveryZones[editingZoneIndex]?.fee ?? 0)}
+                    value={gridSettings.cellSizeMeters}
                     disabled={!deliveryEnabled}
-                    onChange={(e) => {
-                      const n = Number(e.target.value) || 0;
-                      setDeliveryZones((prev) => {
-                        const idx = Math.min(Math.max(0, editingZoneIndex), prev.length - 1);
-                        const next = [...prev];
-                        next[idx] = { ...next[idx], fee: n };
-                        return next;
-                      });
-                    }}
+                    onChange={e =>
+                      setGridSettings(g => ({
+                        ...g,
+                        cellSizeMeters: Number(e.target.value) || 450,
+                      }))
+                    }
                   />
-                  <div className="mt-1 text-[11px] text-gray-500">Para birimi: {currencySymbol}</div>
                 </div>
-
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Minimum sipariş tutarı</label>
+                  <label className="block text-xs text-gray-500 mb-1">Grid Yarıçapı (metre)</label>
                   <input
                     type="number"
-                    min={0}
+                    min={200}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    value={String(deliveryZones[editingZoneIndex]?.minOrder ?? 0)}
+                    value={gridSettings.radiusMeters}
                     disabled={!deliveryEnabled}
-                    onChange={(e) => {
-                      const n = Number(e.target.value) || 0;
-                      setDeliveryZones((prev) => {
-                        const idx = Math.min(Math.max(0, editingZoneIndex), prev.length - 1);
-                        const next = [...prev];
-                        next[idx] = { ...next[idx], minOrder: n };
-                        return next;
-                      });
-                    }}
+                    onChange={e =>
+                      setGridSettings(g => ({
+                        ...g,
+                        radiusMeters: Number(e.target.value) || 3000,
+                      }))
+                    }
                   />
-                  <div className="mt-1 text-[11px] text-gray-500">Bu bölge için alt limit (0 = limitsiz)</div>
                 </div>
-
-                <div className="flex items-end gap-3">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={deliveryZones[editingZoneIndex]?.isActive ?? true}
-                      disabled={!deliveryEnabled}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setDeliveryZones((prev) => {
-                          const idx = Math.min(Math.max(0, editingZoneIndex), prev.length - 1);
-                          const next = [...prev];
-                          next[idx] = { ...next[idx], isActive: checked };
-                          return next;
-                        });
-                      }}
-                    />
-                    <span className="text-gray-700">Aktif</span>
-                  </label>
-
-                  <button
-                    type="button"
-                    className="ml-auto rounded-lg bg-red-50 hover:bg-red-100 text-red-700 px-3 py-2 text-sm disabled:opacity-60"
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Grid Yönelimi</label>
+                  <select
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={gridSettings.orientation}
                     disabled={!deliveryEnabled}
-                    onClick={() => {
-                      const idx = Math.min(Math.max(0, editingZoneIndex), deliveryZones.length - 1);
-                      setDeliveryZones((prev) => prev.filter((_, i) => i !== idx));
-                      setEditingZoneIndex((prevIdx) => {
-                        const nextLen = Math.max(0, deliveryZones.length - 1);
-                        if (nextLen === 0) return 0;
-                        return Math.min(prevIdx, nextLen - 1);
-                      });
-                    }}
+                    onChange={e =>
+                      setGridSettings(g => ({
+                        ...g,
+                        orientation: e.target.value === "pointy" ? "pointy" : "flat",
+                      }))
+                    }
                   >
-                    Bölgeyi sil
-                  </button>
+                    <option value="flat">Düz (Flat)</option>
+                    <option value="pointy">Sivri (Pointy)</option>
+                  </select>
                 </div>
               </div>
-            ) : null}
-
-            <div className="mb-3 flex items-center gap-3 flex-wrap">
-              <label className="text-sm text-gray-600">Haritada düzenlenen bölge:</label>
-              <select
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={String(editingZoneIndex)}
-                onChange={(e) => setEditingZoneIndex(Number(e.target.value) || 0)}
-                disabled={!deliveryEnabled || deliveryZones.length === 0}
-              >
-                {deliveryZones.map((z, idx) => (
-                  <option key={z._id || `${z.name}-${idx}`} value={String(idx)}>
-                    {z.name || `Bölge ${idx + 1}`}
-                  </option>
-                ))}
-              </select>
-              {deliveryEnabled && deliveryZones.length === 0 && (
-                <span className="text-xs text-gray-500">Önce bir bölge ekleyin.</span>
-              )}
             </div>
-
-            <div className={"rounded-xl border overflow-hidden " + (!deliveryEnabled ? "opacity-60 pointer-events-none" : "")}>
-              <DeliveryZoneMap
-                center={deliveryMapCenter}
-                value={deliveryZones[editingZoneIndex]?.polygon ?? null}
-                onChange={(poly: any) => {
-                  if (!deliveryEnabled) return;
-                  setDeliveryZones((prev) => {
-                    if (!prev.length) return prev;
-                    const idx = Math.min(Math.max(0, editingZoneIndex), prev.length - 1);
-                    const next = [...prev];
-                    next[idx] = {
-                      ...next[idx],
-                      polygon: poly ?? { type: "Polygon", coordinates: [] },
-                    };
-                    return next;
-                  });
-                }}
-              />
-            </div>
-
-            <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
+            {/* Varsayılan grid hücrelerini oluştur */}
+            <div className="mb-3">
               <button
                 type="button"
                 className="rounded-lg bg-gray-100 hover:bg-gray-200 px-4 py-2"
-                onClick={() => {
-                  if (!deliveryEnabled) {
-                    showToast("Önce paket servisi aktif edin", "error");
-                    return;
-                  }
-
-                  const newZone: DeliveryZone = {
-                    name: `Bölge ${deliveryZones.length + 1}`,
-                    fee: 0,
-                    minOrder: 0,
-                    isActive: true,
-                    polygon: { type: "Polygon", coordinates: [] },
-                  };
-
-                  setDeliveryZones((prev) => [...prev, newZone]);
-                  setEditingZoneIndex(deliveryZones.length); // new zone index (current length)
-                }}
+                disabled={!deliveryEnabled}
+                onClick={() => ensurePlaceholderZones()}
               >
-                Yeni Bölge
+                Varsayılan Grid'den Hücreleri Oluştur
               </button>
-
+            </div>
+            {/* Zone listesi */}
+            <div className="overflow-x-auto mb-4">
+              <table className="min-w-full border rounded-lg text-sm">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="px-2 py-1 border">ID</th>
+                    <th className="px-2 py-1 border">Ad</th>
+                    <th className="px-2 py-1 border">Aktif</th>
+                    <th className="px-2 py-1 border">Min Sipariş</th>
+                    <th className="px-2 py-1 border">Teslimat Ücreti</th>
+                    <th className="px-2 py-1 border"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deliveryZones.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="text-center text-gray-400 py-2">
+                        Hiç bölge yok.
+                      </td>
+                    </tr>
+                  )}
+                  {deliveryZones.map((z) => (
+                    <tr key={z.id}>
+                      <td className="px-2 py-1 border font-mono">{z.id}</td>
+                      <td className="px-2 py-1 border">{z.name || ""}</td>
+                      <td className="px-2 py-1 border text-center">
+                        {z.isActive ? "✓" : ""}
+                      </td>
+                      <td className="px-2 py-1 border">{z.minOrderAmount}</td>
+                      <td className="px-2 py-1 border">{z.feeAmount} {currencySymbol}</td>
+                      <td className="px-2 py-1 border">
+                        <button
+                          type="button"
+                          className="rounded bg-brand-50 hover:bg-brand-100 text-brand-700 px-2 py-1 text-xs"
+                          onClick={() => setSelectedZoneId(z.id)}
+                        >
+                          Düzenle
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Seçili zone editörü */}
+            {selectedZoneId && (
+              <div className="border rounded-lg p-3 mb-4 bg-gray-50">
+                <div className="font-medium mb-2">Bölge Düzenle</div>
+                {(() => {
+                  const idx = deliveryZones.findIndex(z => z.id === selectedZoneId);
+                  if (idx === -1) return <div className="text-gray-500 text-sm">Bölge bulunamadı.</div>;
+                  const z = deliveryZones[idx];
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Ad</label>
+                        <input
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          value={z.name ?? ""}
+                          disabled={!deliveryEnabled}
+                          onChange={e => {
+                            const v = e.target.value;
+                            setDeliveryZones(prev => {
+                              const next = [...prev];
+                              next[idx] = { ...next[idx], name: v };
+                              return next;
+                            });
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Aktif</label>
+                        <input
+                          type="checkbox"
+                          checked={z.isActive}
+                          disabled={!deliveryEnabled}
+                          onChange={e => {
+                            setDeliveryZones(prev => {
+                              const next = [...prev];
+                              next[idx] = { ...next[idx], isActive: e.target.checked };
+                              return next;
+                            });
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Min Sipariş</label>
+                        <input
+                          type="number"
+                          min={0}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          value={z.minOrderAmount}
+                          disabled={!deliveryEnabled}
+                          onChange={e => {
+                            setDeliveryZones(prev => {
+                              const next = [...prev];
+                              next[idx] = { ...next[idx], minOrderAmount: Number(e.target.value) || 0 };
+                              return next;
+                            });
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Teslimat Ücreti</label>
+                        <input
+                          type="number"
+                          min={0}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          value={z.feeAmount}
+                          disabled={!deliveryEnabled}
+                          onChange={e => {
+                            setDeliveryZones(prev => {
+                              const next = [...prev];
+                              next[idx] = { ...next[idx], feeAmount: Number(e.target.value) || 0 };
+                              return next;
+                            });
+                          }}
+                        />
+                        <div className="mt-1 text-[11px] text-gray-500">Para birimi: {currencySymbol}</div>
+                      </div>
+                      <div className="md:col-span-4 flex items-center gap-3 mt-2">
+                        <button
+                          type="button"
+                          className="rounded-lg bg-red-50 hover:bg-red-100 text-red-700 px-3 py-2 text-sm disabled:opacity-60"
+                          disabled={!deliveryEnabled}
+                          onClick={() => {
+                            setDeliveryZones(prev => prev.filter((_, i) => i !== idx));
+                            setSelectedZoneId(null);
+                          }}
+                        >
+                          Bölgeyi Sil
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg bg-gray-100 hover:bg-gray-200 px-3 py-2 text-sm"
+                          onClick={() => setSelectedZoneId(null)}
+                        >
+                          Düzenlemeyi Kapat
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+            {/* Kaydet */}
+            <div className="mt-4 flex items-center justify-end gap-3 flex-wrap">
               <button
                 type="button"
                 onClick={() => saveDeliveryZonesMut.mutate()}

@@ -89,7 +89,17 @@ r.put(
   updateRestaurant
 );
 
-// ✅ Delivery (paket servis) ayarlarını güncelle
+// ✅ Delivery (paket servis) ayarlarını güncelle (HEX grid)
+// Yeni ana endpoint: /delivery-zones
+r.put(
+  "/:id/delivery-zones",
+  auth(),
+  allowLocationManagerOrAdmin("id"),
+  validate(updateDeliverySettingsSchema),
+  updateDeliverySettings
+);
+
+// Geriye dönük uyumluluk: eski endpoint
 r.put(
   "/:id/delivery-settings",
   auth(),

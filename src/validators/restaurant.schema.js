@@ -39,30 +39,6 @@ const locationSchema = Joi.object({
   coordinates: coordinatesSchema,
 });
 
-// ✅ Polygon (GeoJSON) => coordinates: [[[lng,lat],...]]
-// Basit ama işe yarar doğrulama:
-// - coordinates array
-// - ilk ring array
-// - ring içinde en az 4 nokta (Polygon kapalı ring için pratik minimum)
-const polygonSchema = Joi.object({
-  type: Joi.string().valid("Polygon").required(),
-  coordinates: Joi.array()
-    .items(
-      Joi.array()
-        .items(coordinatesSchema)
-        .min(4)
-        .required()
-    )
-    .min(1)
-    .required(),
-});
-
-// ✅ Delivery serviceArea
-const deliveryServiceAreaSchema = Joi.object({
-  type: Joi.string().valid("radius", "polygon").optional(),
-  radiusMeters: Joi.number().min(1).optional(),
-  polygon: polygonSchema.optional(),
-}).unknown(false);
 
 // ✅ Delivery payment options
 const deliveryPaymentOptionsSchema = Joi.object({
@@ -71,16 +47,37 @@ const deliveryPaymentOptionsSchema = Joi.object({
   cardOnDelivery: Joi.boolean().optional(),
 }).unknown(false);
 
-// ✅ Delivery (model ile uyumlu)
+// ✅ Delivery HEX grid settings
+const deliveryGridSettingsSchema = Joi.object({
+  cellSizeMeters: Joi.number().min(50).optional(),
+  radiusMeters: Joi.number().min(200).optional(),
+  orientation: Joi.string().valid("flat", "pointy").default("flat"),
+}).unknown(false);
+
+// ✅ Delivery HEX zone (per-cell overrides)
+const deliveryZoneSchema = Joi.object({
+  id: Joi.string().trim().min(1).required(),
+  name: Joi.string().allow("", null).optional(),
+  isActive: Joi.boolean().default(true),
+  minOrderAmount: Joi.number().min(0).default(0),
+  feeAmount: Joi.number().min(0).default(0),
+}).unknown(false);
+
+// ✅ Delivery (model ile uyumlu) — HEX grid
 const deliverySchema = Joi.object({
   enabled: Joi.boolean().optional(),
 
   paymentOptions: deliveryPaymentOptionsSchema.optional(),
 
+  // Global defaults (optional)
   minOrderAmount: Joi.number().min(0).optional(),
   feeAmount: Joi.number().min(0).optional(),
 
-  serviceArea: deliveryServiceAreaSchema.optional(),
+  // HEX grid settings
+  gridSettings: deliveryGridSettingsSchema.optional(),
+
+  // Per-hex overrides
+  zones: Joi.array().items(deliveryZoneSchema).optional(),
 }).unknown(false);
 
 /* ---------- CREATE RESTAURANT ---------- */
@@ -286,27 +283,32 @@ const deliverySettingsBodySchema = Joi.object({
   minOrderAmount: Joi.number().min(0).optional(),
   feeAmount: Joi.number().min(0).optional(),
 
-  etaMinMinutes: Joi.number().min(0).optional(),
-  etaMaxMinutes: Joi.number().min(0).optional(),
+  // HEX grid
+  gridSettings: deliveryGridSettingsSchema.optional(),
+  zones: Joi.array().items(deliveryZoneSchema).optional(),
 
+  // location (optional) — supports GeoJSON Point or {lat,lng}
   location: flexibleLocationSchema.optional(),
-  serviceArea: deliveryServiceAreaSchema.optional(),
 
+  // convenience lat/lng fields
   lat: Joi.number().min(-90).max(90).optional(),
   lng: Joi.number().min(-180).max(180).optional(),
   latitude: Joi.number().min(-90).max(90).optional(),
   longitude: Joi.number().min(-180).max(180).optional(),
 
+  // nested shape also allowed
   delivery: Joi.object({
     enabled: Joi.boolean().optional(),
     paymentOptions: deliveryPaymentOptionsSchema.optional(),
     minOrderAmount: Joi.number().min(0).optional(),
     feeAmount: Joi.number().min(0).optional(),
-    etaMinMinutes: Joi.number().min(0).optional(),
-    etaMaxMinutes: Joi.number().min(0).optional(),
+
+    gridSettings: deliveryGridSettingsSchema.optional(),
+    zones: Joi.array().items(deliveryZoneSchema).optional(),
+
     location: flexibleLocationSchema.optional(),
-    serviceArea: deliveryServiceAreaSchema.optional(),
   })
+    .min(1)
     .unknown(false)
     .optional(),
 })
@@ -319,13 +321,20 @@ const deliverySettingsBodySchema = Joi.object({
       ...d,
       ...value,
       location: typeof value.location !== "undefined" ? value.location : d.location,
-      serviceArea: typeof value.serviceArea !== "undefined" ? value.serviceArea : d.serviceArea,
       paymentOptions:
         typeof value.paymentOptions !== "undefined" ? value.paymentOptions : d.paymentOptions,
+      gridSettings:
+        typeof value.gridSettings !== "undefined" ? value.gridSettings : d.gridSettings,
+      zones: typeof value.zones !== "undefined" ? value.zones : d.zones,
     };
 
-    // ✅ önemli: merged’i geri döndür (yoksa merge hiç uygulanmamış olur)
+    // ✅ important: merged’i geri döndür
     delete merged.delivery;
+
+    const hasAny = Object.keys(merged).length > 0;
+    if (!hasAny) {
+      return helpers.error("any.invalid");
+    }
     return merged;
   });
 

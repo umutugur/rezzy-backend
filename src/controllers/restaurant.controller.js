@@ -392,12 +392,12 @@ export const updateRestaurant = async (req, res, next) => {
       else delete $set.status;
     }
 
-    // ✅ delivery normalize (model yapısı ile uyumlu)
+    // ✅ delivery normalize (HEX grid uyumlu)
     if (typeof $set.delivery !== "undefined") {
-      // delivery null/false gönderilirse komple kaldırma değil, ignore ediyoruz.
-      // Bu sayede yanlışlıkla delivery alanını bozmayız.
       const d = $set.delivery;
 
+      // delivery null/false gönderilirse komple kaldırma değil, ignore ediyoruz.
+      // Bu sayede yanlışlıkla delivery alanını bozmayız.
       if (d && typeof d === "object") {
         const nd = {};
 
@@ -423,93 +423,38 @@ export const updateRestaurant = async (req, res, next) => {
         if (typeof minOrderAmount !== "undefined") nd.minOrderAmount = Math.max(0, minOrderAmount);
         if (typeof feeAmount !== "undefined") nd.feeAmount = Math.max(0, feeAmount);
 
-        if (d.serviceArea && typeof d.serviceArea === "object") {
-          const sa = {};
+        // ✅ HEX grid settings
+        if (d.gridSettings && typeof d.gridSettings === "object") {
+          const gs = d.gridSettings;
+          const cellSizeMeters = toNum(gs.cellSizeMeters);
+          const radiusMeters = toNum(gs.radiusMeters);
+          const orientationRaw = typeof gs.orientation === "string" ? gs.orientation.trim() : "";
+          const orientation = orientationRaw === "pointy" ? "pointy" : "flat";
 
-          // ✅ type ZORUNLU: serviceArea gönderildiyse type (radius|polygon) gelmek zorunda
-          const rawType = d.serviceArea.type;
-          const t = typeof rawType === "string" ? rawType.trim() : "";
-          if (t !== "radius" && t !== "polygon") {
-            throw {
-              status: 400,
-              message: "delivery.serviceArea.type zorunludur (radius|polygon).",
-            };
-          }
-          sa.type = t;
+          const ngs = {};
+          if (typeof cellSizeMeters !== "undefined") ngs.cellSizeMeters = Math.max(50, cellSizeMeters);
+          if (typeof radiusMeters !== "undefined") ngs.radiusMeters = Math.max(200, radiusMeters);
+          ngs.orientation = orientation;
 
-          const toNum = (v) => {
-            const n = Number(v);
-            return Number.isFinite(n) ? n : undefined;
-          };
+          if (Object.keys(ngs).length) nd.gridSettings = ngs;
+        }
 
-          // radius => radiusMeters zorunlu
-          if (t === "radius") {
-            const radiusMeters = toNum(d.serviceArea.radiusMeters);
-            if (!Number.isFinite(radiusMeters) || radiusMeters <= 0) {
-              throw {
-                status: 400,
-                message: "delivery.serviceArea.type=radius için radiusMeters (>0) zorunludur.",
+        // ✅ zones (per-hex overrides)
+        if (Array.isArray(d.zones)) {
+          nd.zones = d.zones
+            .map((z) => {
+              if (!z || typeof z !== "object") return null;
+              const id = String(z.id || "").trim();
+              if (!id) return null;
+              return {
+                id,
+                name: typeof z.name === "string" ? z.name : undefined,
+                isActive: z.isActive !== false,
+                minOrderAmount: Math.max(0, Number(z.minOrderAmount) || 0),
+                feeAmount: Math.max(0, Number(z.feeAmount) || 0),
               };
-            }
-            sa.radiusMeters = radiusMeters;
-          }
-
-          // polygon => polygon zorunlu + GeoJSON basic sanitize
-          if (t === "polygon") {
-            if (!d.serviceArea.polygon || typeof d.serviceArea.polygon !== "object") {
-              throw {
-                status: 400,
-                message: "delivery.serviceArea.type=polygon için polygon (GeoJSON) zorunludur.",
-              };
-            }
-
-            const poly = {};
-            if (typeof d.serviceArea.polygon.type === "string") {
-              const pt = d.serviceArea.polygon.type.trim();
-              if (pt === "Polygon") poly.type = "Polygon";
-            }
-
-            // GeoJSON Polygon => [[[lng,lat],...]]
-            const coords = d.serviceArea.polygon.coordinates;
-            if (Array.isArray(coords)) {
-              // Basit güvenlik: maksimum halka ve nokta sayısı limiti
-              const rings = coords.slice(0, 5).map((ring) =>
-                Array.isArray(ring)
-                  ? ring
-                      .slice(0, 500)
-                      .map((p) =>
-                        Array.isArray(p) && p.length === 2
-                          ? [Number(p[0]), Number(p[1])]
-                          : null
-                      )
-                      .filter((p) =>
-                        Array.isArray(p) &&
-                        Number.isFinite(p[0]) &&
-                        Number.isFinite(p[1]) &&
-                        p[0] >= -180 &&
-                        p[0] <= 180 &&
-                        p[1] >= -90 &&
-                        p[1] <= 90
-                      )
-                  : []
-              );
-
-              // En az bir ring ve her ring en az 4 nokta olmalı (polygon kapanışı için)
-              const cleaned = rings.filter((r) => Array.isArray(r) && r.length >= 4);
-              if (cleaned.length) poly.coordinates = cleaned;
-            }
-
-            if (poly.type !== "Polygon" || !Array.isArray(poly.coordinates) || poly.coordinates.length === 0) {
-              throw {
-                status: 400,
-                message: "delivery.serviceArea.polygon geçersiz. type='Polygon' ve coordinates gerekli.",
-              };
-            }
-
-            sa.polygon = poly;
-          }
-
-          nd.serviceArea = sa;
+            })
+            .filter(Boolean);
         }
 
         // Hiç geçerli alan yoksa delivery'yi update etmeyelim
@@ -989,15 +934,8 @@ export const getReservationQR = async (req, res, next) => {
 /* -------------------------------------------------
    ✅ DELIVERY SETTINGS (NEW)
 -------------------------------------------------- */
-export const updateDeliverySettings = async (req, res, next) => {
+export const updateDeliveryZones = async (req, res, next) => {
   try {
-    console.log("[updateDeliverySettings] content-type:", req.headers["content-type"]);
-    console.log("[updateDeliverySettings] raw body:", req.body);
-    console.log("[updateDeliverySettings] keys:", req.body ? Object.keys(req.body) : null);
-    console.log("[updateDeliverySettings] enabled typeof:", typeof req.body?.enabled, "value:", req.body?.enabled);
-    console.log("[updateDeliverySettings] serviceArea typeof:", typeof req.body?.serviceArea, "value:", req.body?.serviceArea);
-    console.log("[updateDeliverySettings] location typeof:", typeof req.body?.location, "value:", req.body?.location);
-
     const { id } = req.params;
 
     if (!canManageRestaurant(req.user, id)) {
@@ -1005,70 +943,57 @@ export const updateDeliverySettings = async (req, res, next) => {
     }
 
     const body = req.body || {};
+
+    // Accept both payload shapes:
+    // 1) { enabled, gridSettings, zones, location }
+    // 2) { delivery: { enabled, gridSettings, zones }, location }
+    const input = body && typeof body === "object" && body.delivery && typeof body.delivery === "object"
+      ? { ...body.delivery, location: body.location ?? body.delivery.location }
+      : body;
+
     const $set = {};
 
     // enabled
-    if (typeof body.enabled === "boolean") {
-      $set["delivery.enabled"] = body.enabled;
+    if (typeof input.enabled === "boolean") {
+      $set["delivery.enabled"] = input.enabled;
     }
 
-    // paymentOptions
-    if (body.paymentOptions && typeof body.paymentOptions === "object") {
-      const po = body.paymentOptions;
-      if (typeof po.online === "boolean") $set["delivery.paymentOptions.online"] = po.online;
-      if (typeof po.cashOnDelivery === "boolean")
-        $set["delivery.paymentOptions.cashOnDelivery"] = po.cashOnDelivery;
-      if (typeof po.cardOnDelivery === "boolean")
-        $set["delivery.paymentOptions.cardOnDelivery"] = po.cardOnDelivery;
+    // gridSettings
+    if (input.gridSettings && typeof input.gridSettings === "object") {
+      const gs = input.gridSettings;
+      const cellSizeMeters = Number(gs.cellSizeMeters);
+      const radiusMeters = Number(gs.radiusMeters);
+      const orientationRaw = typeof gs.orientation === "string" ? gs.orientation.trim() : "";
+      const orientation = orientationRaw === "pointy" ? "pointy" : "flat";
+
+      if (Number.isFinite(cellSizeMeters)) $set["delivery.gridSettings.cellSizeMeters"] = Math.max(50, cellSizeMeters);
+      if (Number.isFinite(radiusMeters)) $set["delivery.gridSettings.radiusMeters"] = Math.max(200, radiusMeters);
+      $set["delivery.gridSettings.orientation"] = orientation;
     }
 
-    // numeric helpers
-    const toNum = (v) => {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : undefined;
-    };
+    // zones
+    if (Array.isArray(input.zones)) {
+      const zones = input.zones
+        .map((z) => {
+          if (!z || typeof z !== "object") return null;
+          const zid = String(z.id || "").trim();
+          if (!zid) return null;
+          return {
+            id: zid,
+            name: typeof z.name === "string" ? z.name : undefined,
+            isActive: z.isActive !== false,
+            minOrderAmount: Math.max(0, Number(z.minOrderAmount) || 0),
+            feeAmount: Math.max(0, Number(z.feeAmount) || 0),
+          };
+        })
+        .filter(Boolean);
 
-    const minOrderAmount = toNum(body.minOrderAmount);
-    const feeAmount = toNum(body.feeAmount);
-    const etaMinMinutes = toNum(body.etaMinMinutes);
-    const etaMaxMinutes = toNum(body.etaMaxMinutes);
+      $set["delivery.zones"] = zones;
+    }
 
-    if (typeof minOrderAmount !== "undefined") $set["delivery.minOrderAmount"] = Math.max(0, minOrderAmount);
-    if (typeof feeAmount !== "undefined") $set["delivery.feeAmount"] = Math.max(0, feeAmount);
-
-    if (typeof etaMinMinutes !== "undefined") $set["delivery.etaMinMinutes"] = Math.max(0, etaMinMinutes);
-    if (typeof etaMaxMinutes !== "undefined") $set["delivery.etaMaxMinutes"] = Math.max(0, etaMaxMinutes);
-
-    // (opsiyonel) restoran pini de güncellenebilsin
-    // Kabul edilen formatlar:
-    // 1) { location: { type: 'Point', coordinates: [lng, lat] } }
-    // 2) { location: { coordinates: [lng, lat] } }
-    // 3) { location: { lat, lng } } / { location: { latitude, longitude } }
-    // 4) { lat, lng } / { latitude, longitude } (root-level)
-    const readLngLat = (input) => {
-      if (!input || typeof input !== "object") return null;
-
-      // GeoJSON-ish
-      if (Array.isArray(input.coordinates) && input.coordinates.length === 2) {
-        const [lng, lat] = input.coordinates.map(Number);
-        if (
-          Number.isFinite(lng) &&
-          Number.isFinite(lat) &&
-          lng >= -180 &&
-          lng <= 180 &&
-          lat >= -90 &&
-          lat <= 90
-        ) {
-          return { lng, lat };
-        }
-      }
-
-      // { lat, lng } or { latitude, longitude }
-      const lngRaw = typeof input.lng !== "undefined" ? input.lng : input.longitude;
-      const latRaw = typeof input.lat !== "undefined" ? input.lat : input.latitude;
-      const lng = Number(lngRaw);
-      const lat = Number(latRaw);
-
+    // optional restaurant location update
+    if (input.location && typeof input.location === "object" && Array.isArray(input.location.coordinates)) {
+      const [lng, lat] = input.location.coordinates.map(Number);
       if (
         Number.isFinite(lng) &&
         Number.isFinite(lat) &&
@@ -1077,118 +1002,7 @@ export const updateDeliverySettings = async (req, res, next) => {
         lat >= -90 &&
         lat <= 90
       ) {
-        return { lng, lat };
-      }
-
-      return null;
-    };
-
-    const locFromNested = readLngLat(body.location);
-    const locFromRoot = readLngLat({
-      lng: body.lng,
-      lat: body.lat,
-      longitude: body.longitude,
-      latitude: body.latitude,
-    });
-
-    const loc = locFromNested || locFromRoot;
-    if (loc) {
-      $set["location"] = { type: "Point", coordinates: [loc.lng, loc.lat] };
-    }
-
-    // serviceArea
-    if (body.serviceArea && typeof body.serviceArea === "object") {
-      const sa = body.serviceArea;
-      const t = typeof sa.type === "string" ? sa.type.trim() : "";
-
-      if (t !== "radius" && t !== "polygon") {
-        return next({
-          status: 400,
-          message: "delivery.serviceArea.type zorunludur (radius|polygon).",
-        });
-      }
-
-      $set["delivery.serviceArea.type"] = t;
-
-      if (t === "radius") {
-        const radiusMeters = toNum(sa.radiusMeters);
-        if (!Number.isFinite(radiusMeters) || radiusMeters <= 0) {
-          return next({
-            status: 400,
-            message: "serviceArea.type=radius için radiusMeters (>0) zorunludur.",
-          });
-        }
-        $set["delivery.serviceArea.radiusMeters"] = radiusMeters;
-
-        // polygon’u temizle (radius’a geçince eski polygon kalmasın)
-        $set["delivery.serviceArea.polygon"] = undefined;
-      }
-
-      if (t === "polygon") {
-        const poly = sa.polygon;
-        if (!poly || typeof poly !== "object" || poly.type !== "Polygon" || !Array.isArray(poly.coordinates)) {
-          return next({
-            status: 400,
-            message: "serviceArea.type=polygon için polygon (GeoJSON Polygon) zorunludur.",
-          });
-        }
-
-        // sanitize rings/points
-        const rings = poly.coordinates
-          .slice(0, 5)
-          .map((ring) =>
-            Array.isArray(ring)
-              ? ring
-                  .slice(0, 500)
-                  .map((p) =>
-                    Array.isArray(p) && p.length === 2 ? [Number(p[0]), Number(p[1])] : null
-                  )
-                  .filter(
-                    (p) =>
-                      Array.isArray(p) &&
-                      Number.isFinite(p[0]) &&
-                      Number.isFinite(p[1]) &&
-                      p[0] >= -180 &&
-                      p[0] <= 180 &&
-                      p[1] >= -90 &&
-                      p[1] <= 90
-                  )
-              : []
-          )
-          .filter((r) => Array.isArray(r) && r.length >= 4);
-
-        if (rings.length === 0) {
-          return next({
-            status: 400,
-            message: "Polygon geçersiz. En az 1 ring ve ring başına en az 4 nokta gerekli.",
-          });
-        }
-
-        $set["delivery.serviceArea.polygon"] = {
-          type: "Polygon",
-          coordinates: rings,
-        };
-
-        // radius’u temizle (polygon’a geçince eski radius kalmasın)
-        $set["delivery.serviceArea.radiusMeters"] = 0;
-      }
-    }
-
-    // Eğer enabled=true yapılıyorsa ve payload içinde eta geldiyse basic tutarlılık kontrolü
-    if (body.enabled === true) {
-      // eta modelde zorunlu değil ama ürün gereği tutarlı olmalı
-      if (
-        (typeof etaMinMinutes !== "undefined" || typeof etaMaxMinutes !== "undefined") &&
-        (typeof etaMinMinutes === "undefined" || typeof etaMaxMinutes === "undefined")
-      ) {
-        return next({ status: 400, message: "ETA için etaMinMinutes ve etaMaxMinutes birlikte gönderilmelidir." });
-      }
-      if (
-        typeof etaMinMinutes !== "undefined" &&
-        typeof etaMaxMinutes !== "undefined" &&
-        (etaMinMinutes <= 0 || etaMaxMinutes <= 0 || etaMinMinutes > etaMaxMinutes)
-      ) {
-        return next({ status: 400, message: "ETA geçersiz (min>0, max>0, min<=max)." });
+        $set["location"] = { type: "Point", coordinates: [lng, lat] };
       }
     }
 
@@ -1214,3 +1028,6 @@ export const updateDeliverySettings = async (req, res, next) => {
     next(e);
   }
 };
+
+// Backward-compatible export name (eski client/route'lar kırılmasın)
+export const updateDeliverySettings = updateDeliveryZones;
