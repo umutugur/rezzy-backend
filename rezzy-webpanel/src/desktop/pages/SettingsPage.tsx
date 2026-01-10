@@ -642,6 +642,14 @@ if (Number.isFinite(lng) && Number.isFinite(lat) && (lng !== 0 || lat !== 0)) {
     </div>
   );
 
+  // Delivery map center (prefer saved restaurant location)
+  const deliveryMapCenter = React.useMemo(() => {
+    const lng = Number((form as any)?.location?.coordinates?.[0] ?? 0);
+    const lat = Number((form as any)?.location?.coordinates?.[1] ?? 0);
+    const hasLoc = Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0);
+    return hasLoc ? { lat, lng } : undefined;
+  }, [form]);
+
   return (
     <RestaurantDesktopLayout
       activeNav="settings"
@@ -1678,6 +1686,7 @@ if (Number.isFinite(lng) && Number.isFinite(lat) && (lng !== 0 || lat !== 0)) {
 
             <div className={"rounded-xl border overflow-hidden " + (!deliveryEnabled ? "opacity-60 pointer-events-none" : "")}>
               <DeliveryZoneMap
+                center={deliveryMapCenter}
                 value={deliveryZones[editingZoneIndex]?.polygon ?? null}
                 onChange={(poly: any) => {
                   if (!deliveryEnabled) return;
