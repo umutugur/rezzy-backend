@@ -20,7 +20,7 @@ import {
 import { showToast } from "../../ui/Toast";
 import { parseLatLngFromGoogleMaps } from "../../utils/geo";
 import { Card } from "../../components/Card";
-// import DeliveryZoneMap from "../components/DeliveryZoneMap";
+import DeliveryZoneMap from "../components/DeliveryZoneMap";
 
 // === Tipler ===
 type OpeningHour = { day: number; open: string; close: string; isClosed?: boolean };
@@ -679,6 +679,26 @@ export const SettingsPage: React.FC = () => {
     const hasLoc = Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0);
     return hasLoc ? { lat, lng } : undefined;
   }, [form]);
+
+  // --- Delivery zone helpers (map/table shared) ---
+  const toggleZoneActive = React.useCallback((zoneId: string) => {
+    setDeliveryZones((prev) =>
+      prev.map((z) => (z.id === zoneId ? { ...z, isActive: !z.isActive } : z))
+    );
+  }, []);
+
+  const selectZone = React.useCallback((zoneId: string | null) => {
+    setSelectedZoneId(zoneId);
+  }, []);
+
+  const updateZonePatch = React.useCallback(
+    (zoneId: string, patch: Partial<DeliveryZoneState>) => {
+      setDeliveryZones((prev) =>
+        prev.map((z) => (z.id === zoneId ? { ...z, ...patch } : z))
+      );
+    },
+    []
+  );
 
   return (
     <RestaurantDesktopLayout
@@ -1652,6 +1672,43 @@ export const SettingsPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Harita (Teslimat bölgeleri) */}
+            <div className="mb-4">
+              {!deliveryMapCenter ? (
+                <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
+                  Harita için önce restoran konumunu kaydedin (Genel sekmesinden Lat/Lng).
+                </div>
+              ) : (
+                <div className="rounded-lg border overflow-hidden">
+                  <div className="px-3 py-2 bg-gray-50 border-b flex items-center justify-between gap-2 flex-wrap">
+                    <div className="text-sm font-medium">Teslimat Haritası</div>
+                    <div className="text-xs text-gray-500">
+                      Hücre seçmek için tıklayın. Aktif/pasif durumunu değiştirin.
+                    </div>
+                  </div>
+                  <div style={{ height: 420 }}>
+                    {/*
+                      NOTE: Props are intentionally passed as `any` to avoid mismatches
+                      with the component's internal prop typing while keeping this page stable.
+                    */}
+                    <DeliveryZoneMap
+                      {...({
+                        center: deliveryMapCenter,
+                        zones: deliveryZones,
+                        gridSettings,
+                        selectedZoneId,
+                        deliveryEnabled,
+                        onSelectZone: (id: string) => selectZone(id),
+                        onToggleZone: (id: string) => toggleZoneActive(id),
+                        onUpdateZone: (id: string, patch: Partial<DeliveryZoneState>) =>
+                          updateZonePatch(id, patch),
+                      } as any)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
             {/* Varsayılan grid hücrelerini oluştur */}
             <div className="mb-3">
               <button
@@ -1697,7 +1754,7 @@ export const SettingsPage: React.FC = () => {
                         <button
                           type="button"
                           className="rounded bg-brand-50 hover:bg-brand-100 text-brand-700 px-2 py-1 text-xs"
-                          onClick={() => setSelectedZoneId(z.id)}
+                          onClick={() => selectZone(z.id)}
                         >
                           Düzenle
                         </button>
@@ -1798,7 +1855,7 @@ export const SettingsPage: React.FC = () => {
                         <button
                           type="button"
                           className="rounded-lg bg-gray-100 hover:bg-gray-200 px-3 py-2 text-sm"
-                          onClick={() => setSelectedZoneId(null)}
+                          onClick={() => selectZone(null)}
                         >
                           Düzenlemeyi Kapat
                         </button>
