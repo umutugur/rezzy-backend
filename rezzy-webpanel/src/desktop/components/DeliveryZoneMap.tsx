@@ -178,9 +178,7 @@ export default function DeliveryZoneMap({
         />
 
         {/* Keep hex layer below popups so popups never render behind polygons */}
-        <Pane name="hexPane" style={{ zIndex: 450 }} />
         <Pane name="popupPane" style={{ zIndex: 1000 }} />
-
         <Pane name="hexPane" style={{ zIndex: 450 }}>
           {/* Restaurant location pin */}
           {Number.isFinite(center?.lat) && Number.isFinite(center?.lng) ? (
