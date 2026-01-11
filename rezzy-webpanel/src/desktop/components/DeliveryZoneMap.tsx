@@ -177,7 +177,11 @@ export default function DeliveryZoneMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <Pane name="hexPane" style={{ zIndex: 650 }}>
+        {/* Keep hex layer below popups so popups never render behind polygons */}
+        <Pane name="hexPane" style={{ zIndex: 450 }} />
+        <Pane name="popupPane" style={{ zIndex: 1000 }} />
+
+        <Pane name="hexPane" style={{ zIndex: 450 }}>
           {/* Restaurant location pin */}
           {Number.isFinite(center?.lat) && Number.isFinite(center?.lng) ? (
             <CircleMarker
@@ -191,7 +195,7 @@ export default function DeliveryZoneMap({
                 weight: 2,
               }}
             >
-              <Popup>
+              <Popup pane="popupPane" autoPan>
                 <div style={{ fontSize: 12 }}>
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>Restoran Konumu</div>
                   <div>
@@ -232,7 +236,7 @@ export default function DeliveryZoneMap({
                   dblclick: () => onToggleZone(z.id, !z.isActive),
                 }}
               >
-                <Popup>
+                <Popup pane="popupPane" autoPan>
                   <div style={{ fontSize: 12, minWidth: 200 }}>
                     <div style={{ fontWeight: 700, marginBottom: 6 }}>{title}</div>
                     <div style={{ marginBottom: 6 }}>

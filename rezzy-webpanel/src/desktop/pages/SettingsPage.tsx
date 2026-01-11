@@ -447,22 +447,35 @@ export const SettingsPage: React.FC = () => {
         }
       }
 
-      const payload: any = {
+      const normalizedGridSettings = {
+        cellSizeMeters: Math.max(50, Number(gridSettings.cellSizeMeters) || 450),
+        radiusMeters: Math.max(200, Number(gridSettings.radiusMeters) || 3000),
+        orientation: gridSettings.orientation === "pointy" ? "pointy" : "flat",
+      } as const;
+
+      const normalizedZones = Array.isArray(deliveryZones)
+        ? deliveryZones.map((z) => ({
+            id: String(z.id),
+            name: typeof z.name === "string" ? z.name : undefined,
+            isActive: z.isActive !== false,
+            minOrderAmount: Math.max(0, Number(z.minOrderAmount) || 0),
+            feeAmount: Math.max(0, Number(z.feeAmount) || 0),
+          }))
+        : [];
+
+      // Some backends expect delivery fields at root, some expect them nested under `delivery`.
+      // To avoid 400 "No valid fields to update", we send BOTH shapes.
+      const deliveryFields: any = {
         enabled: !!deliveryEnabled,
-        gridSettings: {
-          cellSizeMeters: Math.max(50, Number(gridSettings.cellSizeMeters) || 450),
-          radiusMeters: Math.max(200, Number(gridSettings.radiusMeters) || 3000),
-          orientation: gridSettings.orientation === "pointy" ? "pointy" : "flat",
+        gridSettings: normalizedGridSettings,
+        zones: normalizedZones,
+      };
+
+      const payload: any = {
+        ...deliveryFields,
+        delivery: {
+          ...deliveryFields,
         },
-        zones: Array.isArray(deliveryZones)
-          ? deliveryZones.map((z) => ({
-              id: String(z.id),
-              name: typeof z.name === "string" ? z.name : undefined,
-              isActive: z.isActive !== false,
-              minOrderAmount: Math.max(0, Number(z.minOrderAmount) || 0),
-              feeAmount: Math.max(0, Number(z.feeAmount) || 0),
-            }))
-          : [],
       };
 
       // also update restaurant location if we have it
