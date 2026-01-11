@@ -204,7 +204,18 @@ export const SettingsPage: React.FC = () => {
     error: deliverySettingsError,
   } = useQuery<any>({
     queryKey: ["delivery-settings", rid],
-    queryFn: async () => (await api.get(`/restaurants/${rid}/delivery-settings`)).data,
+    queryFn: async () => {
+      try {
+        return (await api.get(`/restaurants/${rid}/delivery-settings`)).data;
+      } catch (e: any) {
+        // Some environments only support PUT for delivery-settings and return 404 on GET.
+        // We treat 404 as "no dedicated delivery-settings resource" and fall back to restaurant detail.
+        const status = e?.response?.status;
+        if (status === 404) return null;
+        throw e;
+      }
+    },
+    retry: false,
     enabled: !!rid,
   });
   const currencySymbol = getCurrencySymbolForRegion(data?.region);
@@ -337,7 +348,7 @@ export const SettingsPage: React.FC = () => {
     // --- Delivery settings hydrate ---
     // Prefer /delivery-settings (authoritative), but gracefully fall back to restaurant detail.
     const dsRaw: any =
-      deliverySettingsData ??
+      (deliverySettingsData ?? undefined) ??
       (data as any).delivery ??
       (data as any).deliverySettings ??
       undefined;
