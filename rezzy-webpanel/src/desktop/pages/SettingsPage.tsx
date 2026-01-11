@@ -211,7 +211,7 @@ export const SettingsPage: React.FC = () => {
   const [gridSettings, setGridSettings] = React.useState<DeliveryGridSettings>({
     cellSizeMeters: 450,
     radiusMeters: 3000,
-    orientation: "flat",
+    orientation: "pointy",
   });
   const [selectedZoneId, setSelectedZoneId] = React.useState<string | null>(null);
 
@@ -328,7 +328,7 @@ export const SettingsPage: React.FC = () => {
     setGridSettings({
       cellSizeMeters: Number(data.delivery?.gridSettings?.cellSizeMeters ?? 450),
       radiusMeters: Number(data.delivery?.gridSettings?.radiusMeters ?? 3000),
-      orientation: (data.delivery?.gridSettings?.orientation === "pointy" ? "pointy" : "flat"),
+      orientation: "pointy",
     });
     setDeliveryZones(Array.isArray(data.delivery?.zones) ? data.delivery!.zones!.map(z => ({
       id: String((z as any).id ?? ""),
@@ -450,7 +450,7 @@ export const SettingsPage: React.FC = () => {
       const normalizedGridSettings = {
         cellSizeMeters: Math.max(50, Number(gridSettings.cellSizeMeters) || 450),
         radiusMeters: Math.max(200, Number(gridSettings.radiusMeters) || 3000),
-        orientation: gridSettings.orientation === "pointy" ? "pointy" : "flat",
+        orientation: "pointy",
       } as const;
 
       const normalizedZones = Array.isArray(deliveryZones)
@@ -473,9 +473,7 @@ export const SettingsPage: React.FC = () => {
 
       const payload: any = {
         ...deliveryFields,
-        delivery: {
-          ...deliveryFields,
-        },
+        delivery: deliveryFields,
       };
 
       // also update restaurant location if we have it
@@ -1638,7 +1636,7 @@ export const SettingsPage: React.FC = () => {
             {/* Grid Ayarları */}
             <div className="border rounded-lg p-3 mb-4 bg-gray-50">
               <div className="font-medium mb-2">Grid Ayarları</div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Hücre Boyutu (metre)</label>
                   <input
@@ -1670,23 +1668,6 @@ export const SettingsPage: React.FC = () => {
                       }))
                     }
                   />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Grid Yönelimi</label>
-                  <select
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    value={gridSettings.orientation}
-                    disabled={!deliveryEnabled}
-                    onChange={e =>
-                      setGridSettings(g => ({
-                        ...g,
-                        orientation: e.target.value === "pointy" ? "pointy" : "flat",
-                      }))
-                    }
-                  >
-                    <option value="flat">Düz (Flat)</option>
-                    <option value="pointy">Sivri (Pointy)</option>
-                  </select>
                 </div>
               </div>
             </div>
