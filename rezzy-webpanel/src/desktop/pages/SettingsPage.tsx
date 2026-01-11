@@ -198,6 +198,15 @@ export const SettingsPage: React.FC = () => {
     queryFn: () => restaurantGet(rid),
     enabled: !!rid,
   });
+  const {
+    data: deliverySettingsData,
+    isLoading: isDeliverySettingsLoading,
+    error: deliverySettingsError,
+  } = useQuery<any>({
+    queryKey: ["delivery-settings", rid],
+    queryFn: async () => (await api.get(`/restaurants/${rid}/delivery-settings`)).data,
+    enabled: !!rid,
+  });
   const currencySymbol = getCurrencySymbolForRegion(data?.region);
 
   const [form, setForm] = React.useState<SettingsForm>({});
@@ -214,6 +223,7 @@ export const SettingsPage: React.FC = () => {
     orientation: "pointy",
   });
   const [selectedZoneId, setSelectedZoneId] = React.useState<string | null>(null);
+  const hydratedDeliveryOnceRef = React.useRef(false);
 
   // === Helper: Varsayılan HEX grid hücreleri (Bölge 1..N) ===
   const placeholderZonesCreatedRef = React.useRef(false);
@@ -324,21 +334,71 @@ export const SettingsPage: React.FC = () => {
           : DEFAULT_POLICIES.checkinWindowAfterMinutes,
     });
 
-    setDeliveryEnabled(!!data.delivery?.enabled);
-    setGridSettings({
-      cellSizeMeters: Number(data.delivery?.gridSettings?.cellSizeMeters ?? 450),
-      radiusMeters: Number(data.delivery?.gridSettings?.radiusMeters ?? 3000),
-      orientation: "pointy",
-    });
-    setDeliveryZones(Array.isArray(data.delivery?.zones) ? data.delivery!.zones!.map(z => ({
-      id: String((z as any).id ?? ""),
-      name: typeof (z as any).name === "string" ? (z as any).name : undefined,
-      isActive: (z as any).isActive !== false,
-      minOrderAmount: Number((z as any).minOrderAmount ?? 0),
-      feeAmount: Number((z as any).feeAmount ?? 0),
-    })).filter(z => !!z.id) : []);
+    // --- Delivery settings hydrate ---
+    // Prefer /delivery-settings (authoritative), but gracefully fall back to restaurant detail.
+    const dsRaw: any =
+      deliverySettingsData ??
+      (data as any).delivery ??
+      (data as any).deliverySettings ??
+      undefined;
+
+    // Some shapes might be { delivery: { ... } }, normalize it.
+    const ds: any = dsRaw?.delivery ? dsRaw.delivery : dsRaw;
+
+    const nextDeliveryEnabled = !!(
+      ds?.enabled ??
+      (data as any).delivery?.enabled ??
+      false
+    );
+
+    setDeliveryEnabled(nextDeliveryEnabled);
+
+    // Only overwrite grid settings if we have a value from backend; otherwise keep current state.
+    if (ds?.gridSettings || (data as any).delivery?.gridSettings || !hydratedDeliveryOnceRef.current) {
+      const gs = ds?.gridSettings ?? (data as any).delivery?.gridSettings;
+      setGridSettings((prev) => ({
+        ...prev,
+        cellSizeMeters: Number(gs?.cellSizeMeters ?? prev.cellSizeMeters ?? 450),
+        radiusMeters: Number(gs?.radiusMeters ?? prev.radiusMeters ?? 3000),
+        orientation: "pointy",
+      }));
+    }
+
+    // IMPORTANT: Do NOT reset zones to [] just because restaurant detail doesn't include them.
+    // Only overwrite when backend returns zones; otherwise preserve current UI state.
+    if (Array.isArray(ds?.zones)) {
+      setDeliveryZones(
+        ds.zones
+          .map((z: any) => ({
+            id: String(z?.id ?? ""),
+            name: typeof z?.name === "string" ? z.name : undefined,
+            isActive: z?.isActive !== false,
+            minOrderAmount: Number(z?.minOrderAmount ?? 0),
+            feeAmount: Number(z?.feeAmount ?? 0),
+          }))
+          .filter((z: any) => !!z.id)
+      );
+    } else if (!hydratedDeliveryOnceRef.current) {
+      // First hydration: if restaurant detail happens to include zones, use them.
+      const rz = (data as any).delivery?.zones;
+      if (Array.isArray(rz)) {
+        setDeliveryZones(
+          rz
+            .map((z: any) => ({
+              id: String(z?.id ?? ""),
+              name: typeof z?.name === "string" ? z.name : undefined,
+              isActive: z?.isActive !== false,
+              minOrderAmount: Number(z?.minOrderAmount ?? 0),
+              feeAmount: Number(z?.feeAmount ?? 0),
+            }))
+            .filter((z: any) => !!z.id)
+        );
+      }
+    }
+
     setSelectedZoneId(null);
-  }, [data]);
+    hydratedDeliveryOnceRef.current = true;
+  }, [data, deliverySettingsData]);
 
   // === Yardımcı: Content-Disposition başlığından dosya adı çek ===
   const getFilenameFromContentDisposition = (header?: string | null) => {
@@ -489,6 +549,7 @@ export const SettingsPage: React.FC = () => {
     },
     onSuccess: () => {
       showToast("Teslimat bölgeleri güncellendi", "success");
+      qc.invalidateQueries({ queryKey: ["delivery-settings", rid] });
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
     onError: (e: any) => {
@@ -1683,7 +1744,7 @@ export const SettingsPage: React.FC = () => {
                   <div className="px-3 py-2 bg-gray-50 border-b flex items-center justify-between gap-2 flex-wrap">
                     <div className="text-sm font-medium">Teslimat Haritası</div>
                     <div className="text-xs text-gray-500">
-                      Hücre seçmek için tıklayın. Aktif/pasif durumunu değiştirin.
+                      Hücre seçmek için tıklayın. Seçince altta “Bölge Düzenle” paneli açılır.
                     </div>
                   </div>
                   <div style={{ height: 420 }}>

@@ -180,41 +180,41 @@ const RestaurantSchema = new mongoose.Schema(
     },
 
    // ✅ Paket servis (Delivery)
-delivery: {
-  enabled: { type: Boolean, default: false, index: true },
+    delivery: {
+      enabled: { type: Boolean, default: false, index: true },
 
-  paymentOptions: {
-    online: { type: Boolean, default: true },
-    cashOnDelivery: { type: Boolean, default: true },
-    cardOnDelivery: { type: Boolean, default: true },
-  },
-
-  minOrderAmount: { type: Number, default: 0 },
-  feeAmount: { type: Number, default: 0 },
-
-  // ✅ ETA (dakika)
-  etaMinMinutes: { type: Number, default: 0, min: 0 },
-  etaMaxMinutes: { type: Number, default: 0, min: 0 },
-
-  serviceArea: {
-    type: {
-      type: String,
-      enum: ["radius", "polygon"],
-      default: "radius",
-    },
-    radiusMeters: { type: Number, default: 0 },
-
-    polygon: {
-      type: {
-        type: String,
-        enum: ["Polygon"],
+      paymentOptions: {
+        online: { type: Boolean, default: true },
+        cashOnDelivery: { type: Boolean, default: true },
+        cardOnDelivery: { type: Boolean, default: true },
       },
-      coordinates: {
-        type: [[[Number]]],
+
+      // Global defaults (optional)
+      minOrderAmount: { type: Number, default: 0, min: 0 },
+      feeAmount: { type: Number, default: 0, min: 0 },
+
+      // ✅ ETA (dakika)
+      etaMinMinutes: { type: Number, default: 0, min: 0 },
+      etaMaxMinutes: { type: Number, default: 0, min: 0 },
+
+      // ✅ HEX Grid settings (Getir benzeri)
+      gridSettings: {
+        cellSizeMeters: { type: Number, default: 450, min: 50 },
+        radiusMeters: { type: Number, default: 3000, min: 200 },
+        orientation: { type: String, enum: ["flat", "pointy"], default: "flat" },
       },
+
+      // ✅ Per-hex overrides (deterministic hex id)
+      zones: [
+        {
+          id: { type: String, required: true },
+          name: { type: String },
+          isActive: { type: Boolean, default: false, index: true },
+          minOrderAmount: { type: Number, default: 0, min: 0 },
+          feeAmount: { type: Number, default: 0, min: 0 },
+        },
+      ],
     },
-  },
-},
 
     mapAddress: String,
     placeId: String,
@@ -238,10 +238,10 @@ RestaurantSchema.index(
   { name: "organization_status" }
 );
 
-// ✅ Polygon sorguları için (userPoint intersects)
+// ✅ Teslimat aktif restoranları hızlı filtrelemek için
 RestaurantSchema.index(
-  { "delivery.serviceArea.polygon": "2dsphere" },
-  { name: "delivery_polygon_2dsphere" }
+  { "delivery.enabled": 1, isActive: 1, region: 1 },
+  { name: "delivery_enabled_isActive_region" }
 );
 
 export default mongoose.model("Restaurant", RestaurantSchema);
