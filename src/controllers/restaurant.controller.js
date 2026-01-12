@@ -183,13 +183,14 @@ export const listRestaurants = async (req, res, next) => {
 
       const raw = await Restaurant.aggregate([
         {
-          $geoNear: {
-            near: { type: "Point", coordinates: [lngNum, latNum] },
-            distanceField: "distance",
-            spherical: true,
-            query: filter,
-          },
-        },
+  $geoNear: {
+    key: "location.coordinates", // ✅ hangi 2dsphere index kullanılacak
+    near: { type: "Point", coordinates: [lngNum, latNum] },
+    distanceField: "distance",
+    spherical: true,
+    query: filter,
+  },
+},
         {
           $project: {
             name: 1,
@@ -1026,13 +1027,12 @@ export const updateDeliveryZones = async (req, res, next) => {
       const cellSizeMeters = toNum(gs.cellSizeMeters);
       const radiusMeters = toNum(gs.radiusMeters);
       const orientationRaw = typeof gs.orientation === "string" ? gs.orientation.trim() : "";
-      const orientation = orientationRaw === "pointy" ? "pointy" : "flat";
 
       if (typeof cellSizeMeters !== "undefined")
         $set["delivery.gridSettings.cellSizeMeters"] = Math.max(50, cellSizeMeters);
       if (typeof radiusMeters !== "undefined")
         $set["delivery.gridSettings.radiusMeters"] = Math.max(200, radiusMeters);
-      $set["delivery.gridSettings.orientation"] = orientation;
+        $set["delivery.gridSettings.orientation"] = "pointy";
     }
 
     // zones
