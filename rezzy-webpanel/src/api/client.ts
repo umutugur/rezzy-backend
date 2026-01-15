@@ -62,14 +62,29 @@ api.interceptors.response.use(
     return res;
   },
   (err) => {
-    const msg =
-      err?.response?.data?.message ||
-      err?.message ||
-      "İstek başarısız";
-    if (err?.response?.status === 401) {
+    const status = err?.response?.status;
+    const url = String(err?.config?.url || "");
+    const method = String(err?.config?.method || "get").toLowerCase();
+
+    // ✅ 1) Bu istek "toast basma" diye işaretlenmişse sessiz geç
+    const noToast = !!(err?.config as any)?.__noToast;
+
+    // ✅ 2) delivery-settings GET 404 -> bazı env'lerde endpoint yok, normal kabul
+    const isDeliverySettingsGet404 =
+      status === 404 && method === "get" && url.includes("/delivery-settings");
+
+    if (status === 401) {
       authStore.logout();
     }
-    showToast(msg, "error");
+
+    if (!noToast && !isDeliverySettingsGet404) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "İstek başarısız";
+      showToast(msg, "error");
+    }
+
     return Promise.reject(err);
   }
 );
