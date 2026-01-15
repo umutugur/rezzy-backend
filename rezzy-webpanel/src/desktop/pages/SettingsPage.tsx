@@ -190,6 +190,19 @@ function axialId(ax: HexAxial) {
   return `ax:${ax.q},${ax.r}`;
 }
 
+function isAxialId(id: any) {
+  return typeof id === "string" && id.startsWith("ax:");
+}
+
+function legacyIndexFromIdOrName(z: any): number | null {
+  const s = String(z?.id ?? "");
+  let m = s.match(/(\d+)/);
+  if (!m && typeof z?.name === "string") m = z.name.match(/(\d+)/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n > 0 ? n - 1 : null; // 0-based
+}
+
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
@@ -415,28 +428,66 @@ export const SettingsPage: React.FC = () => {
         ...prev,
         cellSizeMeters: Number(gs?.cellSizeMeters ?? prev.cellSizeMeters ?? 450),
         radiusMeters: Number(gs?.radiusMeters ?? prev.radiusMeters ?? 3000),
-        orientation: "pointy",
+        orientation: gs?.orientation === "flat" ? "flat" : "pointy",
       }));
     }
 
     // IMPORTANT: Do NOT reset zones to [] just because restaurant detail doesn't include them.
     // Only overwrite when backend returns zones; otherwise preserve current UI state.
-   if (Array.isArray(ds?.zones) && ds.zones.length > 0) {
-  setDeliveryZones(
-    ds.zones
-      .map((z: any) => ({
-        id: String(z?.id ?? ""),
-        name: typeof z?.name === "string" ? z.name : undefined,
-        isActive: z?.isActive !== false,
-        minOrderAmount: Number(z?.minOrderAmount ?? 0),
-        feeAmount: Number(z?.feeAmount ?? 0),
-      }))
-      .filter((z: any) => !!z.id)
-  );
-} else if (!hydratedDeliveryOnceRef.current) {
-      // First hydration: if restaurant detail happens to include zones, use them.
+
+    const dsZones = Array.isArray(ds?.zones) && ds.zones.length > 0 ? ds.zones : null;
+
+    if (dsZones) {
+      const incomingZones = dsZones;
+      const hasAxial = incomingZones.some((z: any) => isAxialId(String(z?.id ?? "")));
+
+      if (hasAxial) {
+        // ✅ New format (ax:...) → use directly
+        setDeliveryZones(
+          incomingZones
+            .map((z: any) => ({
+              id: String(z?.id ?? ""),
+              name: typeof z?.name === "string" ? z.name : undefined,
+              isActive: z?.isActive !== false,
+              minOrderAmount: Number(z?.minOrderAmount ?? 0),
+              feeAmount: Number(z?.feeAmount ?? 0),
+            }))
+            .filter((z: any) => !!z.id)
+        );
+      } else {
+        // ✅ Legacy format (hex-1 / etc) → migrate onto deterministic axial base
+        const gs = ds?.gridSettings ?? (data as any).delivery?.gridSettings;
+        const base = makeBaseZones({
+          cellSizeMeters: Number(gs?.cellSizeMeters ?? gridSettings.cellSizeMeters ?? 450),
+          radiusMeters: Number(gs?.radiusMeters ?? gridSettings.radiusMeters ?? 3000),
+        });
+
+        const next = [...base];
+
+        for (const z of incomingZones) {
+          const idx = legacyIndexFromIdOrName(z);
+          if (idx === null || idx < 0 || idx >= next.length) continue;
+
+          next[idx] = {
+            ...next[idx],
+            // id must remain axial (ax:...)
+            name: typeof z?.name === "string" && z.name.trim() ? z.name : next[idx].name,
+            isActive: z?.isActive !== false,
+            minOrderAmount: Number(z?.minOrderAmount ?? next[idx].minOrderAmount) || 0,
+            feeAmount: Number(z?.feeAmount ?? next[idx].feeAmount) || 0,
+          };
+        }
+
+        setDeliveryZones(next);
+        showToast(
+          "Teslimat bölgeleri eski formattan yeni (ax) formata taşındı. Lütfen Kaydet’e basın.",
+          "success"
+        );
+      }
+    } else if (!hydratedDeliveryOnceRef.current) {
+      // First hydration fallback: if restaurant detail happens to include zones, use them.
       const rz = (data as any).delivery?.zones;
-      if (Array.isArray(rz)) {
+      if (Array.isArray(rz) && rz.length > 0) {
         setDeliveryZones(
           rz
             .map((z: any) => ({
@@ -565,7 +616,7 @@ export const SettingsPage: React.FC = () => {
       const normalizedGridSettings = {
         cellSizeMeters: Math.max(50, Number(gridSettings.cellSizeMeters) || 450),
         radiusMeters: Math.max(200, Number(gridSettings.radiusMeters) || 3000),
-        orientation: "pointy",
+        orientation: (gridSettings.orientation === "flat" ? "flat" : "pointy"),
       } as const;
 
       const normalizedZones = Array.isArray(deliveryZones)
