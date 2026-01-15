@@ -813,16 +813,35 @@ export const SettingsPage: React.FC = () => {
 
 
   // --- Delivery zone helpers (map/table shared) ---
-  const toggleZoneActive = React.useCallback((zoneId: string) => {
-    setDeliveryZones((prev) =>
-      prev.map((z) => (z.id === zoneId ? { ...z, isActive: !z.isActive } : z))
-    );
-  }, []);
 
-  const selectZone = React.useCallback((zoneId: string | null) => {
+const ensureZonesSeeded = React.useCallback(
+  (prev: DeliveryZoneState[]) => (prev && prev.length > 0 ? prev : createPlaceholderZones()),
+  [createPlaceholderZones]
+);
+
+const toggleZoneActive = React.useCallback(
+  (zoneId: string) => {
+    setDeliveryZones((prev) => {
+      const seeded = ensureZonesSeeded(prev);
+      return seeded.map((z) => (z.id === zoneId ? { ...z, isActive: !z.isActive } : z));
+    });
+  },
+  [ensureZonesSeeded]
+);
+
+const selectZone = React.useCallback(
+  (zoneId: string | null) => {
+    if (!zoneId) {
+      setSelectedZoneId(null);
+      return;
+    }
+
+    // ✅ Eğer state boşsa önce grid’i seed et ki edit paneli bulabilsin
+    setDeliveryZones((prev) => ensureZonesSeeded(prev));
     setSelectedZoneId(zoneId);
-  }, []);
-
+  },
+  [ensureZonesSeeded]
+);
   const updateZonePatch = React.useCallback(
     (zoneId: string, patch: Partial<DeliveryZoneState>) => {
       setDeliveryZones((prev) =>
