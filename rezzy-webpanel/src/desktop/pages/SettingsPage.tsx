@@ -421,19 +421,19 @@ export const SettingsPage: React.FC = () => {
 
     // IMPORTANT: Do NOT reset zones to [] just because restaurant detail doesn't include them.
     // Only overwrite when backend returns zones; otherwise preserve current UI state.
-    if (Array.isArray(ds?.zones)) {
-      setDeliveryZones(
-        ds.zones
-          .map((z: any) => ({
-            id: String(z?.id ?? ""),
-            name: typeof z?.name === "string" ? z.name : undefined,
-            isActive: z?.isActive !== false,
-            minOrderAmount: Number(z?.minOrderAmount ?? 0),
-            feeAmount: Number(z?.feeAmount ?? 0),
-          }))
-          .filter((z: any) => !!z.id)
-      );
-    } else if (!hydratedDeliveryOnceRef.current) {
+   if (Array.isArray(ds?.zones) && ds.zones.length > 0) {
+  setDeliveryZones(
+    ds.zones
+      .map((z: any) => ({
+        id: String(z?.id ?? ""),
+        name: typeof z?.name === "string" ? z.name : undefined,
+        isActive: z?.isActive !== false,
+        minOrderAmount: Number(z?.minOrderAmount ?? 0),
+        feeAmount: Number(z?.feeAmount ?? 0),
+      }))
+      .filter((z: any) => !!z.id)
+  );
+} else if (!hydratedDeliveryOnceRef.current) {
       // First hydration: if restaurant detail happens to include zones, use them.
       const rz = (data as any).delivery?.zones;
       if (Array.isArray(rz)) {
