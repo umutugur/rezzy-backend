@@ -105,10 +105,13 @@ function axialRing(radius: number): HexAxial[] {
   return out;
 }
 
+function axialId(ax: HexAxial) {
+  return `ax:${ax.q},${ax.r}`;
+}
+
 function makeDefaultGrid(ringCount: number): { coords: HexAxial[]; baseZones: DeliveryHexZone[] } {
   const coords = axialRing(ringCount);
 
-  // stable deterministic ordering: by distance then r then q
   coords.sort((a, b) => {
     const da = Math.max(Math.abs(a.q), Math.abs(a.r), Math.abs(-a.q - a.r));
     const db = Math.max(Math.abs(b.q), Math.abs(b.r), Math.abs(-b.q - b.r));
@@ -117,8 +120,8 @@ function makeDefaultGrid(ringCount: number): { coords: HexAxial[]; baseZones: De
     return a.q - b.q;
   });
 
-  const baseZones: DeliveryHexZone[] = coords.map((_, i) => ({
-    id: `hex-${i + 1}`,
+  const baseZones: DeliveryHexZone[] = coords.map((ax, i) => ({
+    id: axialId(ax),                 // ✅ artık index değil axial
     name: `Bölge ${i + 1}`,
     isActive: false,
     minOrderAmount: 0,
@@ -127,7 +130,6 @@ function makeDefaultGrid(ringCount: number): { coords: HexAxial[]; baseZones: De
 
   return { coords, baseZones };
 }
-
 export default function DeliveryZoneMap({
   center = { lat: 35.1856, lng: 33.3823 },
   zones,

@@ -9,6 +9,50 @@ function normalizePoint(coords) {
   if (lng < -180 || lng > 180 || lat < -90 || lat > 90) return null;
   return [lng, lat];
 }
+function metersPerLngAtLat(lat) {
+  const latRad = (lat * Math.PI) / 180;
+  return 111_320 * Math.cos(latRad);
+}
+
+function axialIdFromQR(q, r) {
+  return `ax:${q},${r}`;
+}
+
+function cubeRound(x, y, z) {
+  let rx = Math.round(x);
+  let ry = Math.round(y);
+  let rz = Math.round(z);
+
+  const xDiff = Math.abs(rx - x);
+  const yDiff = Math.abs(ry - y);
+  const zDiff = Math.abs(rz - z);
+
+  if (xDiff > yDiff && xDiff > zDiff) rx = -ry - rz;
+  else if (yDiff > zDiff) ry = -rx - rz;
+  else rz = -rx - ry;
+
+  return { x: rx, y: ry, z: rz };
+}
+
+function axialFromOffsetMeters(dx, dy, size) {
+  // inverse of:
+  // x = size*sqrt(3)*(q + r/2)
+  // y = size*(3/2)*r
+  const r = (2 / 3) * (dy / size);
+  const q = (dx / (size * Math.sqrt(3))) - r / 2;
+
+  const cx = q;
+  const cz = r;
+  const cy = -cx - cz;
+
+  const rounded = cubeRound(cx, cy, cz);
+  return { q: rounded.x, r: rounded.z };
+}
+
+function axialDistance(q, r) {
+  const s = -q - r;
+  return Math.max(Math.abs(q), Math.abs(r), Math.abs(s));
+}
 
 /**
  * Burada “hex zone bulma” katmanını soyut tutuyoruz.
@@ -18,18 +62,29 @@ function normalizePoint(coords) {
  *
  * Şimdilik bu fonksiyonun sadece "hexId" döndüren kısmını senin algoritmana bağlayacağız.
  */
-export function computeHexIdPointy({
-  // eslint-disable-next-line no-unused-vars
-  gridSettings,
-  // eslint-disable-next-line no-unused-vars
-  customerLocation,
-}) {
-  // ✅ TODO: Senin pointy hex algoritman buraya.
-  // Şu an varsayım: dışarıdan "hexId" üretilebiliyor.
-  // Bu placeholder’ı bırakmak yerine, kendi resolver’ını buraya taşımalısın.
-  return null;
-}
+export function computeHexIdPointy({ gridSettings, customerLocation, restaurantLocation }) {
+  const size = Number(gridSettings?.cellSizeMeters || 0);
+  if (!Number.isFinite(size) || size <= 0) return null;
+  if (!Array.isArray(restaurantLocation) || restaurantLocation.length !== 2) return null;
 
+  const [clng, clat] = customerLocation;        // [lng, lat]
+  const [rlng, rlat] = restaurantLocation || []; // [lng, lat]
+  if (![clng, clat, rlng, rlat].every(Number.isFinite)) return null;
+
+  // offset in meters (east, north)
+  const dx = (clng - rlng) * metersPerLngAtLat(rlat);
+  const dy = (clat - rlat) * 111_320;
+
+  const ax = axialFromOffsetMeters(dx, dy, size);
+
+  // ring limit (same logic as frontend)
+  const radiusMeters = Number(gridSettings?.radiusMeters || 0);
+  const ring = Math.max(1, Math.min(6, Math.round(radiusMeters / (size * 1.6))));
+
+  if (axialDistance(ax.q, ax.r) > ring) return null;
+
+  return axialIdFromQR(ax.q, ax.r);
+}
 /**
  * Restaurant + customerLocation -> zone sonucu
  * - global defaults + per-zone override uygular
@@ -56,10 +111,18 @@ export async function resolveZoneForRestaurant({
   }
 
   const gridSettings = r.delivery?.gridSettings || {};
-  const computedHexId =
-    String(hexId || "").trim() ||
-    computeHexIdPointy({ gridSettings, customerLocation: coords });
 
+const restaurantLocation = Array.isArray(r?.location?.coordinates)
+  ? r.location.coordinates
+  : null;
+
+const computedHexId =
+  String(hexId || "").trim() ||
+  computeHexIdPointy({
+    gridSettings,
+    customerLocation: coords,
+    restaurantLocation, // ✅ şart
+  });
   if (!computedHexId) {
     // Hex bulunamıyorsa sipariş de engellenecek; ama bunun nedeni algoritma/limit olabilir.
     return {

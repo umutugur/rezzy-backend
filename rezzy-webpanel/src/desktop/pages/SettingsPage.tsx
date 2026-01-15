@@ -103,6 +103,7 @@ type Restaurant = {
   checkinWindowAfterMinutes: number;
 };
 
+
 const DAYS = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"] as const;
 
 const DEFAULT_OPENING_HOURS: OpeningHour[] = Array.from(
@@ -173,6 +174,53 @@ const THEME_OPTIONS: { key: DesktopThemeKey; label: string; description: string 
     description: "iPad POS tarzı, açık ve yüksek kontrastlı görünüm.",
   },
 ];
+type HexAxial = { q: number; r: number };
+
+function axialRing(radius: number): HexAxial[] {
+  const out: HexAxial[] = [];
+  for (let q = -radius; q <= radius; q++) {
+    const r1 = Math.max(-radius, -q - radius);
+    const r2 = Math.min(radius, -q + radius);
+    for (let r = r1; r <= r2; r++) out.push({ q, r });
+  }
+  return out;
+}
+
+function axialId(ax: HexAxial) {
+  return `ax:${ax.q},${ax.r}`;
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function ringCountFromRadius(radiusMeters: number, cellSizeMeters: number) {
+  const r = Number(radiusMeters);
+  const s = Number(cellSizeMeters);
+  if (!Number.isFinite(r) || !Number.isFinite(s) || r <= 0 || s <= 0) return 2;
+  return clamp(Math.round(r / (s * 1.6)), 1, 6);
+}
+
+function makeBaseZones(grid: { radiusMeters: number; cellSizeMeters: number }) {
+  const ring = ringCountFromRadius(grid.radiusMeters, grid.cellSizeMeters);
+  const coords = axialRing(ring);
+
+  coords.sort((a, b) => {
+    const da = Math.max(Math.abs(a.q), Math.abs(a.r), Math.abs(-a.q - a.r));
+    const db = Math.max(Math.abs(b.q), Math.abs(b.r), Math.abs(-b.q - b.r));
+    if (da !== db) return da - db;
+    if (a.r !== b.r) return a.r - b.r;
+    return a.q - b.q;
+  });
+
+  return coords.map((ax, i) => ({
+    id: axialId(ax),
+    name: `Bölge ${i + 1}`,
+    isActive: false,
+    minOrderAmount: 0,
+    feeAmount: 0,
+  }));
+}
 
 export const SettingsPage: React.FC = () => {
   const user = authStore.getUser();
@@ -240,15 +288,11 @@ export const SettingsPage: React.FC = () => {
   const placeholderZonesCreatedRef = React.useRef(false);
 
   const createPlaceholderZones = React.useCallback((): DeliveryZoneState[] => {
-    // Getir benzeri başlangıç grid’i (merkez + 2 halka ≈ 19 hücre)
-    return Array.from({ length: 19 }, (_, i) => ({
-      id: `hex-${i + 1}`,
-      name: `Bölge ${i + 1}`,
-      isActive: false,
-      minOrderAmount: 0,
-      feeAmount: 0,
-    }));
-  }, []);
+  return makeBaseZones({
+    cellSizeMeters: gridSettings.cellSizeMeters,
+    radiusMeters: gridSettings.radiusMeters,
+  });
+}, [gridSettings.cellSizeMeters, gridSettings.radiusMeters]);
 
   // Delivery map center (prefer saved restaurant location)
   const deliveryMapCenter = React.useMemo(() => {
