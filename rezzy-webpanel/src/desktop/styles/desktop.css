@@ -1458,3 +1458,58 @@
 .kbtn.warning { background:#ff9800; }
 .kbtn.success { background:#00c853; }
 .kbtn:hover { opacity:.85; }
+/* ===== Delivery Orders basic tokens (fallback) ===== */
+.rezvix-theme-light,
+.rezvix-theme-default,
+.rezvix-desktop-shell {
+  --rez-bg: #f6f7fb;
+  --rez-card: #ffffff;
+  --rez-line: rgba(15, 23, 42, 0.10);
+  --rez-text: #0f172a;
+  --rez-muted: rgba(15, 23, 42, 0.60);
+
+  --rez-primary: #7b2c2c; /* senin bordo tonu */
+  --rez-danger: #b42318;
+  --rez-warning: #b26a00;
+  --rez-success: #067647;
+
+  --rez-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+/* ===== Buttons ===== */
+.rezvix-btn {
+  appearance: none;
+  border: 1px solid var(--rez-line);
+  background: var(--rez-card);
+  color: var(--rez-text);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 120ms ease, opacity 120ms ease, background-color 120ms ease;
+}
+
+.rezvix-btn:hover { transform: translateY(-1px); }
+.rezvix-btn:active { transform: translateY(0px); opacity: 0.9; }
+.rezvix-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+.rezvix-btn--primary {
+  background: var(--rez-primary);
+  border-color: transparent;
+  color: #fff;
+}
+
+.rezvix-btn--danger {
+  background: var(--rez-danger);
+  border-color: transparent;
+  color: #fff;
+}
+
+.rezvix-btn--ghost {
+  background: transparent;
+}
