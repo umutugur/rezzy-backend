@@ -30,7 +30,7 @@ import addressRoutes from "./routes/address.js";
 import deliveryRoutes from "./routes/delivery.js";
 
 // ✅ NEW: Delivery panel routes (desktop delivery orders)
-import deliveryPanelRoutes from "./routes/delivery.panel.routes.js";
+import deliveryPanelRoutes from "./routes/deliveryOrders.panel.routes.js";
 
 dotenv.config();
 const app = express();
