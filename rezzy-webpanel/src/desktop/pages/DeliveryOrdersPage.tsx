@@ -11,7 +11,7 @@ import {
   restaurantSetDeliveryOrderDelivered,
   restaurantCancelDeliveryOrder,
   type DeliveryOrderRow,
-} from "../../api/client";
+} from "../../api/delivery";
 
 type Status = "new" | "accepted" | "on_the_way" | "delivered" | "cancelled";
 
