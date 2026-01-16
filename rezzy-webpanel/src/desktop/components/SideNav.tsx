@@ -6,6 +6,7 @@ export type DesktopNavKey =
   | "rezvix"
   | "menu"
   | "reports"
+  | "delivery"
   | "settings";
 
 export type SideNavProps = {
@@ -65,7 +66,19 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate }) => {
 
         <div style={{ marginTop: 10 }}>
           <div className="rezvix-sidenav__group-label">Rezvix</div>
-
+          <button
+  type="button"
+  className={
+    "rezvix-sidenav__item" +
+    (active === "delivery" ? " rezvix-sidenav__item--active" : "")
+  }
+  onClick={() => handleClick("delivery")}
+>
+  <div className="rezvix-sidenav__icon">🛵</div>
+  <div className="rezvix-sidenav__label">
+    <span>Paket Sipariş</span>
+  </div>
+</button>
           <button
             type="button"
             className={

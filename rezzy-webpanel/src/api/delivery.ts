@@ -276,3 +276,45 @@ export async function deliveryReplaceZones(
   });
   return data as { ok: boolean; zones: DeliveryZone[] };
 }
+export type DeliveryOrderRow = {
+  _id: string;
+  status: "new" | "accepted" | "on_the_way" | "delivered" | "cancelled";
+  createdAt?: string;
+
+  restaurantName?: string;
+  shortCode?: string;
+
+  subtotal?: number;
+  deliveryFee?: number;
+  total?: number;
+
+  addressText?: string;
+  customerNote?: string;
+
+  items?: { itemId: string; title: string; price: number; qty: number; note?: string }[];
+};
+
+export async function restaurantListDeliveryOrders(restaurantId: string) {
+  const { data } = await api.get(`/panel/restaurants/${restaurantId}/delivery-orders`);
+  return data as { items: DeliveryOrderRow[] };
+}
+
+export async function restaurantAcceptDeliveryOrder(restaurantId: string, orderId: string) {
+  const { data } = await api.post(`/panel/restaurants/${restaurantId}/delivery-orders/${orderId}/accept`);
+  return data;
+}
+
+export async function restaurantSetDeliveryOrderOnTheWay(restaurantId: string, orderId: string) {
+  const { data } = await api.post(`/panel/restaurants/${restaurantId}/delivery-orders/${orderId}/on-the-way`);
+  return data;
+}
+
+export async function restaurantSetDeliveryOrderDelivered(restaurantId: string, orderId: string) {
+  const { data } = await api.post(`/panel/restaurants/${restaurantId}/delivery-orders/${orderId}/delivered`);
+  return data;
+}
+
+export async function restaurantCancelDeliveryOrder(restaurantId: string, orderId: string) {
+  const { data } = await api.post(`/panel/restaurants/${restaurantId}/delivery-orders/${orderId}/cancel`);
+  return data;
+}
