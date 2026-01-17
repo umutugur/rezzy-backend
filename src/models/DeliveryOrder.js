@@ -29,17 +29,13 @@ const DeliveryOrderSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     addressId: { type: mongoose.Schema.Types.ObjectId, ref: "UserAddress", required: true, index: true },
 
-    // ✅ Customer snapshots (order-time)
+    // ✅ Snapshots (order-time)
     customerName: { type: String, default: "" },
     customerPhone: { type: String, default: "" },
-
-    // ✅ Address snapshot (order-time)
     addressText: { type: String, default: "" },
+    customerNote: { type: String, default: "" }, // order-level note
 
-    // ✅ Order-level note (NOT item note)
-    customerNote: { type: String, default: "" },
-
-    // ✅ Zone snapshot (sipariş anındaki)
+    // ✅ Zone snapshot
     zoneId: { type: String, required: true, index: true },
     zoneIsActive: { type: Boolean, default: true },
     minOrderAmountSnapshot: { type: Number, min: 0, default: 0 },

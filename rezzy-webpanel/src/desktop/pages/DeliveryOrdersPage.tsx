@@ -18,7 +18,6 @@ import {
 } from "../../api/delivery";
 
 type Status = "new" | "accepted" | "on_the_way" | "delivered" | "cancelled";
-
 type PaymentMethod = "card" | "cash" | "card_on_delivery" | string | undefined;
 
 function formatMoney(amount: number, currency: "TRY" | "GBP") {
@@ -43,6 +42,10 @@ function paymentLabel(m: PaymentMethod): string {
   return "—";
 }
 
+function safeStr(v: any) {
+  return String(v ?? "").trim();
+}
+
 // Popup blocker fix: user gesture anında window.open
 function openPrintWindow(title: string) {
   const w = window.open("", "_blank", "width=420,height=800");
@@ -63,6 +66,7 @@ function writeAndPrint80mm(w: Window, title: string, html: string) {
           .row { display:flex; justify-content:space-between; margin: 2px 0; gap: 8px; }
           .bold { font-weight: 800; }
           .small { font-size: 10px; }
+          .muted { opacity: .85; }
         </style>
       </head>
       <body><div class="wrap">${html}</div></body>
@@ -90,25 +94,42 @@ function buildPrintHtml(o: DeliveryOrderRow, currency: "TRY" | "GBP") {
   const itemsHtml = (o.items || [])
     .map((it: any) => {
       const line = Number(it.price || 0) * Number(it.qty || 1);
-      return `<div class="row"><span>${it.qty}× ${it.title}</span><span>${formatMoney(
+      return `<div class="row"><span>${it.qty}× ${safeStr(it.title)}</span><span>${formatMoney(
         line,
         currency
-      )}</span></div>`;
+      )}</span></div>${
+        safeStr(it.note)
+          ? `<div class="small muted">Not: ${safeStr(it.note)}</div>`
+          : ""
+      }`;
     })
     .join("");
 
-  const addr = (o as any).addressText || "-";
-  const note = String((o as any).customerNote || "").trim();
+  const addr = safeStr((o as any).addressText) || "-";
+  const note = safeStr((o as any).customerNote);
   const pay = paymentLabel((o as any).paymentMethod);
 
+  const customerName = safeStr((o as any).customerName);
+  const customerPhone = safeStr((o as any).customerPhone);
+
   return `
-    <div class="center bold">${(o as any).restaurantName || "Restoran"}</div>
+    <div class="center bold">${safeStr((o as any).restaurantName) || "Restoran"}</div>
     <div class="center small">PAKET SİPARİŞ</div>
     <div class="line"></div>
 
-    <div class="row small"><span>Sipariş</span><span>#${(o as any).shortCode || String(o._id).slice(-6)}</span></div>
+    <div class="row small"><span>Sipariş</span><span>#${safeStr((o as any).shortCode) || String(o._id).slice(-6)}</span></div>
     <div class="row small"><span>Tarih</span><span>${created}</span></div>
     <div class="row small"><span>Ödeme</span><span>${pay}</span></div>
+
+    ${
+      customerName || customerPhone
+        ? `
+          <div class="line"></div>
+          ${customerName ? `<div class="row small"><span>Müşteri</span><span>${customerName}</span></div>` : ""}
+          ${customerPhone ? `<div class="row small"><span>Telefon</span><span>${customerPhone}</span></div>` : ""}
+        `
+        : ""
+    }
 
     <div class="line"></div>
     <div class="bold">Adres</div>
@@ -166,7 +187,6 @@ export const DeliveryOrdersPage: React.FC = () => {
 
   const orders: DeliveryOrderRow[] = data?.items ?? [];
 
-  // yeni sipariş sesi
   React.useEffect(() => {
     const prev = prevByIdRef.current;
     const nowMap: Record<string, DeliveryOrderRow> = {};
@@ -255,33 +275,22 @@ export const DeliveryOrdersPage: React.FC = () => {
     return by;
   }, [orders]);
 
-  // Modal action handlers (print + mutate)
   const handleAcceptAndPrint = (o: DeliveryOrderRow) => {
-    // popup blocker fix
     const w = openPrintWindow("Paket Sipariş");
     if (!w) {
       showToast("Tarayıcı yazdırma penceresini engelledi. Popup izni ver.", "error");
       return;
     }
-    // önce print HTML’yi yaz (order zaten elimizde var)
+
     const html = buildPrintHtml(o, currency);
     writeAndPrint80mm(w, "Paket Sipariş", html);
 
-    // sonra status update
     acceptMut.mutate(String(o._id));
   };
 
-  const handleReject = (o: DeliveryOrderRow) => {
-    cancelMut.mutate(String(o._id));
-  };
-
-  const handleOnTheWay = (o: DeliveryOrderRow) => {
-    onTheWayMut.mutate(String(o._id));
-  };
-
-  const handleDelivered = (o: DeliveryOrderRow) => {
-    deliveredMut.mutate(String(o._id));
-  };
+  const handleReject = (o: DeliveryOrderRow) => cancelMut.mutate(String(o._id));
+  const handleOnTheWay = (o: DeliveryOrderRow) => onTheWayMut.mutate(String(o._id));
+  const handleDelivered = (o: DeliveryOrderRow) => deliveredMut.mutate(String(o._id));
 
   return (
     <RestaurantDesktopLayout
@@ -294,7 +303,6 @@ export const DeliveryOrdersPage: React.FC = () => {
         { label: "Yolda", value: `${groups.on_the_way.length}`, tone: groups.on_the_way.length ? "success" : "neutral" },
       ]}
     >
-      {/* local styles */}
       <style>{`
         @keyframes rezGlow {
           0% { box-shadow: 0 0 0 rgba(0,0,0,0); }
@@ -354,35 +362,14 @@ export const DeliveryOrdersPage: React.FC = () => {
 
       {!isLoading && !isError && orders.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-          <Column
-            title="Yeni"
-            items={groups.new}
-            currency={currency}
-            onPick={setSelected}
-            compactNew
-          />
-          <Column
-            title="Onaylı"
-            items={groups.accepted}
-            currency={currency}
-            onPick={setSelected}
-          />
-          <Column
-            title="Yolda"
-            items={groups.on_the_way}
-            currency={currency}
-            onPick={setSelected}
-          />
+          <Column title="Yeni" items={groups.new} currency={currency} onPick={setSelected} compactNew />
+          <Column title="Onaylı" items={groups.accepted} currency={currency} onPick={setSelected} />
+          <Column title="Yolda" items={groups.on_the_way} currency={currency} onPick={setSelected} />
         </div>
       )}
 
-      {/* Detail modal */}
       {selected && (
-        <div
-          className="rez-modal-overlay"
-          onClick={() => setSelected(null)}
-          role="presentation"
-        >
+        <div className="rez-modal-overlay" onClick={() => setSelected(null)} role="presentation">
           <div className="rez-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
               <div className="rez-modal-title">
@@ -420,18 +407,31 @@ export const DeliveryOrdersPage: React.FC = () => {
               </span>
             </div>
 
+            {/* ✅ Müşteri satırı */}
+            {(safeStr((selected as any).customerName) || safeStr((selected as any).customerPhone)) ? (
+              <div className="rez-kv" style={{ marginTop: 6 }}>
+                <span>Müşteri</span>
+                <span style={{ textAlign: "right", maxWidth: 320 }}>
+                  {[
+                    safeStr((selected as any).customerName),
+                    safeStr((selected as any).customerPhone),
+                  ].filter(Boolean).join(" • ")}
+                </span>
+              </div>
+            ) : null}
+
             <div className="rez-kv" style={{ marginTop: 6 }}>
               <span>Adres</span>
               <span style={{ textAlign: "right", maxWidth: 320 }}>
-                {String((selected as any).addressText || "—")}
+                {safeStr((selected as any).addressText) || "—"}
               </span>
             </div>
 
-            {String((selected as any).customerNote || "").trim() ? (
+            {safeStr((selected as any).customerNote) ? (
               <div style={{ marginTop: 10 }}>
                 <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>Sipariş Notu</div>
                 <div style={{ fontSize: 13, opacity: 0.9 }}>
-                  {String((selected as any).customerNote).trim()}
+                  {safeStr((selected as any).customerNote)}
                 </div>
               </div>
             ) : null}
@@ -447,11 +447,11 @@ export const DeliveryOrdersPage: React.FC = () => {
                     <div className="rez-item-row" key={`${it.itemId || it.title}-${idx}`}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 800 }}>
-                          {it.qty}× {it.title}
+                          {it.qty}× {safeStr(it.title)}
                         </div>
-                        {String(it.note || "").trim() ? (
+                        {safeStr(it.note) ? (
                           <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
-                            Not: {String(it.note).trim()}
+                            Not: {safeStr(it.note)}
                           </div>
                         ) : null}
                       </div>
@@ -474,7 +474,6 @@ export const DeliveryOrdersPage: React.FC = () => {
 
             <div className="rez-hr" />
 
-            {/* Actions depend on status */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {((selected as any).status === "new") && (
                 <>
@@ -590,17 +589,16 @@ function Column(props: {
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                 <div style={{ fontWeight: 900 }}>
-                  #{(o as any).shortCode || String(o._id).slice(-6)}
+                  #{safeStr((o as any).shortCode) || String(o._id).slice(-6)}
                 </div>
                 <div style={{ fontWeight: 900 }}>
                   {formatMoney(Number((o as any).total || 0), currency)}
                 </div>
               </div>
 
-              {/* Yeni sipariş: sadece numara + tutar istiyorsun */}
               {!compactNew && (
                 <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
-                  {String((o as any).addressText || "-")}
+                  {safeStr((o as any).addressText) || "-"}
                 </div>
               )}
             </div>

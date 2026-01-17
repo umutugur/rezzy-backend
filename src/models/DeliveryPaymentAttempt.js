@@ -4,10 +4,10 @@ import mongoose from "mongoose";
 const AttemptItemSchema = new mongoose.Schema(
   {
     itemId: { type: mongoose.Schema.Types.ObjectId, ref: "MenuItem", required: true },
-    title: { type: String, required: true },
-    price: { type: Number, min: 0, required: true },
+    title: { type: String, required: true }, // snapshot
+    price: { type: Number, min: 0, required: true }, // snapshot
     qty: { type: Number, min: 1, required: true },
-    note: { type: String, default: "" },
+    note: { type: String, default: "" }, // item-level
   },
   { _id: false }
 );
@@ -24,6 +24,7 @@ const DeliveryPaymentAttemptSchema = new mongoose.Schema(
     addressText: { type: String, default: "" },
     customerNote: { type: String, default: "" },
 
+    // Zone snapshot
     zoneId: { type: String, required: true, index: true },
     zoneIsActive: { type: Boolean, default: true },
     minOrderAmountSnapshot: { type: Number, min: 0, default: 0 },
