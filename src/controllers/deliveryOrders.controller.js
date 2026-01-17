@@ -59,20 +59,21 @@ function buildAddressTextSnapshot(addr) {
 }
 
 async function buildCustomerSnapshot({ userId, reqUser }) {
-  // auth middleware bazen req.user içine name/phone koyuyor; önce onu kullan
   const fromReqName = safeStr(reqUser?.name);
   const fromReqPhone = safeStr(reqUser?.phone);
 
-  if (fromReqName || fromReqPhone) {
+  // Eğer ikisi de doluysa DB'ye gitme
+  if (fromReqName && fromReqPhone) {
     return { customerName: fromReqName, customerPhone: fromReqPhone };
   }
 
-  // yoksa DB’den çek
+  // Eksik olanı DB’den tamamla
   const u = await User.findById(userId).select("name phone").lean();
-  return {
-    customerName: safeStr(u?.name),
-    customerPhone: safeStr(u?.phone),
-  };
+
+  const customerName = fromReqName || safeStr(u?.name);
+  const customerPhone = fromReqPhone || safeStr(u?.phone);
+
+  return { customerName, customerPhone };
 }
 
 async function buildDeliveryPricingOrThrow({ userId, restaurantId, addressId, items, hexId }) {
