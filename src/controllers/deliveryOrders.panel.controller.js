@@ -1,3 +1,4 @@
+// src/controllers/deliveryOrders.panel.controller.js
 import mongoose from "mongoose";
 import DeliveryOrder from "../models/DeliveryOrder.js";
 import Restaurant from "../models/Restaurant.js";
@@ -14,7 +15,13 @@ async function loadOrderOrThrow(rid, orderId) {
   return o;
 }
 
-// list
+function paymentLabel(method) {
+  if (method === "card") return "Online Ödeme";
+  if (method === "cash") return "Kapıda Nakit";
+  if (method === "card_on_delivery") return "Kapıda Kart";
+  return "Bilinmiyor";
+}
+
 export async function panelListDeliveryOrders(req, res, next) {
   try {
     const rid = mustObjectId(req.params.rid, "RESTAURANT_ID_INVALID", "rid geçersiz.");
@@ -32,11 +39,22 @@ export async function panelListDeliveryOrders(req, res, next) {
       createdAt: o.createdAt,
       restaurantName: r?.name || null,
       shortCode: o.shortCode || null,
+
       subtotal: o.subtotal,
       deliveryFee: o.deliveryFee,
       total: o.total,
+      currency: o.currency || null,
+
+      // ✅ snapshots
       addressText: o.addressText || null,
+      customerName: o.customerName || null,
+      customerPhone: o.customerPhone || null,
       customerNote: o.customerNote || null,
+
+      paymentMethod: o.paymentMethod || null,
+      paymentMethodLabel: paymentLabel(o.paymentMethod),
+      paymentStatus: o.paymentStatus || null,
+
       items: o.items || [],
     }));
 
@@ -46,6 +64,7 @@ export async function panelListDeliveryOrders(req, res, next) {
   }
 }
 
+// (accept / on_the_way / delivered / cancel aynı kalsın)
 function ensureNotDelivered(o) {
   if (String(o.status) === "delivered") {
     throw { status: 400, code: "ORDER_ALREADY_DELIVERED", message: "Teslim edilmiş sipariş güncellenemez." };
@@ -130,7 +149,7 @@ export async function panelCancelDeliveryOrder(req, res, next) {
     const orderId = mustObjectId(req.params.orderId, "ORDER_ID_INVALID", "orderId geçersiz.");
 
     const o = await loadOrderOrThrow(rid, orderId);
-    ensureNotDelivered(o); // delivered/cancelled değilse iptal serbest
+    ensureNotDelivered(o);
 
     await DeliveryOrder.updateOne(
       { _id: orderId, restaurantId: rid },

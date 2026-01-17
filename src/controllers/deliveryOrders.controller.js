@@ -7,6 +7,7 @@ import DeliveryPaymentAttempt from "../models/DeliveryPaymentAttempt.js";
 import UserAddress from "../models/UserAddress.js";
 import Restaurant from "../models/Restaurant.js";
 import MenuItem from "../models/MenuItem.js";
+import User from "../models/User.js"; // ✅ ekle
 import { resolveZoneForRestaurant } from "../utils/deliveryZoneResolver.js";
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
@@ -26,6 +27,52 @@ function assertAuth(req) {
 function asObjectId(v, code, message) {
   if (!v || !mongoose.Types.ObjectId.isValid(String(v))) throw { status: 400, code, message };
   return new mongoose.Types.ObjectId(String(v));
+}
+
+function safeStr(v) {
+  return String(v ?? "").trim();
+}
+
+function buildAddressTextSnapshot(addr) {
+  if (!addr) return "";
+  // en yaygın alanları dene
+  const full =
+    safeStr(addr.fullAddress) ||
+    safeStr(addr.address) ||
+    safeStr(addr.addressLine) ||
+    safeStr(addr.formatted) ||
+    safeStr(addr.text);
+
+  if (full) return full;
+
+  // fallback: parçala-birleştir
+  const title = safeStr(addr.title || addr.label || addr.name);
+  const district = safeStr(addr.district || addr.town || addr.neighborhood);
+  const street = safeStr(addr.street || addr.streetName);
+  const buildingNo = safeStr(addr.buildingNo || addr.building || addr.no);
+  const doorNo = safeStr(addr.doorNo || addr.door || addr.apartment);
+  const city = safeStr(addr.city || addr.province || addr.state);
+
+  const parts = [district, street, buildingNo, doorNo, city].filter(Boolean).join(", ");
+  const out = parts || "";
+  return title ? `${title}${out ? ": " : ""}${out}` : out;
+}
+
+async function buildCustomerSnapshot({ userId, reqUser }) {
+  // auth middleware bazen req.user içine name/phone koyuyor; önce onu kullan
+  const fromReqName = safeStr(reqUser?.name);
+  const fromReqPhone = safeStr(reqUser?.phone);
+
+  if (fromReqName || fromReqPhone) {
+    return { customerName: fromReqName, customerPhone: fromReqPhone };
+  }
+
+  // yoksa DB’den çek
+  const u = await User.findById(userId).select("name phone").lean();
+  return {
+    customerName: safeStr(u?.name),
+    customerPhone: safeStr(u?.phone),
+  };
 }
 
 async function buildDeliveryPricingOrThrow({ userId, restaurantId, addressId, items, hexId }) {
@@ -55,7 +102,6 @@ async function buildDeliveryPricingOrThrow({ userId, restaurantId, addressId, it
     };
   }
 
-  // Zone resolve (backend authoritative)
   const zoneOut = await resolveZoneForRestaurant({
     restaurantId: rid,
     customerLocation: coords,
@@ -78,7 +124,6 @@ async function buildDeliveryPricingOrThrow({ userId, restaurantId, addressId, it
     };
   }
 
-  // Items normalize
   if (!Array.isArray(items) || items.length === 0) {
     throw { status: 400, code: "ITEMS_REQUIRED", message: "Sepet boş olamaz." };
   }
@@ -120,7 +165,7 @@ async function buildDeliveryPricingOrThrow({ userId, restaurantId, addressId, it
       title: String(m.title || ""),
       price,
       qty: it.qty,
-      note: it.note,
+      note: it.note, // item-level
     };
   });
 
@@ -146,6 +191,7 @@ async function buildDeliveryPricingOrThrow({ userId, restaurantId, addressId, it
     currency,
     zone: zoneOut.zone,
     address: addr,
+    addressText: buildAddressTextSnapshot(addr),
     calcItems,
     subtotal,
     deliveryFee,
@@ -155,9 +201,7 @@ async function buildDeliveryPricingOrThrow({ userId, restaurantId, addressId, it
 }
 
 /**
- * ✅ B Modeli: CARD ödeme için checkout oluşturur.
- * - DeliveryOrder yaratmaz
- * - Stripe PI + DeliveryPaymentAttempt yaratır
+ * ✅ CARD checkout (attempt + snapshot)
  */
 export async function checkoutDeliveryOrder(req, res, next) {
   try {
@@ -168,6 +212,7 @@ export async function checkoutDeliveryOrder(req, res, next) {
     }
 
     const { restaurantId, addressId, items, hexId } = req.body || {};
+    const customerNote = safeStr(req.body?.customerNote ?? req.body?.note ?? "");
 
     const rid = asObjectId(restaurantId, "RESTAURANT_ID_INVALID", "restaurantId geçersiz.");
     const aid = asObjectId(addressId, "DELIVERY_ADDRESS_REQUIRED", "Paket servis için teslimat adresi seçmeniz gerekiyor.");
@@ -180,7 +225,8 @@ export async function checkoutDeliveryOrder(req, res, next) {
       hexId,
     });
 
-    // Stripe PI
+    const cust = await buildCustomerSnapshot({ userId, reqUser: req.user });
+
     const pi = await stripe.paymentIntents.create({
       amount: Math.round(pricing.total * 100),
       currency: String(pricing.currency || "TRY").toLowerCase(),
@@ -194,11 +240,16 @@ export async function checkoutDeliveryOrder(req, res, next) {
       },
     });
 
-    // Attempt create
     const attempt = await DeliveryPaymentAttempt.create({
       restaurantId: rid,
       userId: new mongoose.Types.ObjectId(String(userId)),
       addressId: aid,
+
+      // ✅ snapshotlar (checkout-time)
+      customerName: cust.customerName,
+      customerPhone: cust.customerPhone,
+      addressText: pricing.addressText,
+      customerNote,
 
       zoneId: String(pricing.zone.id),
       zoneIsActive: true,
@@ -241,13 +292,14 @@ export async function checkoutDeliveryOrder(req, res, next) {
 }
 
 /**
- * ✅ Cash / card_on_delivery: Stripe yok → DeliveryOrder direkt yaratılır
+ * ✅ CASH / CARD_ON_DELIVERY (order + snapshot)
  */
 export async function createDeliveryOrderCOD(req, res, next) {
   try {
     const userId = assertAuth(req);
 
     const { restaurantId, addressId, items, paymentMethod, hexId } = req.body || {};
+    const customerNote = safeStr(req.body?.customerNote ?? req.body?.note ?? "");
 
     if (!["cash", "card_on_delivery"].includes(String(paymentMethod || ""))) {
       throw { status: 400, code: "PAYMENT_METHOD_INVALID", message: "paymentMethod geçersiz." };
@@ -264,7 +316,8 @@ export async function createDeliveryOrderCOD(req, res, next) {
       hexId,
     });
 
-    // Delivery komisyonu şimdilik 0
+    const cust = await buildCustomerSnapshot({ userId, reqUser: req.user });
+
     const commissionRate = 0;
     const commissionAmount = 0;
 
@@ -272,6 +325,12 @@ export async function createDeliveryOrderCOD(req, res, next) {
       restaurantId: rid,
       userId: new mongoose.Types.ObjectId(String(userId)),
       addressId: aid,
+
+      // ✅ snapshotlar (order-time)
+      customerName: cust.customerName,
+      customerPhone: cust.customerPhone,
+      addressText: pricing.addressText,
+      customerNote,
 
       zoneId: String(pricing.zone.id),
       zoneIsActive: true,
@@ -311,9 +370,6 @@ export async function createDeliveryOrderCOD(req, res, next) {
   }
 }
 
-/**
- * ✅ Client polling: attempt durumunu ve oluşan orderId'yi döner
- */
 export async function getDeliveryAttemptStatus(req, res, next) {
   try {
     const userId = assertAuth(req);

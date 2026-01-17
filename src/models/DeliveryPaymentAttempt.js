@@ -4,8 +4,8 @@ import mongoose from "mongoose";
 const AttemptItemSchema = new mongoose.Schema(
   {
     itemId: { type: mongoose.Schema.Types.ObjectId, ref: "MenuItem", required: true },
-    title: { type: String, required: true }, // snapshot
-    price: { type: Number, min: 0, required: true }, // snapshot
+    title: { type: String, required: true },
+    price: { type: Number, min: 0, required: true },
     qty: { type: Number, min: 1, required: true },
     note: { type: String, default: "" },
   },
@@ -18,7 +18,12 @@ const DeliveryPaymentAttemptSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     addressId: { type: mongoose.Schema.Types.ObjectId, ref: "UserAddress", required: true, index: true },
 
-    // Zone snapshot
+    // ✅ Snapshots (checkout-time)
+    customerName: { type: String, default: "" },
+    customerPhone: { type: String, default: "" },
+    addressText: { type: String, default: "" },
+    customerNote: { type: String, default: "" },
+
     zoneId: { type: String, required: true, index: true },
     zoneIsActive: { type: Boolean, default: true },
     minOrderAmountSnapshot: { type: Number, min: 0, default: 0 },
@@ -32,7 +37,7 @@ const DeliveryPaymentAttemptSchema = new mongoose.Schema(
     deliveryFee: { type: Number, min: 0, default: 0 },
     total: { type: Number, min: 0, default: 0 },
 
-    paymentMethod: { type: String, enum: ["card"], required: true }, // sadece online attempt
+    paymentMethod: { type: String, enum: ["card"], required: true },
     stripePaymentIntentId: { type: String, required: true, index: true },
 
     status: {
@@ -42,7 +47,6 @@ const DeliveryPaymentAttemptSchema = new mongoose.Schema(
       index: true,
     },
 
-    // Webhook succeed olduğunda oluşan delivery order referansı
     deliveryOrderId: { type: mongoose.Schema.Types.ObjectId, ref: "DeliveryOrder", default: null, index: true },
   },
   { timestamps: true }

@@ -5,22 +5,17 @@ import Reservation from "../models/Reservation.js";
 import Order from "../models/Order.js";
 import OrderSession from "../models/OrderSession.js";
 
-// ✅ Delivery (B modeli)
 import DeliveryPaymentAttempt from "../models/DeliveryPaymentAttempt.js";
 import DeliveryOrder from "../models/DeliveryOrder.js";
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-const stripe = stripeSecret
-  ? new Stripe(stripeSecret, { apiVersion: "2024-06-20" })
-  : null;
+const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: "2024-06-20" }) : null;
 
 export const stripeWebhook = async (req, res) => {
   if (!stripe || !webhookSecret) {
-    console.error(
-      "[StripeWebhook] Stripe not configured. Check STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET"
-    );
+    console.error("[StripeWebhook] Stripe not configured. Check STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET");
     return res.status(500).send("Stripe not configured");
   }
 
@@ -41,48 +36,32 @@ export const stripeWebhook = async (req, res) => {
         const metadata = pi.metadata || {};
         const kind = String(metadata.kind || "");
 
-        // ✅ 0) DELIVERY ATTEMPT (B modeli)
-        // - succeed olunca DeliveryOrder yaratılır (paid/accepted)
-        // - fail olunca DeliveryOrder asla oluşmaz
         if (kind === "delivery_attempt") {
           const piId = pi.id;
 
-          const attempt = await DeliveryPaymentAttempt.findOne({
-            stripePaymentIntentId: piId,
-          });
-
+          const attempt = await DeliveryPaymentAttempt.findOne({ stripePaymentIntentId: piId });
           if (!attempt) {
-            console.warn(
-              "[StripeWebhook] delivery_attempt succeeded but attempt not found:",
-              piId
-            );
+            console.warn("[StripeWebhook] delivery_attempt succeeded but attempt not found:", piId);
             break;
           }
 
-          // Idempotent: daha önce succeed olup order oluştuysa tekrar yapma
-          if (attempt.status === "succeeded" && attempt.deliveryOrderId) {
-            break;
-          }
+          if (attempt.status === "succeeded" && attempt.deliveryOrderId) break;
 
-          // Optional güvenlik: stripe amount ile attempt.total uyumsuzsa logla
           const amountMinor = typeof pi.amount === "number" ? pi.amount : 0;
           const paidAmount = amountMinor / 100;
           const attemptTotal = Number(attempt.total || 0);
           if (Math.abs(paidAmount - attemptTotal) > 0.01) {
-            console.warn(
-              "[StripeWebhook] delivery_attempt amount mismatch:",
-              { paidAmount, attemptTotal, piId, attemptId: String(attempt._id) }
-            );
-            // İstersen burada hard fail yapabilirsin:
-            // throw new Error("Delivery amount mismatch");
+            console.warn("[StripeWebhook] delivery_attempt amount mismatch:", {
+              paidAmount,
+              attemptTotal,
+              piId,
+              attemptId: String(attempt._id),
+            });
           }
 
-          // Attempt -> succeeded
           attempt.status = "succeeded";
 
-          // DeliveryOrder oluştur (yoksa)
           if (!attempt.deliveryOrderId) {
-            // Delivery komisyonlarını daha sonra snapshotlayacaksın; şimdilik 0
             const commissionRate = 0;
             const commissionAmount = 0;
 
@@ -90,6 +69,12 @@ export const stripeWebhook = async (req, res) => {
               restaurantId: attempt.restaurantId,
               userId: attempt.userId,
               addressId: attempt.addressId,
+
+              // ✅ snapshotlar attempt’ten
+              customerName: attempt.customerName || "",
+              customerPhone: attempt.customerPhone || "",
+              addressText: attempt.addressText || "",
+              customerNote: attempt.customerNote || "",
 
               zoneId: attempt.zoneId,
               zoneIsActive: true,
@@ -111,6 +96,7 @@ export const stripeWebhook = async (req, res) => {
               stripePaymentIntentId: piId,
 
               status: "accepted",
+              acceptedAt: new Date(),
             });
 
             attempt.deliveryOrderId = order._id;
@@ -120,7 +106,7 @@ export const stripeWebhook = async (req, res) => {
           break;
         }
 
-        // ✅ 1) QR ORDER ÖDEMESİ
+        // ---- existing QR / reservation logic aynen kalsın ----
         const orderId = metadata.orderId;
         const sessionId = metadata.sessionId;
 
@@ -136,25 +122,18 @@ export const stripeWebhook = async (req, res) => {
                 stripePaymentIntentId: pi.id,
                 paymentStatus: "paid",
                 currency,
-                total: amount, // güvenlik için stripe tutarını esas al
+                total: amount,
                 status: "accepted",
               },
             },
             { new: true }
           );
 
-          if (
-            order &&
-            sessionId &&
-            mongoose.Types.ObjectId.isValid(sessionId)
-          ) {
+          if (order && sessionId && mongoose.Types.ObjectId.isValid(sessionId)) {
             await OrderSession.updateOne(
               { _id: sessionId },
               {
-                $inc: {
-                  "totals.cardTotal": amount,
-                  "totals.grandTotal": amount,
-                },
+                $inc: { "totals.cardTotal": amount, "totals.grandTotal": amount },
                 $set: { lastOrderAt: new Date() },
               }
             );
@@ -163,7 +142,6 @@ export const stripeWebhook = async (req, res) => {
           break;
         }
 
-        // ✅ 2) REZERVASYON DEPOZİTO ÖDEMESİ
         const reservationId = metadata.reservationId;
 
         if (reservationId && mongoose.Types.ObjectId.isValid(reservationId)) {
@@ -185,9 +163,7 @@ export const stripeWebhook = async (req, res) => {
             }
           );
         } else {
-          console.warn(
-            "[StripeWebhook] payment_intent.succeeded without valid kind/reservationId/orderId"
-          );
+          console.warn("[StripeWebhook] payment_intent.succeeded without valid kind/reservationId/orderId");
         }
 
         break;
@@ -198,23 +174,15 @@ export const stripeWebhook = async (req, res) => {
         const metadata = pi.metadata || {};
         const kind = String(metadata.kind || "");
 
-        // ✅ 0) DELIVERY ATTEMPT FAIL (B modeli)
         if (kind === "delivery_attempt") {
           const piId = pi.id;
 
-          const attempt = await DeliveryPaymentAttempt.findOne({
-            stripePaymentIntentId: piId,
-          });
-
+          const attempt = await DeliveryPaymentAttempt.findOne({ stripePaymentIntentId: piId });
           if (!attempt) {
-            console.warn(
-              "[StripeWebhook] delivery_attempt failed but attempt not found:",
-              piId
-            );
+            console.warn("[StripeWebhook] delivery_attempt failed but attempt not found:", piId);
             break;
           }
 
-          // Idempotent
           if (attempt.status !== "pending") break;
 
           attempt.status = "failed";
@@ -222,22 +190,15 @@ export const stripeWebhook = async (req, res) => {
           break;
         }
 
-        // ✅ 1) QR ORDER FAIL
         const orderId = metadata.orderId;
         if (orderId && mongoose.Types.ObjectId.isValid(orderId)) {
           await Order.updateOne(
             { _id: orderId },
-            {
-              $set: {
-                stripePaymentIntentId: pi.id,
-                paymentStatus: "failed",
-              },
-            }
+            { $set: { stripePaymentIntentId: pi.id, paymentStatus: "failed" } }
           );
           break;
         }
 
-        // ✅ 2) REZERVASYON FAIL
         const reservationId = metadata.reservationId;
         if (reservationId && mongoose.Types.ObjectId.isValid(reservationId)) {
           await Reservation.updateOne(
@@ -252,9 +213,7 @@ export const stripeWebhook = async (req, res) => {
             }
           );
         } else {
-          console.warn(
-            "[StripeWebhook] payment_intent.payment_failed without valid kind/reservationId/orderId"
-          );
+          console.warn("[StripeWebhook] payment_intent.payment_failed without valid kind/reservationId/orderId");
         }
 
         break;

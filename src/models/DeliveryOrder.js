@@ -7,7 +7,7 @@ const DeliveryOrderItemSchema = new mongoose.Schema(
     title: { type: String, required: true }, // snapshot
     price: { type: Number, min: 0, required: true }, // snapshot
     qty: { type: Number, min: 1, default: 1 },
-    note: { type: String, default: "" },
+    note: { type: String, default: "" }, // item-level note
   },
   { _id: false }
 );
@@ -28,6 +28,16 @@ const DeliveryOrderSchema = new mongoose.Schema(
     restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: "Restaurant", required: true, index: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     addressId: { type: mongoose.Schema.Types.ObjectId, ref: "UserAddress", required: true, index: true },
+
+    // ✅ Customer snapshots (order-time)
+    customerName: { type: String, default: "" },
+    customerPhone: { type: String, default: "" },
+
+    // ✅ Address snapshot (order-time)
+    addressText: { type: String, default: "" },
+
+    // ✅ Order-level note (NOT item note)
+    customerNote: { type: String, default: "" },
 
     // ✅ Zone snapshot (sipariş anındaki)
     zoneId: { type: String, required: true, index: true },
@@ -50,7 +60,6 @@ const DeliveryOrderSchema = new mongoose.Schema(
     paymentStatus: { type: String, enum: ["pending", "paid", "failed", "cancelled"], default: "pending" },
     stripePaymentIntentId: { type: String, default: null },
 
-    // ✅ Yeni akış
     status: {
       type: String,
       enum: ["new", "accepted", "on_the_way", "delivered", "cancelled"],
@@ -58,20 +67,16 @@ const DeliveryOrderSchema = new mongoose.Schema(
       index: true,
     },
 
-    // ✅ Status timestamp'leri (panel için altın değerinde)
     acceptedAt: { type: Date, default: null },
     onTheWayAt: { type: Date, default: null },
     deliveredAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
 
-    // ✅ İptal audit
     cancelledBy: { type: String, enum: ["restaurant", "customer", "admin", "system"], default: null },
     cancelReason: { type: String, default: "" },
 
-    // ✅ audit trail (basit)
     statusHistory: { type: [StatusHistorySchema], default: [] },
 
-    // opsiyonel: panel listesinde göstermek için kısa kod (fişte de iyi olur)
     shortCode: { type: String, default: "" },
   },
   { timestamps: true }
