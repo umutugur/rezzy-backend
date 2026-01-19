@@ -174,7 +174,7 @@ export const DeliveryOrdersPage: React.FC = () => {
   const [selected, setSelected] = React.useState<DeliveryOrderRow | null>(null);
 
   React.useEffect(() => {
-    soundRef.current = new Audio("/sounds/notify.mp3");
+    soundRef.current = new Audio("/sounds/order-come.mp3");
   }, []);
 
   const { data, isLoading, isError } = useQuery({

@@ -71,16 +71,32 @@ export const listDeliveryRestaurants = async (req, res, next) => {
 
       const dist = haversineMeters(userCoords, center);
 
-      items.push({
-        ...r,
-        _distanceMeters: Math.round(dist),
-        deliveryZone: {
-          id: out.zone.id,
-          name: out.zone.name || null,
-          minOrderAmount: out.zone.minOrderAmount,
-          feeAmount: out.zone.feeAmount,
-        },
-      });
+      // controllers/deliveryController.js (listDeliveryRestaurants içinde)
+items.push({
+  _id: String(r._id),
+  name: r.name,
+  city: r.city ?? null,
+  address: r.address ?? null,
+  photos: Array.isArray(r.photos) ? r.photos : [],
+  rating: typeof r.rating === "number" ? r.rating : null,
+  region: r.region ?? null,
+
+  // delivery meta (frontend'in beklediği alanlar)
+  deliveryActive: true,
+  deliveryMinOrderAmount: Number(out.zone.minOrderAmount ?? 0),
+  deliveryEtaMin: Number(r?.delivery?.etaMin ?? 0) || null,   // yoksa null
+  deliveryEtaMax: Number(r?.delivery?.etaMax ?? 0) || null,   // yoksa null
+  distanceKm: Number((dist / 1000).toFixed(2)),
+  deliveryFee: Number(out.zone.feeAmount ?? 0),
+
+  // order tarafı için ayrıca lazım olabilir
+  deliveryZone: {
+    id: out.zone.id,
+    name: out.zone.name || null,
+    minOrderAmount: out.zone.minOrderAmount,
+    feeAmount: out.zone.feeAmount,
+  },
+});
     }
 
     items.sort((a, b) => (a._distanceMeters ?? 0) - (b._distanceMeters ?? 0));
