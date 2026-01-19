@@ -16,6 +16,7 @@ const MenuItemSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    ////opsiyon öncesi
 
     /**
      * ✅ NEW: Organization seviyesindeki ürünün referansı
