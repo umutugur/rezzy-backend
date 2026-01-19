@@ -25,6 +25,22 @@ import {
   createItemSchema,
   updateItemSchema,
 } from "../validators/menu.schema.js";
+import {
+  listModifierGroups,
+  createModifierGroup,
+  updateModifierGroup,
+  deleteModifierGroup,
+  addModifierOption,
+  updateModifierOption,
+  deleteModifierOption,
+} from "../controllers/modifierGroups.controller.js";
+
+import {
+  createModifierGroupSchema,
+  updateModifierGroupSchema,
+  addModifierOptionSchema,
+  updateModifierOptionSchema,
+} from "../validators/modifier.schema.js";
 
 const r = Router();
 
@@ -160,5 +176,66 @@ r.patch(
   auth(),
   allowLocationManagerOrAdmin("rid"),
   upsertItemOverride
+);
+// ---------------- Modifier Groups ----------------
+
+// Liste
+r.get(
+  "/:rid/menu/modifier-groups",
+  auth(),
+  allow("restaurant", "admin", "customer"),
+  listModifierGroups
+);
+
+// Group create
+r.post(
+  "/:rid/menu/modifier-groups",
+  auth(),
+  allowLocationManagerOrAdmin("rid"),
+  validateBody(createModifierGroupSchema),
+  createModifierGroup
+);
+
+// Group update
+r.patch(
+  "/:rid/menu/modifier-groups/:gid",
+  auth(),
+  allowLocationManagerOrAdmin("rid"),
+  validateBody(updateModifierGroupSchema),
+  updateModifierGroup
+);
+
+// Group delete (soft)
+r.delete(
+  "/:rid/menu/modifier-groups/:gid",
+  auth(),
+  allowLocationManagerOrAdmin("rid"),
+  deleteModifierGroup
+);
+
+// Option add
+r.post(
+  "/:rid/menu/modifier-groups/:gid/options",
+  auth(),
+  allowLocationManagerOrAdmin("rid"),
+  validateBody(addModifierOptionSchema),
+  addModifierOption
+);
+
+// Option update
+r.patch(
+  "/:rid/menu/modifier-groups/:gid/options/:oid",
+  auth(),
+  allowLocationManagerOrAdmin("rid"),
+  validateBody(updateModifierOptionSchema),
+  updateModifierOption
+);
+
+// Option delete (soft)
+r.delete(
+  "/:rid/menu/modifier-groups/:gid/options/:oid",
+  auth(),
+  allowLocationManagerOrAdmin("rid"),
+  deleteModifierOption
 );
 export default r;

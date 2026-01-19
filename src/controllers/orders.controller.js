@@ -1,20 +1,18 @@
-// controllers/orders.controller.js
+// src/controllers/orders.controller.js
 import mongoose from "mongoose";
 import Stripe from "stripe";
 import OrderSession from "../models/OrderSession.js";
 import Order from "../models/Order.js";
 import Restaurant from "../models/Restaurant.js";
 import TableServiceRequest from "../models/TableServiceRequest.js";
-import dayjs from "dayjs"; // (şu dosyada aktif kullanılmıyorsa kaldırabilirsin)
 import Reservation from "../models/Reservation.js";
+import { buildItemsWithModifiersOrThrow } from "../services/modifierPricing.service.js";
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
-const stripe = stripeSecret
-  ? new Stripe(stripeSecret, { apiVersion: "2024-06-20" })
-  : null;
+const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: "2024-06-20" }) : null;
 
 function currencyFromRegion(region) {
-  if (region === "UK") return "GBP";
+  if (String(region || "").toUpperCase() === "UK") return "GBP";
   return "TRY";
 }
 
@@ -26,42 +24,27 @@ function hasRestaurantAccess(reqUser, rid) {
   if (role === "admin") return true;
 
   if (role === "restaurant") {
-    // legacy user.restaurantId
     if (String(reqUser.restaurantId || "") === ridStr) return true;
 
-    // multi-membership: req.user.restaurantMemberships[].restaurantId
-    const rms = Array.isArray(reqUser.restaurantMemberships)
-      ? reqUser.restaurantMemberships
-      : [];
-
-    return rms.some(
-      (m) => String(m?.restaurantId || m?.restaurant || "") === ridStr
-    );
+    const rms = Array.isArray(reqUser.restaurantMemberships) ? reqUser.restaurantMemberships : [];
+    return rms.some((m) => String(m?.restaurantId || m?.restaurant || "") === ridStr);
   }
 
   return false;
 }
 
-/** Masa güncelleme helper */
 async function updateTable(restaurantId, tableId, patch) {
   if (!restaurantId || !tableId) return;
   try {
     await Restaurant.updateOne(
       { _id: restaurantId, "tables._id": tableId },
-      {
-        $set: Object.fromEntries(
-          Object.entries(patch).map(([k, v]) => [`tables.$.${k}`, v])
-        ),
-      }
+      { $set: Object.fromEntries(Object.entries(patch).map(([k, v]) => [`tables.$.${k}`, v])) }
     );
   } catch (err) {
     console.error("[orders.updateTable] err", err);
   }
 }
 
-/**
- * ✅ Aynı restoran + aynı user için en yakın rezervasyonu bul
- */
 async function findClosestReservationForUser(restaurantId, userId) {
   try {
     if (!restaurantId || !userId) return null;
@@ -76,11 +59,6 @@ async function findClosestReservationForUser(restaurantId, userId) {
     })
       .sort({ dateTimeUTC: 1 })
       .lean();
-
-    console.log(
-      "[findClosestReservationForUser] candidate count =",
-      candidates.length
-    );
 
     if (!candidates.length) return null;
 
@@ -98,16 +76,7 @@ async function findClosestReservationForUser(restaurantId, userId) {
       }
     }
 
-    console.log(
-      "[findClosestReservationForUser] bestDiffMin =",
-      bestDiffMin,
-      "bestId =",
-      best?._id?.toString()
-    );
-
-    // 12 saat tolerans (öncesi / sonrası)
     if (!best || bestDiffMin > 720) return null;
-
     return best._id;
   } catch (err) {
     console.error("[findClosestReservationForUser] err", err);
@@ -119,110 +88,44 @@ export async function openSession(req, res) {
   try {
     const { restaurantId, tableId, reservationId } = req.body || {};
     if (!restaurantId || !tableId) {
-      return res
-        .status(400)
-        .json({ message: "restaurantId ve tableId zorunlu." });
+      return res.status(400).json({ message: "restaurantId ve tableId zorunlu." });
     }
 
     const rid = String(restaurantId);
     const table = String(tableId);
     const uid = req.user?._id || req.user?.id;
 
-    console.log("---- [openSession] START ----");
-    console.log("[openSession] body =", req.body);
-    console.log("[openSession] user  =", req.user);
-
-    // 1) Kullanılacak reservationId'yi belirle
     let resolvedReservationId = null;
 
-    // a) Body'den geldiyse ve geçerliyse onu kullan
     if (reservationId && mongoose.Types.ObjectId.isValid(reservationId)) {
       resolvedReservationId = reservationId;
-      console.log(
-        "[openSession] using reservationId from body =",
-        resolvedReservationId
-      );
     } else if (uid) {
-      // b) Kullanıcı varsa → bu restoran için en yakın rezervasyonu bul
       const matchId = await findClosestReservationForUser(rid, uid);
-      if (matchId) {
-        resolvedReservationId = matchId;
-        console.log(
-          "[openSession] matched reservation for user =",
-          resolvedReservationId
-        );
-      } else {
-        console.log(
-          "[openSession] NO reservation matched for user",
-          String(uid)
-        );
-      }
-    } else {
-      console.log("[openSession] req.user YOK, user bazlı eşleşme yapamıyoruz.");
+      if (matchId) resolvedReservationId = matchId;
     }
 
-    // 2) Bu masa için açık session var mı?
-    let s = await OrderSession.findOne({
-      restaurantId: rid,
-      tableId: table,
-      status: "open",
-    });
+    let s = await OrderSession.findOne({ restaurantId: rid, tableId: table, status: "open" });
 
     if (s) {
-      console.log(
-        "[openSession] existing session found:",
-        s._id.toString(),
-        "current reservationId =",
-        s.reservationId ? s.reservationId.toString() : null
-      );
-
-      // Eğer daha önce reservationId yazılmamışsa ve şimdi bulduysak, session'a işleyelim
       if (!s.reservationId && resolvedReservationId) {
         s.reservationId = resolvedReservationId;
         await s.save();
-        console.log(
-          "[openSession] reservationId patched on existing session:",
-          resolvedReservationId.toString()
-        );
       }
-
-      console.log("---- [openSession] END (existing) ----");
       return res.json({ sessionId: s._id });
     }
 
-    // 3) Hiç açık session yoksa, yeni session aç
     const r = await Restaurant.findById(rid).lean();
     const currency = currencyFromRegion(r?.region);
 
-    const createPayload = {
+    s = await OrderSession.create({
       restaurantId: rid,
       tableId: table,
       reservationId:
-        resolvedReservationId &&
-        mongoose.Types.ObjectId.isValid(resolvedReservationId)
-          ? resolvedReservationId
-          : null,
+        resolvedReservationId && mongoose.Types.ObjectId.isValid(resolvedReservationId) ? resolvedReservationId : null,
       currency,
-    };
-
-    console.log("[openSession] creating new session with payload =", createPayload);
-
-    s = await OrderSession.create(createPayload);
-
-    // MASAYI AKTİF YAP
-    await updateTable(rid, table, {
-      hasActiveSession: true,
-      sessionId: s._id,
-      status: "order_active",
     });
 
-    console.log(
-      "[openSession] new session created:",
-      s._id.toString(),
-      "reservationId =",
-      s.reservationId ? s.reservationId.toString() : null
-    );
-    console.log("---- [openSession] END (new) ----");
+    await updateTable(rid, table, { hasActiveSession: true, sessionId: s._id, status: "order_active" });
 
     return res.json({ sessionId: s._id });
   } catch (e) {
@@ -234,11 +137,11 @@ export async function openSession(req, res) {
 export async function getSession(req, res) {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: "Geçersiz session id." });
-    }
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: "Geçersiz session id." });
+
     const s = await OrderSession.findById(id).lean();
     if (!s) return res.status(404).json({ message: "Session bulunamadı." });
+
     return res.json(s);
   } catch (e) {
     console.error("[getSession] err", e);
@@ -249,18 +152,11 @@ export async function getSession(req, res) {
 export async function closeSession(req, res) {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: "Geçersiz session id." });
-    }
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: "Geçersiz session id." });
 
-    const s = await OrderSession.findByIdAndUpdate(
-      id,
-      { $set: { status: "closed", closedAt: new Date() } },
-      { new: true }
-    );
+    const s = await OrderSession.findByIdAndUpdate(id, { $set: { status: "closed", closedAt: new Date() } }, { new: true });
     if (!s) return res.status(404).json({ message: "Session bulunamadı." });
 
-    // MASAYI SIFIRLA
     await Restaurant.updateMany(
       { "tables.sessionId": id },
       {
@@ -273,18 +169,10 @@ export async function closeSession(req, res) {
       { arrayFilters: [{ "t.sessionId": id }] }
     );
 
-    // ✅ Bu session'a ait tüm siparişleri mutfak açısından "teslim edildi" yap
-    await Order.updateMany(
-      { sessionId: id, kitchenStatus: { $ne: "delivered" } },
-      { $set: { kitchenStatus: "delivered" } }
-    );
+    await Order.updateMany({ sessionId: id, kitchenStatus: { $ne: "delivered" } }, { $set: { kitchenStatus: "delivered" } });
 
-    // 🆕 Adisyon kapandığında bu session'a ait TÜM açık TableServiceRequest'leri kapat
     try {
-      await TableServiceRequest.updateMany(
-        { sessionId: id, status: "open" },
-        { $set: { status: "handled" } }
-      );
+      await TableServiceRequest.updateMany({ sessionId: id, status: "open" }, { $set: { status: "handled" } });
     } catch (err) {
       console.error("[closeSession] TSR close err", err);
     }
@@ -296,30 +184,24 @@ export async function closeSession(req, res) {
   }
 }
 
+/**
+ * ✅ QR / masa siparişi (server-authoritative + modifier snapshot)
+ *
+ * Beklenen items formatı:
+ * items: [{ itemId, qty, note, selectedModifiers: [{ groupId, optionIds: [] }] }]
+ */
 export async function createOrder(req, res) {
   try {
-    const {
-      sessionId,
-      restaurantId,
-      tableId,
-      items,
-      paymentMethod,
-      isGuest,
-      guestName,
-    } = req.body || {};
+    const { sessionId, restaurantId, tableId, items, paymentMethod, isGuest, guestName } = req.body || {};
 
     if (!sessionId || !restaurantId || !tableId) {
-      return res.status(400).json({
-        message: "sessionId, restaurantId, tableId zorunlu.",
-      });
+      return res.status(400).json({ message: "sessionId, restaurantId, tableId zorunlu." });
     }
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "items zorunlu." });
     }
     if (!["card", "venue"].includes(paymentMethod)) {
-      return res
-        .status(400)
-        .json({ message: "paymentMethod card veya venue olmalı." });
+      return res.status(400).json({ message: "paymentMethod card veya venue olmalı." });
     }
 
     const sid = String(sessionId);
@@ -331,59 +213,54 @@ export async function createOrder(req, res) {
       return res.status(404).json({ message: "Açık adisyon bulunamadı." });
     }
 
-    const r = await Restaurant.findById(rid).lean();
-    const currency = currencyFromRegion(r?.region);
+    const restaurant = await Restaurant.findById(rid).lean();
+    if (!restaurant) return res.status(404).json({ message: "Restoran bulunamadı." });
 
-    const calcItems = items.map((x) => ({
-      itemId: x.itemId,
-      title: x.title,
-      price: Number(x.price || 0),
-      qty: Math.max(1, Number(x.qty || 1)),
-      note: x.note || "",
-    }));
+    const currency = currencyFromRegion(restaurant?.region);
 
-    const total = calcItems.reduce((sum, it) => sum + it.price * it.qty, 0);
+    // ✅ Tek otorite: server build + validate + snapshot
+    const { builtItems, subtotal } = await buildItemsWithModifiersOrThrow({
+      restaurant,
+      items,
+    });
 
-    const isCard = paymentMethod === "card";
+    const total = subtotal;
 
     const o = await Order.create({
       sessionId: sid,
       restaurantId: rid,
       tableId: String(tableId),
 
-      // ✅ userId sabit olsun (jwt payload'da id de gelebiliyor)
       userId: uid ?? null,
       isGuest: !!isGuest || !uid,
       guestName: String(guestName || ""),
 
-      items: calcItems,
+      items: builtItems.map((it) => ({
+        itemId: it.itemId,
+        itemTitle: it.itemTitle,
+        basePrice: it.basePrice,
+        quantity: it.quantity,
+        selectedModifiers: it.selectedModifiers,
+        note: it.note,
+
+        unitModifiersTotal: it.unitModifiersTotal,
+        unitTotal: it.unitTotal,
+        lineTotal: it.lineTotal,
+      })),
+
       total,
       currency,
       paymentMethod,
       paymentStatus: paymentMethod === "venue" ? "not_required" : "pending",
 
-      /**
-       * ✅ ENUM uyumlu: status sadece ["new","accepted","cancelled"]
-       * Ödeme tamamlanmadan mutfağa düşmeyi paymentStatus filtreliyor (listKitchenTickets).
-       */
       status: "new",
       kitchenStatus: "new",
-
-      // createOrder mevcutta QR/Rezvix akışı için kullanılıyor → default "qr"
       source: "qr",
-
-      // Stripe PI id set edilecek
       stripePaymentIntentId: null,
     });
 
-    // MASAYI order_active yap
-    await updateTable(rid, tableId, {
-      hasActiveSession: true,
-      sessionId: sid,
-      status: "order_active",
-    });
+    await updateTable(rid, tableId, { hasActiveSession: true, sessionId: sid, status: "order_active" });
 
-    // Venue ödemede direkt bitir
     if (paymentMethod === "venue") {
       s.totals.payAtVenueTotal += total;
       s.totals.grandTotal += total;
@@ -426,7 +303,9 @@ export async function createOrder(req, res) {
     });
   } catch (e) {
     console.error("[createOrder] err", e);
-    return res.status(500).json({ message: "Sipariş oluşturulamadı." });
+    const status = Number(e?.status || 500);
+    const message = e?.message || "Sipariş oluşturulamadı.";
+    return res.status(status).json({ message, code: e?.code || "ORDER_CREATE_FAILED", meta: e?.meta });
   }
 }
 
@@ -437,10 +316,7 @@ export async function listSessionOrders(req, res) {
       return res.status(400).json({ message: "Geçersiz session id." });
     }
 
-    const list = await Order.find({ sessionId })
-      .sort({ createdAt: -1 })
-      .lean();
-
+    const list = await Order.find({ sessionId }).sort({ createdAt: -1 }).lean();
     return res.json(list);
   } catch (e) {
     console.error("[listSessionOrders] err", e);
@@ -451,32 +327,21 @@ export async function listSessionOrders(req, res) {
 export async function createStripeIntent(req, res) {
   try {
     const { orderId } = req.params;
-    const { saveCard = true } = req.body || {};
-
-    if (!mongoose.Types.ObjectId.isValid(orderId)) {
-      return res.status(400).json({ message: "Geçersiz orderId." });
-    }
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ message: "Geçersiz orderId." });
 
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (!stripe) {
-      return res.status(500).json({ message: "Stripe konfigüre değil." });
-    }
+    if (!stripe) return res.status(500).json({ message: "Stripe konfigüre değil." });
 
     let customerId = order.stripeCustomerId;
     if (!customerId) {
-      const customer = await stripe.customers.create({
-        metadata: { userId: String(order.userId || "guest") },
-      });
+      const customer = await stripe.customers.create({ metadata: { userId: String(order.userId || "guest") } });
       customerId = customer.id;
       order.stripeCustomerId = customerId;
     }
 
-    const ephemeralKey = await stripe.ephemeralKeys.create(
-      { customer: customerId },
-      { apiVersion: "2024-06-20" }
-    );
+    const ephemeralKey = await stripe.ephemeralKeys.create({ customer: customerId }, { apiVersion: "2024-06-20" });
 
     let clientSecret = null;
     if (order.stripePaymentIntentId) {
@@ -507,7 +372,7 @@ export async function createStripeIntent(req, res) {
 }
 
 /**
- * ✅ WALK-IN SİPARİŞ OLUŞTURMA
+ * ✅ WALK-IN (server-authoritative + modifier snapshot)
  */
 export async function createWalkInOrder(req, res) {
   try {
@@ -527,44 +392,27 @@ export async function createWalkInOrder(req, res) {
     const rid = String(restaurantId);
     const table = String(tableId);
 
-    // 1) Açık session var mı?
-    let s = await OrderSession.findOne({
-      restaurantId: rid,
-      tableId: table,
-      status: "open",
-    });
+    let s = await OrderSession.findOne({ restaurantId: rid, tableId: table, status: "open" });
 
-    // 2) Yoksa session aç
     if (!s) {
       const r = await Restaurant.findById(rid).lean();
       const currency = currencyFromRegion(r?.region);
 
-      s = await OrderSession.create({
-        restaurantId: rid,
-        tableId: table,
-        reservationId: null,
-        currency,
-      });
+      s = await OrderSession.create({ restaurantId: rid, tableId: table, reservationId: null, currency });
 
-      await updateTable(rid, table, {
-        hasActiveSession: true,
-        sessionId: s._id,
-        status: "order_active",
-      });
+      await updateTable(rid, table, { hasActiveSession: true, sessionId: s._id, status: "order_active" });
     }
 
     const restaurant = await Restaurant.findById(rid).lean();
+    if (!restaurant) return res.status(404).json({ message: "Restoran bulunamadı." });
     const currency = currencyFromRegion(restaurant?.region);
 
-    const calcItems = items.map((x) => ({
-      itemId: x.itemId,
-      title: x.title,
-      price: Number(x.price || 0),
-      qty: Math.max(1, Number(x.qty || 1)),
-      note: x.note || "",
-    }));
+    const { builtItems, subtotal } = await buildItemsWithModifiersOrThrow({
+      restaurant,
+      items,
+    });
 
-    const total = calcItems.reduce((sum, it) => sum + it.price * it.qty, 0);
+    const total = subtotal;
 
     const order = await Order.create({
       sessionId: s._id,
@@ -573,7 +421,19 @@ export async function createWalkInOrder(req, res) {
       userId: null,
       isGuest: true,
       guestName: String(guestName || ""),
-      items: calcItems,
+
+      items: builtItems.map((it) => ({
+        itemId: it.itemId,
+        itemTitle: it.itemTitle,
+        basePrice: it.basePrice,
+        quantity: it.quantity,
+        selectedModifiers: it.selectedModifiers,
+        note: it.note,
+        unitModifiersTotal: it.unitModifiersTotal,
+        unitTotal: it.unitTotal,
+        lineTotal: it.lineTotal,
+      })),
+
       total,
       currency,
       paymentMethod: "venue",
@@ -583,32 +443,24 @@ export async function createWalkInOrder(req, res) {
       kitchenStatus: "new",
     });
 
-    // 3) Session totals güncelle
     s.totals.payAtVenueTotal += total;
     s.totals.grandTotal += total;
     s.lastOrderAt = new Date();
     await s.save();
 
-    // 4) Masa durumu
-    await updateTable(rid, table, {
-      hasActiveSession: true,
-      sessionId: s._id,
-      status: "order_active",
-    });
+    await updateTable(rid, table, { hasActiveSession: true, sessionId: s._id, status: "order_active" });
 
-    return res.json({
-      order,
-      sessionId: s._id,
-      totals: s.totals,
-    });
+    return res.json({ order, sessionId: s._id, totals: s.totals });
   } catch (e) {
     console.error("[createWalkInOrder] err", e);
-    return res.status(500).json({ message: "Walk-in sipariş oluşturulamadı." });
+    const status = Number(e?.status || 500);
+    const message = e?.message || "Walk-in sipariş oluşturulamadı.";
+    return res.status(status).json({ message, code: e?.code || "WALKIN_CREATE_FAILED", meta: e?.meta });
   }
 }
 
 /**
- * ✅ Mutfak ekranı için fiş listesi
+ * ✅ Mutfak fiş listesi — modifier snapshot’ı da göstermek istersen burada formatlayabilirsin.
  */
 export async function listKitchenTickets(req, res) {
   try {
@@ -620,9 +472,7 @@ export async function listKitchenTickets(req, res) {
     const rid = String(restaurantId);
 
     const restaurant = await Restaurant.findById(rid).lean();
-    if (!restaurant) {
-      return res.status(404).json({ message: "Restoran bulunamadı." });
-    }
+    if (!restaurant) return res.status(404).json({ message: "Restoran bulunamadı." });
 
     const tableMap = new Map();
     (restaurant.tables || []).forEach((t) => {
@@ -648,10 +498,7 @@ export async function listKitchenTickets(req, res) {
       const tableLabel = tableMap.get(tableKey) || tableKey;
 
       const createdAtMs = o.createdAt ? new Date(o.createdAt).getTime() : now;
-      const minutesAgo = Math.max(
-        0,
-        Math.floor((now - createdAtMs) / (60 * 1000))
-      );
+      const minutesAgo = Math.max(0, Math.floor((now - createdAtMs) / (60 * 1000)));
 
       return {
         id: String(o._id),
@@ -661,9 +508,10 @@ export async function listKitchenTickets(req, res) {
         source: o.source || "qr",
         minutesAgo,
         items: (o.items || []).map((it) => ({
-          title: it.title,
-          qty: it.qty,
+          title: it.itemTitle,
+          qty: it.quantity,
           note: it.note || "",
+          modifiers: it.selectedModifiers || [],
         })),
       };
     });
@@ -675,11 +523,6 @@ export async function listKitchenTickets(req, res) {
   }
 }
 
-/**
- * 🔥 Mutfağın sipariş durumunu günceller (NEW → PREPARING → READY → DELIVERED)
- * READY olduğunda otomatik garson uyarısı (order_ready) açar
- * DELIVERED olduğunda kapatır ve masa rengini normale çeker
- */
 export async function updateKitchenStatus(req, res) {
   try {
     const { orderId } = req.params;
@@ -693,14 +536,8 @@ export async function updateKitchenStatus(req, res) {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Sipariş bulunamadı." });
 
-    // ✅ Ödeme tamamlanmadan mutfak akışına sokma
-    if (
-      order.paymentStatus &&
-      !["paid", "not_required"].includes(String(order.paymentStatus))
-    ) {
-      return res
-        .status(400)
-        .json({ message: "Ödeme tamamlanmadan sipariş durumu güncellenemez." });
+    if (order.paymentStatus && !["paid", "not_required"].includes(String(order.paymentStatus))) {
+      return res.status(400).json({ message: "Ödeme tamamlanmadan sipariş durumu güncellenemez." });
     }
 
     order.kitchenStatus = status;
@@ -720,44 +557,20 @@ export async function updateKitchenStatus(req, res) {
       });
 
       if (!existing) {
-        await TableServiceRequest.create({
-          restaurantId: rid,
-          tableId,
-          sessionId,
-          type: "order_ready",
-          status: "open",
-        });
-
-        await Restaurant.updateOne(
-          { _id: rid, "tables._id": tableId },
-          { $set: { "tables.$.status": "waiter_call" } }
-        );
+        await TableServiceRequest.create({ restaurantId: rid, tableId, sessionId, type: "order_ready", status: "open" });
+        await Restaurant.updateOne({ _id: rid, "tables._id": tableId }, { $set: { "tables.$.status": "waiter_call" } });
       }
     }
 
     if (status === "delivered") {
       await TableServiceRequest.updateMany(
-        {
-          restaurantId: rid,
-          tableId,
-          sessionId,
-          type: "order_ready",
-          status: "open",
-        },
+        { restaurantId: rid, tableId, sessionId, type: "order_ready", status: "open" },
         { $set: { status: "handled" } }
       );
 
-      const stillWaiting = await TableServiceRequest.exists({
-        restaurantId: rid,
-        tableId,
-        status: "open",
-      });
-
+      const stillWaiting = await TableServiceRequest.exists({ restaurantId: rid, tableId, status: "open" });
       if (!stillWaiting) {
-        await Restaurant.updateOne(
-          { _id: rid, "tables._id": tableId },
-          { $set: { "tables.$.status": "order_active" } }
-        );
+        await Restaurant.updateOne({ _id: rid, "tables._id": tableId }, { $set: { "tables.$.status": "order_active" } });
       }
     }
 
@@ -776,7 +589,6 @@ export async function cancelOrder(req, res, next) {
     return res.status(400).json({ message: "Geçersiz order id." });
   }
 
-  // Panel endpoint ise restaurant access kontrolü
   if (ridParam) {
     if (!hasRestaurantAccess(req.user, ridParam)) {
       return res.status(403).json({ message: "Bu restoran için yetkin yok." });
@@ -790,18 +602,12 @@ export async function cancelOrder(req, res, next) {
 
     await session.withTransaction(async () => {
       const order = await Order.findById(orderId).session(session);
-      if (!order) {
-        throw { status: 404, message: "Sipariş bulunamadı." };
-      }
+      if (!order) throw { status: 404, message: "Sipariş bulunamadı." };
 
       const rid = String(order.restaurantId);
 
-      // Panelde rid param geldi ise order'ın restoranı ile uyuşmalı
-      if (ridParam && rid !== ridParam) {
-        throw { status: 403, message: "Bu sipariş bu restorana ait değil." };
-      }
+      if (ridParam && rid !== ridParam) throw { status: 403, message: "Bu sipariş bu restorana ait değil." };
 
-      // /api/orders/:orderId/cancel gibi eski path'te de restaurant user'ı kısıtlayalım
       if (!ridParam) {
         const role = String(req.user?.role || "").toLowerCase();
         if (role === "restaurant" && !hasRestaurantAccess(req.user, rid)) {
@@ -809,27 +615,22 @@ export async function cancelOrder(req, res, next) {
         }
       }
 
-      // Zaten iptalse idempotent
       if (order.status === "cancelled") {
         outOrder = order;
         return;
       }
 
-      // Teslim edilmiş sipariş iptal edilemez
       if (String(order.kitchenStatus || "") === "delivered") {
         throw { status: 400, message: "Teslim edilmiş sipariş iptal edilemez." };
       }
 
-      // Kart ile PAID olmuş sipariş iptal edilemez (refund akışı ayrı)
       if (String(order.paymentMethod || "") === "card" && String(order.paymentStatus || "") === "paid") {
         throw { status: 400, message: "Ödenmiş (kart) sipariş iptal edilemez." };
       }
 
-      // Soft cancel
       order.status = "cancelled";
       await order.save({ session });
 
-      // Session totals düzelt
       const os = await OrderSession.findById(order.sessionId).session(session);
       if (os) {
         const amt = Number(order.total || 0);
@@ -837,26 +638,17 @@ export async function cancelOrder(req, res, next) {
         if (String(order.paymentMethod || "") === "card") {
           os.totals.cardTotal = Math.max(0, Number(os.totals.cardTotal || 0) - amt);
         } else {
-          // venue
           os.totals.payAtVenueTotal = Math.max(0, Number(os.totals.payAtVenueTotal || 0) - amt);
         }
 
-        os.totals.grandTotal = Math.max(
-          0,
-          Number(os.totals.cardTotal || 0) + Number(os.totals.payAtVenueTotal || 0)
-        );
+        os.totals.grandTotal = Math.max(0, Number(os.totals.cardTotal || 0) + Number(os.totals.payAtVenueTotal || 0));
 
-        // lastOrderAt: iptal edilmeyen son sipariş
-        const last = await Order.findOne({
-          sessionId: os._id,
-          status: { $ne: "cancelled" },
-        })
+        const last = await Order.findOne({ sessionId: os._id, status: { $ne: "cancelled" } })
           .sort({ createdAt: -1 })
           .select({ createdAt: 1 })
           .session(session);
 
         os.lastOrderAt = last?.createdAt ?? null;
-
         await os.save({ session });
       }
 
@@ -865,10 +657,7 @@ export async function cancelOrder(req, res, next) {
 
     return res.json({ ok: true, order: outOrder });
   } catch (err) {
-    // mevcut pattern: bazı controller'lar next kullanmıyor, ama global handler varsa destekleyelim
-    if (typeof next === "function" && err && typeof err === "object" && "status" in err) {
-      return next(err);
-    }
+    if (typeof next === "function" && err && typeof err === "object" && "status" in err) return next(err);
 
     const status = Number(err?.status || 500);
     const message = err?.message || "Sipariş iptal edilemedi.";

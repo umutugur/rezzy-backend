@@ -1,13 +1,39 @@
 // src/models/DeliveryPaymentAttempt.js
 import mongoose from "mongoose";
 
+const SelectedModifierOptionSchema = new mongoose.Schema(
+  {
+    optionId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    optionTitle: { type: String, required: true },
+    priceDelta: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
+const SelectedModifierGroupSchema = new mongoose.Schema(
+  {
+    groupId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    groupTitle: { type: String, required: true },
+    options: { type: [SelectedModifierOptionSchema], default: [] },
+  },
+  { _id: false }
+);
+
 const AttemptItemSchema = new mongoose.Schema(
   {
     itemId: { type: mongoose.Schema.Types.ObjectId, ref: "MenuItem", required: true },
-    title: { type: String, required: true }, // snapshot
-    price: { type: Number, min: 0, required: true }, // snapshot
+
+    itemTitle: { type: String, required: true },
+    basePrice: { type: Number, min: 0, required: true },
+
     qty: { type: Number, min: 1, required: true },
-    note: { type: String, default: "" }, // item-level
+    note: { type: String, default: "" },
+
+    selectedModifiers: { type: [SelectedModifierGroupSchema], default: [] },
+
+    unitModifiersTotal: { type: Number, min: 0, default: 0 },
+    unitTotal: { type: Number, min: 0, default: 0 },
+    lineTotal: { type: Number, min: 0, default: 0 },
   },
   { _id: false }
 );
@@ -18,13 +44,11 @@ const DeliveryPaymentAttemptSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     addressId: { type: mongoose.Schema.Types.ObjectId, ref: "UserAddress", required: true, index: true },
 
-    // ✅ Snapshots (checkout-time)
     customerName: { type: String, default: "" },
     customerPhone: { type: String, default: "" },
     addressText: { type: String, default: "" },
     customerNote: { type: String, default: "" },
 
-    // Zone snapshot
     zoneId: { type: String, required: true, index: true },
     zoneIsActive: { type: Boolean, default: true },
     minOrderAmountSnapshot: { type: Number, min: 0, default: 0 },

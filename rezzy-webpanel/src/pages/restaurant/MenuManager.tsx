@@ -12,6 +12,15 @@ import {
   restaurantGetResolvedMenu,
   restaurantUpsertCategoryOverride,
   restaurantUpsertItemOverride,
+
+  // ✅ Modifier Groups
+  restaurantListModifierGroups,
+  restaurantCreateModifierGroup,
+  restaurantUpdateModifierGroup,
+  restaurantDeleteModifierGroup,
+  restaurantAddModifierOption,
+  restaurantUpdateModifierOption,
+  restaurantDeleteModifierOption,
 } from "../../api/client";
 import { Card } from "../../components/Card";
 
@@ -21,6 +30,7 @@ import { Card } from "../../components/Card";
 type MenuManagerPageProps = {
   restaurantId?: string;
 };
+
 type LocalCategory = {
   _id?: string;
   id?: string;
@@ -42,6 +52,9 @@ type LocalItem = {
   order: number;
   isActive: boolean;
   isAvailable: boolean;
+
+  // ✅ NEW
+  modifierGroupIds?: string[];
 };
 
 type ResolvedSource = "org" | "org_branch_override" | "local";
@@ -59,6 +72,9 @@ type ResolvedMenuItem = {
   isAvailable?: boolean;
   orgItemId?: string | null;
   source?: ResolvedSource;
+
+  // ✅ NEW
+  modifierGroupIds?: string[];
 };
 
 type ResolvedMenuCategory = {
@@ -77,6 +93,28 @@ type ResolvedMenuResponse = {
   categories: ResolvedMenuCategory[];
   organizationId?: string | null;
   restaurantId?: string;
+};
+
+/* =======================
+   Modifier Types
+======================= */
+type ModifierOption = {
+  _id: string;
+  title: string;
+  price: number;
+  order: number;
+  isActive: boolean;
+};
+
+type ModifierGroup = {
+  _id: string;
+  title: string;
+  description?: string;
+  minSelect: number;
+  maxSelect: number;
+  order: number;
+  isActive: boolean;
+  options: ModifierOption[];
 };
 
 /* =======================
@@ -147,6 +185,269 @@ function Modal({
 }
 
 /* =======================
+   Modifier Group / Option modals
+======================= */
+type ModifierGroupModalState =
+  | { open: false }
+  | {
+      open: true;
+      mode: "create" | "edit";
+      title: string;
+      groupId?: string;
+      initial: {
+        title: string;
+        description: string;
+        minSelect: number;
+        maxSelect: number;
+        order: number;
+        isActive: boolean;
+      };
+    };
+
+type ModifierOptionModalState =
+  | { open: false }
+  | {
+      open: true;
+      mode: "create" | "edit";
+      title: string;
+      groupId: string;
+      optionId?: string;
+      initial: { title: string; price: number; order: number; isActive: boolean };
+    };
+
+function ModifierGroupEditorModal({
+  state,
+  onClose,
+  onSave,
+  saving,
+}: {
+  state: ModifierGroupModalState;
+  onClose: () => void;
+  onSave: (payload: {
+    title: string;
+    description: string;
+    minSelect: number;
+    maxSelect: number;
+    order: number;
+    isActive: boolean;
+  }) => void;
+  saving: boolean;
+}) {
+  const open = state.open;
+  const [form, setForm] = React.useState({
+    title: "",
+    description: "",
+    minSelect: 0,
+    maxSelect: 1,
+    order: 0,
+    isActive: true,
+  });
+
+  React.useEffect(() => {
+    if (!open) return;
+    setForm({
+      title: state.initial.title ?? "",
+      description: state.initial.description ?? "",
+      minSelect: Number(state.initial.minSelect ?? 0),
+      maxSelect: Number(state.initial.maxSelect ?? 1),
+      order: Number(state.initial.order ?? 0),
+      isActive: state.initial.isActive !== false,
+    });
+  }, [open, state.open && state.initial]);
+
+  if (!open) return null;
+
+  const invalid = Number(form.maxSelect) < Number(form.minSelect);
+
+  return (
+    <Modal
+      open={open}
+      title={state.title}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
+            onClick={onClose}
+          >
+            Vazgeç
+          </button>
+          <button
+            className="px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
+            disabled={saving || !form.title.trim() || invalid}
+            onClick={() =>
+              onSave({
+                title: form.title.trim(),
+                description: form.description?.trim() || "",
+                minSelect: Number(form.minSelect) || 0,
+                maxSelect: Number(form.maxSelect) || 1,
+                order: Number(form.order) || 0,
+                isActive: !!form.isActive,
+              })
+            }
+          >
+            Kaydet
+          </button>
+        </div>
+      }
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="md:col-span-2">
+          <label className="text-xs text-gray-500">Grup adı</label>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.title}
+            onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+          />
+        </div>
+        <div className="md:col-span-2">
+          <label className="text-xs text-gray-500">Açıklama</label>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.description}
+            onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Min seçim</label>
+          <input
+            type="number"
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.minSelect}
+            onChange={(e) => setForm((p) => ({ ...p, minSelect: Number(e.target.value) || 0 }))}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Max seçim</label>
+          <input
+            type="number"
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.maxSelect}
+            onChange={(e) => setForm((p) => ({ ...p, maxSelect: Number(e.target.value) || 1 }))}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Sıra</label>
+          <input
+            type="number"
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.order}
+            onChange={(e) => setForm((p) => ({ ...p, order: Number(e.target.value) || 0 }))}
+          />
+        </div>
+        <div className="flex items-center gap-2 mt-6">
+          <input
+            type="checkbox"
+            checked={form.isActive}
+            onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
+          />
+          <span className="text-sm">Aktif</span>
+        </div>
+        {invalid ? (
+          <div className="md:col-span-2 text-xs text-red-600">maxSelect, minSelect'ten küçük olamaz.</div>
+        ) : null}
+      </div>
+    </Modal>
+  );
+}
+
+function ModifierOptionEditorModal({
+  state,
+  onClose,
+  onSave,
+  saving,
+}: {
+  state: ModifierOptionModalState;
+  onClose: () => void;
+  onSave: (payload: { title: string; price: number; order: number; isActive: boolean }) => void;
+  saving: boolean;
+}) {
+  const open = state.open;
+  const [form, setForm] = React.useState({ title: "", price: 0, order: 0, isActive: true });
+
+  React.useEffect(() => {
+    if (!open) return;
+    setForm({
+      title: state.initial.title ?? "",
+      price: Number(state.initial.price ?? 0),
+      order: Number(state.initial.order ?? 0),
+      isActive: state.initial.isActive !== false,
+    });
+  }, [open, state.open && state.initial]);
+
+  if (!open) return null;
+
+  return (
+    <Modal
+      open={open}
+      title={state.title}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
+            onClick={onClose}
+          >
+            Vazgeç
+          </button>
+          <button
+            className="px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
+            disabled={saving || !form.title.trim()}
+            onClick={() =>
+              onSave({
+                title: form.title.trim(),
+                price: Number(form.price) || 0,
+                order: Number(form.order) || 0,
+                isActive: !!form.isActive,
+              })
+            }
+          >
+            Kaydet
+          </button>
+        </div>
+      }
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="md:col-span-2">
+          <label className="text-xs text-gray-500">Opsiyon adı</label>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.title}
+            onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Fiyat farkı (₺)</label>
+          <input
+            type="number"
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.price}
+            onChange={(e) => setForm((p) => ({ ...p, price: Number(e.target.value) || 0 }))}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Sıra</label>
+          <input
+            type="number"
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.order}
+            onChange={(e) => setForm((p) => ({ ...p, order: Number(e.target.value) || 0 }))}
+          />
+        </div>
+        <div className="flex items-center gap-2 mt-2">
+          <input
+            type="checkbox"
+            checked={form.isActive}
+            onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
+          />
+          <span className="text-sm">Aktif</span>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* =======================
    Category modal
 ======================= */
 type CategoryModalState =
@@ -155,8 +456,8 @@ type CategoryModalState =
       open: true;
       mode: "create_local" | "edit_local" | "edit_org_override";
       title: string;
-      categoryId?: string | null;     // local edit için
-      orgCategoryId?: string | null;  // org override için
+      categoryId?: string | null; // local edit için
+      orgCategoryId?: string | null; // org override için
       initial: { title: string; description: string; order: number };
     };
 
@@ -267,8 +568,8 @@ type ItemModalState =
       open: true;
       mode: "create_local" | "edit_local" | "edit_org_override";
       title: string;
-      itemId?: string | null;     // local edit için
-      orgItemId?: string | null;  // org override için
+      itemId?: string | null; // local edit için
+      orgItemId?: string | null; // org override için
       initial: {
         title: string;
         description: string;
@@ -276,6 +577,7 @@ type ItemModalState =
         tagsText: string;
         order: number;
         isAvailable: boolean;
+        modifierGroupIds: string[];
       };
     };
 
@@ -286,6 +588,7 @@ function ItemEditorModal({
   onSave,
   onQuickDisable,
   saving,
+  modifierGroups,
 }: {
   state: ItemModalState;
   disabled: boolean;
@@ -298,9 +601,11 @@ function ItemEditorModal({
     order: number;
     isAvailable: boolean;
     photoFile: File | null;
+    modifierGroupIds: string[];
   }) => void;
   onQuickDisable?: (() => void) | null;
   saving: boolean;
+  modifierGroups: ModifierGroup[];
 }) {
   const open = state.open;
   const [form, setForm] = React.useState({
@@ -311,6 +616,7 @@ function ItemEditorModal({
     order: 0,
     isAvailable: true,
     photoFile: null as File | null,
+    modifierGroupIds: [] as string[],
   });
 
   React.useEffect(() => {
@@ -323,6 +629,7 @@ function ItemEditorModal({
       order: Number(state.initial.order ?? 0),
       isAvailable: state.initial.isAvailable !== false,
       photoFile: null,
+      modifierGroupIds: Array.isArray(state.initial.modifierGroupIds) ? state.initial.modifierGroupIds.map(String) : [],
     });
   }, [open, state.open && state.initial]);
 
@@ -367,6 +674,7 @@ function ItemEditorModal({
                   order: Number(form.order) || 0,
                   isAvailable: !!form.isAvailable,
                   photoFile: form.photoFile,
+                  modifierGroupIds: form.modifierGroupIds,
                 })
               }
             >
@@ -430,6 +738,46 @@ function ItemEditorModal({
           </div>
         )}
 
+        {!isOrgOverride && (
+          <div className="md:col-span-2">
+            <label className="text-xs text-gray-500">Opsiyon Grupları</label>
+            <div className="mt-1 border rounded-lg p-2 max-h-40 overflow-auto">
+              {modifierGroups.filter((g) => g.isActive !== false).length === 0 ? (
+                <div className="text-xs text-gray-500">Opsiyon grubu yok. Önce bir grup oluştur.</div>
+              ) : (
+                <div className="space-y-2">
+                  {modifierGroups
+                    .filter((g) => g.isActive !== false)
+                    .slice()
+                    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                    .map((g) => {
+                      const checked = form.modifierGroupIds.includes(g._id);
+                      return (
+                        <label key={g._id} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="truncate">{g.title}</span>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const on = e.target.checked;
+                              setForm((p) => {
+                                const next = new Set(p.modifierGroupIds);
+                                if (on) next.add(g._id);
+                                else next.delete(g._id);
+                                return { ...p, modifierGroupIds: Array.from(next) };
+                              });
+                            }}
+                          />
+                        </label>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+            <div className="mt-1 text-[11px] text-gray-500">Bu seçimler sipariş ekranında ürün opsiyonlarını açar.</div>
+          </div>
+        )}
+
         <div className="md:col-span-2 flex items-center justify-between">
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -477,12 +825,9 @@ type CategoryVM = {
   kind: "resolved";
 };
 
-export default function MenuManagerPage({
-  restaurantId,
-}: MenuManagerPageProps) {
+export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) {
   const rid = restaurantId || authStore.getUser()?.restaurantId || "";
   const qc = useQueryClient();
-
 
   const [mode, setMode] = React.useState<"manage" | "preview">("manage");
 
@@ -492,24 +837,38 @@ export default function MenuManagerPage({
     queryFn: () => restaurantListCategories(rid, { includeInactive: true }),
     enabled: !!rid,
   });
-const includeInactiveForManage = mode === "manage";
-const includeUnavailableForManage = mode === "manage";
- const resolvedQ = useQuery({
-  queryKey: ["menu-resolved", rid, includeInactiveForManage, includeUnavailableForManage],
-  queryFn: () =>
-    restaurantGetResolvedMenu(rid, {
-      includeInactive: includeInactiveForManage,
-      includeUnavailable: includeUnavailableForManage,
-    }) as Promise<ResolvedMenuResponse>,
-  enabled: !!rid,
-});
+
+  const includeInactiveForManage = mode === "manage";
+  const includeUnavailableForManage = mode === "manage";
+
+  const resolvedQ = useQuery({
+    queryKey: ["menu-resolved", rid, includeInactiveForManage, includeUnavailableForManage],
+    queryFn: () =>
+      restaurantGetResolvedMenu(rid, {
+        includeInactive: includeInactiveForManage,
+        includeUnavailable: includeUnavailableForManage,
+      }) as Promise<ResolvedMenuResponse>,
+    enabled: !!rid,
+  });
+
+  const modifierGroupsQ = useQuery({
+    queryKey: ["menu-modifier-groups", rid],
+    queryFn: async () => {
+      const resp = await restaurantListModifierGroups(rid, { includeInactive: true } as any);
+      return (resp as any)?.items ?? [];
+    },
+    enabled: !!rid,
+  });
+
   const localCats: LocalCategory[] = (localCatQ.data ?? []) as any;
   const resolvedCats: ResolvedMenuCategory[] = sortByOrder(resolvedQ.data?.categories ?? []);
+  const modifierGroups: ModifierGroup[] = sortByOrder((modifierGroupsQ.data ?? []) as any);
 
   const refreshAll = React.useCallback(() => {
     qc.invalidateQueries({ queryKey: ["menu-categories", rid] });
     qc.invalidateQueries({ queryKey: ["menu-resolved", rid] });
     qc.invalidateQueries({ queryKey: ["menu-items", rid] });
+    qc.invalidateQueries({ queryKey: ["menu-modifier-groups", rid] });
   }, [qc, rid]);
 
   // Build categories list (resolved only, çünkü yönetim artık resolved üstünden yapılacak)
@@ -546,7 +905,7 @@ const includeUnavailableForManage = mode === "manage";
   const selected = React.useMemo(() => all.find((x) => x.key === selectedKey) ?? null, [all, selectedKey]);
   const selectedResolved = selected?.resolved ?? null;
 
-  // Items tab (must be declared before any memo that uses it)
+  // Items tab
   const [itemTab, setItemTab] = React.useState<"active" | "closed">("active");
 
   // Selected resolved items filtered by tab
@@ -572,12 +931,11 @@ const includeUnavailableForManage = mode === "manage";
     enabled: !!rid && !!selectedLocalCatId,
   });
 
- // const localItems: LocalItem[] = (itemsQ.data ?? []) as any;
- // const closedLocalItems = React.useMemo(() => sortByOrder(localItems.filter((x) => x.isActive === false)), [localItems]);
-const closedCount = React.useMemo(() => {
-  const items = selectedResolved?.items ?? [];
-  return items.filter((x) => x.isActive === false).length;
-}, [selectedResolved]);
+  const closedCount = React.useMemo(() => {
+    const items = selectedResolved?.items ?? [];
+    return items.filter((x) => x.isActive === false).length;
+  }, [selectedResolved]);
+
   // Filters
   const [q, setQ] = React.useState("");
   const list = React.useMemo(() => {
@@ -586,31 +944,26 @@ const closedCount = React.useMemo(() => {
     return all.filter((c) => norm(c.title).includes(qq) || norm(c.description || "").includes(qq));
   }, [all, q]);
 
+  /* =======================
+     Mutations
+  ======================= */
 
-  // Mutations: Local category CRUD
+  // Local category CRUD
   const createLocalCatMut = useMutation({
-    mutationFn: (payload: { title: string; description?: string; order?: number }) =>
-      restaurantCreateCategory(rid, payload as any),
-    onSuccess: async () => {
-      refreshAll();
-    },
+    mutationFn: (payload: { title: string; description?: string; order?: number }) => restaurantCreateCategory(rid, payload as any),
+    onSuccess: async () => refreshAll(),
   });
 
   const updateLocalCatMut = useMutation({
-    mutationFn: ({ cid, payload }: { cid: string; payload: any }) =>
-      restaurantUpdateCategory(rid, cid, payload),
-    onSuccess: async () => {
-      refreshAll();
-    },
+    mutationFn: ({ cid, payload }: { cid: string; payload: any }) => restaurantUpdateCategory(rid, cid, payload),
+    onSuccess: async () => refreshAll(),
   });
 
-  // Mutations: Overrides
+  // Overrides
   const catOverrideMut = useMutation({
     mutationFn: ({ orgCategoryId, payload }: { orgCategoryId: string; payload: { hidden?: boolean; order?: number } }) =>
       restaurantUpsertCategoryOverride(rid, orgCategoryId, payload),
-    onSuccess: async () => {
-      refreshAll();
-    },
+    onSuccess: async () => refreshAll(),
   });
 
   const itemOverrideMut = useMutation({
@@ -621,39 +974,69 @@ const closedCount = React.useMemo(() => {
       orgItemId: string;
       payload: { hidden?: boolean; order?: number; price?: number; isAvailable?: boolean };
     }) => restaurantUpsertItemOverride(rid, orgItemId, payload),
-    onSuccess: async () => {
-      refreshAll();
-    },
+    onSuccess: async () => refreshAll(),
   });
 
-  // Mutations: Local item CRUD
+  // Local item CRUD
   const createLocalItemMut = useMutation({
     mutationFn: (payload: any) => restaurantCreateItem(rid, payload),
-    onSuccess: async () => {
-      refreshAll();
-    },
+    onSuccess: async () => refreshAll(),
   });
 
   const updateLocalItemMut = useMutation({
     mutationFn: (payload: any) => restaurantUpdateItem(rid, payload.iid, payload),
-    onSuccess: async () => {
-      refreshAll();
-    },
+    onSuccess: async () => refreshAll(),
   });
 
   const deleteLocalItemMut = useMutation({
     mutationFn: (iid: string) => restaurantDeleteItem(rid, iid),
-    onSuccess: async () => {
-      refreshAll();
-    },
+    onSuccess: async () => refreshAll(),
   });
 
-  // Modals
+  // ✅ Modifier group CRUD
+  const createModGroupMut = useMutation({
+    mutationFn: (payload: any) => restaurantCreateModifierGroup(rid, payload),
+    onSuccess: async () => refreshAll(),
+  });
+
+  const updateModGroupMut = useMutation({
+    mutationFn: ({ gid, payload }: { gid: string; payload: any }) => restaurantUpdateModifierGroup(rid, gid, payload),
+    onSuccess: async () => refreshAll(),
+  });
+
+  const deleteModGroupMut = useMutation({
+    mutationFn: (gid: string) => restaurantDeleteModifierGroup(rid, gid),
+    onSuccess: async () => refreshAll(),
+  });
+
+  const addModOptionMut = useMutation({
+    mutationFn: ({ gid, payload }: { gid: string; payload: any }) => restaurantAddModifierOption(rid, gid, payload),
+    onSuccess: async () => refreshAll(),
+  });
+
+  const updateModOptionMut = useMutation({
+    mutationFn: ({ gid, oid, payload }: { gid: string; oid: string; payload: any }) => restaurantUpdateModifierOption(rid, gid, oid, payload),
+    onSuccess: async () => refreshAll(),
+  });
+
+  const deleteModOptionMut = useMutation({
+    mutationFn: ({ gid, oid }: { gid: string; oid: string }) => restaurantDeleteModifierOption(rid, gid, oid),
+    onSuccess: async () => refreshAll(),
+  });
+
+  /* =======================
+     Modals
+  ======================= */
   const [categoryModal, setCategoryModal] = React.useState<CategoryModalState>({ open: false });
   const [itemModal, setItemModal] = React.useState<ItemModalState>({ open: false });
 
+  const [modGroupModal, setModGroupModal] = React.useState<ModifierGroupModalState>({ open: false });
+  const [modOptionModal, setModOptionModal] = React.useState<ModifierOptionModalState>({ open: false });
+
   const closeCategoryModal = React.useCallback(() => setCategoryModal({ open: false }), []);
   const closeItemModal = React.useCallback(() => setItemModal({ open: false }), []);
+  const closeModGroupModal = React.useCallback(() => setModGroupModal({ open: false }), []);
+  const closeModOptionModal = React.useCallback(() => setModOptionModal({ open: false }), []);
 
   const openCreateLocalCategory = React.useCallback(() => {
     setCategoryModal({
@@ -705,60 +1088,114 @@ const closedCount = React.useMemo(() => {
       open: true,
       mode: "create_local",
       title: "Yeni Ürün",
-      initial: { title: "", description: "", price: 0, tagsText: "", order: 0, isAvailable: true },
+      initial: { title: "", description: "", price: 0, tagsText: "", order: 0, isAvailable: true, modifierGroupIds: [] },
     });
   }, []);
 
-  const openEditItem = React.useCallback(
-    (it: any, src: ResolvedSource) => {
-      if (src === "local") {
-        setItemModal({
-          open: true,
-          mode: "edit_local",
-          title: "Ürün Düzenle",
-          itemId: getId(it),
-          initial: {
-            title: it.title ?? "",
-            description: it.description ?? "",
-            price: Number(it.price ?? 0),
-            tagsText: (it.tags ?? []).join(", "),
-            order: Number(it.order ?? 0),
-            isAvailable: it.isAvailable !== false,
-          },
-        });
-        return;
-      }
-
-      // org / org_branch_override
-      const orgItemId = String(it.orgItemId || getId(it));
+  const openEditItem = React.useCallback((it: any, src: ResolvedSource) => {
+    if (src === "local") {
       setItemModal({
         open: true,
-        mode: "edit_org_override",
-        title: "Ürün (Şube Ayarları)",
-        orgItemId,
+        mode: "edit_local",
+        title: "Ürün Düzenle",
+        itemId: getId(it),
         initial: {
           title: it.title ?? "",
           description: it.description ?? "",
           price: Number(it.price ?? 0),
-          tagsText: "",
+          tagsText: (it.tags ?? []).join(", "),
           order: Number(it.order ?? 0),
           isAvailable: it.isAvailable !== false,
+          modifierGroupIds: Array.isArray(it.modifierGroupIds) ? it.modifierGroupIds.map(String) : [],
         },
       });
-    },
-    []
-  );
+      return;
+    }
+
+    // org / org_branch_override
+    const orgItemId = String(it.orgItemId || getId(it));
+    setItemModal({
+      open: true,
+      mode: "edit_org_override",
+      title: "Ürün (Şube Ayarları)",
+      orgItemId,
+      initial: {
+        title: it.title ?? "",
+        description: it.description ?? "",
+        price: Number(it.price ?? 0),
+        tagsText: "",
+        order: Number(it.order ?? 0),
+        isAvailable: it.isAvailable !== false,
+        modifierGroupIds: [],
+      },
+    });
+  }, []);
+
+  const openCreateModifierGroup = React.useCallback(() => {
+    setModGroupModal({
+      open: true,
+      mode: "create",
+      title: "Yeni Opsiyon Grubu",
+      initial: { title: "", description: "", minSelect: 0, maxSelect: 1, order: 0, isActive: true },
+    });
+  }, []);
+
+  const openEditModifierGroup = React.useCallback((g: ModifierGroup) => {
+    setModGroupModal({
+      open: true,
+      mode: "edit",
+      title: "Opsiyon Grubu Düzenle",
+      groupId: g._id,
+      initial: {
+        title: g.title ?? "",
+        description: String(g.description ?? ""),
+        minSelect: Number(g.minSelect ?? 0),
+        maxSelect: Number(g.maxSelect ?? 1),
+        order: Number(g.order ?? 0),
+        isActive: g.isActive !== false,
+      },
+    });
+  }, []);
+
+  const openCreateModifierOption = React.useCallback((gid: string) => {
+    setModOptionModal({
+      open: true,
+      mode: "create",
+      title: "Opsiyon Ekle",
+      groupId: gid,
+      initial: { title: "", price: 0, order: 0, isActive: true },
+    });
+  }, []);
+  const openEditModifierOption = React.useCallback((gid: string, o: ModifierOption) => {
+    setModOptionModal({
+      open: true,
+      mode: "edit",
+      title: "Opsiyon Düzenle",
+      groupId: gid,
+      optionId: o._id,
+      initial: {
+        title: o.title ?? "",
+        price: Number(o.price ?? 0),
+        order: Number(o.order ?? 0),
+        isActive: o.isActive !== false,
+      },
+    });
+  }, []);
 
   // Derived
   const selectedBadge = selected ? badgeFor(selected.source) : null;
-  const loading = localCatQ.isLoading || resolvedQ.isLoading || itemsQ.isLoading;
-  const anyError = localCatQ.isError || resolvedQ.isError || itemsQ.isError;
 
-  const canLocalItemOps = !!selectedLocalCatId && (selectedResolved?.isActive !== false);
+  const loading =
+    localCatQ.isLoading || resolvedQ.isLoading || itemsQ.isLoading || modifierGroupsQ.isLoading;
+
+  const anyError =
+    localCatQ.isError || resolvedQ.isError || itemsQ.isError || modifierGroupsQ.isError;
+
+  const canLocalItemOps = !!selectedLocalCatId && selectedResolved?.isActive !== false;
 
   return (
     <div className="flex-1 space-y-6">
-      {/* Header (sade) */}
+      {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold">Menü</h2>
@@ -796,355 +1233,482 @@ const closedCount = React.useMemo(() => {
         </div>
       </div>
 
-      {!rid && (
-        <div className="text-sm text-red-600">RestaurantId bulunamadı.</div>
-      )}
+      {!rid && <div className="text-sm text-red-600">RestaurantId bulunamadı.</div>}
 
       {loading && <div className="text-sm text-gray-500">Yükleniyor…</div>}
 
-      {anyError && (
-        <div className="text-sm text-red-600">
-          Menü verisi alınırken hata oluştu.
-        </div>
-      )}
+      {anyError && <div className="text-sm text-red-600">Menü verisi alınırken hata oluştu.</div>}
 
       {/* =======================
           MANAGE
       ======================= */}
       {mode === "manage" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* LEFT */}
-          <div className="lg:col-span-4 space-y-4">
-            <Card
-              title={
-                <div className="flex items-center justify-between">
-                  <span>Kategoriler</span>
-                  <button
-                    className="px-3 py-1.5 text-xs rounded bg-brand-600 text-white hover:bg-brand-700"
-                    onClick={openCreateLocalCategory}
-                  >
-                    + Kategori
-                  </button>
-                </div>
-              }
-            >
-              <div className="space-y-3">
-                <input
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                  placeholder="Ara…"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-
-                <div className="max-h-[520px] overflow-auto pr-1 space-y-2">
-                  {list.length === 0 ? (
-                    <div className="text-sm text-gray-500 p-2">Kayıt yok.</div>
-                  ) : (
-                    list.map((c) => {
-                      const isSelected = c.key === selectedKey;
-                      const b = badgeFor(c.source);
-
-                      return (
-                        <button
-                          key={c.key}
-                          onClick={() => setSelectedKey(c.key)}
-                          className={`w-full text-left border rounded-xl p-3 transition ${
-                            isSelected ? "border-brand-600 bg-brand-50" : "border-gray-200 hover:bg-gray-50"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="font-medium truncate">{c.title}</div>
-                            <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
-                          </div>
-                          <div className="text-[11px] text-gray-400 mt-1">
-                            Sıra: {c.order} • {c.isActive ? "Açık" : "Kapalı"}
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
+        <div className="space-y-6">
+          {/* Modifier Groups */}
+          <Card
+            title={
+              <div className="flex items-center justify-between">
+                <span>Opsiyon Grupları (Modifier)</span>
+                <button
+                  className="px-3 py-1.5 text-xs rounded bg-brand-600 text-white hover:bg-brand-700"
+                  onClick={openCreateModifierGroup}
+                >
+                  + Grup
+                </button>
               </div>
-            </Card>
-          </div>
+            }
+          >
+            <div className="space-y-3">
+              {modifierGroups.length === 0 ? (
+                <div className="text-sm text-gray-500">Henüz opsiyon grubu yok.</div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {modifierGroups.map((g) => (
+                    <div key={g._id} className="border rounded-xl p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{g.title}</div>
+                          {g.description ? (
+                            <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">{g.description}</div>
+                          ) : null}
+                          <div className="text-[11px] text-gray-500 mt-1">
+                            Min: {Number(g.minSelect ?? 0)} • Max: {Number(g.maxSelect ?? 1)} • Sıra:{" "}
+                            {Number(g.order ?? 0)} • {g.isActive !== false ? "Aktif" : "Pasif"}
+                          </div>
+                        </div>
 
-          {/* RIGHT */}
-          <div className="lg:col-span-8 space-y-4">
-            <Card
-              title={
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate">
-                        {selected ? selected.title : "Seçim yok"}
-                      </span>
-                      {selectedBadge && (
-                        <span className={`text-[11px] px-2 py-0.5 rounded ${selectedBadge.cls}`}>{selectedBadge.text}</span>
-                      )}
-                      {selected && !selected.isActive && (
-                        <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
-                          Kapalı
-                        </span>
-                      )}
+                        <div className="shrink-0 flex items-center gap-2">
+                          <button
+                            className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
+                            onClick={() => openEditModifierGroup(g)}
+                          >
+                            Düzenle
+                          </button>
+
+                          <button
+                            className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
+                            onClick={() => openCreateModifierOption(g._id)}
+                          >
+                            + Opsiyon
+                          </button>
+
+                          <button
+                            className="px-2 py-1 text-xs rounded bg-red-50 text-red-700 hover:bg-red-100"
+                            onClick={() => {
+                              if (confirm(`"${g.title}" grubunu kapatmak istiyor musun?`)) {
+                                deleteModGroupMut.mutate(g._id);
+                              }
+                            }}
+                          >
+                            Kapat
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 border rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 px-3 py-2 text-xs text-gray-600 flex items-center justify-between">
+                          <span>Opsiyonlar</span>
+                          <span className="text-[11px] text-gray-500">
+                            {(g.options ?? []).filter((x) => x.isActive !== false).length} aktif
+                          </span>
+                        </div>
+
+                        <div className="max-h-56 overflow-auto">
+                          {(g.options ?? []).length === 0 ? (
+                            <div className="px-3 py-3 text-sm text-gray-500">Opsiyon yok.</div>
+                          ) : (
+                            <table className="min-w-full text-sm">
+                              <thead className="bg-white text-gray-500">
+                                <tr className="border-t">
+                                  <th className="text-left font-medium px-3 py-2">Ad</th>
+                                  <th className="text-left font-medium px-3 py-2">Fiyat</th>
+                                  <th className="text-left font-medium px-3 py-2">Durum</th>
+                                  <th className="text-right font-medium px-3 py-2">Aksiyon</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {sortByOrder(g.options ?? []).map((o) => (
+                                  <tr key={o._id} className="border-t">
+                                    <td className="px-3 py-2">
+                                      <div className="font-medium">{o.title}</div>
+                                      <div className="text-[11px] text-gray-400">Sıra: {Number(o.order ?? 0)}</div>
+                                    </td>
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                      <b>{money(o.price)} ₺</b>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <span className="text-xs text-gray-600">{o.isActive !== false ? "Aktif" : "Pasif"}</span>
+                                    </td>
+                                    <td className="px-3 py-2 text-right">
+                                      <div className="inline-flex gap-2">
+                                        <button
+                                          className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
+                                          onClick={() => openEditModifierOption(g._id, o)}
+                                        >
+                                          Düzenle
+                                        </button>
+                                        <button
+                                          className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
+                                          onClick={() => {
+                                            if (confirm(`"${o.title}" opsiyonunu kapatmak istiyor musun?`)) {
+                                              deleteModOptionMut.mutate({ gid: g._id, oid: o._id });
+                                            }
+                                          }}
+                                        >
+                                          Kapat
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </div>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Existing grid (categories + items) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* LEFT */}
+            <div className="lg:col-span-4 space-y-4">
+              <Card
+                title={
+                  <div className="flex items-center justify-between">
+                    <span>Kategoriler</span>
+                    <button
+                      className="px-3 py-1.5 text-xs rounded bg-brand-600 text-white hover:bg-brand-700"
+                      onClick={openCreateLocalCategory}
+                    >
+                      + Kategori
+                    </button>
                   </div>
+                }
+              >
+                <div className="space-y-3">
+                  <input
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    placeholder="Ara…"
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                  />
 
-                  <div className="shrink-0 flex items-center gap-2">
-                    {/* Ürün ekleme sadece local kategoride */}
-                    <button
-                      className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-60"
-                      disabled={!canLocalItemOps || itemTab === "closed"}
-                      onClick={openCreateLocalItem}
-                      title={!selectedLocalCatId ? "Şubeye özel kategori seç" : selectedResolved?.isActive === false ? "Kategori kapalı" : ""}
-                    >
-                      + Ürün
-                    </button>
+                  <div className="max-h-[520px] overflow-auto pr-1 space-y-2">
+                    {list.length === 0 ? (
+                      <div className="text-sm text-gray-500 p-2">Kayıt yok.</div>
+                    ) : (
+                      list.map((c) => {
+                        const isSelected = c.key === selectedKey;
+                        const b = badgeFor(c.source);
 
-                    <button
-                      className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-60"
-                      disabled={!selectedResolved}
-                      onClick={openEditSelectedCategory}
-                    >
-                      Düzenle
-                    </button>
-
-                    {/* Kategori aç/kapat */}
-                    {selectedResolved && (
-                      <button
-                        className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-60"
-                        disabled={!selectedResolved}
-                        onClick={() => {
-                          const src = (selectedResolved.source ?? "local") as ResolvedSource;
-                          const nextActive = !(selectedResolved.isActive !== false); // toggle
-
-                          if (src === "local") {
-                            if (!selectedLocalCatId) return;
-                            updateLocalCatMut.mutate({
-                              cid: selectedLocalCatId,
-                              payload: { isActive: nextActive },
-                            });
-                            return;
-                          }
-
-                          // org / org_branch_override: hidden toggle (isActive = !hidden)
-                          const orgCategoryId = String(selectedResolved.orgCategoryId || getId(selectedResolved));
-                          catOverrideMut.mutate({
-                            orgCategoryId,
-                            payload: { hidden: !nextActive },
-                          });
-                        }}
-                      >
-                        {selectedResolved.isActive !== false ? "Bu şubede kapat" : "Aç"}
-                      </button>
+                        return (
+                          <button
+                            key={c.key}
+                            onClick={() => setSelectedKey(c.key)}
+                            className={`w-full text-left border rounded-xl p-3 transition ${
+                              isSelected ? "border-brand-600 bg-brand-50" : "border-gray-200 hover:bg-gray-50"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-medium truncate">{c.title}</div>
+                              <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
+                            </div>
+                            <div className="text-[11px] text-gray-400 mt-1">
+                              Sıra: {c.order} • {c.isActive ? "Açık" : "Kapalı"}
+                            </div>
+                          </button>
+                        );
+                      })
                     )}
                   </div>
                 </div>
-              }
-            >
-              {!selectedResolved && <div className="text-sm text-gray-500">Soldan kategori seç.</div>}
+              </Card>
+            </div>
 
-              {selectedResolved && (
-                <>
-                  {/* Items tab switcher */}
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
-                      <button
-                        className={`px-3 py-1.5 text-sm ${itemTab === "active" ? "bg-brand-50 text-brand-700" : "bg-white hover:bg-gray-50"}`}
-                        onClick={() => setItemTab("active")}
-                        type="button"
-                      >
-                        Aktif
-                      </button>
-                      <button
-                        className={`px-3 py-1.5 text-sm border-l border-gray-200 ${itemTab === "closed" ? "bg-brand-50 text-brand-700" : "bg-white hover:bg-gray-50"}`}
-                        onClick={() => setItemTab("closed")}
-                        type="button"
-                      >
-                        Kapalı
-                        {closedCount > 0 ? (
-                          <span className="ml-2 inline-flex items-center justify-center text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
-                            {closedCount}
+            {/* RIGHT */}
+            <div className="lg:col-span-8 space-y-4">
+              <Card
+                title={
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate">{selected ? selected.title : "Seçim yok"}</span>
+                        {selectedBadge && (
+                          <span className={`text-[11px] px-2 py-0.5 rounded ${selectedBadge.cls}`}>{selectedBadge.text}</span>
+                        )}
+                        {selected && !selected.isActive && (
+                          <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
+                            Kapalı
                           </span>
-                        ) : null}
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 flex items-center gap-2">
+                      <button
+                        className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-60"
+                        disabled={!canLocalItemOps || itemTab === "closed"}
+                        onClick={openCreateLocalItem}
+                        title={
+                          !selectedLocalCatId
+                            ? "Şubeye özel kategori seç"
+                            : selectedResolved?.isActive === false
+                            ? "Kategori kapalı"
+                            : ""
+                        }
+                      >
+                        + Ürün
                       </button>
+
+                      <button
+                        className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-60"
+                        disabled={!selectedResolved}
+                        onClick={openEditSelectedCategory}
+                      >
+                        Düzenle
+                      </button>
+
+                      {selectedResolved && (
+                        <button
+                          className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-60"
+                          disabled={!selectedResolved}
+                          onClick={() => {
+                            const src = (selectedResolved.source ?? "local") as ResolvedSource;
+                            const nextActive = !(selectedResolved.isActive !== false);
+
+                            if (src === "local") {
+                              if (!selectedLocalCatId) return;
+                              updateLocalCatMut.mutate({
+                                cid: selectedLocalCatId,
+                                payload: { isActive: nextActive },
+                              });
+                              return;
+                            }
+
+                            const orgCategoryId = String(selectedResolved.orgCategoryId || getId(selectedResolved));
+                            catOverrideMut.mutate({
+                              orgCategoryId,
+                              payload: { hidden: !nextActive },
+                            });
+                          }}
+                        >
+                          {selectedResolved.isActive !== false ? "Bu şubede kapat" : "Aç"}
+                        </button>
+                      )}
                     </div>
                   </div>
+                }
+              >
+                {!selectedResolved && <div className="text-sm text-gray-500">Soldan kategori seç.</div>}
 
-                  {/* Items table */}
-                  <div className="overflow-auto border rounded-xl">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-gray-50 text-gray-600">
-                        <tr>
-                          <th className="text-left font-medium px-3 py-2">Ürün</th>
-                          <th className="text-left font-medium px-3 py-2">Fiyat</th>
-                          <th className="text-left font-medium px-3 py-2">Durum</th>
-                          <th className="text-left font-medium px-3 py-2">Kaynak</th>
-                          <th className="text-right font-medium px-3 py-2">Aksiyon</th>
-                        </tr>
-                      </thead>
+                {selectedResolved && (
+                  <>
+                    {/* Items tab switcher */}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+                        <button
+                          className={`px-3 py-1.5 text-sm ${
+                            itemTab === "active" ? "bg-brand-50 text-brand-700" : "bg-white hover:bg-gray-50"
+                          }`}
+                          onClick={() => setItemTab("active")}
+                          type="button"
+                        >
+                          Aktif
+                        </button>
+                        <button
+                          className={`px-3 py-1.5 text-sm border-l border-gray-200 ${
+                            itemTab === "closed" ? "bg-brand-50 text-brand-700" : "bg-white hover:bg-gray-50"
+                          }`}
+                          onClick={() => setItemTab("closed")}
+                          type="button"
+                        >
+                          Kapalı
+                          {closedCount > 0 ? (
+                            <span className="ml-2 inline-flex items-center justify-center text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                              {closedCount}
+                            </span>
+                          ) : null}
+                        </button>
+                      </div>
+                    </div>
 
-                      <tbody>
-                        {itemTab === "active" ? (
-                          selectedItems.length === 0 ? (
+                    {/* Items table */}
+                    <div className="overflow-auto border rounded-xl">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-50 text-gray-600">
+                          <tr>
+                            <th className="text-left font-medium px-3 py-2">Ürün</th>
+                            <th className="text-left font-medium px-3 py-2">Fiyat</th>
+                            <th className="text-left font-medium px-3 py-2">Durum</th>
+                            <th className="text-left font-medium px-3 py-2">Kaynak</th>
+                            <th className="text-right font-medium px-3 py-2">Aksiyon</th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {itemTab === "active" ? (
+                            selectedItems.length === 0 ? (
+                              <tr>
+                                <td className="px-3 py-4 text-gray-500" colSpan={5}>
+                                  Ürün yok.
+                                </td>
+                              </tr>
+                            ) : (
+                              selectedItems.map((it, idx) => {
+                                const src = (it.source ?? "local") as ResolvedSource;
+                                const b = badgeFor(src);
+
+                                const isOrg = src === "org" || src === "org_branch_override";
+                                const stableOrgItemId = String(it.orgItemId || getId(it));
+                                const canEdit =
+                                  selectedResolved.isActive !== false &&
+                                  (src === "local" ? !!selectedLocalCatId : true);
+
+                                return (
+                                  <tr key={`${src}:${stableOrgItemId}:${idx}`} className="border-t">
+                                    <td className="px-3 py-2">
+                                      <div className="font-medium">{it.title}</div>
+                                      {!!it.description && (
+                                        <div className="text-xs text-gray-500 line-clamp-2">{it.description}</div>
+                                      )}
+                                      {Array.isArray(it.modifierGroupIds) && it.modifierGroupIds.length > 0 ? (
+                                        <div className="mt-1 text-[11px] text-gray-500">
+                                          Opsiyon: {it.modifierGroupIds.length} grup
+                                        </div>
+                                      ) : null}
+                                    </td>
+
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                      <b>{money(it.price)} ₺</b>
+                                    </td>
+
+                                    <td className="px-3 py-2">
+                                      <div className="text-xs text-gray-600">
+                                        {it.isActive === false ? "Kapalı" : "Açık"} •{" "}
+                                        {it.isAvailable === false ? "Stok yok" : "Serviste"}
+                                      </div>
+                                    </td>
+
+                                    <td className="px-3 py-2">
+                                      <span className={`text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
+                                    </td>
+
+                                    <td className="px-3 py-2 text-right">
+                                      <div className="inline-flex gap-2">
+                                        <button
+                                          className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
+                                          disabled={!canEdit}
+                                          onClick={() => openEditItem(it, src)}
+                                        >
+                                          Düzenle
+                                        </button>
+
+                                        <button
+                                          className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
+                                          disabled={selectedResolved.isActive === false}
+                                          onClick={() => {
+                                            if (selectedResolved.isActive === false) return;
+
+                                            if (isOrg) {
+                                              itemOverrideMut.mutate({
+                                                orgItemId: stableOrgItemId,
+                                                payload: { hidden: true },
+                                              });
+                                              return;
+                                            }
+
+                                            if (!selectedLocalCatId) return;
+                                            updateLocalItemMut.mutate({ iid: getId(it), isActive: false } as any);
+                                          }}
+                                        >
+                                          Bu şubede kapat
+                                        </button>
+
+                                        {src === "local" && (
+                                          <button
+                                            className="px-2 py-1 text-xs rounded bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60"
+                                            disabled={selectedResolved.isActive === false}
+                                            onClick={() => {
+                                              if (selectedResolved.isActive === false) return;
+                                              if (confirm(`"${it.title}" silinsin mi?`)) {
+                                                deleteLocalItemMut.mutate(getId(it));
+                                              }
+                                            }}
+                                          >
+                                            Sil
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )
+                          ) : selectedItems.length === 0 ? (
                             <tr>
                               <td className="px-3 py-4 text-gray-500" colSpan={5}>
-                                Ürün yok.
+                                Kapalı ürün yok.
                               </td>
                             </tr>
                           ) : (
                             selectedItems.map((it, idx) => {
                               const src = (it.source ?? "local") as ResolvedSource;
                               const b = badgeFor(src);
-
-                              const isOrg = src === "org" || src === "org_branch_override";
                               const stableOrgItemId = String(it.orgItemId || getId(it));
-                              const canEdit =
-                                selectedResolved.isActive !== false &&
-                                (src === "local"
-                                  ? !!selectedLocalCatId
-                                  : true);
+                              const isOrg = src === "org" || src === "org_branch_override";
 
                               return (
-                                <tr key={`${src}:${stableOrgItemId}:${idx}`} className="border-t">
+                                <tr key={`closed:${src}:${stableOrgItemId}:${idx}`} className="border-t bg-gray-50/40">
                                   <td className="px-3 py-2">
                                     <div className="font-medium">{it.title}</div>
-                                    {!!it.description && (
-                                      <div className="text-xs text-gray-500 line-clamp-2">{it.description}</div>
-                                    )}
                                   </td>
-
                                   <td className="px-3 py-2 whitespace-nowrap">
                                     <b>{money(it.price)} ₺</b>
                                   </td>
-
                                   <td className="px-3 py-2">
-                                    <div className="text-xs text-gray-600">
-                                      {it.isActive === false ? "Kapalı" : "Açık"} •{" "}
-                                      {it.isAvailable === false ? "Stok yok" : "Serviste"}
-                                    </div>
+                                    <div className="text-xs text-gray-600">Kapalı</div>
                                   </td>
-
                                   <td className="px-3 py-2">
                                     <span className={`text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
                                   </td>
-
                                   <td className="px-3 py-2 text-right">
                                     <div className="inline-flex gap-2">
                                       <button
-                                        className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
-                                        disabled={!canEdit}
-                                        onClick={() => openEditItem(it, src)}
-                                      >
-                                        Düzenle
-                                      </button>
-
-                                      <button
-                                        className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
-                                        disabled={selectedResolved.isActive === false}
+                                        className="px-2 py-1 text-xs rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                                        disabled={selectedResolved?.isActive === false}
                                         onClick={() => {
-                                          if (selectedResolved.isActive === false) return;
+                                          if (selectedResolved?.isActive === false) return;
 
                                           if (isOrg) {
                                             itemOverrideMut.mutate({
                                               orgItemId: stableOrgItemId,
-                                              payload: { hidden: true },
+                                              payload: { hidden: false },
                                             });
-                                            return;
+                                          } else {
+                                            updateLocalItemMut.mutate({ iid: getId(it), isActive: true } as any);
                                           }
-
-                                          // local
-                                          if (!selectedLocalCatId) return;
-                                          updateLocalItemMut.mutate({ iid: getId(it), isActive: false } as any);
                                         }}
                                       >
-                                        Bu şubede kapat
+                                        Aç
                                       </button>
-
-                                      {/* local sil */}
-                                      {src === "local" && (
-                                        <button
-                                          className="px-2 py-1 text-xs rounded bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60"
-                                          disabled={selectedResolved.isActive === false}
-                                          onClick={() => {
-                                            if (selectedResolved.isActive === false) return;
-                                            if (confirm(`"${it.title}" silinsin mi?`)) {
-                                              deleteLocalItemMut.mutate(getId(it));
-                                            }
-                                          }}
-                                        >
-                                          Sil
-                                        </button>
-                                      )}
                                     </div>
                                   </td>
                                 </tr>
                               );
                             })
-                          )
-                        ) : (
-                            // itemTab === "closed"
-selectedItems.length === 0 ? (
-  <tr>
-    <td className="px-3 py-4 text-gray-500" colSpan={5}>
-      Kapalı ürün yok.
-    </td>
-  </tr>
-) : (
-  selectedItems.map((it, idx) => {
-    const src = (it.source ?? "local") as ResolvedSource;
-    const b = badgeFor(src);
-    const stableOrgItemId = String(it.orgItemId || getId(it));
-    const isOrg = src === "org" || src === "org_branch_override";
-
-    return (
-      <tr key={`closed:${src}:${stableOrgItemId}:${idx}`} className="border-t bg-gray-50/40">
-        <td className="px-3 py-2">
-          <div className="font-medium">{it.title}</div>
-        </td>
-        <td className="px-3 py-2 whitespace-nowrap">
-          <b>{money(it.price)} ₺</b>
-        </td>
-        <td className="px-3 py-2">
-          <div className="text-xs text-gray-600">Kapalı</div>
-        </td>
-        <td className="px-3 py-2">
-          <span className={`text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
-        </td>
-        <td className="px-3 py-2 text-right">
-          <div className="inline-flex gap-2">
-            {/* Aç */}
-            <button
-              className="px-2 py-1 text-xs rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
-              disabled={selectedResolved?.isActive === false}
-              onClick={() => {
-                if (selectedResolved?.isActive === false) return;
-
-                if (isOrg) {
-                  itemOverrideMut.mutate({
-                    orgItemId: stableOrgItemId,
-                    payload: { hidden: false },
-                  });
-                } else {
-                  updateLocalItemMut.mutate({ iid: getId(it), isActive: true } as any);
-                }
-              }}
-            >
-              Aç
-            </button>
-          </div>
-        </td>
-      </tr>
-    );
-  })
-)
-                            
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </Card>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </Card>
+            </div>
           </div>
         </div>
       )}
@@ -1180,7 +1744,15 @@ selectedItems.length === 0 ? (
                             <div className="font-medium truncate">{it.title}</div>
                             <div className="text-sm font-semibold whitespace-nowrap">{money(it.price)} ₺</div>
                           </div>
-                          {!!it.description && <div className="text-xs text-gray-500 mt-1 line-clamp-2">{it.description}</div>}
+                          {!!it.description && (
+                            <div className="text-xs text-gray-500 mt-1 line-clamp-2">{it.description}</div>
+                          )}
+
+                          {Array.isArray(it.modifierGroupIds) && it.modifierGroupIds.length > 0 ? (
+                            <div className="mt-2 text-[11px] text-gray-500">
+                              Opsiyon: {it.modifierGroupIds.length} grup
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     ))}
@@ -1196,6 +1768,51 @@ selectedItems.length === 0 ? (
       {/* =======================
           MODALS
       ======================= */}
+      <ModifierGroupEditorModal
+        state={modGroupModal}
+        onClose={closeModGroupModal}
+        saving={createModGroupMut.isPending || updateModGroupMut.isPending}
+        onSave={(payload) => {
+          if (!rid) return;
+          if (!modGroupModal.open) return;
+
+          if (modGroupModal.mode === "create") {
+            createModGroupMut.mutate(payload as any);
+            closeModGroupModal();
+            return;
+          }
+
+          if (modGroupModal.mode === "edit" && modGroupModal.groupId) {
+            updateModGroupMut.mutate({ gid: modGroupModal.groupId, payload });
+            closeModGroupModal();
+          }
+        }}
+      />
+
+      <ModifierOptionEditorModal
+        state={modOptionModal}
+        onClose={closeModOptionModal}
+        saving={addModOptionMut.isPending || updateModOptionMut.isPending}
+        onSave={(payload) => {
+          if (!modOptionModal.open) return;
+
+          if (modOptionModal.mode === "create") {
+            addModOptionMut.mutate({ gid: modOptionModal.groupId, payload });
+            closeModOptionModal();
+            return;
+          }
+
+          if (modOptionModal.mode === "edit" && modOptionModal.optionId) {
+            updateModOptionMut.mutate({
+              gid: modOptionModal.groupId,
+              oid: modOptionModal.optionId,
+              payload,
+            });
+            closeModOptionModal();
+          }
+        }}
+      />
+
       <CategoryEditorModal
         state={categoryModal}
         onClose={closeCategoryModal}
@@ -1218,7 +1835,6 @@ selectedItems.length === 0 ? (
             return;
           }
 
-          // org override: sadece order
           const orgCategoryId = categoryModal.orgCategoryId;
           if (!orgCategoryId) return;
           catOverrideMut.mutate({ orgCategoryId, payload: { order: payload.order, hidden: false } });
@@ -1231,6 +1847,7 @@ selectedItems.length === 0 ? (
         disabled={selectedResolved?.isActive === false}
         saving={createLocalItemMut.isPending || updateLocalItemMut.isPending || itemOverrideMut.isPending}
         onClose={closeItemModal}
+        modifierGroups={modifierGroups}
         onQuickDisable={
           itemModal.open
             ? () => {
@@ -1280,12 +1897,12 @@ selectedItems.length === 0 ? (
               order: payload.order,
               isAvailable: !!payload.isAvailable,
               photoFile: payload.photoFile,
+              modifierGroupIds: payload.modifierGroupIds,
             } as any);
             closeItemModal();
             return;
           }
 
-          // create local
           if (!selectedLocalCatId) return;
           createLocalItemMut.mutate({
             categoryId: selectedLocalCatId,
@@ -1296,6 +1913,7 @@ selectedItems.length === 0 ? (
             order: payload.order,
             isAvailable: !!payload.isAvailable,
             photoFile: payload.photoFile,
+            modifierGroupIds: payload.modifierGroupIds,
           } as any);
           closeItemModal();
         }}

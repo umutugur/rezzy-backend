@@ -17,6 +17,7 @@ import { getResolvedMenuForRestaurant } from "../services/menuResolve.service.js
 // ✅ Org menü modelleri
 import OrgMenuCategory from "../models/OrgMenuCategory.js";
 import OrgMenuItem from "../models/OrgMenuItem.js";
+import ModifierGroup from "../models/ModifierGroup.js";
 
 /* ---------------- helpers ---------------- */
 function toObjectId(id) {
@@ -295,6 +296,7 @@ export const createItem = async (req, res, next) => {
       tags = [],
       order = 0,
       isAvailable = true,
+      modifierGroupIds = [],
     } = iVal;
 
     const cat = await MenuCategory.findOne({
@@ -318,7 +320,20 @@ export const createItem = async (req, res, next) => {
       });
       photoUrl = up.secure_url;
     }
+    // modifierGroupIds doğrulama: hepsi bu restoranın mı?
+let mgIds = Array.isArray(modifierGroupIds) ? modifierGroupIds : [];
+mgIds = mgIds.map(String).filter((x) => mongoose.Types.ObjectId.isValid(x));
 
+if (mgIds.length) {
+  const cnt = await ModifierGroup.countDocuments({
+    _id: { $in: mgIds },
+    restaurantId: rid,
+    isActive: true,
+  });
+  if (cnt !== mgIds.length) {
+    return res.status(400).json({ message: "Seçilen opsiyon gruplarından bazıları geçersiz." });
+  }
+}
     const doc = await MenuItem.create({
       restaurantId: rid,
       categoryId,
@@ -331,6 +346,7 @@ export const createItem = async (req, res, next) => {
       order: Number(order) || 0,
       isAvailable: !!isAvailable,
       isActive: true,
+      modifierGroupIds: mgIds,
     });
 
     res.status(201).json({ ok: true, item: doc });
@@ -362,6 +378,7 @@ export const updateItem = async (req, res, next) => {
       isAvailable,
       isActive,
       removePhoto,
+      modifierGroupIds
     } = uVal;
 
     // 🔍 Önce mevcut item’ı çekelim; org override mı local mi görelim
@@ -420,6 +437,24 @@ export const updateItem = async (req, res, next) => {
         });
         patch.photoUrl = up.secure_url;
       }
+      if (modifierGroupIds != null) {
+  let mgIds = Array.isArray(modifierGroupIds) ? modifierGroupIds : [];
+  mgIds = mgIds.map(String).filter((x) => mongoose.Types.ObjectId.isValid(x));
+
+  if (mgIds.length) {
+    const cnt = await ModifierGroup.countDocuments({
+      _id: { $in: mgIds },
+      restaurantId: rid,
+      isActive: true,
+    });
+    if (cnt !== mgIds.length) {
+      return res.status(400).json({
+        message: "Seçilen opsiyon gruplarından bazıları geçersiz.",
+      });
+    }
+  }
+  patch.modifierGroupIds = mgIds;
+}
     }
 
     // ✅ Org override item’larda sadece belirli alanları uygula

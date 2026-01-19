@@ -6,9 +6,9 @@ import DeliveryOrder from "../models/DeliveryOrder.js";
 import DeliveryPaymentAttempt from "../models/DeliveryPaymentAttempt.js";
 import UserAddress from "../models/UserAddress.js";
 import Restaurant from "../models/Restaurant.js";
-import MenuItem from "../models/MenuItem.js";
-import User from "../models/User.js"; // ✅ ekle
+import User from "../models/User.js";
 import { resolveZoneForRestaurant } from "../utils/deliveryZoneResolver.js";
+import { buildItemsWithModifiersOrThrow } from "../services/modifierPricing.service.js";
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: "2024-06-20" }) : null;
@@ -35,7 +35,6 @@ function safeStr(v) {
 
 function buildAddressTextSnapshot(addr) {
   if (!addr) return "";
-  // en yaygın alanları dene
   const full =
     safeStr(addr.fullAddress) ||
     safeStr(addr.address) ||
@@ -45,7 +44,6 @@ function buildAddressTextSnapshot(addr) {
 
   if (full) return full;
 
-  // fallback: parçala-birleştir
   const title = safeStr(addr.title || addr.label || addr.name);
   const district = safeStr(addr.district || addr.town || addr.neighborhood);
   const street = safeStr(addr.street || addr.streetName);
@@ -62,24 +60,19 @@ async function buildCustomerSnapshot({ userId, reqUser }) {
   const fromReqName = safeStr(reqUser?.name);
   const fromReqPhone = safeStr(reqUser?.phone);
 
-  // Eğer ikisi de doluysa DB'ye gitme
-  if (fromReqName && fromReqPhone) {
-    return { customerName: fromReqName, customerPhone: fromReqPhone };
-  }
+  if (fromReqName && fromReqPhone) return { customerName: fromReqName, customerPhone: fromReqPhone };
 
-  // Eksik olanı DB’den tamamla
   const u = await User.findById(userId).select("name phone").lean();
-
-  const customerName = fromReqName || safeStr(u?.name);
-  const customerPhone = fromReqPhone || safeStr(u?.phone);
-
-  return { customerName, customerPhone };
+  return {
+    customerName: fromReqName || safeStr(u?.name),
+    customerPhone: fromReqPhone || safeStr(u?.phone),
+  };
 }
 
 async function buildDeliveryPricingOrThrow({ userId, restaurantId, addressId, items, hexId }) {
   const rid = String(restaurantId);
 
-  const r = await Restaurant.findById(rid).select("isActive status region delivery").lean();
+  const r = await Restaurant.findById(rid).select("isActive status region delivery organizationId").lean();
   if (!r) throw { status: 404, code: "RESTAURANT_NOT_FOUND", message: "Restoran bulunamadı." };
 
   if (!r.isActive || String(r.status || "active") !== "active") {
@@ -125,52 +118,11 @@ async function buildDeliveryPricingOrThrow({ userId, restaurantId, addressId, it
     };
   }
 
-  if (!Array.isArray(items) || items.length === 0) {
-    throw { status: 400, code: "ITEMS_REQUIRED", message: "Sepet boş olamaz." };
-  }
-
-  const normalized = items.map((x) => ({
-    itemId: String(x?.itemId || ""),
-    qty: Math.max(1, Number(x?.qty || 1)),
-    note: String(x?.note || ""),
-  }));
-
-  const ids = normalized.map((x) => x.itemId).filter((id) => mongoose.Types.ObjectId.isValid(id));
-  if (ids.length !== normalized.length) {
-    throw { status: 400, code: "ITEM_ID_INVALID", message: "Sepette geçersiz ürün var." };
-  }
-
-  const menuItems = await MenuItem.find({
-    _id: { $in: ids },
-    restaurantId: rid,
-    isActive: true,
-    isAvailable: true,
-  })
-    .select("_id title price")
-    .lean();
-
-  const miMap = new Map(menuItems.map((m) => [String(m._id), m]));
-
-  const calcItems = normalized.map((it) => {
-    const m = miMap.get(String(it.itemId));
-    if (!m) {
-      throw {
-        status: 400,
-        code: "ITEM_NOT_AVAILABLE",
-        message: "Sepetteki bazı ürünler artık mevcut değil. Lütfen sepeti güncelleyin.",
-      };
-    }
-    const price = Math.max(0, Number(m.price || 0));
-    return {
-      itemId: m._id,
-      title: String(m.title || ""),
-      price,
-      qty: it.qty,
-      note: it.note, // item-level
-    };
+  // ✅ Tek otorite: item + modifier validation + subtotal
+  const { builtItems, subtotal } = await buildItemsWithModifiersOrThrow({
+    restaurant: r,
+    items,
   });
-
-  const subtotal = calcItems.reduce((sum, it) => sum + it.price * it.qty, 0);
 
   const minOrderAmount = Math.max(0, Number(zoneOut.zone.minOrderAmount || 0));
   if (subtotal < minOrderAmount) {
@@ -187,6 +139,19 @@ async function buildDeliveryPricingOrThrow({ userId, restaurantId, addressId, it
   const total = subtotal + deliveryFee;
   const currency = currencyFromRegion(r?.region);
 
+  // Delivery modelleri qty alanı kullanıyor; builtItems zaten qty de koyuyor
+  const calcItems = builtItems.map((it) => ({
+    itemId: it.itemId,
+    itemTitle: it.itemTitle,
+    basePrice: it.basePrice,
+    qty: it.qty,
+    note: it.note,
+    selectedModifiers: it.selectedModifiers,
+    unitModifiersTotal: it.unitModifiersTotal,
+    unitTotal: it.unitTotal,
+    lineTotal: it.lineTotal,
+  }));
+
   return {
     restaurant: r,
     currency,
@@ -201,16 +166,11 @@ async function buildDeliveryPricingOrThrow({ userId, restaurantId, addressId, it
   };
 }
 
-/**
- * ✅ CARD checkout (attempt + snapshot)
- */
 export async function checkoutDeliveryOrder(req, res, next) {
   try {
     const userId = assertAuth(req);
 
-    if (!stripe) {
-      throw { status: 500, code: "STRIPE_NOT_CONFIGURED", message: "Stripe konfigüre değil." };
-    }
+    if (!stripe) throw { status: 500, code: "STRIPE_NOT_CONFIGURED", message: "Stripe konfigüre değil." };
 
     const { restaurantId, addressId, items, hexId } = req.body || {};
     const customerNote = safeStr(req.body?.customerNote ?? req.body?.note ?? "");
@@ -246,7 +206,6 @@ export async function checkoutDeliveryOrder(req, res, next) {
       userId: new mongoose.Types.ObjectId(String(userId)),
       addressId: aid,
 
-      // ✅ snapshotlar (checkout-time)
       customerName: cust.customerName,
       customerPhone: cust.customerPhone,
       addressText: pricing.addressText,
@@ -292,9 +251,6 @@ export async function checkoutDeliveryOrder(req, res, next) {
   }
 }
 
-/**
- * ✅ CASH / CARD_ON_DELIVERY (order + snapshot)
- */
 export async function createDeliveryOrderCOD(req, res, next) {
   try {
     const userId = assertAuth(req);
@@ -327,7 +283,6 @@ export async function createDeliveryOrderCOD(req, res, next) {
       userId: new mongoose.Types.ObjectId(String(userId)),
       addressId: aid,
 
-      // ✅ snapshotlar (order-time)
       customerName: cust.customerName,
       customerPhone: cust.customerPhone,
       addressText: pricing.addressText,

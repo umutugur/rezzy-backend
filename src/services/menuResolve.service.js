@@ -6,6 +6,7 @@ import OrgMenuItem from "../models/OrgMenuItem.js";
 import MenuCategory from "../models/MenuCategory.js";
 import MenuItem from "../models/MenuItem.js";
 import BranchMenuOverride from "../models/BranchMenuOverride.js";
+import ModifierGroup from "../models/ModifierGroup.js";
 
 function toObjectId(id) {
   try {
@@ -13,6 +14,13 @@ function toObjectId(id) {
   } catch {
     return null;
   }
+}
+
+function asIdList(v) {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((x) => String(x))
+    .filter((x) => mongoose.Types.ObjectId.isValid(x));
 }
 
 /**
@@ -25,6 +33,7 @@ function toObjectId(id) {
  * opts:
  *  - includeInactive: true ise pasif/hidden kayıtları da döner (panel yönetim için)
  *  - includeUnavailable: true ise isAvailable=false ürünleri de döner
+ *  - includeModifierGroups: true ise item'ların modifierGroups populate edilir
  */
 export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
   const rid = toObjectId(restaurantId);
@@ -32,6 +41,7 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
 
   const includeInactive = opts?.includeInactive === true;
   const includeUnavailable = opts?.includeUnavailable === true;
+  const includeModifierGroups = opts?.includeModifierGroups === true;
 
   const restaurant = await Restaurant.findById(rid)
     .select("_id organizationId")
@@ -40,14 +50,18 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
 
   // Org yoksa: klasik restoran menüsü (local only)
   if (!restaurant.organizationId) {
-    return getLocalMenuForRestaurant(rid, { includeInactive, includeUnavailable });
+    const local = await getLocalMenuForRestaurant(rid, {
+      includeInactive,
+      includeUnavailable,
+      includeModifierGroups,
+    });
+    return local;
   }
 
   const orgId = restaurant.organizationId;
 
   const [orgCategories, orgItems, overrides, localCategories, localItems] =
     await Promise.all([
-      // org tarafında isActive filtresi yok; filtre resolved aşamasında uygulanır
       OrgMenuCategory.find({ organizationId: orgId })
         .sort({ order: 1, _id: 1 })
         .lean(),
@@ -55,10 +69,8 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
         .sort({ order: 1, _id: 1 })
         .lean(),
 
-      // override sadece bu koleksiyondan
       BranchMenuOverride.find({ restaurantId: rid }).lean(),
 
-      // local menü: sadece gerçekten local olanlar
       MenuCategory.find({ restaurantId: rid, orgCategoryId: null }).lean(),
       MenuItem.find({ restaurantId: rid, orgItemId: null }).lean(),
     ]);
@@ -90,6 +102,9 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
 
   const resolvedCategories = [];
 
+  // kullanilan modifier group id’leri topla (populate icin)
+  const usedModifierGroupIds = new Set();
+
   // ---- 1) Org tabanlı kategoriler ----
   for (const orgCat of orgCategories) {
     const orgCatIdStr = String(orgCat._id);
@@ -98,7 +113,6 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
     const orgIsActive = orgCat.isActive !== false;
     const hidden = overrideCat?.hidden === true;
 
-    // org kapalıysa branch açamaz; branch hidden ise kapalı
     const isActive = orgIsActive && !hidden;
 
     if (!includeInactive && !isActive) continue;
@@ -106,11 +120,11 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
     const categoryOrder =
       overrideCat?.order !== undefined ? overrideCat.order : orgCat.order || 0;
 
-    const resolvedCategoryId = orgCat._id; // tekil kimlik: org id
+    const resolvedCategoryId = orgCat._id;
 
     const resolvedCategory = {
       _id: resolvedCategoryId,
-      categoryId: resolvedCategoryId, // backward compat
+      categoryId: resolvedCategoryId,
       orgCategoryId: orgCat._id,
       restaurantId: restaurant._id,
 
@@ -151,9 +165,13 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
       const itemOrder =
         overrideItem?.order !== undefined ? overrideItem.order : orgItem.order || 0;
 
+      // ✅ NEW: org item modifierGroupIds (modelde yoksa [])
+      const modifierGroupIds = asIdList(orgItem.modifierGroupIds);
+      for (const mid of modifierGroupIds) usedModifierGroupIds.add(mid);
+
       resolvedItems.push({
-        _id: orgItem._id, // tekil kimlik: org id
-        itemId: orgItem._id, // backward compat
+        _id: orgItem._id,
+        itemId: orgItem._id,
         orgItemId: orgItem._id,
         restaurantId: restaurant._id,
         categoryId: resolvedCategoryId,
@@ -167,6 +185,9 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
         isActive: itemIsActive,
         isAvailable,
         source: overrideItem ? "org_branch_override" : "org",
+
+        // ✅ NEW
+        modifierGroupIds,
       });
     }
 
@@ -206,23 +227,31 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
         if (!includeUnavailable && !isAvailable) return false;
         return true;
       })
-      .map((it) => ({
-        _id: it._id,
-        itemId: it._id,
-        orgItemId: null,
-        restaurantId: restaurant._id,
-        categoryId: localCat._id,
+      .map((it) => {
+        const modifierGroupIds = asIdList(it.modifierGroupIds);
+        for (const mid of modifierGroupIds) usedModifierGroupIds.add(mid);
 
-        title: it.title,
-        description: it.description || "",
-        price: it.price ?? null,
-        photoUrl: it.photoUrl || "",
-        tags: it.tags || [],
-        order: it.order || 0,
-        isActive: it.isActive !== false,
-        isAvailable: it.isAvailable !== false,
-        source: "local",
-      }));
+        return {
+          _id: it._id,
+          itemId: it._id,
+          orgItemId: null,
+          restaurantId: restaurant._id,
+          categoryId: localCat._id,
+
+          title: it.title,
+          description: it.description || "",
+          price: it.price ?? null,
+          photoUrl: it.photoUrl || "",
+          tags: it.tags || [],
+          order: it.order || 0,
+          isActive: it.isActive !== false,
+          isAvailable: it.isAvailable !== false,
+          source: "local",
+
+          // ✅ NEW
+          modifierGroupIds,
+        };
+      });
 
     resolvedLocalItems.sort((a, b) => (a.order || 0) - (b.order || 0));
     localResolvedCategory.items = resolvedLocalItems;
@@ -232,6 +261,62 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
 
   // Kategori sıralaması
   resolvedCategories.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  // ✅ OPTIONAL populate: modifierGroups
+  if (includeModifierGroups && usedModifierGroupIds.size) {
+    const ids = Array.from(usedModifierGroupIds);
+
+    const q = {
+      _id: { $in: ids },
+      restaurantId: restaurant._id,
+    };
+    if (!includeInactive) q.isActive = true;
+
+    const groups = await ModifierGroup.find(q)
+      .sort({ order: 1, createdAt: 1 })
+      .lean();
+
+    const groupMap = new Map(groups.map((g) => [String(g._id), g]));
+
+    for (const cat of resolvedCategories) {
+      for (const item of cat.items || []) {
+        const mids = asIdList(item.modifierGroupIds);
+        const populated = [];
+
+        for (const mid of mids) {
+          const g = groupMap.get(String(mid));
+          if (!g) continue;
+
+          const options = Array.isArray(g.options) ? g.options : [];
+          const filteredOptions = includeInactive
+            ? options
+            : options.filter((o) => o.isActive !== false);
+
+          populated.push({
+            _id: g._id,
+            title: g.title,
+            description: g.description || "",
+            minSelect: Number(g.minSelect ?? 0),
+            maxSelect: Number(g.maxSelect ?? 1),
+            order: Number(g.order ?? 0),
+            isActive: g.isActive !== false,
+            options: filteredOptions
+              .slice()
+              .sort((a, b) => (a.order || 0) - (b.order || 0))
+              .map((o) => ({
+                _id: o._id,
+                title: o.title,
+                price: Number(o.price ?? 0),
+                order: Number(o.order ?? 0),
+                isActive: o.isActive !== false,
+              })),
+          });
+        }
+
+        item.modifierGroups = populated;
+      }
+    }
+  }
 
   return {
     restaurantId: restaurant._id,
@@ -246,6 +331,7 @@ export async function getResolvedMenuForRestaurant(restaurantId, opts = {}) {
 async function getLocalMenuForRestaurant(restaurantId, opts = {}) {
   const includeInactive = opts?.includeInactive === true;
   const includeUnavailable = opts?.includeUnavailable === true;
+  const includeModifierGroups = opts?.includeModifierGroups === true;
 
   const catQuery = { restaurantId };
   if (!includeInactive) catQuery.isActive = true;
@@ -266,6 +352,8 @@ async function getLocalMenuForRestaurant(restaurantId, opts = {}) {
     itemsByCategoryId.get(key).push(it);
   }
 
+  const usedModifierGroupIds = new Set();
+
   const resolvedCategories = categories.map((c) => {
     const key = String(c._id);
     const catItems = itemsByCategoryId.get(key) || [];
@@ -281,24 +369,82 @@ async function getLocalMenuForRestaurant(restaurantId, opts = {}) {
       order: c.order || 0,
       isActive: c.isActive !== false,
       source: "local",
-      items: catItems.map((it) => ({
-        _id: it._id,
-        itemId: it._id,
-        orgItemId: null,
-        restaurantId: it.restaurantId,
-        categoryId: it.categoryId,
-        title: it.title,
-        description: it.description || "",
-        price: it.price ?? null,
-        photoUrl: it.photoUrl || "",
-        tags: it.tags || [],
-        order: it.order || 0,
-        isActive: it.isActive !== false,
-        isAvailable: it.isAvailable !== false,
-        source: "local",
-      })),
+      items: catItems.map((it) => {
+        const modifierGroupIds = asIdList(it.modifierGroupIds);
+        for (const mid of modifierGroupIds) usedModifierGroupIds.add(mid);
+
+        return {
+          _id: it._id,
+          itemId: it._id,
+          orgItemId: null,
+          restaurantId: it.restaurantId,
+          categoryId: it.categoryId,
+          title: it.title,
+          description: it.description || "",
+          price: it.price ?? null,
+          photoUrl: it.photoUrl || "",
+          tags: it.tags || [],
+          order: it.order || 0,
+          isActive: it.isActive !== false,
+          isAvailable: it.isAvailable !== false,
+          source: "local",
+
+          // ✅ NEW
+          modifierGroupIds,
+        };
+      }),
     };
   });
+
+  // ✅ OPTIONAL populate: modifierGroups (local-only)
+  if (includeModifierGroups && usedModifierGroupIds.size) {
+    const ids = Array.from(usedModifierGroupIds);
+
+    const q = { _id: { $in: ids }, restaurantId };
+    if (!includeInactive) q.isActive = true;
+
+    const groups = await ModifierGroup.find(q).sort({ order: 1, createdAt: 1 }).lean();
+    const groupMap = new Map(groups.map((g) => [String(g._id), g]));
+
+    for (const cat of resolvedCategories) {
+      for (const item of cat.items || []) {
+        const mids = asIdList(item.modifierGroupIds);
+        const populated = [];
+
+        for (const mid of mids) {
+          const g = groupMap.get(String(mid));
+          if (!g) continue;
+
+          const options = Array.isArray(g.options) ? g.options : [];
+          const filteredOptions = includeInactive
+            ? options
+            : options.filter((o) => o.isActive !== false);
+
+          populated.push({
+            _id: g._id,
+            title: g.title,
+            description: g.description || "",
+            minSelect: Number(g.minSelect ?? 0),
+            maxSelect: Number(g.maxSelect ?? 1),
+            order: Number(g.order ?? 0),
+            isActive: g.isActive !== false,
+            options: filteredOptions
+              .slice()
+              .sort((a, b) => (a.order || 0) - (b.order || 0))
+              .map((o) => ({
+                _id: o._id,
+                title: o.title,
+                price: Number(o.price ?? 0),
+                order: Number(o.order ?? 0),
+                isActive: o.isActive !== false,
+              })),
+          });
+        }
+
+        item.modifierGroups = populated;
+      }
+    }
+  }
 
   return {
     restaurantId,

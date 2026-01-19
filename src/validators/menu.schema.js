@@ -21,6 +21,26 @@ const tagsLike = Joi.alternatives()
     return [];
   }, "tags-like");
 
+/**
+ * ✅ NEW: modifierGroupIds (form-data/string destekli)
+ * - array: ["id1","id2"]
+ * - string: "id1,id2"
+ */
+const modifierGroupIdsLike = Joi.alternatives()
+  .try(
+    Joi.array().items(Joi.string().trim().min(1)),
+    Joi.string().trim().allow("")
+  )
+  .custom((v) => {
+    if (Array.isArray(v)) return v.map(String).map((x) => x.trim()).filter(Boolean);
+    if (typeof v === "string") {
+      const s = v.trim();
+      if (!s) return [];
+      return s.split(",").map((x) => x.trim()).filter(Boolean);
+    }
+    return [];
+  }, "modifierGroupIds-like");
+
 /* ---------------- CATEGORY ---------------- */
 
 export const createCategorySchema = Joi.object({
@@ -46,6 +66,9 @@ export const createItemSchema = Joi.object({
   tags: tagsLike.default([]),
   order: numLike.integer().min(0).max(10000).default(0),
   isAvailable: boolLike.default(true),
+
+  // ✅ NEW
+  modifierGroupIds: modifierGroupIdsLike.default([]),
 });
 
 export const updateItemSchema = Joi.object({
@@ -58,6 +81,9 @@ export const updateItemSchema = Joi.object({
   isAvailable: boolLike,
   isActive: boolLike,
   removePhoto: boolLike,
+
+  // ✅ NEW
+  modifierGroupIds: modifierGroupIdsLike,
 }).min(1);
 
 export const listItemsQuerySchema = Joi.object({

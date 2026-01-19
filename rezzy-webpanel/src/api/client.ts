@@ -663,6 +663,178 @@ export async function restaurantGetReservationQR(resId: string) {
   };
 }
 // =========================
+// RESTAURANT — Modifier Groups (Options)
+// =========================
+
+export type RestaurantModifierOption = {
+  _id: string;
+  title: string;
+  price: number;
+  order: number;
+  isActive: boolean;
+};
+
+export type RestaurantModifierGroup = {
+  _id: string;
+  restaurantId: string;
+  title: string;
+  description?: string;
+  minSelect: number;
+  maxSelect: number;
+  order: number;
+  isActive: boolean;
+  options: RestaurantModifierOption[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+/**
+ * GET /api/panel/restaurants/:rid/menu/modifier-groups?includeInactive=true
+ */
+export async function restaurantListModifierGroups(
+  rid: string,
+  params?: { includeInactive?: boolean }
+): Promise<{ items: RestaurantModifierGroup[] }> {
+  const { data } = await api.get(
+    `/panel/restaurants/${rid}/menu/modifier-groups`,
+    { params }
+  );
+  const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+  return { items };
+}
+
+/**
+ * POST /api/panel/restaurants/:rid/menu/modifier-groups
+ */
+export async function restaurantCreateModifierGroup(
+  rid: string,
+  input: {
+    title: string;
+    description?: string;
+    minSelect?: number;
+    maxSelect?: number;
+    order?: number;
+    isActive?: boolean;
+  }
+): Promise<{ ok: boolean; group: RestaurantModifierGroup }> {
+  const payload: any = {
+    title: input.title,
+    description: input.description ?? "",
+    minSelect: typeof input.minSelect === "number" ? input.minSelect : 0,
+    maxSelect: typeof input.maxSelect === "number" ? input.maxSelect : 1,
+    order: typeof input.order === "number" ? input.order : 0,
+  };
+  if (typeof input.isActive === "boolean") payload.isActive = input.isActive;
+
+  const { data } = await api.post(
+    `/panel/restaurants/${rid}/menu/modifier-groups`,
+    payload
+  );
+  return data as { ok: boolean; group: RestaurantModifierGroup };
+}
+
+/**
+ * PATCH /api/panel/restaurants/:rid/menu/modifier-groups/:gid
+ */
+export async function restaurantUpdateModifierGroup(
+  rid: string,
+  gid: string,
+  input: {
+    title?: string;
+    description?: string;
+    minSelect?: number;
+    maxSelect?: number;
+    order?: number;
+    isActive?: boolean;
+  }
+): Promise<{ ok: boolean; group: RestaurantModifierGroup }> {
+  const payload: any = {};
+  if (input.title != null) payload.title = input.title;
+  if (input.description != null) payload.description = input.description;
+  if (typeof input.minSelect === "number") payload.minSelect = input.minSelect;
+  if (typeof input.maxSelect === "number") payload.maxSelect = input.maxSelect;
+  if (typeof input.order === "number") payload.order = input.order;
+  if (typeof input.isActive === "boolean") payload.isActive = input.isActive;
+
+  const { data } = await api.patch(
+    `/panel/restaurants/${rid}/menu/modifier-groups/${gid}`,
+    payload
+  );
+  return data as { ok: boolean; group: RestaurantModifierGroup };
+}
+
+/**
+ * DELETE /api/panel/restaurants/:rid/menu/modifier-groups/:gid (soft)
+ */
+export async function restaurantDeleteModifierGroup(
+  rid: string,
+  gid: string
+): Promise<{ ok: boolean }> {
+  const { data } = await api.delete(
+    `/panel/restaurants/${rid}/menu/modifier-groups/${gid}`
+  );
+  return data as { ok: boolean };
+}
+
+/**
+ * POST /api/panel/restaurants/:rid/menu/modifier-groups/:gid/options
+ */
+export async function restaurantAddModifierOption(
+  rid: string,
+  gid: string,
+  input: { title: string; price?: number; order?: number; isActive?: boolean }
+): Promise<{ ok: boolean; group: RestaurantModifierGroup }> {
+  const payload: any = {
+    title: input.title,
+    price: typeof input.price === "number" ? input.price : 0,
+    order: typeof input.order === "number" ? input.order : 0,
+  };
+  if (typeof input.isActive === "boolean") payload.isActive = input.isActive;
+
+  const { data } = await api.post(
+    `/panel/restaurants/${rid}/menu/modifier-groups/${gid}/options`,
+    payload
+  );
+  return data as { ok: boolean; group: RestaurantModifierGroup };
+}
+
+/**
+ * PATCH /api/panel/restaurants/:rid/menu/modifier-groups/:gid/options/:oid
+ */
+export async function restaurantUpdateModifierOption(
+  rid: string,
+  gid: string,
+  oid: string,
+  input: { title?: string; price?: number; order?: number; isActive?: boolean }
+): Promise<{ ok: boolean; group: RestaurantModifierGroup }> {
+  const payload: any = {};
+  if (input.title != null) payload.title = input.title;
+  if (typeof input.price === "number") payload.price = input.price;
+  if (typeof input.order === "number") payload.order = input.order;
+  if (typeof input.isActive === "boolean") payload.isActive = input.isActive;
+
+  const { data } = await api.patch(
+    `/panel/restaurants/${rid}/menu/modifier-groups/${gid}/options/${oid}`,
+    payload
+  );
+  return data as { ok: boolean; group: RestaurantModifierGroup };
+}
+
+/**
+ * DELETE /api/panel/restaurants/:rid/menu/modifier-groups/:gid/options/:oid (soft)
+ */
+export async function restaurantDeleteModifierOption(
+  rid: string,
+  gid: string,
+  oid: string
+): Promise<{ ok: boolean; group: RestaurantModifierGroup }> {
+  const { data } = await api.delete(
+    `/panel/restaurants/${rid}/menu/modifier-groups/${gid}/options/${oid}`
+  );
+  return data as { ok: boolean; group: RestaurantModifierGroup };
+}
+
+// =========================
 // RESTAURANT — Menu Overrides (Org menü için şube override)
 // =========================
 
@@ -825,6 +997,7 @@ export async function restaurantCreateItem(
     order?: number;
     isAvailable?: boolean;
     photoFile?: File | null;
+    modifierGroupIds?: string[];
   }
 ) {
   const fd = new FormData();
@@ -839,6 +1012,12 @@ export async function restaurantCreateItem(
   (input.tags ?? []).forEach((t) => {
     if (t) fd.append("tags", t);
   });
+
+  // ✅ Opsiyon grupları (modifier groups)
+  if (Array.isArray((input as any).modifierGroupIds)) {
+    const ids = (input as any).modifierGroupIds.map(String).map((x: string) => x.trim()).filter(Boolean);
+    if (ids.length) fd.append("modifierGroupIds", ids.join(","));
+  }
 
   if (input.photoFile instanceof File) {
     fd.append("photo", input.photoFile);
@@ -866,6 +1045,7 @@ export async function restaurantUpdateItem(
     isActive?: boolean;
     removePhoto?: boolean;
     photoFile?: File | null;
+    modifierGroupIds?: string[];
   }
 ) {
   const fd = new FormData();
@@ -882,6 +1062,12 @@ export async function restaurantUpdateItem(
   (input.tags ?? []).forEach((t) => {
     if (t) fd.append("tags", t);
   });
+  // ✅ Opsiyon grupları (modifier groups)
+  if (Array.isArray((input as any).modifierGroupIds)) {
+    const ids = (input as any).modifierGroupIds.map(String).map((x: string) => x.trim()).filter(Boolean);
+    // Not: boş array gönderilirse backend default([]) / mevcut kalabilir; temizlemek istersen [] yerine explicit empty string gönder.
+    fd.append("modifierGroupIds", ids.join(","));
+  }
   if (input.photoFile) fd.append("photo", input.photoFile);
 
   const { data } = await api.patch(
