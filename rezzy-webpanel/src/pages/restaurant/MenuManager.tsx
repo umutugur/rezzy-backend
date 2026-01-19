@@ -831,6 +831,20 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
 
   const [mode, setMode] = React.useState<"manage" | "preview">("manage");
 
+  // UI tab inside "Yönetim" (business logic unchanged)
+  const [manageTab, setManageTab] = React.useState<"items" | "modifiers">("items");
+
+  // Accordion state for modifier groups
+  const [expandedGroupIds, setExpandedGroupIds] = React.useState<Set<string>>(() => new Set());
+  const toggleGroupExpanded = React.useCallback((gid: string) => {
+    setExpandedGroupIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(gid)) next.delete(gid);
+      else next.add(gid);
+      return next;
+    });
+  }, []);
+
   // Queries
   const localCatQ = useQuery({
     queryKey: ["menu-categories", rid],
@@ -1224,6 +1238,15 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
             Önizleme
           </button>
 
+          {mode === "manage" && manageTab === "modifiers" && (
+            <button
+              className="px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700"
+              onClick={openCreateModifierGroup}
+            >
+              + Grup
+            </button>
+          )}
+
           <button
             className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
             onClick={refreshAll}
@@ -1232,6 +1255,31 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
           </button>
         </div>
       </div>
+
+      {mode === "manage" && (
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+            <button
+              className={`px-3 py-1.5 text-sm ${
+                manageTab === "items" ? "bg-brand-50 text-brand-700" : "bg-white hover:bg-gray-50"
+              }`}
+              onClick={() => setManageTab("items")}
+              type="button"
+            >
+              Kategoriler & Ürünler
+            </button>
+            <button
+              className={`px-3 py-1.5 text-sm border-l border-gray-200 ${
+                manageTab === "modifiers" ? "bg-brand-50 text-brand-700" : "bg-white hover:bg-gray-50"
+              }`}
+              onClick={() => setManageTab("modifiers")}
+              type="button"
+            >
+              Opsiyon Grupları
+            </button>
+          </div>
+        </div>
+      )}
 
       {!rid && <div className="text-sm text-red-600">RestaurantId bulunamadı.</div>}
 
@@ -1244,137 +1292,150 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
       ======================= */}
       {mode === "manage" && (
         <div className="space-y-6">
-          {/* Modifier Groups */}
-          <Card
-            title={
-              <div className="flex items-center justify-between">
-                <span>Opsiyon Grupları (Modifier)</span>
-                <button
-                  className="px-3 py-1.5 text-xs rounded bg-brand-600 text-white hover:bg-brand-700"
-                  onClick={openCreateModifierGroup}
-                >
-                  + Grup
-                </button>
-              </div>
-            }
-          >
-            <div className="space-y-3">
-              {modifierGroups.length === 0 ? (
-                <div className="text-sm text-gray-500">Henüz opsiyon grubu yok.</div>
-              ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                  {modifierGroups.map((g) => (
-                    <div key={g._id} className="border rounded-xl p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="font-medium truncate">{g.title}</div>
-                          {g.description ? (
-                            <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">{g.description}</div>
-                          ) : null}
-                          <div className="text-[11px] text-gray-500 mt-1">
-                            Min: {Number(g.minSelect ?? 0)} • Max: {Number(g.maxSelect ?? 1)} • Sıra:{" "}
-                            {Number(g.order ?? 0)} • {g.isActive !== false ? "Aktif" : "Pasif"}
+          {manageTab === "modifiers" && (
+            <Card title={<div className="flex items-center justify-between"><span>Opsiyon Grupları</span></div>}>
+              <div className="space-y-3">
+                {modifierGroups.length === 0 ? (
+                  <div className="text-sm text-gray-500">Henüz opsiyon grubu yok.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {modifierGroups.map((g) => {
+                      const isOpen = expandedGroupIds.has(g._id);
+                      return (
+                        <div key={g._id} className="border rounded-xl overflow-hidden">
+                          {/* Accordion header */}
+                          <div className="flex items-start justify-between gap-3 px-4 py-3 bg-white">
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 text-left"
+                              onClick={() => toggleGroupExpanded(g._id)}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="font-medium truncate">{g.title}</div>
+                                  <div className="text-[11px] text-gray-500 mt-0.5">
+                                    Min: {Number(g.minSelect ?? 0)} • Max: {Number(g.maxSelect ?? 1)} • Sıra: {Number(g.order ?? 0)} • {g.isActive !== false ? "Aktif" : "Pasif"}
+                                  </div>
+                                </div>
+                                <div className="shrink-0 text-gray-400">
+                                  {isOpen ? "▾" : "▸"}
+                                </div>
+                              </div>
+                              {g.description ? (
+                                <div className="text-xs text-gray-500 mt-1 line-clamp-2">{g.description}</div>
+                              ) : null}
+                            </button>
+
+                            {/* Actions (same handlers) */}
+                            <div className="shrink-0 flex items-center gap-2">
+                              <button
+                                className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
+                                onClick={() => openEditModifierGroup(g)}
+                                type="button"
+                              >
+                                Düzenle
+                              </button>
+
+                              <button
+                                className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
+                                onClick={() => openCreateModifierOption(g._id)}
+                                type="button"
+                              >
+                                + Opsiyon
+                              </button>
+
+                              <button
+                                className="px-2 py-1 text-xs rounded bg-red-50 text-red-700 hover:bg-red-100"
+                                onClick={() => {
+                                  if (confirm(`\"${g.title}\" grubunu kapatmak istiyor musun?`)) {
+                                    deleteModGroupMut.mutate(g._id);
+                                  }
+                                }}
+                                type="button"
+                              >
+                                Kapat
+                              </button>
+                            </div>
                           </div>
-                        </div>
 
-                        <div className="shrink-0 flex items-center gap-2">
-                          <button
-                            className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
-                            onClick={() => openEditModifierGroup(g)}
-                          >
-                            Düzenle
-                          </button>
+                          {/* Accordion content */}
+                          {isOpen && (
+                            <div className="border-t bg-gray-50/40">
+                              <div className="px-4 py-2 text-xs text-gray-600 flex items-center justify-between">
+                                <span>Opsiyonlar</span>
+                                <span className="text-[11px] text-gray-500">
+                                  {(g.options ?? []).filter((x) => x.isActive !== false).length} aktif
+                                </span>
+                              </div>
 
-                          <button
-                            className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
-                            onClick={() => openCreateModifierOption(g._id)}
-                          >
-                            + Opsiyon
-                          </button>
-
-                          <button
-                            className="px-2 py-1 text-xs rounded bg-red-50 text-red-700 hover:bg-red-100"
-                            onClick={() => {
-                              if (confirm(`"${g.title}" grubunu kapatmak istiyor musun?`)) {
-                                deleteModGroupMut.mutate(g._id);
-                              }
-                            }}
-                          >
-                            Kapat
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 border rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 px-3 py-2 text-xs text-gray-600 flex items-center justify-between">
-                          <span>Opsiyonlar</span>
-                          <span className="text-[11px] text-gray-500">
-                            {(g.options ?? []).filter((x) => x.isActive !== false).length} aktif
-                          </span>
-                        </div>
-
-                        <div className="max-h-56 overflow-auto">
-                          {(g.options ?? []).length === 0 ? (
-                            <div className="px-3 py-3 text-sm text-gray-500">Opsiyon yok.</div>
-                          ) : (
-                            <table className="min-w-full text-sm">
-                              <thead className="bg-white text-gray-500">
-                                <tr className="border-t">
-                                  <th className="text-left font-medium px-3 py-2">Ad</th>
-                                  <th className="text-left font-medium px-3 py-2">Fiyat</th>
-                                  <th className="text-left font-medium px-3 py-2">Durum</th>
-                                  <th className="text-right font-medium px-3 py-2">Aksiyon</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {sortByOrder(g.options ?? []).map((o) => (
-                                  <tr key={o._id} className="border-t">
-                                    <td className="px-3 py-2">
-                                      <div className="font-medium">{o.title}</div>
-                                      <div className="text-[11px] text-gray-400">Sıra: {Number(o.order ?? 0)}</div>
-                                    </td>
-                                    <td className="px-3 py-2 whitespace-nowrap">
-                                      <b>{money(o.price)} ₺</b>
-                                    </td>
-                                    <td className="px-3 py-2">
-                                      <span className="text-xs text-gray-600">{o.isActive !== false ? "Aktif" : "Pasif"}</span>
-                                    </td>
-                                    <td className="px-3 py-2 text-right">
-                                      <div className="inline-flex gap-2">
-                                        <button
-                                          className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
-                                          onClick={() => openEditModifierOption(g._id, o)}
-                                        >
-                                          Düzenle
-                                        </button>
-                                        <button
-                                          className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
-                                          onClick={() => {
-                                            if (confirm(`"${o.title}" opsiyonunu kapatmak istiyor musun?`)) {
-                                              deleteModOptionMut.mutate({ gid: g._id, oid: o._id });
-                                            }
-                                          }}
-                                        >
-                                          Kapat
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                              <div className="overflow-auto">
+                                {(g.options ?? []).length === 0 ? (
+                                  <div className="px-4 py-3 text-sm text-gray-500">Opsiyon yok.</div>
+                                ) : (
+                                  <table className="min-w-full text-sm">
+                                    <thead className="bg-white text-gray-500">
+                                      <tr className="border-t">
+                                        <th className="text-left font-medium px-4 py-2">Ad</th>
+                                        <th className="text-left font-medium px-4 py-2">Fiyat</th>
+                                        <th className="text-left font-medium px-4 py-2">Durum</th>
+                                        <th className="text-right font-medium px-4 py-2">Aksiyon</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {sortByOrder(g.options ?? []).map((o) => (
+                                        <tr key={o._id} className="border-t">
+                                          <td className="px-4 py-2">
+                                            <div className="font-medium">{o.title}</div>
+                                            <div className="text-[11px] text-gray-400">Sıra: {Number(o.order ?? 0)}</div>
+                                          </td>
+                                          <td className="px-4 py-2 whitespace-nowrap">
+                                            <b>{money(o.price)} ₺</b>
+                                          </td>
+                                          <td className="px-4 py-2">
+                                            <span className="text-xs text-gray-600">{o.isActive !== false ? "Aktif" : "Pasif"}</span>
+                                          </td>
+                                          <td className="px-4 py-2 text-right">
+                                            <div className="inline-flex gap-2">
+                                              <button
+                                                className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
+                                                onClick={() => openEditModifierOption(g._id, o)}
+                                                type="button"
+                                              >
+                                                Düzenle
+                                              </button>
+                                              <button
+                                                className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
+                                                onClick={() => {
+                                                  if (confirm(`\"${o.title}\" opsiyonunu kapatmak istiyor musun?`)) {
+                                                    deleteModOptionMut.mutate({ gid: g._id, oid: o._id });
+                                                  }
+                                                }}
+                                                type="button"
+                                              >
+                                                Kapat
+                                              </button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+                            </div>
                           )}
                         </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
 
-          {/* Existing grid (categories + items) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Categories + Items */}
+          {manageTab === "items" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* LEFT */}
             <div className="lg:col-span-4 space-y-4">
               <Card
@@ -1710,6 +1771,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
               </Card>
             </div>
           </div>
+          )}
         </div>
       )}
 
