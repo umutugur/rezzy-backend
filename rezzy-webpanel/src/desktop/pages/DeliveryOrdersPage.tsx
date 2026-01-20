@@ -46,6 +46,46 @@ function safeStr(v: any) {
   return String(v ?? "").trim();
 }
 
+function calcItemTitle(it: any): string {
+  return safeStr(it?.itemTitle ?? it?.title);
+}
+
+function calcLineTotal(it: any): number {
+  const qty = Math.max(1, Number(it?.qty || 1));
+  const lineTotal = Number(it?.lineTotal ?? 0);
+  if (Number.isFinite(lineTotal) && lineTotal > 0) return lineTotal;
+
+  const unitTotal = Number(it?.unitTotal ?? 0);
+  if (Number.isFinite(unitTotal) && unitTotal > 0) return unitTotal * qty;
+
+  const price = Number(it?.price ?? 0);
+  if (Number.isFinite(price) && price > 0) return price * qty;
+
+  const basePrice = Number(it?.basePrice ?? 0);
+  if (Number.isFinite(basePrice) && basePrice > 0) return basePrice * qty;
+
+  return 0;
+}
+
+function buildSelectedModifiersHtml(it: any): string {
+  const groups = Array.isArray(it?.selectedModifiers) ? it.selectedModifiers : [];
+  if (!groups.length) return "";
+
+  const rows = groups
+    .map((g: any) => {
+      const gTitle = safeStr(g?.groupTitle);
+      const opts = Array.isArray(g?.options) ? g.options : [];
+      const optTitles = opts.map((o: any) => safeStr(o?.optionTitle)).filter(Boolean);
+      if (!gTitle && optTitles.length === 0) return "";
+      return `<div><span class="bold">${gTitle || "Opsiyon"}:</span> ${optTitles.join(", ")}</div>`;
+    })
+    .filter(Boolean)
+    .join("");
+
+  if (!rows) return "";
+  return `<div class="small muted" style="margin-top:2px; line-height:1.35;">${rows}</div>`;
+}
+
 // Popup blocker fix: user gesture anında window.open
 function openPrintWindow(title: string) {
   const w = window.open("", "_blank", "width=420,height=800");
@@ -93,15 +133,21 @@ function buildPrintHtml(o: DeliveryOrderRow, currency: "TRY" | "GBP") {
 
   const itemsHtml = (o.items || [])
     .map((it: any) => {
-      const line = Number(it.price || 0) * Number(it.qty || 1);
-      return `<div class="row"><span>${it.qty}× ${safeStr(it.title)}</span><span>${formatMoney(
-        line,
-        currency
-      )}</span></div>${
-        safeStr(it.note)
-          ? `<div class="small muted">Not: ${safeStr(it.note)}</div>`
-          : ""
-      }`;
+      const qty = Math.max(1, Number(it?.qty || 1));
+      const title = calcItemTitle(it);
+      const line = calcLineTotal(it);
+
+      const modsHtml = buildSelectedModifiersHtml(it);
+
+      const noteHtml = safeStr(it?.note)
+        ? `<div class="small muted" style="margin-top:2px;">Not: ${safeStr(it.note)}</div>`
+        : "";
+
+      return `
+        <div class="row"><span>${qty}× ${title}</span><span>${formatMoney(line, currency)}</span></div>
+        ${modsHtml}
+        ${noteHtml}
+      `;
     })
     .join("");
 
@@ -442,19 +488,44 @@ export const DeliveryOrdersPage: React.FC = () => {
             <div>
               {(selected as any).items?.length ? (
                 (selected as any).items.map((it: any, idx: number) => {
-                  const line = Number(it.price || 0) * Number(it.qty || 1);
+                  const qty = Math.max(1, Number(it?.qty || 1));
+                  const title = calcItemTitle(it);
+                  const line = calcLineTotal(it);
+
+                  const groups = Array.isArray(it?.selectedModifiers) ? it.selectedModifiers : [];
+
                   return (
-                    <div className="rez-item-row" key={`${it.itemId || it.title}-${idx}`}>
+                    <div className="rez-item-row" key={`${it.itemId || it.itemTitle || it.title}-${idx}`}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 800 }}>
-                          {it.qty}× {safeStr(it.title)}
+                          {qty}× {title}
                         </div>
-                        {safeStr(it.note) ? (
-                          <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
+
+                        {groups.length ? (
+                          <div style={{ marginTop: 4, fontSize: 12, opacity: 0.85, lineHeight: 1.35 }}>
+                            {groups.map((g: any, gi: number) => {
+                              const gTitle = safeStr(g?.groupTitle);
+                              const opts = Array.isArray(g?.options) ? g.options : [];
+                              const optTitles = opts.map((o: any) => safeStr(o?.optionTitle)).filter(Boolean);
+                              if (!gTitle && optTitles.length === 0) return null;
+
+                              return (
+                                <div key={`${gTitle || "ops"}-${gi}`}>
+                                  <span style={{ fontWeight: 800 }}>{gTitle || "Opsiyon"}:</span>{" "}
+                                  <span>{optTitles.join(", ")}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+
+                        {safeStr(it?.note) ? (
+                          <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
                             Not: {safeStr(it.note)}
                           </div>
                         ) : null}
                       </div>
+
                       <div style={{ fontWeight: 900 }}>
                         {formatMoney(line, currency)}
                       </div>
