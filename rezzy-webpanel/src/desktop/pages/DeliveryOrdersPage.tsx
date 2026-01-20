@@ -83,7 +83,7 @@ function buildSelectedModifiersHtml(it: any): string {
     .join("");
 
   if (!rows) return "";
-  return `<div class="small muted" style="margin-top:2px; line-height:1.35;">${rows}</div>`;
+  return `<div class="small mods" style="margin-top:2px; line-height:1.4;">${rows}</div>`;
 }
 
 // Popup blocker fix: user gesture anında window.open
@@ -99,14 +99,15 @@ function writeAndPrint80mm(w: Window, title: string, html: string) {
         <title>${title}</title>
         <style>
           @page { size: 80mm auto; margin: 4mm 2mm; }
-          body { font-family: Menlo, Monaco, Consolas, monospace; font-size: 11px; margin: 0; width: 72mm; }
+          body { font-family: Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 1.25; margin: 0; width: 72mm; }
           .wrap { padding: 6px 8px; }
           .center { text-align: center; }
-          .line { border-top: 1px dashed #000; margin: 6px 0; }
-          .row { display:flex; justify-content:space-between; margin: 2px 0; gap: 8px; }
-          .bold { font-weight: 800; }
-          .small { font-size: 10px; }
-          .muted { opacity: .85; }
+          .line { border-top: 1px dashed #000; margin: 8px 0; }
+          .row { display:flex; justify-content:space-between; margin: 3px 0; gap: 8px; }
+          .bold { font-weight: 900; }
+          .small { font-size: 11px; line-height: 1.25; }
+          .muted { opacity: 1; }
+          .mods { font-weight: 800; }
         </style>
       </head>
       <body><div class="wrap">${html}</div></body>
@@ -131,6 +132,19 @@ function buildPrintHtml(o: DeliveryOrderRow, currency: "TRY" | "GBP") {
       })
     : "-";
 
+  // Helper: detect old-style modifier summaries in note
+  const looksLikeModifierSummary = (s: string) => {
+    const v = safeStr(s);
+    if (!v) return false;
+    // Common patterns we used earlier while we did not have selectedModifiers snapshot
+    // Example: "Acı Seçimi: ... • Sos Seçimi: ..."
+    if (v.includes("Seçimi") && (v.includes(":") || v.includes("•"))) return true;
+    // Also treat multi-group inline summaries as modifier notes
+    const colonCount = (v.match(/:/g) || []).length;
+    if (colonCount >= 2) return true;
+    return false;
+  };
+
   const itemsHtml = (o.items || [])
     .map((it: any) => {
       const qty = Math.max(1, Number(it?.qty || 1));
@@ -139,8 +153,12 @@ function buildPrintHtml(o: DeliveryOrderRow, currency: "TRY" | "GBP") {
 
       const modsHtml = buildSelectedModifiersHtml(it);
 
-      const noteHtml = safeStr(it?.note)
-        ? `<div class="small muted" style="margin-top:2px;">Not: ${safeStr(it.note)}</div>`
+      const noteText = safeStr(it?.note);
+      const hasMods = Array.isArray(it?.selectedModifiers) && it.selectedModifiers.length > 0;
+      const showNote = !!noteText && (!hasMods || !looksLikeModifierSummary(noteText));
+
+      const noteHtml = showNote
+        ? `<div class="small" style="margin-top:3px;">Not: ${noteText}</div>`
         : "";
 
       return `
@@ -320,7 +338,16 @@ export const DeliveryOrdersPage: React.FC = () => {
     }
     return by;
   }, [orders]);
+const handlePrintOnly = (o: DeliveryOrderRow) => {
+  const w = openPrintWindow("Paket Sipariş");
+  if (!w) {
+    showToast("Tarayıcı yazdırma penceresini engelledi. Popup izni ver.", "error");
+    return;
+  }
 
+  const html = buildPrintHtml(o, currency);
+  writeAndPrint80mm(w, "Paket Sipariş", html);
+};
   const handleAcceptAndPrint = (o: DeliveryOrderRow) => {
     const w = openPrintWindow("Paket Sipariş");
     if (!w) {
@@ -418,11 +445,24 @@ export const DeliveryOrdersPage: React.FC = () => {
         <div className="rez-modal-overlay" onClick={() => setSelected(null)} role="presentation">
           <div className="rez-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-              <div className="rez-modal-title">
-                Sipariş #{(selected as any).shortCode || String(selected._id).slice(-6)}
-              </div>
-              <button className="rezvix-btn" onClick={() => setSelected(null)}>Kapat</button>
-            </div>
+  <div className="rez-modal-title">
+    Sipariş #{(selected as any).shortCode || String(selected._id).slice(-6)}
+  </div>
+
+  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <button
+      className="rezvix-btn"
+      onClick={() => handlePrintOnly(selected)}
+      title="Yazdır"
+    >
+      Yazdır
+    </button>
+
+    <button className="rezvix-btn" onClick={() => setSelected(null)}>
+      Kapat
+    </button>
+  </div>
+</div>
 
             <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
               <span className="rez-badge">{paymentLabel((selected as any).paymentMethod)}</span>
@@ -548,6 +588,9 @@ export const DeliveryOrdersPage: React.FC = () => {
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {((selected as any).status === "new") && (
                 <>
+                <button className="rezvix-btn" onClick={() => handlePrintOnly(selected)}>
+  Yazdır
+</button>
                   <button
                     className="rezvix-btn rezvix-btn--primary"
                     disabled={acceptMut.isPending}
