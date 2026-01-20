@@ -30,7 +30,60 @@ function toObjectId(id) {
 function isValidId(id) {
   return mongoose.Types.ObjectId.isValid(String(id || ""));
 }
+async function attachModifierGroupsToMenu(menu, rid) {
+  const m = menu && typeof menu === "object" ? menu : { categories: [] };
 
+  // collect all modifierGroupIds from resolved categories/items
+  const ids = new Set();
+
+  for (const cat of m.categories || []) {
+    for (const it of cat.items || []) {
+      const arr = Array.isArray(it?.modifierGroupIds) ? it.modifierGroupIds : [];
+      for (const x of arr) {
+        const s = String(x || "").trim();
+        if (mongoose.Types.ObjectId.isValid(s)) ids.add(s);
+      }
+    }
+  }
+
+  if (ids.size === 0) {
+    return { ...m, modifierGroups: [] };
+  }
+
+  const docs = await ModifierGroup.find({
+    _id: { $in: Array.from(ids) },
+    restaurantId: rid,
+    isActive: true,
+  })
+    .select("_id title description minSelect maxSelect order isActive options")
+    .lean();
+
+  const modifierGroups = (docs || [])
+    .map((g) => ({
+      _id: String(g._id),
+      title: String(g.title || ""),
+      description: g.description ?? null,
+      minSelect: Number(g.minSelect ?? 0) || 0,
+      maxSelect: Number(g.maxSelect ?? 1) || 1,
+      order: Number(g.order ?? 0) || 0,
+      isActive: Boolean(g.isActive ?? true),
+      options: Array.isArray(g.options)
+        ? g.options
+            .filter((o) => (o?.isActive ?? true) !== false)
+            .map((o) => ({
+              _id: String(o._id || ""),
+              title: String(o.title || ""),
+              price: Number(o.price ?? 0) || 0,
+              order: Number(o.order ?? 0) || 0,
+              isActive: Boolean(o.isActive ?? true),
+            }))
+            .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+        : [],
+    }))
+    .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+
+  return { ...m, modifierGroups };
+}
 /**
  * ✅ Ortalama harcama tabanı (avgSpendBase)
  * Artık **resolved menü** üzerinden hesaplanıyor:
@@ -548,10 +601,21 @@ export const getResolvedMenuForPanel = async (req, res, next) => {
 };
 // public
 export const getResolvedMenuForPublic = async (req, res, next) => {
-  const { rid } = req.params;
-  const menu = await getResolvedMenuForRestaurant(rid, {
-    includeInactive: false,
-    includeUnavailable: false,
-  });
-  res.json(menu);
+  try {
+    const { rid } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(String(rid || ""))) {
+      return res.status(400).json({ message: "Invalid restaurant id" });
+    }
+
+    const menu = await getResolvedMenuForRestaurant(rid, {
+      includeInactive: false,
+      includeUnavailable: false,
+    });
+
+    const withMods = await attachModifierGroupsToMenu(menu, rid);
+    return res.json(withMods);
+  } catch (e) {
+    next(e);
+  }
 };
