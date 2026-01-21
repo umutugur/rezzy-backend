@@ -587,10 +587,14 @@ export const getResolvedMenuForPanel = async (req, res, next) => {
 
     const includeInactive = String(req.query.includeInactive || "") === "true";
     const includeUnavailable = String(req.query.includeUnavailable || "") === "true";
+    const includeModifierGroupsRaw = String(req.query.includeModifierGroups ?? "").trim();
+    const includeModifierGroups =
+       includeModifierGroupsRaw === "" ? true : includeModifierGroupsRaw === "true";
 
     const menu = await getResolvedMenuForRestaurant(String(rid), {
       includeInactive,
       includeUnavailable,
+      includeModifierGroups,
     });
     // service ne döndürüyorsa aynen passthrough:
     // { categories: [...], organizationId, restaurantId, ... }
