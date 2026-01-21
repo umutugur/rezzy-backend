@@ -54,6 +54,24 @@ type MenuItem = {
   modifierGroupIds?: string[] | null;
 };
 
+type ModifierOption = {
+  _id: string;
+  title: string;
+  priceDelta?: number;
+  isDefault?: boolean;
+  isActive?: boolean;
+};
+
+type ModifierGroup = {
+  _id: string;
+  title: string;
+  minSelect?: number;
+  maxSelect?: number;
+  isRequired?: boolean;
+  isActive?: boolean;
+  options?: ModifierOption[];
+};
+
 type DraftOrderItem = {
   itemId: string;
   title: string;
@@ -356,6 +374,103 @@ const LiveTablesInner: React.FC<LiveTablesInnerProps> = ({
     queryFn: () => restaurantGetResolvedMenu(rid, { includeUnavailable: true }),
     enabled: !!rid && isOrderModalOpen,
   });
+
+  const modifierGroupsById: Record<string, ModifierGroup> = React.useMemo(() => {
+    const out: Record<string, ModifierGroup> = {};
+
+    const rootGroups: any[] =
+      (resolvedMenuData as any)?.modifierGroups ||
+      (resolvedMenuData as any)?.modifier_groups ||
+      (resolvedMenuData as any)?.modifiers?.groups ||
+      [];
+
+    // 1) Prefer explicit root modifierGroups if the API returns them
+    if (Array.isArray(rootGroups) && rootGroups.length > 0) {
+      for (const g of rootGroups) {
+        const id = String(g?._id ?? g?.id ?? "").trim();
+        if (!id) continue;
+        out[id] = {
+          _id: id,
+          title: String(g?.title ?? g?.name ?? ""),
+          minSelect: g?.minSelect ?? g?.min ?? undefined,
+          maxSelect: g?.maxSelect ?? g?.max ?? undefined,
+          isRequired:
+            typeof g?.isRequired === "boolean"
+              ? g.isRequired
+              : typeof g?.required === "boolean"
+              ? g.required
+              : undefined,
+          isActive:
+            typeof g?.isActive === "boolean" ? g.isActive : g?.isActive == null ? undefined : !!g.isActive,
+          options: Array.isArray(g?.options)
+            ? g.options.map((o: any) => ({
+                _id: String(o?._id ?? o?.id ?? "").trim(),
+                title: String(o?.title ?? o?.name ?? ""),
+                priceDelta:
+                  o?.priceDelta != null
+                    ? Number(o.priceDelta)
+                    : o?.price != null
+                    ? Number(o.price)
+                    : o?.delta != null
+                    ? Number(o.delta)
+                    : undefined,
+                isDefault: typeof o?.isDefault === "boolean" ? o.isDefault : undefined,
+                isActive:
+                  typeof o?.isActive === "boolean" ? o.isActive : o?.isActive == null ? undefined : !!o.isActive,
+              }))
+            : undefined,
+        };
+      }
+      return out;
+    }
+
+    // 2) Fallback: scrape modifierGroups from items if the API doesn't return root groups
+    const cats = ((resolvedMenuData as any)?.categories ?? []) as any[];
+    for (const c of cats) {
+      const items = Array.isArray(c?.items) ? c.items : [];
+      for (const it of items) {
+        const groups = Array.isArray(it?.modifierGroups) ? it.modifierGroups : [];
+        for (const g of groups) {
+          const id = String(g?._id ?? g?.id ?? "").trim();
+          if (!id) continue;
+          if (out[id]) continue;
+          out[id] = {
+            _id: id,
+            title: String(g?.title ?? g?.name ?? ""),
+            minSelect: g?.minSelect ?? g?.min ?? undefined,
+            maxSelect: g?.maxSelect ?? g?.max ?? undefined,
+            isRequired:
+              typeof g?.isRequired === "boolean"
+                ? g.isRequired
+                : typeof g?.required === "boolean"
+                ? g.required
+                : undefined,
+            isActive:
+              typeof g?.isActive === "boolean" ? g.isActive : g?.isActive == null ? undefined : !!g.isActive,
+            options: Array.isArray(g?.options)
+              ? g.options.map((o: any) => ({
+                  _id: String(o?._id ?? o?.id ?? "").trim(),
+                  title: String(o?.title ?? o?.name ?? ""),
+                  priceDelta:
+                    o?.priceDelta != null
+                      ? Number(o.priceDelta)
+                      : o?.price != null
+                      ? Number(o.price)
+                      : o?.delta != null
+                      ? Number(o.delta)
+                      : undefined,
+                  isDefault: typeof o?.isDefault === "boolean" ? o.isDefault : undefined,
+                  isActive:
+                    typeof o?.isActive === "boolean" ? o.isActive : o?.isActive == null ? undefined : !!o.isActive,
+                }))
+              : undefined,
+          };
+        }
+      }
+    }
+
+    return out;
+  }, [resolvedMenuData]);
 
   // resolved → flat categories + items
   const categoriesWithItems: MenuCategory[] = React.useMemo(() => {
@@ -716,6 +831,7 @@ const LiveTablesInner: React.FC<LiveTablesInnerProps> = ({
         activeCategoryId={activeCategoryId}
         onChangeActiveCategoryId={(id) => setActiveCategoryId(id)}
         visibleItems={visibleItems}
+        modifierGroupsById={modifierGroupsById}
         menuLoading={resolvedMenuLoading}
         menuError={!!resolvedMenuError}
         draftItems={draftItems}

@@ -60,6 +60,8 @@ type Props = {
   onChangeActiveCategoryId: (id: string | "all") => void;
 
   visibleItems: MenuItem[];
+  // Optional lookup map to hydrate modifier groups when items only have modifierGroupIds
+  modifierGroupsById?: Record<string, ModifierGroup> | ModifierGroup[] | { items?: ModifierGroup[] } | null;
   menuLoading: boolean;
   menuError: boolean;
 
@@ -110,6 +112,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
   activeCategoryId,
   onChangeActiveCategoryId,
   visibleItems,
+  modifierGroupsById,
   menuLoading,
   menuError,
   draftItems,
@@ -131,6 +134,47 @@ export const WalkInOrderModal: React.FC<Props> = ({
     region === "UK" || region === "GB" ? "GBP" : "TRY";
 
   const effectiveCurrency: CurrencyCode = currency ?? defaultCurrency;
+
+  // Normalize modifierGroupsById so parent can pass either a map or an array-like payload
+  const modifierGroupMap: Record<string, ModifierGroup> = React.useMemo(() => {
+    const v: any = modifierGroupsById as any;
+
+    // 1) Already a map
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      // Some callers may accidentally pass { items: [...] }
+      if (Array.isArray(v.items)) {
+        const out: Record<string, ModifierGroup> = {};
+        for (const g of v.items) {
+          if (!g || !(g as any)._id) continue;
+          out[String((g as any)._id)] = g as any;
+        }
+        return out;
+      }
+
+      // If it looks like a proper id->group map, keep it
+      const keys = Object.keys(v);
+      // Heuristic: if it has many keys and the first value looks like a group, accept
+      if (keys.length > 0) {
+        const first = v[keys[0]];
+        if (first && typeof first === "object" && (first as any)._id) return v as Record<string, ModifierGroup>;
+      }
+
+      // Otherwise it might be an empty object or a wrong shape
+      return (v as Record<string, ModifierGroup>) || {};
+    }
+
+    // 2) Array of groups
+    if (Array.isArray(v)) {
+      const out: Record<string, ModifierGroup> = {};
+      for (const g of v) {
+        if (!g || !(g as any)._id) continue;
+        out[String((g as any)._id)] = g as any;
+      }
+      return out;
+    }
+
+    return {};
+  }, [modifierGroupsById]);
 
   // Keep a local cache of menu items we've seen so far.
   // This allows the "Seçilenler" panel to open the modifier picker with the full item shape
@@ -157,9 +201,26 @@ export const WalkInOrderModal: React.FC<Props> = ({
   const [modifierError, setModifierError] = React.useState<string>("");
 
   function getItemModifierGroups(item: MenuItem): ModifierGroup[] {
+    // 1) Prefer hydrated groups on the item itself
     const mg: any = (item as any).modifierGroups;
     if (Array.isArray(mg)) return mg as ModifierGroup[];
     if (mg && Array.isArray(mg.items)) return mg.items as ModifierGroup[];
+
+    // 2) If only ids exist, try to hydrate from the lookup map (if provided)
+    const idsRaw: any = (item as any).modifierGroupIds;
+    const ids = Array.isArray(idsRaw)
+      ? idsRaw
+          .map((x) => String(x ?? "").trim())
+          .filter(Boolean)
+      : [];
+
+    if (ids.length > 0) {
+      const hydrated = ids
+        .map((id) => modifierGroupMap[id])
+        .filter(Boolean) as ModifierGroup[];
+      return hydrated;
+    }
+
     return [];
   }
 
@@ -183,14 +244,16 @@ export const WalkInOrderModal: React.FC<Props> = ({
     const next: Record<string, Set<string>> = {};
     const groups = getItemModifierGroups(item);
 
-    // If we only have ids (no hydrated groups/options), we cannot render a picker.
-    // Show a deterministic error instead of silently failing.
-    const hasOnlyIds =
-      groups.length === 0 && Array.isArray((item as any).modifierGroupIds) && (item as any).modifierGroupIds.length > 0;
+    // If we still cannot hydrate groups/options, show a deterministic error.
+    if (groups.length === 0) {
+      const ids: any = (item as any).modifierGroupIds;
+      const hasIds = Array.isArray(ids) && ids.length > 0;
 
-    if (hasOnlyIds) {
+      const mapKeyCount = Object.keys(modifierGroupMap || {}).length;
       setModifierError(
-        "Bu ürünün opsiyonları (modifier groups) yüklenmemiş. Menü endpoint'inin ürünlerle birlikte modifierGroups+options döndürmesi gerekiyor."
+        hasIds
+          ? `Bu ürün opsiyonlu görünüyor ama opsiyon detayları yüklenmedi.\n\nBeklenen: modifierGroups + options verisi.\nMevcut: modifierGroupIds var (${Array.isArray(ids) ? ids.length : 0} adet), modifierGroupsById map key sayısı: ${mapKeyCount}.\n\nÇözüm: LiveTablesPage (parent) resolved menüden modifierGroups/option'ları alıp WalkInOrderModal'a modifierGroupsById olarak geçmeli.`
+          : "Bu ürün için opsiyon bulunamadı."
       );
       setModifierPickerItem(item);
       setModifierSelections({});
@@ -775,14 +838,14 @@ export const WalkInOrderModal: React.FC<Props> = ({
                     >
                       Vazgeç
                     </button>
-                    <button
-                      type="button"
-                      onClick={confirmModifierPicker}
-                      disabled={getItemModifierGroups(modifierPickerItem).length === 0}
-                      className="px-5 py-2 rounded-full bg-gradient-to-r from-purple-600 to-purple-500 text-[12px] font-semibold text-white shadow-lg shadow-purple-600/30 hover:shadow-purple-600/40 hover:translate-y-[-1px] transition disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      Seçimleri Onayla
-                    </button>
+                      <button
+                        type="button"
+                        onClick={confirmModifierPicker}
+                        disabled={getItemModifierGroups(modifierPickerItem).length === 0 || !!modifierError}
+                        className="px-5 py-2 rounded-full bg-gradient-to-r from-purple-600 to-purple-500 text-[12px] font-semibold text-white shadow-lg shadow-purple-600/30 hover:shadow-purple-600/40 hover:translate-y-[-1px] transition disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        Seçimleri Onayla
+                      </button>
                   </div>
                 </div>
               </div>
