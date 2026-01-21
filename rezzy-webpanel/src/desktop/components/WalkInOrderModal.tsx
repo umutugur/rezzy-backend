@@ -7,11 +7,32 @@ type MenuCategory = {
   title: string;
 };
 
+type ModifierOption = {
+  _id: string;
+  title: string;
+  price?: number;      // price delta
+  priceDelta?: number; // allow either naming
+  isActive?: boolean;
+};
+
+type ModifierGroup = {
+  _id: string;
+  title: string;
+  description?: string;
+  minSelect?: number;
+  maxSelect?: number;
+  isActive?: boolean;
+  options?: ModifierOption[];
+};
+
 type MenuItem = {
   _id: string;
   title: string;
   price: number;
   isAvailable?: boolean;
+
+  // If present, clicking item should open modifier picker
+  modifierGroups?: ModifierGroup[];
 };
 
 type DraftOrderItem = {
@@ -42,6 +63,13 @@ type Props = {
 
   draftItems: Record<string, DraftOrderItem>;
   onChangeQty: (item: MenuItem, delta: number) => void;
+
+  // If provided, modifier picker will call this; parent should store selected modifiers
+  onAddWithModifiers?: (
+    item: MenuItem,
+    selectedModifiers: Array<{ groupId: string; optionIds: string[] }>
+  ) => void;
+
   onChangeItemNote?: (itemId: string, note: string) => void;
 
   selectedItemCount: number;
@@ -84,6 +112,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
   menuError,
   draftItems,
   onChangeQty,
+  onAddWithModifiers,
   onChangeItemNote,
   selectedItemCount,
   selectedTotal,
@@ -100,6 +129,117 @@ export const WalkInOrderModal: React.FC<Props> = ({
     region === "UK" || region === "GB" ? "GBP" : "TRY";
 
   const effectiveCurrency: CurrencyCode = currency ?? defaultCurrency;
+
+  // =========================
+  // Modifier picker (internal)
+  // =========================
+  const [modifierPickerOpen, setModifierPickerOpen] = React.useState(false);
+  const [modifierPickerItem, setModifierPickerItem] = React.useState<MenuItem | null>(null);
+  const [modifierSelections, setModifierSelections] = React.useState<Record<string, Set<string>>>({});
+  const [modifierError, setModifierError] = React.useState<string>("");
+
+  function getGroupLimits(g: ModifierGroup) {
+    const min = Math.max(0, Number(g.minSelect ?? 0));
+    const max = Math.max(0, Number(g.maxSelect ?? 1));
+    return { min, max };
+  }
+
+  function openModifierPicker(item: MenuItem) {
+    setModifierError("");
+    setModifierPickerItem(item);
+
+    const next: Record<string, Set<string>> = {};
+    (item.modifierGroups ?? []).forEach((g) => {
+      next[String(g._id)] = new Set<string>();
+    });
+
+    setModifierSelections(next);
+    setModifierPickerOpen(true);
+  }
+
+  function closeModifierPicker() {
+    setModifierPickerOpen(false);
+    setModifierPickerItem(null);
+    setModifierSelections({});
+    setModifierError("");
+  }
+
+  function toggleOption(group: ModifierGroup, option: ModifierOption) {
+    const gid = String(group._id);
+    const oid = String(option._id);
+    const { max } = getGroupLimits(group);
+
+    setModifierSelections((prev) => {
+      const curr = prev[gid] ? new Set(prev[gid]) : new Set<string>();
+      const has = curr.has(oid);
+
+      if (has) {
+        curr.delete(oid);
+      } else {
+        if (max <= 1) {
+          curr.clear();
+          curr.add(oid);
+        } else {
+          if (curr.size >= max) return prev;
+          curr.add(oid);
+        }
+      }
+
+      return { ...prev, [gid]: curr };
+    });
+  }
+
+  function validateModifierSelections(item: MenuItem): string {
+    const groups = item.modifierGroups ?? [];
+    for (const g of groups) {
+      if (!g || g.isActive === false) continue;
+      const gid = String(g._id);
+      const set = modifierSelections[gid] ?? new Set<string>();
+      const { min, max } = getGroupLimits(g);
+      if (set.size < min) return `“${g.title}” için en az ${min} seçim zorunlu.`;
+      if (max > 0 && set.size > max) return `“${g.title}” için en fazla ${max} seçim yapılabilir.`;
+    }
+    return "";
+  }
+
+  function buildSelectedModifiersPayload(item: MenuItem) {
+    const groups = item.modifierGroups ?? [];
+    return groups
+      .filter((g) => g && g.isActive !== false)
+      .map((g) => {
+        const gid = String(g._id);
+        const set = modifierSelections[gid] ?? new Set<string>();
+        return { groupId: gid, optionIds: Array.from(set) };
+      })
+      .filter((x) => x.optionIds.length > 0);
+  }
+
+  function optionPriceDelta(opt: ModifierOption) {
+    const d = Number(opt.priceDelta ?? opt.price ?? 0);
+    return Number.isFinite(d) ? d : 0;
+  }
+
+  function confirmModifierPicker() {
+    const item = modifierPickerItem;
+    if (!item) return;
+
+    const err = validateModifierSelections(item);
+    if (err) {
+      setModifierError(err);
+      return;
+    }
+
+    const payload = buildSelectedModifiersPayload(item);
+
+    if (typeof onAddWithModifiers === "function") {
+      onAddWithModifiers(item, payload);
+    } else {
+      // fallback: still add qty (modifier selection will be ignored)
+      onChangeQty(item, 1);
+    }
+
+    closeModifierPicker();
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(7,9,20,0.46)] backdrop-blur-md">
@@ -222,7 +362,15 @@ export const WalkInOrderModal: React.FC<Props> = ({
                   const current = draftItems[mi._id]?.qty ?? 0;
                   const isUnavailable = mi.isAvailable === false;
 
-                  const handleInc = () => onChangeQty(mi, 1);
+                  const hasModifiers = Array.isArray(mi.modifierGroups) && mi.modifierGroups.length > 0;
+
+                  const handleInc = () => {
+                    if (hasModifiers) {
+                      openModifierPicker(mi);
+                      return;
+                    }
+                    onChangeQty(mi, 1);
+                  };
                   const handleDec = () => onChangeQty(mi, -1);
 
                   return (
@@ -423,6 +571,148 @@ export const WalkInOrderModal: React.FC<Props> = ({
           </div>
         </div>
         </div>
+        {/* =========================
+            Modifier Picker Modal
+        ========================= */}
+        {modifierPickerOpen && modifierPickerItem && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(7,9,20,0.52)] backdrop-blur-sm">
+            <div className="w-[min(720px,100%-32px)] max-h-[88vh] rounded-[24px] border border-slate-200/70 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.55)] overflow-hidden">
+              <div className="px-5 py-4 bg-[radial-gradient(circle_at_top_left,rgba(88,57,255,0.12),rgba(255,255,255,0.96))]">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] tracking-[0.18em] uppercase text-slate-400 mb-1">OPSİYON SEÇ</div>
+                    <div className="text-[15px] font-semibold text-slate-900 leading-snug">{modifierPickerItem.title}</div>
+                    <div className="mt-1 text-[12px] text-slate-500">
+                      Taban fiyat: <span className="font-semibold text-slate-700">{formatMoney(modifierPickerItem.price, effectiveCurrency)}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={closeModifierPicker}
+                    className="px-3 py-1 text-[11px] rounded-full border border-slate-200 bg-white/90 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
+                  >
+                    Kapat
+                  </button>
+                </div>
+
+                <div className="mt-3 h-px w-full bg-gradient-to-r from-slate-200/40 via-slate-200/80 to-slate-200/40" />
+
+                {modifierError ? (
+                  <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-700">{modifierError}</div>
+                ) : null}
+
+                <div className="mt-4 max-h-[56vh] overflow-y-auto pr-1">
+                  {(modifierPickerItem.modifierGroups ?? [])
+                    .filter((g) => g && g.isActive !== false)
+                    .map((g) => {
+                      const { min, max } = getGroupLimits(g);
+                      const selected = modifierSelections[String(g._id)] ?? new Set<string>();
+                      const opts = (g.options ?? []).filter((o) => o && o.isActive !== false);
+
+                      return (
+                        <div key={g._id} className="mb-4 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-sm">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-[13px] font-semibold text-slate-900">{g.title}</div>
+                              {g.description ? (
+                                <div className="mt-0.5 text-[11px] text-slate-500">{g.description}</div>
+                              ) : null}
+                            </div>
+                            <div className="shrink-0 text-[11px] text-slate-500">
+                              {min > 0 ? (
+                                <span className="font-semibold text-slate-700">En az {min}</span>
+                              ) : (
+                                <span>Opsiyonel</span>
+                              )}{" "}
+                              <span className="text-slate-400">·</span>{" "}
+                              <span className="font-semibold text-slate-700">En fazla {Math.max(1, max)}</span>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 grid grid-cols-1 gap-2">
+                            {opts.length === 0 ? (
+                              <div className="text-[12px] text-slate-500">Bu grupta seçenek yok.</div>
+                            ) : (
+                              opts.map((o) => {
+                                const oid = String(o._id);
+                                const checked = selected.has(oid);
+                                const delta = optionPriceDelta(o);
+                                const disableAdd = !checked && max > 0 && max > 1 && selected.size >= max;
+
+                                return (
+                                  <button
+                                    key={o._id}
+                                    type="button"
+                                    onClick={() => toggleOption(g, o)}
+                                    disabled={disableAdd}
+                                    className={
+                                      "w-full rounded-2xl border px-3 py-2 text-left transition flex items-center justify-between gap-3 " +
+                                      (checked ? "border-purple-500 bg-purple-50" : "border-slate-200 bg-white hover:bg-slate-50") +
+                                      (disableAdd ? " opacity-60 cursor-not-allowed" : "")
+                                    }
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="text-[12.5px] font-semibold text-slate-900 break-words">{o.title}</div>
+                                      <div className="mt-0.5 text-[11px] text-slate-500">{checked ? "Seçili" : "Seç"}</div>
+                                    </div>
+
+                                    <div className="shrink-0 flex items-center gap-2">
+                                      {delta !== 0 ? (
+                                        <div className="text-[12px] font-semibold text-slate-700">
+                                          {delta > 0 ? "+" : ""}{formatMoney(delta, effectiveCurrency)}
+                                        </div>
+                                      ) : (
+                                        <div className="text-[12px] text-slate-400">+0</div>
+                                      )}
+                                      <div
+                                        className={
+                                          "w-5 h-5 rounded-full border flex items-center justify-center text-[11px] font-bold " +
+                                          (checked ? "border-purple-500 bg-purple-600 text-white" : "border-slate-300 bg-white text-transparent")
+                                        }
+                                        aria-hidden
+                                      >
+                                        ✓
+                                      </div>
+                                    </div>
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+
+                          <div className="mt-2 text-[11px] text-slate-500">
+                            Seçim: <span className="font-semibold text-slate-700">{selected.size}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 shadow-sm">
+                  <div className="text-[11px] text-slate-500">Seçimlerini onaylayınca ürün sepete eklenecek.</div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={closeModifierPicker}
+                      className="px-4 py-2 rounded-full border border-slate-200 bg-white text-[12px] font-medium text-slate-600 hover:bg-slate-50 transition"
+                    >
+                      Vazgeç
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmModifierPicker}
+                      className="px-5 py-2 rounded-full bg-gradient-to-r from-purple-600 to-purple-500 text-[12px] font-semibold text-white shadow-lg shadow-purple-600/30 hover:shadow-purple-600/40 hover:translate-y-[-1px] transition"
+                    >
+                      Seçimleri Onayla
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

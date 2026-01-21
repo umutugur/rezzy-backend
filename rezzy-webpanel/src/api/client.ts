@@ -895,6 +895,9 @@ export type RestaurantResolvedMenuItem = {
   isActive: boolean;
   isAvailable: boolean;
   orgItemId?: string | null;
+  // ✅ Opsiyon grupları (modifier groups)
+  modifierGroupIds?: string[];
+  modifierGroups?: RestaurantModifierGroup[];
   createdAt?: string;
   updatedAt?: string;
 };
@@ -930,6 +933,7 @@ export async function restaurantGetResolvedMenu(
   });
   return (data ?? { categories: [] }) as RestaurantResolvedMenuResponse;
 }
+
 export async function restaurantListCategories(
   rid: string,
   params?: { includeInactive?: boolean }
@@ -1616,6 +1620,18 @@ export async function orgDeleteMenuItem(
   return data as { ok?: boolean; item: { _id: string; isActive: boolean } };
 }
 // =========================
+// Orders — Modifier selections (WALK_IN / QR)
+// =========================
+
+export type OrderItemModifierSelection = {
+  groupId: string;
+  optionId: string;
+  groupTitle?: string;
+  optionTitle?: string;
+  price?: number;
+};
+
+// =========================
 // RESTAURANT — Live Tables & Orders
 // =========================
 
@@ -1744,6 +1760,7 @@ export async function restaurantCreateWalkInOrder(
       price: number;
       qty: number;
       note?: string;
+      modifiers?: OrderItemModifierSelection[];
     }>;
   }
 ): Promise<{ order: any; sessionId: string; totals: any }> {
