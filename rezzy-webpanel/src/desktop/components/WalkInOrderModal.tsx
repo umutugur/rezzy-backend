@@ -32,7 +32,9 @@ type MenuItem = {
   isAvailable?: boolean;
 
   // If present, clicking item should open modifier picker
-  modifierGroups?: ModifierGroup[];
+  // Some endpoints may return full groups, others only ids.
+  modifierGroups?: ModifierGroup[] | { items?: ModifierGroup[] } | null;
+  modifierGroupIds?: string[] | null;
 };
 
 type DraftOrderItem = {
@@ -138,6 +140,20 @@ export const WalkInOrderModal: React.FC<Props> = ({
   const [modifierSelections, setModifierSelections] = React.useState<Record<string, Set<string>>>({});
   const [modifierError, setModifierError] = React.useState<string>("");
 
+  function getItemModifierGroups(item: MenuItem): ModifierGroup[] {
+    const mg: any = (item as any).modifierGroups;
+    if (Array.isArray(mg)) return mg as ModifierGroup[];
+    if (mg && Array.isArray(mg.items)) return mg.items as ModifierGroup[];
+    return [];
+  }
+
+  function itemHasAnyModifierConfig(item: MenuItem): boolean {
+    const groups = getItemModifierGroups(item);
+    if (groups.length > 0) return true;
+    const ids: any = (item as any).modifierGroupIds;
+    return Array.isArray(ids) && ids.length > 0;
+  }
+
   function getGroupLimits(g: ModifierGroup) {
     const min = Math.max(0, Number(g.minSelect ?? 0));
     const max = Math.max(0, Number(g.maxSelect ?? 1));
@@ -149,7 +165,24 @@ export const WalkInOrderModal: React.FC<Props> = ({
     setModifierPickerItem(item);
 
     const next: Record<string, Set<string>> = {};
-    (item.modifierGroups ?? []).forEach((g) => {
+    const groups = getItemModifierGroups(item);
+
+    // If we only have ids (no hydrated groups/options), we cannot render a picker.
+    // Show a deterministic error instead of silently failing.
+    const hasOnlyIds =
+      groups.length === 0 && Array.isArray((item as any).modifierGroupIds) && (item as any).modifierGroupIds.length > 0;
+
+    if (hasOnlyIds) {
+      setModifierError(
+        "Bu ürünün opsiyonları (modifier groups) yüklenmemiş. Menü endpoint'inin ürünlerle birlikte modifierGroups+options döndürmesi gerekiyor."
+      );
+      setModifierPickerItem(item);
+      setModifierSelections({});
+      setModifierPickerOpen(true);
+      return;
+    }
+
+    groups.forEach((g) => {
       next[String(g._id)] = new Set<string>();
     });
 
@@ -190,7 +223,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
   }
 
   function validateModifierSelections(item: MenuItem): string {
-    const groups = item.modifierGroups ?? [];
+    const groups = getItemModifierGroups(item);
     for (const g of groups) {
       if (!g || g.isActive === false) continue;
       const gid = String(g._id);
@@ -203,7 +236,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
   }
 
   function buildSelectedModifiersPayload(item: MenuItem) {
-    const groups = item.modifierGroups ?? [];
+    const groups = getItemModifierGroups(item);
     return groups
       .filter((g) => g && g.isActive !== false)
       .map((g) => {
@@ -362,7 +395,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                   const current = draftItems[mi._id]?.qty ?? 0;
                   const isUnavailable = mi.isAvailable === false;
 
-                  const hasModifiers = Array.isArray(mi.modifierGroups) && mi.modifierGroups.length > 0;
+                  const hasModifiers = itemHasAnyModifierConfig(mi);
 
                   const handleInc = () => {
                     if (hasModifiers) {
@@ -603,7 +636,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                 ) : null}
 
                 <div className="mt-4 max-h-[56vh] overflow-y-auto pr-1">
-                  {(modifierPickerItem.modifierGroups ?? [])
+                  {getItemModifierGroups(modifierPickerItem)
                     .filter((g) => g && g.isActive !== false)
                     .map((g) => {
                       const { min, max } = getGroupLimits(g);
@@ -703,7 +736,8 @@ export const WalkInOrderModal: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={confirmModifierPicker}
-                      className="px-5 py-2 rounded-full bg-gradient-to-r from-purple-600 to-purple-500 text-[12px] font-semibold text-white shadow-lg shadow-purple-600/30 hover:shadow-purple-600/40 hover:translate-y-[-1px] transition"
+                      disabled={getItemModifierGroups(modifierPickerItem).length === 0}
+                      className="px-5 py-2 rounded-full bg-gradient-to-r from-purple-600 to-purple-500 text-[12px] font-semibold text-white shadow-lg shadow-purple-600/30 hover:shadow-purple-600/40 hover:translate-y-[-1px] transition disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       Seçimleri Onayla
                     </button>
