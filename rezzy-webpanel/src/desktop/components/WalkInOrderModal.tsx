@@ -132,6 +132,22 @@ export const WalkInOrderModal: React.FC<Props> = ({
 
   const effectiveCurrency: CurrencyCode = currency ?? defaultCurrency;
 
+  // Keep a local cache of menu items we've seen so far.
+  // This allows the "Seçilenler" panel to open the modifier picker with the full item shape
+  // (even if the user switches categories).
+  const itemCacheRef = React.useRef<Record<string, MenuItem>>({});
+
+  React.useEffect(() => {
+    if (!Array.isArray(visibleItems)) return;
+    if (visibleItems.length === 0) return;
+    const next = { ...itemCacheRef.current };
+    for (const it of visibleItems) {
+      if (!it || !it._id) continue;
+      next[String(it._id)] = it;
+    }
+    itemCacheRef.current = next;
+  }, [visibleItems]);
+
   // =========================
   // Modifier picker (internal)
   // =========================
@@ -429,6 +445,13 @@ export const WalkInOrderModal: React.FC<Props> = ({
                           <span className="font-semibold">
                             {formatMoney(mi.price, effectiveCurrency)}
                           </span>
+
+                          {hasModifiers ? (
+                            <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700 border border-purple-200">
+                              Opsiyonlu
+                            </span>
+                          ) : null}
+
                           {isUnavailable && (
                             <span className="ml-1 text-[10px] text-red-500">
                               · Şu anda servis dışı
@@ -513,7 +536,11 @@ export const WalkInOrderModal: React.FC<Props> = ({
                               <button
                                 type="button"
                                 className="w-8 h-8 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center text-[15px] font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition"
-                                onClick={() => onChangeQty({ _id: di.itemId, title: di.title, price: di.price }, -1)}
+                                onClick={() => {
+                                  const full = itemCacheRef.current[String(di.itemId)];
+                                  const fallback: MenuItem = { _id: di.itemId, title: di.title, price: Number(di.price || 0) };
+                                  onChangeQty(full ?? fallback, -1);
+                                }}
                                 disabled={!canDec}
                                 aria-label="Azalt"
                               >
@@ -525,7 +552,20 @@ export const WalkInOrderModal: React.FC<Props> = ({
                               <button
                                 type="button"
                                 className="w-8 h-8 rounded-full border border-purple-500 bg-purple-600 text-white flex items-center justify-center text-[15px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-purple-700 transition"
-                                onClick={() => onChangeQty({ _id: di.itemId, title: di.title, price: di.price }, 1)}
+                                onClick={() => {
+                                  const full = itemCacheRef.current[String(di.itemId)];
+                                  const fallback: MenuItem = { _id: di.itemId, title: di.title, price: Number(di.price || 0) };
+                                  const itemToUse = full ?? fallback;
+
+                                  // If the item is option/modifier-based, adding from the right panel should open the picker
+                                  // so each increment can carry its own modifier choices.
+                                  if (itemHasAnyModifierConfig(itemToUse)) {
+                                    openModifierPicker(itemToUse);
+                                    return;
+                                  }
+
+                                  onChangeQty(itemToUse, 1);
+                                }}
                                 aria-label="Arttır"
                               >
                                 +
@@ -536,9 +576,11 @@ export const WalkInOrderModal: React.FC<Props> = ({
                                 className="ml-1 w-8 h-8 rounded-full border border-red-200 bg-red-50 text-red-700 flex items-center justify-center text-[13px] font-semibold hover:bg-red-100 transition"
                                 onClick={() => {
                                   const currentQty = Number(di.qty || 0);
-                                  if (currentQty > 0) {
-                                    onChangeQty({ _id: di.itemId, title: di.title, price: di.price }, -currentQty);
-                                  }
+                                  if (currentQty <= 0) return;
+
+                                  const full = itemCacheRef.current[String(di.itemId)];
+                                  const fallback: MenuItem = { _id: di.itemId, title: di.title, price: Number(di.price || 0) };
+                                  onChangeQty(full ?? fallback, -currentQty);
                                 }}
                                 aria-label="Kaldır"
                                 title="Kaldır"
