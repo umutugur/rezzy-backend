@@ -49,6 +49,9 @@ type MenuItem = {
   price: number;
   isAvailable?: boolean;
   categoryId?: string;
+
+  // ✅ Modifier support (used by WalkInOrderModal / ModifierPicker)
+  modifierGroupIds?: string[] | null;
 };
 
 type DraftOrderItem = {
@@ -379,12 +382,25 @@ const LiveTablesInner: React.FC<LiveTablesInnerProps> = ({
       const cid = String(c._id);
       const items = Array.isArray(c.items) ? c.items : [];
       for (const it of items) {
+        const rawIds =
+          (Array.isArray((it as any).modifierGroupIds)
+            ? (it as any).modifierGroupIds
+            : Array.isArray((it as any).modifierGroups)
+            ? (it as any).modifierGroups
+            : []) as any[];
+
+        const modifierGroupIds = rawIds
+          .map((x) => (typeof x === "string" ? x : x?._id))
+          .map((x) => String(x || "").trim())
+          .filter(Boolean);
+
         out.push({
           _id: String(it._id),
           title: String(it.title || ""),
           price: Number(it.price || 0),
           isAvailable: it.isAvailable !== false,
           categoryId: cid,
+          modifierGroupIds: modifierGroupIds.length ? modifierGroupIds : null,
         });
       }
     }
