@@ -18,6 +18,7 @@ import {
 
   restaurantCreateWalkInOrder,
   type LiveTable,
+  type OrderItemModifierSelection,
 } from "../../api/client";
 import { authStore } from "../../store/auth";
 import { showToast } from "../../ui/Toast";
@@ -75,9 +76,18 @@ type ModifierGroup = {
 type DraftOrderItem = {
   itemId: string;
   title: string;
-  price: number;
+  price: number; // unit price (base + modifier deltas)
   qty: number;
   note?: string;
+
+  // ✅ internal (grouped) selection for UI/keying
+  modifierGroups?: Array<{ groupId: string; optionIds: string[] }>;
+
+  // ✅ API payload shape (flattened)
+  modifiers?: OrderItemModifierSelection[];
+
+  // ✅ UI
+  modifierLabel?: string;
 };
 
 type CurrencyCode = "TRY" | "GBP";
@@ -558,6 +568,104 @@ const LiveTablesInner: React.FC<LiveTablesInnerProps> = ({
       return next;
     });
   }
+  function stableKeyForModifiers(
+  itemId: string,
+  mods: Array<{ groupId: string; optionIds: string[] }>
+) {
+  const normalized = (mods || [])
+    .map((m) => ({
+      groupId: String(m.groupId),
+      optionIds: Array.from(new Set(m.optionIds.map((x) => String(x)))).sort(),
+    }))
+    .sort((a, b) => a.groupId.localeCompare(b.groupId));
+
+  const json = JSON.stringify(normalized);
+  return `${itemId}__m__${btoa(unescape(encodeURIComponent(json))).slice(0, 32)}`;
+}
+
+function buildModifierLabel(
+  mods: Array<{ groupId: string; optionIds: string[] }>
+): string {
+  if (!mods || mods.length === 0) return "";
+
+  const parts: string[] = [];
+  for (const m of mods) {
+    const g = modifierGroupsById[String(m.groupId)];
+    const optTitles: string[] = [];
+    const opts = Array.isArray(g?.options) ? g!.options! : [];
+    for (const oid of m.optionIds || []) {
+      const found = opts.find((o: any) => String(o?._id ?? "") === String(oid));
+      if (found?.title) optTitles.push(String(found.title));
+    }
+    if (g?.title && optTitles.length > 0) parts.push(`${g.title}: ${optTitles.join(", ")}`);
+    else if (optTitles.length > 0) parts.push(optTitles.join(", "));
+  }
+
+  return parts.join(" · ");
+}
+
+function computeModifierDeltaTotal(
+  mods: Array<{ groupId: string; optionIds: string[] }>
+): number {
+  let sum = 0;
+  for (const m of mods || []) {
+    const g = modifierGroupsById[String(m.groupId)];
+    const opts = Array.isArray(g?.options) ? g!.options! : [];
+    for (const oid of m.optionIds || []) {
+      const opt: any = opts.find((o: any) => String(o?._id ?? "") === String(oid));
+      const d =
+        opt?.priceDelta != null ? Number(opt.priceDelta)
+        : opt?.price != null ? Number(opt.price)
+        : 0;
+      if (Number.isFinite(d)) sum += d;
+    }
+  }
+  return sum;
+}
+
+function handleAddWithModifiers(
+  item: MenuItem,
+  flatModifiers: OrderItemModifierSelection[]
+) {
+  // Rebuild grouped shape for UI/labels from flat payload
+  const grouped: Array<{ groupId: string; optionIds: string[] }> = [];
+  const byGroup: Record<string, Set<string>> = {};
+
+  for (const m of flatModifiers || []) {
+    const gid = String(m.groupId);
+    const oid = String(m.optionId);
+    if (!byGroup[gid]) byGroup[gid] = new Set<string>();
+    byGroup[gid].add(oid);
+  }
+
+  for (const gid of Object.keys(byGroup)) {
+    grouped.push({ groupId: gid, optionIds: Array.from(byGroup[gid]) });
+  }
+
+  const key = stableKeyForModifiers(item._id, grouped);
+  const label = buildModifierLabel(grouped);
+  const delta = computeModifierDeltaTotal(grouped);
+  const unitPrice = Number(item.price || 0) + delta;
+
+  setDraftItems((prev) => {
+    const next = { ...prev };
+    const existing = next[key];
+    if (existing) {
+      next[key] = { ...existing, qty: Number(existing.qty || 0) + 1 };
+    } else {
+      next[key] = {
+        itemId: item._id,
+        title: item.title,
+        price: unitPrice,
+        qty: 1,
+        modifierGroups: grouped,
+        modifiers: flatModifiers && flatModifiers.length ? flatModifiers : undefined,
+        modifierLabel: label || undefined,
+      };
+    }
+    return next;
+  });
+}
 
   const visibleItems =
     activeCategoryId === "all"
@@ -568,12 +676,22 @@ const LiveTablesInner: React.FC<LiveTablesInnerProps> = ({
     mutationFn: async () => {
       if (!rid || !selectedTableId) throw new Error("Masa veya restoran bilgisi eksik.");
 
-      const items = Object.values(draftItems).filter((it) => it.qty > 0);
+      const items = Object.values(draftItems).filter((it) => Number(it.qty || 0) > 0);
       if (items.length === 0) throw new Error("En az bir ürün seçmelisiniz.");
+
+      // ✅ Shape items to API contract
+      const payloadItems = items.map((it) => ({
+        itemId: it.itemId,
+        title: it.title,
+        price: Number(it.price || 0),
+        qty: Number(it.qty || 0),
+        note: it.note,
+        modifiers: it.modifiers,
+      }));
 
       return restaurantCreateWalkInOrder(rid, selectedTableId, {
         guestName: guestName.trim() || undefined,
-        items,
+        items: payloadItems,
       });
     },
     onSuccess: () => {
@@ -729,9 +847,14 @@ const LiveTablesInner: React.FC<LiveTablesInnerProps> = ({
 
   const selectedTableName = selectedTable?.name ?? "";
 
-  const selectedItemCount = Object.values(draftItems).reduce((sum, it) => sum + it.qty, 0);
-  const selectedTotal = Object.values(draftItems).reduce((sum, it) => sum + it.qty * it.price, 0);
-
+  const selectedItemCount = Object.values(draftItems).reduce(
+  (sum, it) => sum + Number(it.qty || 0),
+  0
+);
+const selectedTotal = Object.values(draftItems).reduce(
+  (sum, it) => sum + Number(it.qty || 0) * Number(it.price || 0),
+  0
+);
   return (
     <>
       <div className="flex gap-4 items-start">
@@ -836,6 +959,7 @@ const LiveTablesInner: React.FC<LiveTablesInnerProps> = ({
         menuError={!!resolvedMenuError}
         draftItems={draftItems}
         onChangeQty={handleChangeQty}
+        onAddWithModifiers={handleAddWithModifiers}
         selectedItemCount={selectedItemCount}
         selectedTotal={selectedTotal}
         currency={currency}

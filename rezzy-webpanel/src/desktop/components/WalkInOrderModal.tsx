@@ -40,9 +40,13 @@ type MenuItem = {
 type DraftOrderItem = {
   itemId: string;
   title: string;
-  price: number;
+  price: number; // unit price (base + modifier deltas if any)
   qty: number;
   note?: string;
+
+  modifiers?: Array<{ groupId: string; optionId: string }>;
+  selectedModifiers?: Array<{ groupId: string; optionId: string }>;
+  modifierLabel?: string;
 };
 
 type CurrencyCode = "TRY" | "GBP";
@@ -71,7 +75,7 @@ type Props = {
   // If provided, modifier picker will call this; parent should store selected modifiers
   onAddWithModifiers?: (
     item: MenuItem,
-    selectedModifiers: Array<{ groupId: string; optionIds: string[] }>
+    selectedModifiers: Array<{ groupId: string; optionId: string }>
   ) => void;
 
   onChangeItemNote?: (itemId: string, note: string) => void;
@@ -316,14 +320,18 @@ export const WalkInOrderModal: React.FC<Props> = ({
 
   function buildSelectedModifiersPayload(item: MenuItem) {
     const groups = getItemModifierGroups(item);
-    return groups
-      .filter((g) => g && g.isActive !== false)
-      .map((g) => {
-        const gid = String(g._id);
-        const set = modifierSelections[gid] ?? new Set<string>();
-        return { groupId: gid, optionIds: Array.from(set) };
-      })
-      .filter((x) => x.optionIds.length > 0);
+    const out: Array<{ groupId: string; optionId: string }> = [];
+
+    for (const g of groups) {
+      if (!g || g.isActive === false) continue;
+      const gid = String(g._id);
+      const set = modifierSelections[gid] ?? new Set<string>();
+      for (const oid of Array.from(set)) {
+        out.push({ groupId: gid, optionId: String(oid) });
+      }
+    }
+
+    return out;
   }
 
   function optionPriceDelta(opt: ModifierOption) {
@@ -344,11 +352,13 @@ export const WalkInOrderModal: React.FC<Props> = ({
     const payload = buildSelectedModifiersPayload(item);
 
     if (typeof onAddWithModifiers === "function") {
-      onAddWithModifiers(item, payload);
-    } else {
-      // fallback: still add qty (modifier selection will be ignored)
-      onChangeQty(item, 1);
-    }
+  onAddWithModifiers(item, payload);
+} else {
+  setModifierError(
+    "Bu ekranda opsiyon seçimi kaydedilemiyor (parent onAddWithModifiers bağlı değil). LiveTablesPage, WalkInOrderModal'a onAddWithModifiers prop'u göndermeli."
+  );
+  return;
+}
 
     closeModifierPicker();
   }
@@ -585,6 +595,11 @@ export const WalkInOrderModal: React.FC<Props> = ({
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <div className="text-[12.5px] font-semibold text-slate-900 leading-snug break-words">{di.title}</div>
+                              {di.modifierLabel ? (
+  <div className="mt-1 text-[11px] text-purple-700/90 font-medium break-words">
+    {di.modifierLabel}
+  </div>
+) : null}
                               <div className="mt-1 text-[11px] text-slate-500 grid grid-cols-2 gap-x-2 gap-y-0.5">
                                 <span>
                                   Birim: <span className="font-semibold text-slate-700">{formatMoney(Number(di.price || 0), effectiveCurrency)}</span>
