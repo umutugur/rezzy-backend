@@ -887,6 +887,8 @@ function handleAddWithModifiers(
         : defaultCurrency;
 
     const last = td.orders[td.orders.length - 1];
+    console.log("PRINT_LAST_ORDER_RAW_ORDER", last);
+console.log("PRINT_LAST_ORDER_RAW_ITEMS", last?.items);
     const dateStr = new Date(last.createdAt).toLocaleString("tr-TR", {
       dateStyle: "short",
       timeStyle: "short",
