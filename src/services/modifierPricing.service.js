@@ -50,19 +50,46 @@ function normalizeIncomingItems(items) {
     const qty = Math.max(1, Number(x?.qty || x?.quantity || 1));
     const note = String(x?.note || "").trim();
 
-    const selectedModifiers = Array.isArray(x?.selectedModifiers)
-      ? x.selectedModifiers.map((g) => {
-          const groupId = oid(g?.groupId);
-          if (!groupId) {
-            throw { status: 400, code: "MODIFIER_GROUP_INVALID", message: "Opsiyon grubu geçersiz." };
-          }
+    // ✅ Backward compatible: accept BOTH shapes
+    // A) grouped: selectedModifiers: [{ groupId, optionIds: [] }]
+    // B) flat:    modifiers: [{ groupId, optionId }]
+    let selectedModifiers = [];
 
-          const optionIdsRaw = Array.isArray(g?.optionIds) ? g.optionIds : [];
-          const optionIds = optionIdsRaw.map(oid).filter(Boolean);
+    if (Array.isArray(x?.selectedModifiers)) {
+      selectedModifiers = x.selectedModifiers.map((g) => {
+        const groupId = oid(g?.groupId);
+        if (!groupId) {
+          throw { status: 400, code: "MODIFIER_GROUP_INVALID", message: "Opsiyon grubu geçersiz." };
+        }
 
-          return { groupId, optionIds };
-        })
-      : [];
+        const optionIdsRaw = Array.isArray(g?.optionIds) ? g.optionIds : [];
+        const optionIds = optionIdsRaw.map(oid).filter(Boolean);
+
+        return { groupId, optionIds };
+      });
+    } else if (Array.isArray(x?.modifiers)) {
+      // flat -> grouped
+      const byGroup = new Map(); // gidStr -> Set<optionIdStr>
+
+      for (const m of x.modifiers) {
+        const gid = oid(m?.groupId);
+        const opt = oid(m?.optionId);
+        if (!gid || !opt) continue;
+
+        const gidStr = String(gid);
+        const optStr = String(opt);
+
+        if (!byGroup.has(gidStr)) byGroup.set(gidStr, new Set());
+        byGroup.get(gidStr).add(optStr);
+      }
+
+      selectedModifiers = Array.from(byGroup.entries()).map(([gidStr, set]) => {
+        return {
+          groupId: new mongoose.Types.ObjectId(gidStr),
+          optionIds: Array.from(set).map((s) => new mongoose.Types.ObjectId(s)),
+        };
+      });
+    }
 
     return { itemId, qty, note, selectedModifiers };
   });

@@ -80,10 +80,10 @@ type DraftOrderItem = {
   qty: number;
   note?: string;
 
-  // ✅ internal (grouped) selection for UI/keying
-  modifierGroups?: Array<{ groupId: string; optionIds: string[] }>;
+  // ✅ WalkInOrderModal ile UYUMLU: flat selection (groupId + optionId)
+  selectedModifiers?: Array<{ groupId: string; optionId: string }>;
 
-  // ✅ API payload shape (flattened)
+  // ✅ Backward-compatible (legacy) flat shape
   modifiers?: OrderItemModifierSelection[];
 
   // ✅ UI
@@ -569,34 +569,56 @@ const LiveTablesInner: React.FC<LiveTablesInnerProps> = ({
     });
   }
   function stableKeyForModifiers(
-  itemId: string,
-  mods: Array<{ groupId: string; optionIds: string[] }>
-) {
-  const normalized = (mods || [])
-    .map((m) => ({
-      groupId: String(m.groupId),
-      optionIds: Array.from(new Set(m.optionIds.map((x) => String(x)))).sort(),
-    }))
-    .sort((a, b) => a.groupId.localeCompare(b.groupId));
+    itemId: string,
+    mods: Array<{ groupId: string; optionId: string }>
+  ) {
+    const byGroup: Record<string, Set<string>> = {};
+    for (const m of mods || []) {
+      const gid = String(m.groupId);
+      const oid = String(m.optionId);
+      if (!gid || !oid) continue;
+      if (!byGroup[gid]) byGroup[gid] = new Set<string>();
+      byGroup[gid].add(oid);
+    }
 
-  const json = JSON.stringify(normalized);
-  return `${itemId}__m__${btoa(unescape(encodeURIComponent(json))).slice(0, 32)}`;
-}
+    const normalized = Object.keys(byGroup)
+      .sort((a, b) => a.localeCompare(b))
+      .map((groupId) => ({
+        groupId,
+        optionIds: Array.from(byGroup[groupId]).sort(),
+      }));
+
+    const json = JSON.stringify(normalized);
+    return `${itemId}__m__${btoa(unescape(encodeURIComponent(json))).slice(0, 32)}`;
+  }
 
 function buildModifierLabel(
-  mods: Array<{ groupId: string; optionIds: string[] }>
+  mods: Array<{ groupId: string; optionId: string }>
 ): string {
   if (!mods || mods.length === 0) return "";
 
-  const parts: string[] = [];
+  const byGroup: Record<string, string[]> = {};
   for (const m of mods) {
-    const g = modifierGroupsById[String(m.groupId)];
-    const optTitles: string[] = [];
+    const gid = String(m.groupId);
+    const oid = String(m.optionId);
+    if (!gid || !oid) continue;
+    if (!byGroup[gid]) byGroup[gid] = [];
+    byGroup[gid].push(oid);
+  }
+
+  const parts: string[] = [];
+  for (const gid of Object.keys(byGroup).sort((a, b) => a.localeCompare(b))) {
+    const g = modifierGroupsById[String(gid)];
     const opts = Array.isArray(g?.options) ? g!.options! : [];
-    for (const oid of m.optionIds || []) {
+
+    const uniqueOids = Array.from(new Set(byGroup[gid].map((x) => String(x))));
+
+    const optTitles: string[] = [];
+    for (const oid of uniqueOids) {
       const found = opts.find((o: any) => String(o?._id ?? "") === String(oid));
       if (found?.title) optTitles.push(String(found.title));
     }
+
     if (g?.title && optTitles.length > 0) parts.push(`${g.title}: ${optTitles.join(", ")}`);
     else if (optTitles.length > 0) parts.push(optTitles.join(", "));
   }
@@ -605,46 +627,72 @@ function buildModifierLabel(
 }
 
 function computeModifierDeltaTotal(
-  mods: Array<{ groupId: string; optionIds: string[] }>
+  mods: Array<{ groupId: string; optionId: string }>
 ): number {
   let sum = 0;
-  for (const m of mods || []) {
-    const g = modifierGroupsById[String(m.groupId)];
+
+  if (!mods || mods.length === 0) return 0;
+
+  for (const m of mods) {
+    const gid = String(m.groupId);
+    const oid = String(m.optionId);
+    if (!gid || !oid) continue;
+
+    const g = modifierGroupsById[String(gid)];
     const opts = Array.isArray(g?.options) ? g!.options! : [];
-    for (const oid of m.optionIds || []) {
-      const opt: any = opts.find((o: any) => String(o?._id ?? "") === String(oid));
-      const d =
-        opt?.priceDelta != null ? Number(opt.priceDelta)
-        : opt?.price != null ? Number(opt.price)
+
+    const opt: any = opts.find((o: any) => String(o?._id ?? "") === String(oid));
+    const d =
+      opt?.priceDelta != null
+        ? Number(opt.priceDelta)
+        : opt?.price != null
+        ? Number(opt.price)
         : 0;
-      if (Number.isFinite(d)) sum += d;
-    }
+
+    if (Number.isFinite(d)) sum += d;
   }
+
   return sum;
+}
+
+function groupSelectedModifiersForApi(
+  mods?: Array<{ groupId: string; optionId: string }>
+): Array<{ groupId: string; optionIds: string[] }> | undefined {
+  if (!mods || mods.length === 0) return undefined;
+
+  const byGroup: Record<string, Set<string>> = {};
+  for (const m of mods) {
+    const gid = String(m.groupId);
+    const oid = String(m.optionId);
+    if (!gid || !oid) continue;
+    if (!byGroup[gid]) byGroup[gid] = new Set<string>();
+    byGroup[gid].add(oid);
+  }
+
+  const grouped = Object.keys(byGroup)
+    .sort((a, b) => a.localeCompare(b))
+    .map((groupId) => ({
+      groupId,
+      optionIds: Array.from(byGroup[groupId]).sort(),
+    }));
+
+  return grouped.length ? grouped : undefined;
 }
 
 function handleAddWithModifiers(
   item: MenuItem,
   flatModifiers: OrderItemModifierSelection[]
 ) {
-  // Rebuild grouped shape for UI/labels from flat payload
-  const grouped: Array<{ groupId: string; optionIds: string[] }> = [];
-  const byGroup: Record<string, Set<string>> = {};
+  const selectedModifiers: Array<{ groupId: string; optionId: string }> = (flatModifiers || [])
+    .map((m) => ({
+      groupId: String((m as any).groupId),
+      optionId: String((m as any).optionId),
+    }))
+    .filter((m) => Boolean(m.groupId) && Boolean(m.optionId));
 
-  for (const m of flatModifiers || []) {
-    const gid = String(m.groupId);
-    const oid = String(m.optionId);
-    if (!byGroup[gid]) byGroup[gid] = new Set<string>();
-    byGroup[gid].add(oid);
-  }
-
-  for (const gid of Object.keys(byGroup)) {
-    grouped.push({ groupId: gid, optionIds: Array.from(byGroup[gid]) });
-  }
-
-  const key = stableKeyForModifiers(item._id, grouped);
-  const label = buildModifierLabel(grouped);
-  const delta = computeModifierDeltaTotal(grouped);
+  const key = stableKeyForModifiers(item._id, selectedModifiers);
+  const label = buildModifierLabel(selectedModifiers);
+  const delta = computeModifierDeltaTotal(selectedModifiers);
   const unitPrice = Number(item.price || 0) + delta;
 
   setDraftItems((prev) => {
@@ -658,7 +706,7 @@ function handleAddWithModifiers(
         title: item.title,
         price: unitPrice,
         qty: 1,
-        modifierGroups: grouped,
+        selectedModifiers: selectedModifiers.length ? selectedModifiers : undefined,
         modifiers: flatModifiers && flatModifiers.length ? flatModifiers : undefined,
         modifierLabel: label || undefined,
       };
@@ -686,6 +734,11 @@ function handleAddWithModifiers(
         price: Number(it.price || 0),
         qty: Number(it.qty || 0),
         note: it.note,
+
+        // ✅ Preferred (new) grouped shape (API)
+        selectedModifiers: groupSelectedModifiersForApi(it.selectedModifiers),
+
+        // ✅ Backward-compatible (legacy) flat shape
         modifiers: it.modifiers,
       }));
 

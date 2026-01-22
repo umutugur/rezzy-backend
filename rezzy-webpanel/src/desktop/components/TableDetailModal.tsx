@@ -7,15 +7,15 @@ import { authStore } from "../../store/auth";
 import { getCurrencySymbolForRegion } from "../../utils/currency";
 
 type TableDetail = {
-  table: any;
-  session: any;
+  table?: LiveTable;
+  session?: any;
   totals?: {
     cardTotal: number;
     payAtVenueTotal: number;
     grandTotal: number;
   };
-  orders: any[];
-  serviceRequests: any[];
+  orders?: any[];
+  serviceRequests?: any[];
   reservation?: any;
 };
 
@@ -147,7 +147,6 @@ export const TableDetailModal: React.FC<Props> = ({
 
   const qc = useQueryClient();
 
-
   const [localCancelPendingId, setLocalCancelPendingId] = React.useState<string | null>(null);
 
   const cancelOrderMut = useMutation({
@@ -231,7 +230,7 @@ export const TableDetailModal: React.FC<Props> = ({
   }, [rawOrders, hideCancelledOrders]);
 
   const hasOrders = visibleOrders.length > 0;
-  const hasRequests = !!tableDetail && tableDetail.serviceRequests?.length > 0;
+  const hasRequests = (tableDetail?.serviceRequests?.length ?? 0) > 0;
 
   const canCancelOrder = React.useCallback((o: any) => {
     const st = String(o?.status ?? "").trim().toLowerCase();
@@ -454,13 +453,62 @@ export const TableDetailModal: React.FC<Props> = ({
                             ) : null}
                           </div>
                         </div>
-                        <div className="text-[11px] text-slate-600 break-words">
-                          {(o.items || [])
-                            .map(
-                              (it: any) =>
-                                `${it.qty}× ${it.title} (${formatMoney(it.price || 0, currencySymbol)})`
-                            )
-                            .join(", ")}
+                        <div className="text-[11px] text-slate-600 break-words space-y-1">
+                          {(o.items || []).map((it: any, i2: number) => {
+                            const mods =
+                              it?.selectedModifiers ||
+                              it?.modifiers ||
+                              it?.modifierSelections ||
+                              it?.modifierSelection;
+
+                            // Normalize modifier strings for compact display
+                            const modLines: string[] = [];
+
+                            // Grouped shape: { [groupId]: [{ id, title, price, qty? }, ...] }
+                            if (mods && typeof mods === "object" && !Array.isArray(mods)) {
+                              for (const k of Object.keys(mods)) {
+                                const arr = (mods as any)[k];
+                                if (!Array.isArray(arr)) continue;
+                                for (const m of arr) {
+                                  if (!m) continue;
+                                  const t = String(m.title || m.name || m.label || "").trim();
+                                  if (!t) continue;
+                                  const mp = Number(m.price || 0);
+                                  if (mp) modLines.push(`${t} (+${formatMoney(mp, currencySymbol)})`);
+                                  else modLines.push(t);
+                                }
+                              }
+                            }
+
+                            // Flat array shape: [{ title, price, groupTitle? }, ...]
+                            if (Array.isArray(mods)) {
+                              for (const m of mods) {
+                                if (!m) continue;
+                                const t = String(m.title || m.name || m.label || "").trim();
+                                if (!t) continue;
+                                const mp = Number(m.price || 0);
+                                if (mp) modLines.push(`${t} (+${formatMoney(mp, currencySymbol)})`);
+                                else modLines.push(t);
+                              }
+                            }
+
+                            const title = String(it?.title ?? "").trim();
+                            const qty = Number(it?.qty ?? 1);
+                            const price = Number(it?.price ?? 0);
+
+                            return (
+                              <div key={String(it?._id ?? it?.id ?? i2)} className="leading-4">
+                                <div>
+                                  {qty}× {title} ({formatMoney(price, currencySymbol)})
+                                </div>
+                                {modLines.length > 0 && (
+                                  <div className="mt-0.5 text-[10px] text-slate-500">
+                                    <span className="text-slate-400">Opsiyonlar:</span> {modLines.join(", ")}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
@@ -479,7 +527,7 @@ export const TableDetailModal: React.FC<Props> = ({
                     </div>
                   )}
 
-                  {tableDetail.serviceRequests.map((r: any) => (
+                  {(tableDetail.serviceRequests || []).map((r: any) => (
                     <div
                       key={r._id}
                       className="flex items-center justify-between rounded-xl bg-amber-50 px-3 py-1.5 border border-amber-200"
