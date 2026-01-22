@@ -894,6 +894,28 @@ function handleAddWithModifiers(
     return "";
   }
 
+  // Helper to render modifier lines for printing
+  function renderModifierLines(modsRaw: any): string {
+    const mods = String(modsRaw ?? "").trim();
+    if (!mods) return "";
+
+    // Prefer the same delimiter we generate in resolveOrderItemModifierText
+    const parts = mods
+      .split(" · ")
+      .map((s) => String(s).trim())
+      .filter(Boolean);
+
+    // Fallback: if there's no delimiter, still render a single line
+    const lines = parts.length ? parts : [mods];
+
+    return lines
+      .map(
+        (line) =>
+          `<div class="small" style="margin: 0 0 2px 10px;">${escapeHtml(line)}</div>`
+      )
+      .join("");
+  }
+
   // Yazdırma helper’ları (currency düzeltildi)
   function handlePrintLastOrder(td: any) {
     if (!td || !Array.isArray(td.orders) || td.orders.length === 0) return;
@@ -937,10 +959,11 @@ function handleAddWithModifiers(
 
               const title = resolveOrderItemTitle(it);
               const mods = resolveOrderItemModifierText(it);
+              const modsHtml = renderModifierLines(mods);
 
               return `
                 <div class="row"><span>${qty}× ${escapeHtml(title)}</span><span>${formatMoney(line, cur)}</span></div>
-                ${mods ? `<div class="small" style="margin: 0 0 2px 10px;">${escapeHtml(mods)}</div>` : ""}
+                ${modsHtml}
               `;
             })
             .join("")
@@ -1017,10 +1040,11 @@ function handleAddWithModifiers(
 
                         const title = resolveOrderItemTitle(it);
                         const mods = resolveOrderItemModifierText(it);
+                        const modsHtml = renderModifierLines(mods);
 
                         return `
                           <div class="row small"><span>${qty}× ${escapeHtml(title)}</span><span>${formatMoney(line, cur)}</span></div>
-                          ${mods ? `<div class="small" style="margin: 0 0 2px 10px;">${escapeHtml(mods)}</div>` : ""}
+                          ${modsHtml}
                         `;
                       })
                       .join("")
