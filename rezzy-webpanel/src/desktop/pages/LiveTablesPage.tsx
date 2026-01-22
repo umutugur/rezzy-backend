@@ -912,8 +912,6 @@ function handleAddWithModifiers(
         : defaultCurrency;
 
     const last = td.orders[td.orders.length - 1];
-    console.log("PRINT_LAST_ORDER_RAW_ORDER", last);
-console.log("PRINT_LAST_ORDER_RAW_ITEMS", last?.items);
     const dateStr = new Date(last.createdAt).toLocaleString("tr-TR", {
       dateStyle: "short",
       timeStyle: "short",
@@ -923,21 +921,22 @@ console.log("PRINT_LAST_ORDER_RAW_ITEMS", last?.items);
       Array.isArray(last.items) && last.items.length > 0
         ? last.items
             .map((it: any) => {
-               const qty = Number(it.qty ?? it.quantity ?? 1);
+              const qty = Number(it.qty ?? it.quantity ?? 1);
 
-const unit =
-  Number(
-    it.unitTotal ??
-    it.unitPrice ??
-    it.price ??
-    ((Number(it.basePrice ?? 0) + Number(it.unitModifiersTotal ?? 0)) || 0)
-  ) || 0;
+              const unit =
+                Number(
+                  it.unitTotal ??
+                    it.unitPrice ??
+                    it.price ??
+                    ((Number(it.basePrice ?? 0) +
+                      Number(it.unitModifiersTotal ?? 0)) ||
+                      0)
+                ) || 0;
 
-const line =
-  Number(it.lineTotal ?? (unit * qty)) || 0;
+              const line = Number(it.lineTotal ?? unit * qty) || 0;
 
-const title = resolveOrderItemTitle(it);
-const mods = resolveOrderItemModifierText(it);
+              const title = resolveOrderItemTitle(it);
+              const mods = resolveOrderItemModifierText(it);
 
               return `
                 <div class="row"><span>${qty}× ${escapeHtml(title)}</span><span>${formatMoney(line, cur)}</span></div>
@@ -1004,19 +1003,20 @@ const mods = resolveOrderItemModifierText(it);
                       .map((it: any) => {
                         const qty = Number(it.qty ?? it.quantity ?? 1);
 
-const unit =
-  Number(
-    it.unitTotal ??
-    it.unitPrice ??
-    it.price ??
-    ((Number(it.basePrice ?? 0) + Number(it.unitModifiersTotal ?? 0)) || 0)
-  ) || 0;
+                        const unit =
+                          Number(
+                            it.unitTotal ??
+                              it.unitPrice ??
+                              it.price ??
+                              ((Number(it.basePrice ?? 0) +
+                                Number(it.unitModifiersTotal ?? 0)) ||
+                                0)
+                          ) || 0;
 
-const line =
-  Number(it.lineTotal ?? (unit * qty)) || 0;
+                        const line = Number(it.lineTotal ?? unit * qty) || 0;
 
-const title = resolveOrderItemTitle(it);
-const mods = resolveOrderItemModifierText(it);
+                        const title = resolveOrderItemTitle(it);
+                        const mods = resolveOrderItemModifierText(it);
 
                         return `
                           <div class="row small"><span>${qty}× ${escapeHtml(title)}</span><span>${formatMoney(line, cur)}</span></div>
