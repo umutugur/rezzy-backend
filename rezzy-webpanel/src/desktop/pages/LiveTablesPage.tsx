@@ -763,6 +763,112 @@ function handleAddWithModifiers(
     },
   });
 
+  function escapeHtml(v: any): string {
+    const s = String(v ?? "");
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function resolveOrderItemTitle(it: any): string {
+    const direct =
+      it?.title ??
+      it?.itemTitle ??
+      it?.name ??
+      it?.productTitle ??
+      it?.productName;
+    if (direct) return String(direct);
+
+    const nested =
+      it?.item?.title ??
+      it?.item?.name ??
+      it?.menuItem?.title ??
+      it?.menuItem?.name ??
+      it?.product?.title ??
+      it?.product?.name;
+    if (nested) return String(nested);
+
+    const id = String(it?.itemId ?? it?.menuItemId ?? it?.productId ?? "").trim();
+    return id ? `Ürün (${id})` : "Ürün";
+  }
+
+  function resolveOrderItemModifierText(it: any): string {
+    // If backend already provides a human-readable label, prefer it
+    if (it?.modifierLabel) return String(it.modifierLabel);
+
+    // New grouped shape: [{ groupId, optionIds: [] }]
+    if (Array.isArray(it?.selectedModifiers) && it.selectedModifiers.length > 0) {
+      const first = it.selectedModifiers[0];
+      if (first && Array.isArray(first.optionIds)) {
+        // Try to resolve titles if we have modifierGroupsById; fallback to ids
+        const parts: string[] = [];
+        for (const gsel of it.selectedModifiers) {
+          const gid = String(gsel?.groupId ?? "").trim();
+          const optIds: string[] = Array.isArray(gsel?.optionIds)
+            ? gsel.optionIds.map((x: any) => String(x)).filter(Boolean)
+            : [];
+          if (!gid || optIds.length === 0) continue;
+
+          const g = modifierGroupsById[gid];
+          const gTitle = g?.title ? String(g.title) : "";
+
+          const optTitles: string[] = [];
+          for (const oid of optIds) {
+            const found = Array.isArray(g?.options)
+              ? g.options.find((o: any) => String(o?._id ?? o?.id ?? "") === String(oid))
+              : undefined;
+            optTitles.push(found?.title ? String(found.title) : String(oid));
+          }
+
+          parts.push(gTitle ? `${gTitle}: ${optTitles.join(", ")}` : optTitles.join(", "));
+        }
+        return parts.join(" · ");
+      }
+
+      // Flat shape: [{ groupId, optionId }]
+      if (first && (first.optionId || first.groupId)) {
+        const parts: string[] = [];
+        const byGroup: Record<string, string[]> = {};
+        for (const m of it.selectedModifiers) {
+          const gid = String(m?.groupId ?? "").trim();
+          const oid = String(m?.optionId ?? "").trim();
+          if (!gid || !oid) continue;
+          if (!byGroup[gid]) byGroup[gid] = [];
+          byGroup[gid].push(oid);
+        }
+        for (const gid of Object.keys(byGroup).sort((a, b) => a.localeCompare(b))) {
+          const g = modifierGroupsById[gid];
+          const gTitle = g?.title ? String(g.title) : "";
+          const optTitles: string[] = [];
+          for (const oid of Array.from(new Set(byGroup[gid]))) {
+            const found = Array.isArray(g?.options)
+              ? g.options.find((o: any) => String(o?._id ?? o?.id ?? "") === String(oid))
+              : undefined;
+            optTitles.push(found?.title ? String(found.title) : String(oid));
+          }
+          parts.push(gTitle ? `${gTitle}: ${optTitles.join(", ")}` : optTitles.join(", "));
+        }
+        return parts.join(" · ");
+      }
+    }
+
+    // Legacy flat shape: it.modifiers
+    if (Array.isArray(it?.modifiers) && it.modifiers.length > 0) {
+      const parts: string[] = [];
+      for (const m of it.modifiers) {
+        const t = m?.title ?? m?.name;
+        if (t) parts.push(String(t));
+        else if (m?.optionId) parts.push(String(m.optionId));
+      }
+      return parts.join(" · ");
+    }
+
+    return "";
+  }
+
   // Yazdırma helper’ları (currency düzeltildi)
   function handlePrintLastOrder(td: any) {
     if (!td || !Array.isArray(td.orders) || td.orders.length === 0) return;
@@ -790,8 +896,16 @@ function handleAddWithModifiers(
       Array.isArray(last.items) && last.items.length > 0
         ? last.items
             .map((it: any) => {
-              const line = Number(it.price || 0) * Number(it.qty || 1);
-              return `<div class="row"><span>${it.qty}× ${it.title}</span><span>${formatMoney(line, cur)}</span></div>`;
+              const qty = Number(it.qty || 1);
+              const unit = Number(it.price || 0);
+              const line = unit * qty;
+              const title = resolveOrderItemTitle(it);
+              const mods = resolveOrderItemModifierText(it);
+
+              return `
+                <div class="row"><span>${qty}× ${escapeHtml(title)}</span><span>${formatMoney(line, cur)}</span></div>
+                ${mods ? `<div class="small" style="margin: 0 0 2px 10px;">${escapeHtml(mods)}</div>` : ""}
+              `;
             })
             .join("")
         : `<div class="small">Ürün yok.</div>`;
@@ -851,8 +965,16 @@ function handleAddWithModifiers(
                 Array.isArray(o.items) && o.items.length > 0
                   ? o.items
                       .map((it: any) => {
-                        const line = Number(it.price || 0) * Number(it.qty || 1);
-                        return `<div class="row small"><span>${it.qty}× ${it.title}</span><span>${formatMoney(line, cur)}</span></div>`;
+                        const qty = Number(it.qty || 1);
+                        const unit = Number(it.price || 0);
+                        const line = unit * qty;
+                        const title = resolveOrderItemTitle(it);
+                        const mods = resolveOrderItemModifierText(it);
+
+                        return `
+                          <div class="row small"><span>${qty}× ${escapeHtml(title)}</span><span>${formatMoney(line, cur)}</span></div>
+                          ${mods ? `<div class="small" style="margin: 0 0 2px 10px;">${escapeHtml(mods)}</div>` : ""}
+                        `;
                       })
                       .join("")
                   : `<div class="small">Ürün yok.</div>`;

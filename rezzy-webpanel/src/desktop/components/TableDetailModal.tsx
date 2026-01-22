@@ -115,11 +115,135 @@ function formatMoney(amount: any, symbol: string): string {
   })}${symbol}`;
 }
 
+
 function serviceRequestLabel(type: string): string {
   if (type === "waiter") return "Garson çağrısı";
   if (type === "bill") return "Hesap istendi";
   if (type === "order_ready") return "Sipariş hazır";
   return "Servis isteği";
+}
+
+
+function resolveOrderItemTitle(it: any): string {
+  const candidates = [
+    it?.title,
+    it?.itemTitle,
+    it?.name,
+    it?.item?.title,
+    it?.item?.name,
+    it?.menuItem?.title,
+    it?.menuItem?.name,
+    it?.product?.title,
+    it?.product?.name,
+    it?.menuItemTitle,
+  ];
+
+  for (const c of candidates) {
+    const s = String(c ?? "").trim();
+    if (s) return s;
+  }
+  return "Ürün";
+}
+
+function extractModifierLines(it: any, currencySymbol: string): string[] {
+  // 1) If backend already provides a human-readable label, use it.
+  const label = String(it?.modifierLabel ?? it?.modifiersLabel ?? it?.optionsLabel ?? "").trim();
+  if (label) {
+    // Keep as a single line; UI already prefixes with "Opsiyonlar:".
+    return [label];
+  }
+
+  const mods =
+    it?.selectedModifiers ||
+    it?.modifiers ||
+    it?.modifierSelections ||
+    it?.modifierSelection ||
+    it?.selectedModifierGroups;
+
+  const out: string[] = [];
+
+  // 2) Object map shape: { [groupId]: [{ title, price }, ...] }
+  if (mods && typeof mods === "object" && !Array.isArray(mods)) {
+    for (const k of Object.keys(mods)) {
+      const arr = (mods as any)[k];
+      if (!Array.isArray(arr)) continue;
+      for (const m of arr) {
+        if (!m) continue;
+        const t = String(m.title || m.name || m.label || m.optionTitle || "").trim();
+        if (!t) continue;
+        const mp = Number(m.priceDelta ?? m.price ?? m.delta ?? 0);
+        if (mp) out.push(`${t} (+${formatMoney(mp, currencySymbol)})`);
+        else out.push(t);
+      }
+    }
+    return out;
+  }
+
+  // 3) Array shapes
+  if (Array.isArray(mods)) {
+    for (const m of mods) {
+      if (!m) continue;
+
+      // New grouped API shape: { groupId, optionIds: string[] }
+      if (Array.isArray((m as any).optionIds)) {
+        const optionIds = ((m as any).optionIds as any[])
+          .map((x) => String(x ?? "").trim())
+          .filter(Boolean);
+
+        // If backend includes option objects, prefer those titles
+        const optionObjs = Array.isArray((m as any).options) ? (m as any).options : null;
+        const optionTitles = optionObjs
+          ? optionObjs
+              .map((o: any) => String(o?.title || o?.name || o?.label || "").trim())
+              .filter(Boolean)
+          : [];
+
+        const groupTitle = String((m as any).groupTitle || (m as any).title || "").trim();
+
+        const joined =
+          optionTitles.length > 0
+            ? optionTitles.join(", ")
+            : optionIds.length > 0
+            ? optionIds.join(", ")
+            : "";
+
+        if (joined) {
+          if (groupTitle) out.push(`${groupTitle}: ${joined}`);
+          else out.push(joined);
+        }
+        continue;
+      }
+
+      // Flat selection shape: { groupId, optionId } or richer objects
+      const t = String(
+        (m as any).title ||
+          (m as any).name ||
+          (m as any).label ||
+          (m as any).optionTitle ||
+          (m as any).option?.title ||
+          ""
+      ).trim();
+
+      const groupTitle = String((m as any).groupTitle || (m as any).groupName || (m as any).group?.title || "").trim();
+
+      const mp = Number((m as any).priceDelta ?? (m as any).price ?? (m as any).delta ?? 0);
+
+      if (t) {
+        const base = groupTitle ? `${groupTitle}: ${t}` : t;
+        if (mp) out.push(`${base} (+${formatMoney(mp, currencySymbol)})`);
+        else out.push(base);
+        continue;
+      }
+
+      // Last resort: show identifiers if present (helps debugging)
+      const oid = String((m as any).optionId ?? "").trim();
+      const gid = String((m as any).groupId ?? "").trim();
+      if (oid && gid) out.push(`${gid}: ${oid}`);
+      else if (oid) out.push(oid);
+    }
+  }
+
+  return out;
 }
 
 export const TableDetailModal: React.FC<Props> = ({
@@ -455,46 +579,10 @@ export const TableDetailModal: React.FC<Props> = ({
                         </div>
                         <div className="text-[11px] text-slate-600 break-words space-y-1">
                           {(o.items || []).map((it: any, i2: number) => {
-                            const mods =
-                              it?.selectedModifiers ||
-                              it?.modifiers ||
-                              it?.modifierSelections ||
-                              it?.modifierSelection;
-
-                            // Normalize modifier strings for compact display
-                            const modLines: string[] = [];
-
-                            // Grouped shape: { [groupId]: [{ id, title, price, qty? }, ...] }
-                            if (mods && typeof mods === "object" && !Array.isArray(mods)) {
-                              for (const k of Object.keys(mods)) {
-                                const arr = (mods as any)[k];
-                                if (!Array.isArray(arr)) continue;
-                                for (const m of arr) {
-                                  if (!m) continue;
-                                  const t = String(m.title || m.name || m.label || "").trim();
-                                  if (!t) continue;
-                                  const mp = Number(m.price || 0);
-                                  if (mp) modLines.push(`${t} (+${formatMoney(mp, currencySymbol)})`);
-                                  else modLines.push(t);
-                                }
-                              }
-                            }
-
-                            // Flat array shape: [{ title, price, groupTitle? }, ...]
-                            if (Array.isArray(mods)) {
-                              for (const m of mods) {
-                                if (!m) continue;
-                                const t = String(m.title || m.name || m.label || "").trim();
-                                if (!t) continue;
-                                const mp = Number(m.price || 0);
-                                if (mp) modLines.push(`${t} (+${formatMoney(mp, currencySymbol)})`);
-                                else modLines.push(t);
-                              }
-                            }
-
-                            const title = String(it?.title ?? "").trim();
+                            const title = resolveOrderItemTitle(it);
                             const qty = Number(it?.qty ?? 1);
                             const price = Number(it?.price ?? 0);
+                            const modLines = extractModifierLines(it, currencySymbol);
 
                             return (
                               <div key={String(it?._id ?? it?.id ?? i2)} className="leading-4">
