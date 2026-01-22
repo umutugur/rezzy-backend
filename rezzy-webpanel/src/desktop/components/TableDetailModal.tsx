@@ -184,6 +184,25 @@ function extractModifierLines(it: any, currencySymbol: string): string[] {
     for (const m of mods) {
       if (!m) continue;
 
+      // ✅ Walk-in grouped shape: { groupTitle, options: [{ optionTitle, priceDelta }] }
+      if (Array.isArray((m as any).options)) {
+        const groupTitle = String(
+          (m as any).groupTitle || (m as any).title || (m as any).groupName || ""
+        ).trim();
+        const opts = Array.isArray((m as any).options) ? (m as any).options : [];
+
+        for (const o of opts) {
+          if (!o) continue;
+          const t = String(o?.optionTitle || o?.title || o?.name || o?.label || "").trim();
+          if (!t) continue;
+          const mp = Number(o?.priceDelta ?? o?.price ?? o?.delta ?? 0);
+          const base = groupTitle ? `${groupTitle}: ${t}` : t;
+          if (mp) out.push(`${base} (+${formatMoney(mp, currencySymbol)})`);
+          else out.push(base);
+        }
+        continue;
+      }
+
       // New grouped API shape: { groupId, optionIds: string[] }
       if (Array.isArray((m as any).optionIds)) {
         const optionIds = ((m as any).optionIds as any[])
@@ -194,7 +213,9 @@ function extractModifierLines(it: any, currencySymbol: string): string[] {
         const optionObjs = Array.isArray((m as any).options) ? (m as any).options : null;
         const optionTitles = optionObjs
           ? optionObjs
-              .map((o: any) => String(o?.title || o?.name || o?.label || "").trim())
+              .map((o: any) =>
+                String(o?.optionTitle || o?.title || o?.name || o?.label || "").trim()
+              )
               .filter(Boolean)
           : [];
 
@@ -580,14 +601,18 @@ export const TableDetailModal: React.FC<Props> = ({
                         <div className="text-[11px] text-slate-600 break-words space-y-1">
                           {(o.items || []).map((it: any, i2: number) => {
                             const title = resolveOrderItemTitle(it);
-                            const qty = Number(it?.qty ?? 1);
-                            const price = Number(it?.price ?? 0);
+                            const qty = Number(it?.qty ?? it?.quantity ?? 1);
+                            const unit = Number(
+                              it?.unitTotal ?? it?.unitPrice ?? it?.price ??
+                              (Number(it?.basePrice ?? 0) + Number(it?.unitModifiersTotal ?? 0))
+                            ) || 0;
+                            const _lineTotal = Number(it?.lineTotal ?? (unit * qty)) || 0;
                             const modLines = extractModifierLines(it, currencySymbol);
 
                             return (
                               <div key={String(it?._id ?? it?.id ?? i2)} className="leading-4">
                                 <div>
-                                  {qty}× {title} ({formatMoney(price, currencySymbol)})
+                                  {qty}× {title} ({formatMoney(unit, currencySymbol)})
                                 </div>
                                 {modLines.length > 0 && (
                                   <div className="mt-0.5 text-[10px] text-slate-500">

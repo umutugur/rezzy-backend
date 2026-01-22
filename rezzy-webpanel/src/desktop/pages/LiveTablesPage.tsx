@@ -828,6 +828,31 @@ function handleAddWithModifiers(
         return parts.join(" · ");
       }
 
+      // ✅ Walk-in grouped shape: [{ groupTitle, options: [{ optionTitle, priceDelta }] }]
+      if (first && Array.isArray((first as any).options)) {
+        const parts: string[] = [];
+
+        for (const gsel of it.selectedModifiers) {
+          const gTitle = String(gsel?.groupTitle ?? gsel?.title ?? "").trim();
+
+          const opts = Array.isArray((gsel as any)?.options) ? (gsel as any).options : [];
+          const optParts = opts
+            .map((o: any) => {
+              const t = String(o?.optionTitle ?? o?.title ?? o?.name ?? "").trim();
+              if (!t) return "";
+              const d = Number(o?.priceDelta ?? o?.price ?? o?.delta ?? 0);
+              return d ? `${t} (+${formatMoney(d, currency)})` : t;
+            })
+            .filter(Boolean);
+
+          if (optParts.length > 0) {
+            parts.push(gTitle ? `${gTitle}: ${optParts.join(", ")}` : optParts.join(", "));
+          }
+        }
+
+        return parts.join(" · ");
+      }
+
       // Flat shape: [{ groupId, optionId }]
       if (first && (first.optionId || first.groupId)) {
         const parts: string[] = [];
@@ -898,11 +923,21 @@ console.log("PRINT_LAST_ORDER_RAW_ITEMS", last?.items);
       Array.isArray(last.items) && last.items.length > 0
         ? last.items
             .map((it: any) => {
-              const qty = Number(it.qty || 1);
-              const unit = Number(it.price || 0);
-              const line = unit * qty;
-              const title = resolveOrderItemTitle(it);
-              const mods = resolveOrderItemModifierText(it);
+               const qty = Number(it.qty ?? it.quantity ?? 1);
+
+const unit =
+  Number(
+    it.unitTotal ??
+    it.unitPrice ??
+    it.price ??
+    ((Number(it.basePrice ?? 0) + Number(it.unitModifiersTotal ?? 0)) || 0)
+  ) || 0;
+
+const line =
+  Number(it.lineTotal ?? (unit * qty)) || 0;
+
+const title = resolveOrderItemTitle(it);
+const mods = resolveOrderItemModifierText(it);
 
               return `
                 <div class="row"><span>${qty}× ${escapeHtml(title)}</span><span>${formatMoney(line, cur)}</span></div>
@@ -967,11 +1002,21 @@ console.log("PRINT_LAST_ORDER_RAW_ITEMS", last?.items);
                 Array.isArray(o.items) && o.items.length > 0
                   ? o.items
                       .map((it: any) => {
-                        const qty = Number(it.qty || 1);
-                        const unit = Number(it.price || 0);
-                        const line = unit * qty;
-                        const title = resolveOrderItemTitle(it);
-                        const mods = resolveOrderItemModifierText(it);
+                        const qty = Number(it.qty ?? it.quantity ?? 1);
+
+const unit =
+  Number(
+    it.unitTotal ??
+    it.unitPrice ??
+    it.price ??
+    ((Number(it.basePrice ?? 0) + Number(it.unitModifiersTotal ?? 0)) || 0)
+  ) || 0;
+
+const line =
+  Number(it.lineTotal ?? (unit * qty)) || 0;
+
+const title = resolveOrderItemTitle(it);
+const mods = resolveOrderItemModifierText(it);
 
                         return `
                           <div class="row small"><span>${qty}× ${escapeHtml(title)}</span><span>${formatMoney(line, cur)}</span></div>
