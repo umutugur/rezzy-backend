@@ -32,6 +32,6 @@ router.get("/orders/attempt/:attemptId", auth(true), getDeliveryAttemptStatus);
 
 // ✅ My delivery orders (customer)
 router.get("/orders/my", auth(true), listMyDeliveryOrders);
-router.get("/orders/:orderId", auth(true), getMyDeliveryOrder);
+router.get("/orders/my/:orderId", auth(true), getMyDeliveryOrder);
 
 export default router;
