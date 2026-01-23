@@ -354,3 +354,121 @@ export async function getDeliveryAttemptStatus(req, res, next) {
     return next(e);
   }
 }
+function isActiveStatus(status) {
+  return ["new", "accepted", "on_the_way"].includes(String(status || ""));
+}
+
+function buildItemsPreview(items) {
+  const arr = Array.isArray(items) ? items : [];
+  if (arr.length === 0) return "";
+  const first = arr[0];
+  const firstQty = Number(first?.qty || 1) || 1;
+  const firstTitle = String(first?.itemTitle || "").trim();
+
+  const extraCount = arr.length - 1;
+  if (!firstTitle) return extraCount > 0 ? `+${extraCount} ürün` : "";
+
+  if (extraCount > 0) return `${firstQty}× ${firstTitle} · +${extraCount} ürün`;
+  return `${firstQty}× ${firstTitle}`;
+}
+
+export async function listMyDeliveryOrders(req, res, next) {
+  try {
+    const userId = assertAuth(req);
+
+    const limitRaw = Number(req.query?.limit || 20);
+    const limit = Math.min(50, Math.max(1, Math.floor(limitRaw || 20)));
+
+    // Son N siparişi çek (createdAt desc)
+    const rows = await DeliveryOrder.find({ userId: new mongoose.Types.ObjectId(String(userId)) })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    // Restaurant snapshot (tek seferde)
+    const restaurantIds = Array.from(
+      new Set(rows.map((o) => String(o.restaurantId)).filter(Boolean))
+    );
+
+    const restaurants = await Restaurant.find({ _id: { $in: restaurantIds } })
+      .select("name photos")
+      .lean();
+
+    const rMap = new Map();
+    for (const r of restaurants) {
+      rMap.set(String(r._id), {
+        id: String(r._id),
+        name: r?.name || null,
+        photo: Array.isArray(r?.photos) ? r.photos[0] : null,
+      });
+    }
+
+    const mapped = rows.map((o) => {
+      const r = rMap.get(String(o.restaurantId)) || null;
+      const itemsPreview = buildItemsPreview(o.items);
+      const firstItemTitle = String(o?.items?.[0]?.itemTitle || "").trim() || null;
+      const itemCount = (Array.isArray(o.items) ? o.items : []).reduce(
+        (sum, it) => sum + (Number(it?.qty || 0) || 0),
+        0
+      );
+
+      return {
+        _id: String(o._id),
+        createdAt: o.createdAt,
+        status: o.status,
+
+        restaurantId: String(o.restaurantId),
+        restaurantName: r?.name || null,
+        restaurantPhoto: r?.photo || null,
+
+        total: Number(o.total || 0),
+        currency: o.currency || "TRY",
+
+        itemsPreview,
+        firstItemTitle,
+        itemCount,
+      };
+    });
+
+    // ✅ Aktifleri en üste al (stable)
+    const active = [];
+    const passive = [];
+    for (const x of mapped) (isActiveStatus(x.status) ? active : passive).push(x);
+
+    return res.json({ ok: true, items: [...active, ...passive] });
+  } catch (e) {
+    return next(e);
+  }
+}
+
+export async function getMyDeliveryOrder(req, res, next) {
+  try {
+    const userId = assertAuth(req);
+    const { orderId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(String(orderId))) {
+      throw { status: 400, code: "ORDER_ID_INVALID", message: "orderId geçersiz." };
+    }
+
+    const o = await DeliveryOrder.findOne({ _id: orderId, userId: new mongoose.Types.ObjectId(String(userId)) }).lean();
+    if (!o) throw { status: 404, code: "ORDER_NOT_FOUND", message: "Sipariş bulunamadı." };
+
+    const r = await Restaurant.findById(o.restaurantId).select("name photos").lean();
+
+    return res.json({
+      ok: true,
+      order: {
+        ...o,
+        _id: String(o._id),
+        restaurantId: String(o.restaurantId),
+        userId: String(o.userId),
+        addressId: String(o.addressId),
+      },
+      restaurant: r
+        ? { id: String(r._id), name: r?.name || null, photo: Array.isArray(r?.photos) ? r.photos[0] : null }
+        : null,
+    });
+  } catch (e) {
+    return next(e);
+  }
+}

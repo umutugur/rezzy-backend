@@ -9,6 +9,8 @@ import {
   checkoutDeliveryOrder,
   createDeliveryOrderCOD,
   getDeliveryAttemptStatus,
+  listMyDeliveryOrders,
+  getMyDeliveryOrder,
 } from "../controllers/deliveryOrders.controller.js";
 
 const router = express.Router();
@@ -27,5 +29,9 @@ router.post("/orders", auth(true), createDeliveryOrderCOD);
 
 // ✅ Polling
 router.get("/orders/attempt/:attemptId", auth(true), getDeliveryAttemptStatus);
+
+// ✅ My delivery orders (customer)
+router.get("/orders/my", auth(true), listMyDeliveryOrders);
+router.get("/orders/:orderId", auth(true), getMyDeliveryOrder);
 
 export default router;
