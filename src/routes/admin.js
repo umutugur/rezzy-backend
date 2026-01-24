@@ -44,6 +44,7 @@ import {
   removeOrganizationMember,
   addRestaurantMember,
   removeRestaurantMember,
+  adminCreateSingleRestaurant,
 } from "../controllers/admin.controller.js";
 import {
   commissionsPreview,
