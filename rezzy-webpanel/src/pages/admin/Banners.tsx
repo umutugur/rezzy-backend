@@ -1,5 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Cropper from "react-easy-crop";
 import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
 import { api } from "../../api/client";
@@ -30,6 +31,59 @@ function isoOrNull(v: string): string | null {
   const d = new Date(s);
   if (isNaN(d.getTime())) return null;
   return d.toISOString();
+}
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+async function fileToObjectUrl(file: File): Promise<string> {
+  return URL.createObjectURL(file);
+}
+
+async function getCroppedImgFile(
+  imageSrc: string,
+  cropPixels: { x: number; y: number; width: number; height: number },
+  fileName: string
+) {
+  const image: HTMLImageElement = await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = imageSrc;
+  });
+
+  // Standard banner output (mobile home_top)
+  const OUT_W = 1200;
+  const OUT_H = 520; // ~2.307:1
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas context yok");
+
+  canvas.width = OUT_W;
+  canvas.height = OUT_H;
+
+  // Defensive bounds
+  const sx = clamp(cropPixels.x, 0, Math.max(0, image.naturalWidth - 1));
+  const sy = clamp(cropPixels.y, 0, Math.max(0, image.naturalHeight - 1));
+  const sw = clamp(cropPixels.width, 1, image.naturalWidth - sx);
+  const sh = clamp(cropPixels.height, 1, image.naturalHeight - sy);
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(image, sx, sy, sw, sh, 0, 0, OUT_W, OUT_H);
+
+  const blob: Blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("toBlob failed"))),
+      "image/jpeg",
+      0.9
+    );
+  });
+
+  const safe = fileName.replace(/\.[a-z0-9]+$/i, "");
+  return new File([blob], `${safe}-banner.jpg`, { type: "image/jpeg" });
 }
 
 export default function AdminBannersPage() {
@@ -66,10 +120,21 @@ export default function AdminBannersPage() {
   const [targetType, setTargetType] = React.useState<AdminBannerTargetType>("delivery");
   const [restaurantId, setRestaurantId] = React.useState<string>("");
   const [imageFile, setImageFile] = React.useState<File | null>(null);
-
+  const [imageSrc, setImageSrc] = React.useState<string>("");
+  React.useEffect(() => {
+    return () => {
+      if (imageSrc) URL.revokeObjectURL(imageSrc);
+    };
+  }, [imageSrc]);
+  const [cropOpen, setCropOpen] = React.useState(false);
+  const [crop, setCrop] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [zoom, setZoom] = React.useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = React.useState<any>(null);
+  const [croppedFile, setCroppedFile] = React.useState<File | null>(null);
   const createMut = useMutation({
     mutationFn: async () => {
-      if (!imageFile) throw new Error("Banner görseli zorunlu");
+if (!imageFile) throw new Error("Banner görseli zorunlu");
+const finalImage = croppedFile ?? imageFile;
       if (!restaurantId) throw new Error("Restoran seçmelisin");
       return adminCreateBanner({
         placement,
@@ -82,7 +147,7 @@ export default function AdminBannersPage() {
         endAt: isoOrNull(endAt),
         targetType,
         restaurantId,
-        imageFile,
+        imageFile: finalImage,
       });
     },
     onSuccess: async () => {
@@ -95,6 +160,13 @@ export default function AdminBannersPage() {
       setTargetType("delivery");
       setRestaurantId("");
       setImageFile(null);
+      if (imageSrc) URL.revokeObjectURL(imageSrc);
+setImageSrc("");
+setCroppedFile(null);
+setCrop({ x: 0, y: 0 });
+setZoom(1);
+setCroppedAreaPixels(null);
+setCropOpen(false);
       await qc.invalidateQueries({ queryKey: ["admin-banners"] });
     },
   });
@@ -274,14 +346,71 @@ export default function AdminBannersPage() {
               </label>
             </div>
 
-            <div className="md:col-span-3">
-              <div className="text-xs text-gray-500 mb-1">Görsel</div>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-              />
-            </div>
+           <div className="md:col-span-3">
+  <div className="flex items-center justify-between mb-1">
+    <div className="text-xs text-gray-500">
+      Görsel <span className="text-gray-400">(önerilen: 1200×520 • oran ~2.3:1)</span>
+    </div>
+    {imageSrc ? (
+      <button
+        type="button"
+        className="text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50"
+        onClick={() => setCropOpen(true)}
+      >
+        Kırp
+      </button>
+    ) : null}
+  </div>
+
+  <input
+    type="file"
+    accept="image/*"
+    onChange={async (e) => {
+      const f = e.target.files?.[0] ?? null;
+      setImageFile(f);
+      setCroppedFile(null);
+      setCroppedAreaPixels(null);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+
+      if (imageSrc) URL.revokeObjectURL(imageSrc);
+
+      if (f) {
+        const url = await fileToObjectUrl(f);
+        setImageSrc(url);
+      } else {
+        setImageSrc("");
+      }
+    }}
+  />
+
+  {imageSrc ? (
+    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="rounded-xl border border-gray-200 p-3 bg-gray-50">
+        <div className="text-xs text-gray-500 mb-2">Önizleme (home_top)</div>
+        <div className="w-full aspect-[2.3/1] overflow-hidden rounded-lg border bg-white">
+          <img
+            src={croppedFile ? URL.createObjectURL(croppedFile) : imageSrc}
+            alt="banner preview"
+            className="w-full h-full object-cover"
+          />
+        </div>
+        <div className="mt-2 text-[11px] text-gray-500">
+          {croppedFile ? "Kırpılmış görsel kullanılacak." : "Görsel kırpılmadı; mobilde cover ile kesilebilir."}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 p-3">
+        <div className="text-xs text-gray-500 mb-2">İpucu</div>
+        <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1">
+          <li>Metin/logoları merkeze yakın tut.</li>
+          <li>Çok yüksek görsellerde üst-alt kesilir; mutlaka kırp.</li>
+          <li>Yükleme JPEG’e çevrilir (kalite 0.9).</li>
+        </ul>
+      </div>
+    </div>
+  ) : null}
+</div>
 
             <div className="md:col-span-3">
               <button
@@ -325,7 +454,7 @@ export default function AdminBannersPage() {
                     <img
                       src={b.imageUrl}
                       alt={b.title ?? "banner"}
-                      className="w-28 h-14 object-cover rounded-lg border"
+                      className="w-36 h-20 object-cover rounded-xl border"
                     />
                   </td>
 
@@ -438,6 +567,93 @@ export default function AdminBannersPage() {
         <div className="text-xs text-gray-500">
           Not: Banner tıklama aksiyonunu mobilde `targetType` üzerinden route edeceğiz.
         </div>
+        {cropOpen && imageSrc ? (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="w-full max-w-3xl rounded-2xl bg-white shadow-xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <div>
+          <div className="font-semibold">Banner Kırp</div>
+          <div className="text-xs text-gray-500">Çıktı: 1200×520 (oran ~2.3:1)</div>
+        </div>
+        <button
+          type="button"
+          className="px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
+          onClick={() => setCropOpen(false)}
+        >
+          Kapat
+        </button>
+      </div>
+
+      <div className="relative w-full" style={{ height: 420 }}>
+        <Cropper
+          image={imageSrc}
+          crop={crop}
+          zoom={zoom}
+          aspect={2.3 / 1}
+          onCropChange={setCrop}
+          onZoomChange={setZoom}
+          onCropComplete={(_, areaPixels) => setCroppedAreaPixels(areaPixels)}
+        />
+      </div>
+
+      <div className="px-4 py-4 border-t">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-gray-700 font-medium">Zoom</div>
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={0.01}
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="w-56"
+            />
+            <div className="text-xs text-gray-500">{zoom.toFixed(2)}x</div>
+          </div>
+
+          <div className="flex items-center gap-2 justify-end">
+            <button
+              type="button"
+              className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
+              onClick={() => {
+                setCroppedFile(null);
+                setCrop({ x: 0, y: 0 });
+                setZoom(1);
+                setCroppedAreaPixels(null);
+              }}
+            >
+              Sıfırla
+            </button>
+
+            <button
+              type="button"
+              className="px-4 py-2 rounded-lg bg-gray-900 text-white hover:opacity-90"
+              onClick={async () => {
+                if (!imageFile) return;
+                if (!croppedAreaPixels) {
+                  setCropOpen(false);
+                  return;
+                }
+
+                try {
+                  const f = await getCroppedImgFile(imageSrc, croppedAreaPixels, imageFile.name);
+                  setCroppedFile(f);
+                  setCropOpen(false);
+                } catch (e) {
+                  console.error(e);
+                  alert("Kırpma sırasında hata oluştu");
+                }
+              }}
+            >
+              Kırpmayı Kaydet
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+) : null}
       </div>
     </div>
   );
