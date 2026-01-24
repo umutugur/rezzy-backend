@@ -94,22 +94,34 @@ export const listRestaurants = async (req, res, next) => {
   console.log("[listRestaurants] START", req.query);
 
   try {
-    const {
-      city,
-      query,
-      region,
-      lat,
-      lng,
-      people,
-      date,
-      timeRange,
-      budget,
-      style,
-      fromAssistant,
-    } = req.query || {};
+   const {
+  city,
+  query,
+  region,
+  lat,
+  lng,
+  people,
+  date,
+  timeRange,
+  budget,
+  style,
+  fromAssistant,
+  businessType, 
+} = req.query || {};
 
     // Her zaman: sadece aktif restoranlar
     const filter = { isActive: true };
+    if (businessType && String(businessType).trim()) {
+  const bt = String(businessType).trim().toLowerCase();
+
+  // Güvenli olsun diye enum kontrolü (Restaurant.js’teki BUSINESS_TYPES ile uyumlu)
+  if (BUSINESS_TYPES.includes(bt)) {
+    filter.businessType = bt;
+  } else {
+    // İstersen burada invalid businessType için 400 de dönebilirsin
+    // throw { status: 400, message: `Invalid businessType: ${bt}` };
+  }
+}
     const andClauses = [];
 
     if (region) filter.region = String(region).trim().toUpperCase();

@@ -503,6 +503,7 @@ export const listRestaurantsSchema = Joi.object({
     lat: Joi.number().optional(),
     lng: Joi.number().optional(),
     _cb: Joi.any().optional(),
+    businessType: Joi.string().valid(...BUSINESS_TYPES).optional(),
   }).unknown(true),
 });
 
