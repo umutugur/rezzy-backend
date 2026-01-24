@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
 import {
-  adminCreateRestaurant,
+  adminCreateSingleRestaurant,
   adminSearchUsers,
   adminCreateUser,
 } from "../../api/client";
@@ -100,7 +100,7 @@ export default function AdminRestaurantCreatePage() {
         }; // [lng,lat]
       }
 
-      return adminCreateRestaurant({
+            return adminCreateSingleRestaurant({
         ownerId: owner?._id as string,
         name,
         region: region.trim().toUpperCase(),
@@ -112,17 +112,16 @@ export default function AdminRestaurantCreatePage() {
         // ✅ işletme tipi
         businessType,
 
+        // (opsiyonel) org adı override: boş bırakırsan backend restoran adından türetsin
+        // organizationName: name.trim(),
+
         // finans/kurallar
         commissionRate,
         depositRequired,
-        depositAmount: depositRequired
-          ? Number(depositAmount || "0")
-          : 0,
+        depositAmount: depositRequired ? Number(depositAmount || "0") : 0,
         checkinWindowBeforeMinutes: Number(checkinBefore || "0"),
         checkinWindowAfterMinutes: Number(checkinAfter || "0"),
-        underattendanceThresholdPercent: Number(
-          uaThreshold || "80"
-        ),
+        underattendanceThresholdPercent: Number(uaThreshold || "80"),
 
         // konum
         mapAddress: mapAddress || "",

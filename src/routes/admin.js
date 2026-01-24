@@ -110,6 +110,13 @@ r.delete(
 // ---- Restaurants ----
 r.get("/restaurants", auth(), allow("admin"), listRestaurants);
 r.post("/restaurants", auth(), allow("admin"), createRestaurant);
+// ✅ Admin — Single Restaurant Create (auto-organization)
+r.post(
+  "/restaurants/single",
+  auth(),
+  allow("admin"),
+  adminCreateSingleRestaurant
+);
 r.get("/restaurants/:rid", auth(), allow("admin"), getRestaurantDetail);
 r.get(
   "/restaurants/:rid/reservations",

@@ -350,6 +350,62 @@ export async function adminCreateRestaurant(input: {
   const { data } = await api.post("/admin/restaurants", payload);
   return data;
 }
+// ✅ Admin — Single Restaurant Create (auto-organization)
+export async function adminCreateSingleRestaurant(input: {
+  ownerId: string;
+  name: string;
+  region?: string;
+  city?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+
+  businessType?: string;
+  categorySet?: string;
+
+  commissionRate?: number;
+  depositRequired?: boolean;
+  depositAmount?: number;
+  checkinWindowBeforeMinutes?: number;
+  checkinWindowAfterMinutes?: number;
+  underattendanceThresholdPercent?: number;
+
+  mapAddress?: string;
+  placeId?: string;
+  googleMapsUrl?: string;
+  location?: { type: "Point"; coordinates: [number, number] };
+
+  // opsiyonel: org adını override etmek istersen
+  organizationName?: string;
+}) {
+  const lng = Number(input?.location?.coordinates?.[0]);
+  const lat = Number(input?.location?.coordinates?.[1]);
+  const hasCoords = Number.isFinite(lng) && Number.isFinite(lat);
+
+  const payload: any = {
+    ...input,
+    mapAddress: input.mapAddress ?? "",
+    placeId: input.placeId ?? "",
+  };
+
+  const gm = normalizeMapsUrl(input.googleMapsUrl);
+  if (gm) payload.googleMapsUrl = gm;
+  else delete payload.googleMapsUrl;
+
+  if (hasCoords) {
+    payload.location = {
+      type: "Point",
+      coordinates: [lng, lat] as [number, number],
+    };
+  } else {
+    delete payload.location;
+  }
+
+  // 🔴 Backend'de eklenecek endpoint:
+  // POST /admin/restaurants/single
+  const { data } = await api.post("/admin/restaurants/single", payload);
+  return data;
+}
 
 /**
  * POST /admin/organizations/:orgId/restaurants

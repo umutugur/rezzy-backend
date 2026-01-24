@@ -37,6 +37,14 @@ function cut(items, limit) {
   return items.slice(0, limit);
 }
 
+function normalizeMapsUrl(raw) {
+  const v = String(raw ?? "").trim();
+  if (!v) return undefined;
+  // allow only http(s) urls
+  if (!/^https?:\/\//i.test(v)) return undefined;
+  return v;
+}
+
 /**
  * ✅ Tek noktadan membership güncelleme helper’ı
  *
@@ -923,6 +931,183 @@ export const createOrganizationRestaurant = async (req, res, next) => {
         isActive: doc.isActive,
         createdAt: doc.createdAt,
         updatedAt: doc.updatedAt,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * ✅ Admin — Single Restaurant Create (auto-organization)
+ * POST /admin/restaurants/single
+ */
+export const adminCreateSingleRestaurant = async (req, res, next) => {
+  try {
+    let {
+      ownerId,
+      name,
+      region,
+      city,
+      address,
+      phone,
+      email,
+
+      businessType,
+      categorySet,
+
+      commissionRate,
+      depositRequired,
+      depositAmount,
+      checkinWindowBeforeMinutes,
+      checkinWindowAfterMinutes,
+      underattendanceThresholdPercent,
+
+      mapAddress,
+      placeId,
+      googleMapsUrl,
+      location,
+
+      organizationName,
+    } = req.body || {};
+
+    // --- validate ---
+    const ownerObjectId = toObjectId(ownerId);
+    if (!ownerObjectId) {
+      return res.status(400).json({ message: "ownerId is required" });
+    }
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ message: "name is required" });
+    }
+    name = String(name).trim();
+
+    region = String(region || "TR").trim().toUpperCase();
+
+    const owner = await User.findById(ownerObjectId).select("_id").lean();
+    if (!owner) {
+      return res.status(404).json({ message: "Owner user not found" });
+    }
+
+    // --- 1) auto org create ---
+    const orgName = String(organizationName || name).trim();
+
+    const org = await Organization.create({
+      name: orgName,
+      region,
+    });
+
+    // ✅ Owner -> org_owner
+    await assignMemberships(owner._id, {
+      organizationId: org._id,
+      orgRole: "org_owner",
+    });
+
+    // --- normalize numbers/booleans ---
+    if (commissionRate != null) {
+      commissionRate = Number(commissionRate);
+      if (!Number.isNaN(commissionRate) && commissionRate > 1) {
+        commissionRate = commissionRate / 100;
+      }
+      if (Number.isNaN(commissionRate)) commissionRate = undefined;
+    }
+
+    if (depositAmount != null) {
+      depositAmount = Number(depositAmount);
+      if (Number.isNaN(depositAmount)) depositAmount = undefined;
+    }
+
+    if (checkinWindowBeforeMinutes != null) {
+      checkinWindowBeforeMinutes = Number(checkinWindowBeforeMinutes);
+      if (Number.isNaN(checkinWindowBeforeMinutes)) checkinWindowBeforeMinutes = undefined;
+    }
+
+    if (checkinWindowAfterMinutes != null) {
+      checkinWindowAfterMinutes = Number(checkinWindowAfterMinutes);
+      if (Number.isNaN(checkinWindowAfterMinutes)) checkinWindowAfterMinutes = undefined;
+    }
+
+    if (underattendanceThresholdPercent != null) {
+      underattendanceThresholdPercent = Number(underattendanceThresholdPercent);
+      if (Number.isNaN(underattendanceThresholdPercent)) underattendanceThresholdPercent = undefined;
+    }
+
+    // --- normalize maps / location ---
+    const gm = normalizeMapsUrl(googleMapsUrl);
+    if (!gm) googleMapsUrl = undefined;
+
+    const lng = Number(location?.coordinates?.[0]);
+    const lat = Number(location?.coordinates?.[1]);
+    const hasCoords = Number.isFinite(lng) && Number.isFinite(lat);
+
+    const normalizedLocation = hasCoords
+      ? { type: "Point", coordinates: [lng, lat] }
+      : undefined;
+
+    // --- 2) create restaurant ---
+    const restaurantDoc = await Restaurant.create({
+      owner: owner._id,
+      organizationId: org._id,
+
+      name,
+      region,
+      city: city || undefined,
+      address: address || undefined,
+      phone: phone || undefined,
+      email: email || undefined,
+
+      businessType: businessType || "restaurant",
+      categorySet: categorySet || undefined,
+
+      commissionRate: commissionRate != null ? commissionRate : undefined,
+
+      depositRequired: typeof depositRequired === "boolean" ? depositRequired : undefined,
+      depositAmount: depositAmount != null ? depositAmount : undefined,
+      checkinWindowBeforeMinutes:
+        checkinWindowBeforeMinutes != null ? checkinWindowBeforeMinutes : undefined,
+      checkinWindowAfterMinutes:
+        checkinWindowAfterMinutes != null ? checkinWindowAfterMinutes : undefined,
+      underattendanceThresholdPercent:
+        underattendanceThresholdPercent != null ? underattendanceThresholdPercent : undefined,
+
+      mapAddress: mapAddress || undefined,
+      placeId: placeId || undefined,
+      googleMapsUrl: googleMapsUrl || undefined,
+      location: normalizedLocation,
+
+      status: "active",
+      isActive: true,
+    });
+
+    // ✅ Owner -> org + restaurant membership + legacy restaurantId
+    await assignMemberships(owner._id, {
+      organizationId: org._id,
+      orgRole: "org_owner",
+      restaurantId: restaurantDoc._id,
+      restaurantRole: "location_manager",
+      setLegacyRestaurantId: true,
+    });
+
+    return res.status(201).json({
+      ok: true,
+      organization: {
+        _id: org._id,
+        name: org.name,
+        region: org.region,
+      },
+      restaurant: {
+        _id: restaurantDoc._id,
+        name: restaurantDoc.name,
+        region: restaurantDoc.region,
+        city: restaurantDoc.city || null,
+        address: restaurantDoc.address || null,
+        phone: restaurantDoc.phone || null,
+        email: restaurantDoc.email || null,
+        organizationId: restaurantDoc.organizationId,
+        ownerId: owner._id,
+        status: restaurantDoc.status,
+        isActive: restaurantDoc.isActive,
+        createdAt: restaurantDoc.createdAt,
       },
     });
   } catch (e) {
