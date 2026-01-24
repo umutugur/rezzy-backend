@@ -28,6 +28,8 @@ import orgRoutes from "./routes/org.js";
 import orgAnalyticsRoutes from "./routes/org.analytics.routes.js";
 import addressRoutes from "./routes/address.js";
 import deliveryRoutes from "./routes/delivery.js";
+import bannersRoutes from "./routes/banners.routes.js";
+import adminBannersRoutes from "./routes/admin.banners.routes.js";
 
 // ✅ NEW: Delivery panel routes (desktop delivery orders)
 import deliveryPanelRoutes from "./routes/deliveryOrders.panel.routes.js";
@@ -111,6 +113,10 @@ app.use("/api/org-analytics", orgAnalyticsRoutes);
 // adress control and delivery
 app.use("/api/addresses", addressRoutes);
 app.use("/api/delivery", deliveryRoutes);
+
+//Banner
+app.use("/api", bannersRoutes);
+app.use("/api/admin", adminBannersRoutes);
 
 // 404 & error aynı kalsın
 app.use((req, res) => res.status(404).json({ message: "Not found" }));

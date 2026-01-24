@@ -553,6 +553,121 @@ export async function adminDismissComplaint(id: string) {
 }
 
 // =========================
+// ADMIN — Banners
+// =========================
+export type AdminBannerTargetType = "delivery" | "reservation";
+
+export type AdminBanner = {
+  _id: string;
+  placement: string; // home_top | home_mid | ...
+  region: string | null; // TR, CY ... null = all
+  title: string | null;
+  imageUrl: string;
+  linkUrl: string | null;
+  isActive: boolean;
+  order: number;
+  startAt: string | null;
+  endAt: string | null;
+
+  // ✅ new
+  targetType: AdminBannerTargetType;
+  restaurantId: string;
+
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export async function adminListBanners(params?: {
+  placement?: string;
+  region?: string;
+  active?: "true" | "false";
+}) {
+  const { data } = await api.get("/admin/banners", { params });
+  const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+  return { items: items as AdminBanner[] };
+}
+
+export async function adminCreateBanner(input: {
+  placement: string;
+  region?: string | null;
+  title?: string | null;
+  linkUrl?: string | null;
+  order?: number;
+  isActive?: boolean;
+  startAt?: string | null; // ISO
+  endAt?: string | null;   // ISO
+
+  targetType: AdminBannerTargetType;
+  restaurantId: string;
+
+  imageFile: File; // ✅ required
+}) {
+  const fd = new FormData();
+  fd.append("placement", input.placement);
+  if (input.region != null) fd.append("region", input.region || "");
+  if (input.title != null) fd.append("title", input.title || "");
+  if (input.linkUrl != null) fd.append("linkUrl", input.linkUrl || "");
+  if (input.order != null) fd.append("order", String(input.order));
+  if (input.isActive != null) fd.append("isActive", String(input.isActive));
+  if (input.startAt != null) fd.append("startAt", input.startAt || "");
+  if (input.endAt != null) fd.append("endAt", input.endAt || "");
+
+  // ✅ action mapping
+  fd.append("targetType", input.targetType);
+  fd.append("restaurantId", input.restaurantId);
+
+  // ✅ backend upload.single("image")
+  fd.append("image", input.imageFile);
+
+  const { data } = await api.post("/admin/banners", fd);
+  return data as { ok: boolean; banner: AdminBanner };
+}
+
+export async function adminUpdateBanner(
+  id: string,
+  input: {
+    placement?: string;
+    region?: string | null;
+    title?: string | null;
+    linkUrl?: string | null;
+    order?: number;
+    isActive?: boolean;
+    startAt?: string | null;
+    endAt?: string | null;
+
+    targetType?: AdminBannerTargetType;
+    restaurantId?: string;
+
+    imageFile?: File | null; // optional replace
+  }
+) {
+  const fd = new FormData();
+  if (input.placement != null) fd.append("placement", input.placement);
+  if (input.region != null) fd.append("region", input.region || "");
+  if (input.title != null) fd.append("title", input.title || "");
+  if (input.linkUrl != null) fd.append("linkUrl", input.linkUrl || "");
+  if (input.order != null) fd.append("order", String(input.order));
+  if (input.isActive != null) fd.append("isActive", String(input.isActive));
+  if (input.startAt != null) fd.append("startAt", input.startAt || "");
+  if (input.endAt != null) fd.append("endAt", input.endAt || "");
+
+  if (input.targetType != null) fd.append("targetType", input.targetType);
+  if (input.restaurantId != null) fd.append("restaurantId", input.restaurantId);
+
+  if (input.imageFile instanceof File) {
+    fd.append("image", input.imageFile);
+  }
+
+  const { data } = await api.patch(`/admin/banners/${id}`, fd);
+  return data as { ok: boolean; banner: AdminBanner };
+}
+
+export async function adminDeleteBanner(id: string) {
+  const { data } = await api.delete(`/admin/banners/${id}`);
+  return data as { ok: boolean };
+}
+
+// =========================
 // RESTAURANT — Genel
 // =========================
 export async function restaurantGet(rid: string) {

@@ -26,6 +26,7 @@ import AdminCommissionsPage from "./pages/admin/commissions";
 import AdminRestaurantCreatePage from "./pages/admin/RestaurantCreate";
 import AdminOrganizationsPage from "./pages/admin/Organizations";
 import AdminOrganizationDetailPage from "./pages/admin/OrganizationDetail";
+import AdminBannersPage from "./pages/admin/Banners";
 
 import RestaurantDashboardPage from "./pages/restaurant/Dashboard";
 import RestaurantReservationsPage from "./pages/restaurant/Reservations";
@@ -369,6 +370,14 @@ export default function App() {
             </Shell>
           }
         />
+        <Route
+  path="/admin/banners"
+  element={
+    <Shell>
+      <AdminBannersPage />
+    </Shell>
+  }
+/>
         <Route
           path="/admin/organizations"
           element={

@@ -74,6 +74,7 @@ export default function AdminDashboardPage() {
       <Sidebar
         items={[
           { to: "/admin", label: "Dashboard" },
+          { to: "/admin/banners", label: "Bannerlar" },
           { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
           { to: "/admin/organizations", label: "Organizasyonlar" },
           { to: "/admin/restaurants", label: "Restoranlar" },

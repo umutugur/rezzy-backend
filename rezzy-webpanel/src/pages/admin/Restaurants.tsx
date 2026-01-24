@@ -33,10 +33,14 @@ export default function AdminRestaurantsPage() {
       <Sidebar
         items={[
           { to: "/admin", label: "Dashboard" },
+          { to: "/admin/banners", label: "Bannerlar" },
+          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
+          { to: "/admin/organizations", label: "Organizasyonlar" },
           { to: "/admin/restaurants", label: "Restoranlar" },
           { to: "/admin/users", label: "Kullanıcılar" },
           { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" }
+          { to: "/admin/moderation", label: "Moderasyon" },
+          { to: "/admin/notifications", label: "Bildirim Gönder" },
         ]}
       />
       <div className="flex-1 space-y-6">

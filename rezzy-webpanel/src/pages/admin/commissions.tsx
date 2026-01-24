@@ -46,7 +46,9 @@ export default function AdminCommissionsPage() {
       <Sidebar
         items={[
           { to: "/admin", label: "Dashboard" },
-          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüde
+          { to: "/admin/banners", label: "Bannerlar" },
+          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
+          { to: "/admin/organizations", label: "Organizasyonlar" },
           { to: "/admin/restaurants", label: "Restoranlar" },
           { to: "/admin/users", label: "Kullanıcılar" },
           { to: "/admin/reservations", label: "Rezervasyonlar" },
