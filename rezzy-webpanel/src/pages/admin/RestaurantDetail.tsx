@@ -89,6 +89,19 @@ export default function AdminRestaurantDetailPage() {
   const [commission, setCommission] = React.useState<string>("");
   const [isActive, setIsActive] = React.useState<boolean>(true);
 
+  const [infoForm, setInfoForm] = React.useState({
+    name: "",
+    city: "",
+    address: "",
+    phone: "",
+    email: "",
+    region: "",
+  });
+
+  function setInfoField<K extends keyof typeof infoForm>(key: K, value: string) {
+    setInfoForm((p) => ({ ...p, [key]: value }));
+  }
+
   // Restoran bilgisi
   const infoQ = useQuery<RestaurantInfo | null>({
     queryKey: ["admin-restaurant", rid],
@@ -115,19 +128,29 @@ export default function AdminRestaurantDetailPage() {
 
     // Aktif/pasif durumu
     setIsActive(typeof d.isActive === "boolean" ? d.isActive : true);
+
+    // Form prefill
+    setInfoForm({
+      name: String(d.name || ""),
+      city: String(d.city || ""),
+      address: String(d.address || ""),
+      phone: String(d.phone || ""),
+      email: String(d.email || ""),
+      region: String(d.region || ""),
+    });
   }, [infoQ.data]);
 
   // -------------------
-// RESTAURANT MEMBERS
-// -------------------
-const members: RestaurantMember[] = infoQ.data?.members ?? [];
+  // RESTAURANT MEMBERS
+  // -------------------
+  const members: RestaurantMember[] = infoQ.data?.members ?? [];
 
   const [memberQuery, setMemberQuery] = React.useState("");
   const [memberResults, setMemberResults] = React.useState<UserOption[]>([]);
-  const [memberSearchLoading, setMemberSearchLoading] =
-    React.useState(false);
-  const [selectedMember, setSelectedMember] =
-    React.useState<UserOption | null>(null);
+  const [memberSearchLoading, setMemberSearchLoading] = React.useState(false);
+  const [selectedMember, setSelectedMember] = React.useState<UserOption | null>(
+    null
+  );
   const [memberRole, setMemberRole] =
     React.useState<string>("location_manager");
 
@@ -168,9 +191,7 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
     },
     onError: (err: any) => {
       const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        "Üye eklenemedi";
+        err?.response?.data?.message || err?.message || "Üye eklenemedi";
       showToast(msg, "error");
     },
   });
@@ -231,14 +252,54 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
   });
 
   const activeMut = useMutation({
-    mutationFn: (next: boolean) =>
-      adminUpdateRestaurant(rid, { isActive: next }),
+    mutationFn: (next: boolean) => adminUpdateRestaurant(rid, { isActive: next }),
     onSuccess: () => {
       showToast("Restoran durumu güncellendi", "success");
       qc.invalidateQueries({ queryKey: ["admin-restaurant", rid] });
     },
     onError: () => {
       showToast("Restoran durumu güncellenemedi", "error");
+    },
+  });
+
+  const saveInfoMut = useMutation({
+    mutationFn: async () => {
+      const current = infoQ.data;
+      if (!current) throw new Error("Restoran bilgisi yüklenmedi");
+
+      // Sadece değişen alanları gönder (backend: No valid fields to update)
+      const patch: any = {};
+
+      const nName = infoForm.name.trim();
+      const nRegion = infoForm.region.trim();
+
+      if (nName && nName !== String(current.name || "")) patch.name = nName;
+
+      if (nRegion) {
+        const up = nRegion.toUpperCase();
+        if (up !== String(current.region || "")) patch.region = up;
+      }
+
+      // allow clearing with empty string (backend v || undefined)
+      if (infoForm.city !== String(current.city || "")) patch.city = infoForm.city;
+      if (infoForm.address !== String(current.address || "")) patch.address = infoForm.address;
+      if (infoForm.phone !== String(current.phone || "")) patch.phone = infoForm.phone;
+      if (infoForm.email !== String(current.email || "")) patch.email = infoForm.email;
+
+      if (Object.keys(patch).length === 0) throw new Error("Değişiklik yok");
+
+      return await adminUpdateRestaurant(rid, patch);
+    },
+    onSuccess: () => {
+      showToast("Restoran bilgileri güncellendi", "success");
+      qc.invalidateQueries({ queryKey: ["admin-restaurant", rid] });
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Restoran bilgileri güncellenemedi";
+      showToast(msg, "error");
     },
   });
 
@@ -258,9 +319,7 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
     },
     onError: (err: any) => {
       const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        "Komisyon güncellenemedi";
+        err?.response?.data?.message || err?.message || "Komisyon güncellenemedi";
       showToast(msg, "error");
     },
   });
@@ -273,10 +332,10 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
   return (
     <div className="flex gap-6">
       <Sidebar
-         items={[
+        items={[
           { to: "/admin", label: "Dashboard" },
           { to: "/admin/banners", label: "Bannerlar" },
-          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
+          { to: "/admin/commissions", label: "Komisyonlar" },
           { to: "/admin/organizations", label: "Organizasyonlar" },
           { to: "/admin/restaurants", label: "Restoranlar" },
           { to: "/admin/users", label: "Kullanıcılar" },
@@ -285,6 +344,7 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
           { to: "/admin/notifications", label: "Bildirim Gönder" },
         ]}
       />
+
       <div className="flex-1 space-y-6">
         <h2 className="text-lg font-semibold">
           {infoQ.data?.name || "Restoran Detayı"}
@@ -295,39 +355,106 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
           {infoQ.isLoading ? (
             "Yükleniyor…"
           ) : (
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <span className="text-gray-500 text-sm">Şehir</span>
-                <div>{infoQ.data?.city || "-"}</div>
+            <div className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-gray-500 text-sm block">
+                    Restoran Adı
+                  </label>
+                  <input
+                    type="text"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.name}
+                    onChange={(e) => setInfoField("name", e.target.value)}
+                    placeholder="Restoran adı"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-gray-500 text-sm block">Bölge</label>
+                  <input
+                    type="text"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.region}
+                    onChange={(e) => setInfoField("region", e.target.value)}
+                    placeholder="TR"
+                  />
+                  <div className="text-xs text-gray-400 mt-1">
+                    Örn: TR / DE / US
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-gray-500 text-sm block">Şehir</label>
+                  <input
+                    type="text"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.city}
+                    onChange={(e) => setInfoField("city", e.target.value)}
+                    placeholder="İstanbul"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-gray-500 text-sm block">Telefon</label>
+                  <input
+                    type="text"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.phone}
+                    onChange={(e) => setInfoField("phone", e.target.value)}
+                    placeholder="05xx..."
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-gray-500 text-sm block">Adres</label>
+                  <input
+                    type="text"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.address}
+                    onChange={(e) => setInfoField("address", e.target.value)}
+                    placeholder="Adres"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-gray-500 text-sm block">E-posta</label>
+                  <input
+                    type="email"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.email}
+                    onChange={(e) => setInfoField("email", e.target.value)}
+                    placeholder="mail@ornek.com"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 text-sm">Aktif</span>
+                  <input
+                    type="checkbox"
+                    checked={!!isActive}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      setIsActive(next);
+                      activeMut.mutate(next);
+                    }}
+                    disabled={activeMut.isPending || infoQ.isLoading}
+                  />
+                </div>
               </div>
-              <div>
-                <span className="text-gray-500 text-sm">Adres</span>
-                <div>{infoQ.data?.address || "-"}</div>
-              </div>
-              <div>
-                <span className="text-gray-500 text-sm">Telefon</span>
-                <div>{infoQ.data?.phone || "-"}</div>
-              </div>
-              <div>
-                <span className="text-gray-500 text-sm">E-posta</span>
-                <div>{infoQ.data?.email || "-"}</div>
-              </div>
-              <div>
-                <span className="text-gray-500 text-sm">Bölge</span>
-                <div>{infoQ.data?.region || "-"}</div>
-              </div>
+
               <div className="flex items-center gap-2">
-                <span className="text-gray-500 text-sm">Aktif</span>
-                <input
-                  type="checkbox"
-                  checked={!!isActive}
-                  onChange={(e) => {
-                    const next = e.target.checked;
-                    setIsActive(next);
-                    activeMut.mutate(next);
-                  }}
-                  disabled={activeMut.isPending || infoQ.isLoading}
-                />
+                <button
+                  type="button"
+                  onClick={() => saveInfoMut.mutate()}
+                  disabled={saveInfoMut.isPending || infoQ.isLoading}
+                  className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs disabled:opacity-60"
+                >
+                  {saveInfoMut.isPending ? "Kaydediliyor…" : "Bilgileri Kaydet"}
+                </button>
+                <div className="text-xs text-gray-400">
+                  Not: Boş bırakırsan alan temizlenir (name hariç).
+                </div>
               </div>
             </div>
           )}
@@ -349,24 +476,22 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
                 </thead>
                 <tbody>
                   {members.map((m) => (
-  <tr key={m.userId} className="border-t">
-    <td className="py-2 px-4">{m.name || "İsimsiz"}</td>
-    <td className="py-2 px-4">{m.email || "-"}</td>
-    <td className="py-2 px-4">
-      {prettyRestaurantRole(m.role)}
-    </td>
-    <td className="py-2 px-4 text-right">
-      <button
-        type="button"
-        onClick={() => handleRemoveMember(m.userId)}
-        disabled={removeMemberMut.isPending}
-        className="px-2 py-1 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-60"
-      >
-        Kaldır
-      </button>
-    </td>
-  </tr>
-))}
+                    <tr key={m.userId} className="border-t">
+                      <td className="py-2 px-4">{m.name || "İsimsiz"}</td>
+                      <td className="py-2 px-4">{m.email || "-"}</td>
+                      <td className="py-2 px-4">{prettyRestaurantRole(m.role)}</td>
+                      <td className="py-2 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMember(m.userId)}
+                          disabled={removeMemberMut.isPending}
+                          className="px-2 py-1 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-60"
+                        >
+                          Kaldır
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -423,9 +548,7 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
                       type="button"
                       onClick={() => selectMember(u)}
                       className={`w-full flex justify-between items-center px-3 py-2 text-sm hover:bg-white ${
-                        selectedMember?._id === u._id
-                          ? "bg-brand-50"
-                          : ""
+                        selectedMember?._id === u._id ? "bg-brand-50" : ""
                       }`}
                     >
                       <span>
@@ -434,9 +557,7 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
                           ({u.email || "-"})
                         </span>
                       </span>
-                      <span className="text-xs text-gray-400">
-                        {u.role || ""}
-                      </span>
+                      <span className="text-xs text-gray-400">{u.role || ""}</span>
                     </button>
                   ))}
                 </div>
@@ -444,17 +565,15 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
 
               <div className="text-xs text-emerald-700 mt-1">
                 {selectedMember
-                  ? `Seçili kullanıcı: ${
-                      selectedMember.name || "İsimsiz"
-                    } (${selectedMember.email || "-"})`
+                  ? `Seçili kullanıcı: ${selectedMember.name || "İsimsiz"} (${
+                      selectedMember.email || "-"
+                    })`
                   : "Henüz kullanıcı seçilmedi"}
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs text-gray-600 mb-1">
-                Rol
-              </label>
+              <label className="block text-xs text-gray-600 mb-1">Rol</label>
               <select
                 className="border rounded-lg px-3 py-2 w-full text-sm"
                 value={memberRole}
@@ -470,16 +589,10 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
               <button
                 type="button"
                 onClick={handleAddMember}
-                disabled={
-                  !selectedMember ||
-                  !memberRole ||
-                  addMemberMut.isPending
-                }
+                disabled={!selectedMember || !memberRole || addMemberMut.isPending}
                 className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs w-full disabled:opacity-60"
               >
-                {addMemberMut.isPending
-                  ? "Ekleniyor…"
-                  : "Üye Ekle"}
+                {addMemberMut.isPending ? "Ekleniyor…" : "Üye Ekle"}
               </button>
             </div>
           </div>
@@ -489,9 +602,7 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
         <Card title="Komisyon">
           <div className="flex items-end gap-3">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">
-                % Oran
-              </label>
+              <label className="block text-sm text-gray-600 mb-1">% Oran</label>
               <input
                 type="number"
                 min={0}
@@ -515,9 +626,7 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
         <Card title="Rezervasyonlar">
           <div className="flex flex-wrap gap-3 items-end mb-3">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">
-                Durum
-              </label>
+              <label className="block text-sm text-gray-600 mb-1">Durum</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
@@ -543,9 +652,7 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">
-                Bitiş
-              </label>
+              <label className="block text-sm text-gray-600 mb-1">Bitiş</label>
               <input
                 type="date"
                 value={to}
@@ -554,30 +661,22 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">
-                Sayfa
-              </label>
+              <label className="block text-sm text-gray-600 mb-1">Sayfa</label>
               <input
                 type="number"
                 min={1}
                 value={page}
-                onChange={(e) =>
-                  setPage(Number(e.target.value) || 1)
-                }
+                onChange={(e) => setPage(Number(e.target.value) || 1)}
                 className="w-24 border rounded-lg px-3 py-2"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">
-                Limit
-              </label>
+              <label className="block text-sm text-gray-600 mb-1">Limit</label>
               <input
                 type="number"
                 min={1}
                 value={limit}
-                onChange={(e) =>
-                  setLimit(Number(e.target.value) || 20)
-                }
+                onChange={(e) => setLimit(Number(e.target.value) || 20)}
                 className="w-24 border rounded-lg px-3 py-2"
               />
             </div>
@@ -598,11 +697,7 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
                 {(rsvQ.data?.items ?? []).map((r) => (
                   <tr key={r._id} className="border-t">
                     <td className="py-2 px-4">
-                      {r.dateTimeUTC
-                        ? new Date(
-                            r.dateTimeUTC
-                          ).toLocaleString()
-                        : "-"}
+                      {r.dateTimeUTC ? new Date(r.dateTimeUTC).toLocaleString() : "-"}
                     </td>
                     <td className="py-2 px-4">
                       {r.user?.name || "-"}{" "}
@@ -611,23 +706,15 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
                       </span>
                     </td>
                     <td className="py-2 px-4">{r.status}</td>
+                    <td className="py-2 px-4">{r.partySize ?? "-"}</td>
                     <td className="py-2 px-4">
-                      {r.partySize ?? "-"}
-                    </td>
-                    <td className="py-2 px-4">
-                      {r.totalPrice != null
-                        ? r.totalPrice.toLocaleString("tr-TR")
-                        : "-"}
+                      {r.totalPrice != null ? r.totalPrice.toLocaleString("tr-TR") : "-"}
                     </td>
                   </tr>
                 ))}
-                {(!rsvQ.data?.items ||
-                  rsvQ.data.items.length === 0) && (
+                {(!rsvQ.data?.items || rsvQ.data.items.length === 0) && (
                   <tr>
-                    <td
-                      className="py-3 px-4 text-gray-500"
-                      colSpan={5}
-                    >
+                    <td className="py-3 px-4 text-gray-500" colSpan={5}>
                       Kayıt yok
                     </td>
                   </tr>
@@ -641,9 +728,7 @@ const members: RestaurantMember[] = infoQ.data?.members ?? [];
               <button
                 className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
                 disabled={page <= 1}
-                onClick={() =>
-                  setPage((p) => Math.max(1, p - 1))
-                }
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
                 Önceki
               </button>

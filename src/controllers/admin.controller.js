@@ -1362,6 +1362,148 @@ export const listReservationsByRestaurantAdmin = async (
   }
 };
 
+/* ------------ Restaurant update (admin) ------------ */
+export const updateRestaurantAdmin = async (req, res, next) => {
+  try {
+    const rid = toObjectId(req.params.rid);
+    if (!rid) {
+      return res.status(400).json({ message: "Invalid restaurant id" });
+    }
+
+    const body = req.body || {};
+
+    // Whitelist fields that admin is allowed to update (commissionRate handled by separate endpoint)
+    const patch = {};
+
+    // strings
+    if (body.name != null) {
+      const v = String(body.name).trim();
+      if (v) patch.name = v;
+    }
+
+    if (body.region != null) {
+      const v = String(body.region).trim().toUpperCase();
+      if (v) patch.region = v;
+    }
+
+    if (body.city != null) {
+      const v = String(body.city).trim();
+      // allow empty string to clear
+      patch.city = v || undefined;
+    }
+
+    if (body.address != null) {
+      const v = String(body.address).trim();
+      patch.address = v || undefined;
+    }
+
+    if (body.phone != null) {
+      const v = String(body.phone).trim();
+      patch.phone = v || undefined;
+    }
+
+    if (body.email != null) {
+      const v = String(body.email).trim().toLowerCase();
+      patch.email = v || undefined;
+    }
+
+    if (body.businessType != null) {
+      const v = String(body.businessType).trim();
+      patch.businessType = v || undefined;
+    }
+
+    if (body.categorySet != null) {
+      const v = String(body.categorySet).trim();
+      patch.categorySet = v || undefined;
+    }
+
+    if (body.mapAddress != null) {
+      const v = String(body.mapAddress).trim();
+      patch.mapAddress = v || undefined;
+    }
+
+    if (body.placeId != null) {
+      const v = String(body.placeId).trim();
+      patch.placeId = v || undefined;
+    }
+
+    if (body.googleMapsUrl != null) {
+      const gm = normalizeMapsUrl(body.googleMapsUrl);
+      patch.googleMapsUrl = gm || undefined;
+    }
+
+    // booleans
+    if (typeof body.isActive === "boolean") {
+      patch.isActive = body.isActive;
+    }
+
+    if (typeof body.depositRequired === "boolean") {
+      patch.depositRequired = body.depositRequired;
+    }
+
+    // numbers
+    if (body.depositAmount != null) {
+      const n = Number(body.depositAmount);
+      patch.depositAmount = Number.isFinite(n) ? n : undefined;
+    }
+
+    if (body.checkinWindowBeforeMinutes != null) {
+      const n = Number(body.checkinWindowBeforeMinutes);
+      patch.checkinWindowBeforeMinutes = Number.isFinite(n) ? n : undefined;
+    }
+
+    if (body.checkinWindowAfterMinutes != null) {
+      const n = Number(body.checkinWindowAfterMinutes);
+      patch.checkinWindowAfterMinutes = Number.isFinite(n) ? n : undefined;
+    }
+
+    if (body.underattendanceThresholdPercent != null) {
+      const n = Number(body.underattendanceThresholdPercent);
+      patch.underattendanceThresholdPercent = Number.isFinite(n) ? n : undefined;
+    }
+
+    // location: { type: 'Point', coordinates: [lng, lat] }
+    // Accept either full GeoJSON or { coordinates: [lng, lat] }
+    if (body.location != null) {
+      const coords = body.location?.coordinates;
+      const lng = Number(coords?.[0]);
+      const lat = Number(coords?.[1]);
+      const hasCoords = Number.isFinite(lng) && Number.isFinite(lat);
+      patch.location = hasCoords ? { type: "Point", coordinates: [lng, lat] } : undefined;
+    }
+
+    // Explicitly ignore commissionRate here (use /commission endpoint)
+    if ("commissionRate" in body) {
+      // no-op
+    }
+
+    // Remove keys that are still undefined and not meant to be set
+    // (we keep undefined for fields where we want to clear, but for Mongo $set it's fine)
+    const keys = Object.keys(patch);
+    if (keys.length === 0) {
+      return res.status(400).json({ message: "No valid fields to update" });
+    }
+
+    const r = await Restaurant.findByIdAndUpdate(
+      rid,
+      { $set: patch },
+      { new: true }
+    )
+      .select(
+        "_id name region city address phone email isActive businessType categorySet depositRequired depositAmount checkinWindowBeforeMinutes checkinWindowAfterMinutes underattendanceThresholdPercent mapAddress placeId googleMapsUrl location organizationId commissionRate"
+      )
+      .lean();
+
+    if (!r) {
+      return res.status(404).json({ message: "Restaurant not found" });
+    }
+
+    return res.json({ ok: true, restaurant: r });
+  } catch (e) {
+    next(e);
+  }
+};
+
 /* ------------ Commission rate update ------------ */
 export const updateRestaurantCommission = async (req, res, next) => {
   try {

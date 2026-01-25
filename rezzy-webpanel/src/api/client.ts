@@ -1291,7 +1291,31 @@ export async function adminExportCommissions(month?: string): Promise<Blob> {
   return resp.data as Blob;
 }
 
+/**
+ * ✅ Admin — Update restaurant (organization-independent fields)
+ * PATCH /api/admin/restaurants/:rid
+ *
+ * Backend: updateRestaurantAdmin
+ * Not: commissionRate ayrı endpoint'ten yönetilir.
+ */
+export async function adminUpdateRestaurantAdmin(rid: string, payload: any) {
+  const { data } = await api.patch(`/admin/restaurants/${rid}`, payload);
+  return data;
+}
+
+/**
+ * ⚠️ Legacy: Eski update path'i kullanan ekranlar için alias.
+ * Yeni sistemde mümkün olduğunca `adminUpdateRestaurantAdmin` kullan.
+ */
 export async function adminUpdateRestaurant(rid: string, payload: any) {
+  return adminUpdateRestaurantAdmin(rid, payload);
+}
+
+/**
+ * ⚠️ Very legacy: Doğrudan public restaurant update (panel/public) endpoint'i.
+ * Eğer gerçekten ihtiyaç varsa kullan; admin akışı için önerilmez.
+ */
+export async function adminUpdateRestaurantLegacyPublic(rid: string, payload: any) {
   const { data } = await api.put(`/restaurants/${rid}`, payload);
   return data;
 }

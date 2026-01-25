@@ -19,6 +19,7 @@ import {
   getRestaurantDetail,
   listReservationsByRestaurantAdmin,
   updateRestaurantCommission,
+  updateRestaurantAdmin,
   listUsers,
   getUserDetail,
   getUserRiskHistory,
@@ -130,6 +131,12 @@ r.patch(
   auth(),
   allow("admin"),
   updateRestaurantCommission
+);
+r.patch(
+  "/restaurants/:rid",
+  auth(),
+  allow("admin"),
+  updateRestaurantAdmin
 );
 
 // 🔽 Restaurant membership
