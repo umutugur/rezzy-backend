@@ -26,29 +26,36 @@ type RestaurantMember = {
 type RestaurantInfo = {
   _id: string;
   name: string;
+  region?: string;
   city?: string;
   address?: string;
   phone?: string;
   email?: string;
-  region?: string;
   isActive?: boolean;
-  commissionRate?: number;
-  commissionPct?: number;
-  commission?: number;
 
-  members?: RestaurantMember[];
+  // commission
+  commissionRate?: number; // 0..1
+  commissionPct?: number; // legacy 0..100
+  commission?: number; // legacy 0..100
 
+  // admin-managed fields
   businessType?: string;
   categorySet?: string;
-  mapAddress?: string;
-  placeId?: string;
-  googleMapsUrl?: string;
   depositRequired?: boolean;
   depositAmount?: number;
   checkinWindowBeforeMinutes?: number;
   checkinWindowAfterMinutes?: number;
   underattendanceThresholdPercent?: number;
+
+  // maps
+  mapAddress?: string;
+  placeId?: string;
+  googleMapsUrl?: string;
   location?: { type?: string; coordinates?: [number, number] };
+
+  // relations
+  organizationId?: string;
+  members?: RestaurantMember[];
 };
 
 type Rsv = {

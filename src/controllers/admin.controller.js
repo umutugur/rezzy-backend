@@ -1253,7 +1253,12 @@ export const getRestaurantDetail = async (req, res, next) => {
 
     const r = await Restaurant.findById(rid)
       .select(
-        "_id name city address owner settings depositAmount depositRate depositType commissionRate commissionPct commission phone email isActive region organizationId"
+        "_id name region city address phone email isActive organizationId owner settings " +
+        "commissionRate commissionPct commission " +
+        "businessType categorySet " +
+        "depositRequired depositAmount depositRate depositType " +
+        "checkinWindowBeforeMinutes checkinWindowAfterMinutes underattendanceThresholdPercent " +
+        "mapAddress placeId googleMapsUrl location"
       )
       .lean();
 
