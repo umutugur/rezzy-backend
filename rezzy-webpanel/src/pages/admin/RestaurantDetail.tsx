@@ -37,6 +37,18 @@ type RestaurantInfo = {
   commission?: number;
 
   members?: RestaurantMember[];
+
+  businessType?: string;
+  categorySet?: string;
+  mapAddress?: string;
+  placeId?: string;
+  googleMapsUrl?: string;
+  depositRequired?: boolean;
+  depositAmount?: number;
+  checkinWindowBeforeMinutes?: number;
+  checkinWindowAfterMinutes?: number;
+  underattendanceThresholdPercent?: number;
+  location?: { type?: string; coordinates?: [number, number] };
 };
 
 type Rsv = {
@@ -96,9 +108,25 @@ export default function AdminRestaurantDetailPage() {
     phone: "",
     email: "",
     region: "",
+
+    businessType: "",
+    categorySet: "",
+    mapAddress: "",
+    placeId: "",
+    googleMapsUrl: "",
+
+    depositRequired: false,
+    depositAmount: "",
+
+    checkinWindowBeforeMinutes: "",
+    checkinWindowAfterMinutes: "",
+    underattendanceThresholdPercent: "",
+
+    locationLng: "",
+    locationLat: "",
   });
 
-  function setInfoField<K extends keyof typeof infoForm>(key: K, value: string) {
+  function setInfoField<K extends keyof typeof infoForm>(key: K, value: (typeof infoForm)[K]) {
     setInfoForm((p) => ({ ...p, [key]: value }));
   }
 
@@ -137,6 +165,40 @@ export default function AdminRestaurantDetailPage() {
       phone: String(d.phone || ""),
       email: String(d.email || ""),
       region: String(d.region || ""),
+
+      businessType: String(d.businessType || ""),
+      categorySet: String(d.categorySet || ""),
+      mapAddress: String(d.mapAddress || ""),
+      placeId: String(d.placeId || ""),
+      googleMapsUrl: String(d.googleMapsUrl || ""),
+
+      depositRequired: typeof d.depositRequired === "boolean" ? d.depositRequired : false,
+      depositAmount:
+        typeof d.depositAmount === "number" && Number.isFinite(d.depositAmount)
+          ? String(d.depositAmount)
+          : "",
+
+      checkinWindowBeforeMinutes:
+        typeof d.checkinWindowBeforeMinutes === "number" && Number.isFinite(d.checkinWindowBeforeMinutes)
+          ? String(d.checkinWindowBeforeMinutes)
+          : "",
+      checkinWindowAfterMinutes:
+        typeof d.checkinWindowAfterMinutes === "number" && Number.isFinite(d.checkinWindowAfterMinutes)
+          ? String(d.checkinWindowAfterMinutes)
+          : "",
+      underattendanceThresholdPercent:
+        typeof d.underattendanceThresholdPercent === "number" && Number.isFinite(d.underattendanceThresholdPercent)
+          ? String(d.underattendanceThresholdPercent)
+          : "",
+
+      locationLng:
+        Array.isArray(d.location?.coordinates) && Number.isFinite(d.location?.coordinates?.[0] as any)
+          ? String(d.location?.coordinates?.[0])
+          : "",
+      locationLat:
+        Array.isArray(d.location?.coordinates) && Number.isFinite(d.location?.coordinates?.[1] as any)
+          ? String(d.location?.coordinates?.[1])
+          : "",
     });
   }, [infoQ.data]);
 
@@ -286,6 +348,73 @@ export default function AdminRestaurantDetailPage() {
       if (infoForm.phone !== String(current.phone || "")) patch.phone = infoForm.phone;
       if (infoForm.email !== String(current.email || "")) patch.email = infoForm.email;
 
+      if (infoForm.businessType !== String((current as any).businessType || "")) patch.businessType = infoForm.businessType;
+      if (infoForm.categorySet !== String((current as any).categorySet || "")) patch.categorySet = infoForm.categorySet;
+      if (infoForm.mapAddress !== String((current as any).mapAddress || "")) patch.mapAddress = infoForm.mapAddress;
+      if (infoForm.placeId !== String((current as any).placeId || "")) patch.placeId = infoForm.placeId;
+      if (infoForm.googleMapsUrl !== String((current as any).googleMapsUrl || "")) patch.googleMapsUrl = infoForm.googleMapsUrl;
+
+      // booleans
+      if (infoForm.depositRequired !== (typeof (current as any).depositRequired === "boolean" ? (current as any).depositRequired : false)) {
+        patch.depositRequired = infoForm.depositRequired;
+      }
+
+      // numbers (send as number; allow empty string to clear)
+      const depStr = String(infoForm.depositAmount ?? "").trim();
+      const depNum = depStr === "" ? undefined : Number(depStr);
+      const curDep = typeof (current as any).depositAmount === "number" ? (current as any).depositAmount : undefined;
+      if (depStr === "") {
+        if (curDep !== undefined) patch.depositAmount = null;
+      } else if (Number.isFinite(depNum)) {
+        if (depNum !== curDep) patch.depositAmount = depNum;
+      }
+
+      const beforeStr = String(infoForm.checkinWindowBeforeMinutes ?? "").trim();
+      const beforeNum = beforeStr === "" ? undefined : Number(beforeStr);
+      const curBefore = typeof (current as any).checkinWindowBeforeMinutes === "number" ? (current as any).checkinWindowBeforeMinutes : undefined;
+      if (beforeStr === "") {
+        if (curBefore !== undefined) patch.checkinWindowBeforeMinutes = null;
+      } else if (Number.isFinite(beforeNum)) {
+        if (beforeNum !== curBefore) patch.checkinWindowBeforeMinutes = beforeNum;
+      }
+
+      const afterStr = String(infoForm.checkinWindowAfterMinutes ?? "").trim();
+      const afterNum = afterStr === "" ? undefined : Number(afterStr);
+      const curAfter = typeof (current as any).checkinWindowAfterMinutes === "number" ? (current as any).checkinWindowAfterMinutes : undefined;
+      if (afterStr === "") {
+        if (curAfter !== undefined) patch.checkinWindowAfterMinutes = null;
+      } else if (Number.isFinite(afterNum)) {
+        if (afterNum !== curAfter) patch.checkinWindowAfterMinutes = afterNum;
+      }
+
+      const underStr = String(infoForm.underattendanceThresholdPercent ?? "").trim();
+      const underNum = underStr === "" ? undefined : Number(underStr);
+      const curUnder = typeof (current as any).underattendanceThresholdPercent === "number" ? (current as any).underattendanceThresholdPercent : undefined;
+      if (underStr === "") {
+        if (curUnder !== undefined) patch.underattendanceThresholdPercent = null;
+      } else if (Number.isFinite(underNum)) {
+        if (underNum !== curUnder) patch.underattendanceThresholdPercent = underNum;
+      }
+
+      // location: only send if both provided and finite
+      const lngStr = String(infoForm.locationLng ?? "").trim();
+      const latStr = String(infoForm.locationLat ?? "").trim();
+      const lng = lngStr === "" ? NaN : Number(lngStr);
+      const lat = latStr === "" ? NaN : Number(latStr);
+      const curLng = Array.isArray((current as any).location?.coordinates)
+        ? (current as any).location.coordinates?.[0]
+        : undefined;
+      const curLat = Array.isArray((current as any).location?.coordinates)
+        ? (current as any).location.coordinates?.[1]
+        : undefined;
+      const hasCoords = Number.isFinite(lng) && Number.isFinite(lat);
+      if (hasCoords) {
+        if (lng !== curLng || lat !== curLat) {
+          patch.location = { coordinates: [lng, lat] };
+        }
+      }
+
+      // Clean nulls to undefined? Backend expects numbers; we use null for clears so it hits `!= null` checks.
       if (Object.keys(patch).length === 0) throw new Error("Değişiklik yok");
 
       return await adminUpdateRestaurant(rid, patch);
@@ -384,6 +513,30 @@ export default function AdminRestaurantDetailPage() {
                   </div>
                 </div>
 
+                {/* Business Type */}
+                <div>
+                  <label className="text-gray-500 text-sm block">Business Type</label>
+                  <input
+                    type="text"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.businessType}
+                    onChange={(e) => setInfoField("businessType", e.target.value)}
+                    placeholder="restaurant / cafe / bar ..."
+                  />
+                </div>
+
+                {/* Category Set */}
+                <div>
+                  <label className="text-gray-500 text-sm block">Category Set</label>
+                  <input
+                    type="text"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.categorySet}
+                    onChange={(e) => setInfoField("categorySet", e.target.value)}
+                    placeholder="default"
+                  />
+                </div>
+
                 <div>
                   <label className="text-gray-500 text-sm block">Şehir</label>
                   <input
@@ -417,6 +570,68 @@ export default function AdminRestaurantDetailPage() {
                   />
                 </div>
 
+                {/* Map Address */}
+                <div className="md:col-span-2">
+                  <label className="text-gray-500 text-sm block">Map Address</label>
+                  <input
+                    type="text"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.mapAddress}
+                    onChange={(e) => setInfoField("mapAddress", e.target.value)}
+                    placeholder="Harita adresi"
+                  />
+                </div>
+
+                {/* Place ID */}
+                <div>
+                  <label className="text-gray-500 text-sm block">Place ID</label>
+                  <input
+                    type="text"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.placeId}
+                    onChange={(e) => setInfoField("placeId", e.target.value)}
+                    placeholder="Google placeId"
+                  />
+                </div>
+
+                {/* Google Maps URL */}
+                <div>
+                  <label className="text-gray-500 text-sm block">Google Maps URL</label>
+                  <input
+                    type="text"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.googleMapsUrl}
+                    onChange={(e) => setInfoField("googleMapsUrl", e.target.value)}
+                    placeholder="https://maps.google.com/..."
+                  />
+                </div>
+
+                {/* Konum Lng */}
+                <div>
+                  <label className="text-gray-500 text-sm block">Konum (Lng)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.locationLng}
+                    onChange={(e) => setInfoField("locationLng", e.target.value)}
+                    placeholder="29.0"
+                  />
+                </div>
+
+                {/* Konum Lat */}
+                <div>
+                  <label className="text-gray-500 text-sm block">Konum (Lat)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.locationLat}
+                    onChange={(e) => setInfoField("locationLat", e.target.value)}
+                    placeholder="41.0"
+                  />
+                </div>
+
                 <div className="md:col-span-2">
                   <label className="text-gray-500 text-sm block">E-posta</label>
                   <input
@@ -441,6 +656,70 @@ export default function AdminRestaurantDetailPage() {
                     disabled={activeMut.isPending || infoQ.isLoading}
                   />
                 </div>
+
+                {/* Deposit Required */}
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 text-sm">Deposit Required</span>
+                  <input
+                    type="checkbox"
+                    checked={!!infoForm.depositRequired}
+                    onChange={(e) => setInfoField("depositRequired", e.target.checked)}
+                    disabled={infoQ.isLoading}
+                  />
+                </div>
+
+                {/* Deposit Amount */}
+                <div>
+                  <label className="text-gray-500 text-sm block">Deposit Amount</label>
+                  <input
+                    type="number"
+                    step="any"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.depositAmount}
+                    onChange={(e) => setInfoField("depositAmount", e.target.value)}
+                    disabled={!infoForm.depositRequired}
+                    placeholder="0"
+                  />
+                </div>
+
+                {/* Check-in Window Before */}
+                <div>
+                  <label className="text-gray-500 text-sm block">Check-in Window Before (min)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.checkinWindowBeforeMinutes}
+                    onChange={(e) => setInfoField("checkinWindowBeforeMinutes", e.target.value)}
+                    placeholder="15"
+                  />
+                </div>
+
+                {/* Check-in Window After */}
+                <div>
+                  <label className="text-gray-500 text-sm block">Check-in Window After (min)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.checkinWindowAfterMinutes}
+                    onChange={(e) => setInfoField("checkinWindowAfterMinutes", e.target.value)}
+                    placeholder="15"
+                  />
+                </div>
+
+                {/* Underattendance Threshold */}
+                <div>
+                  <label className="text-gray-500 text-sm block">Underattendance Threshold (%)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    className="border rounded-lg px-3 py-2 w-full text-sm"
+                    value={infoForm.underattendanceThresholdPercent}
+                    onChange={(e) => setInfoField("underattendanceThresholdPercent", e.target.value)}
+                    placeholder="50"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -453,7 +732,7 @@ export default function AdminRestaurantDetailPage() {
                   {saveInfoMut.isPending ? "Kaydediliyor…" : "Bilgileri Kaydet"}
                 </button>
                 <div className="text-xs text-gray-400">
-                  Not: Boş bırakırsan alan temizlenir (name hariç).
+                  Not: Boş bırakırsan alan temizlenir (name/region hariç). Konum güncellemek için lng+lat birlikte gir.
                 </div>
               </div>
             </div>
