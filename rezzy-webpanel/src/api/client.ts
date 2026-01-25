@@ -1375,6 +1375,31 @@ export interface RestaurantReportsOverview {
       revenue: number;
     }>;
   };
+  // ✅ Delivery (paket servis) raporları — backend bu alanı eklediyse UI'da görünecek
+  // Not: Optional bırakıldı; eski backend sürümleri bu alanı dönmeyebilir.
+  delivery?: {
+    totalCount: number;
+    grossTotal: number; // müşteriden tahsil edilen toplam (komisyon dahil)
+    netTotal: number;   // restorana kalan toplam (komisyon düşülmüş)
+
+    // Durum bazlı adetler (backend hangi status isimlerini dönüyorsa ona göre dolabilir)
+    statusCounts: Record<string, number>;
+
+    byDay: Array<{
+      date: string; // "YYYY-MM-DD"
+      orders: number;
+      gross: number;
+      net: number;
+    }>;
+
+    topItems: Array<{
+      itemId: string | null;
+      title: string;
+      qty: number;
+      gross: number;
+      net: number;
+    }>;
+  };
   tables: {
     totalSessions: number;
     closedSessions: number;

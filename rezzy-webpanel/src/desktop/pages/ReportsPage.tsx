@@ -1,10 +1,13 @@
 // src/desktop/pages/ReportsPage.tsx
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { RestaurantDesktopLayout, useRestaurantDesktopCurrency } from "../layouts/RestaurantDesktopLayout";
+import {
+  RestaurantDesktopLayout,
+  useRestaurantDesktopCurrency,
+} from "../layouts/RestaurantDesktopLayout";
 import { authStore } from "../../store/auth";
 import { api, restaurantGetReportsOverview } from "../../api/client";
-import { asId } from "../../lib/id"; // ✅ EKLENDİ
+import { asId } from "../../lib/id";
 
 // ---- Tipler (Dashboard ile aynı rezervasyon modeli) ----
 type Row = {
@@ -26,10 +29,6 @@ type Row = {
 type Range = { from?: string; to?: string };
 
 type ViewMode = "reservations" | "advanced";
-
-function ymd(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
 
 function fmtDT(iso: string) {
   try {
@@ -80,10 +79,7 @@ function rangeParams(sel: string): Range {
 }
 
 /** Cursor'lı listeyi tamamen çeker (seçilen aralık içinde). */
-async function fetchAllReservationsInRange(
-  rid: string,
-  p: Range
-): Promise<Row[]> {
+async function fetchAllReservationsInRange(rid: string, p: Range): Promise<Row[]> {
   const items: Row[] = [];
   let cursor: string | undefined = undefined;
   const limit = 100;
@@ -96,9 +92,7 @@ async function fetchAllReservationsInRange(
       params,
     });
 
-    const batch: Row[] = Array.isArray(data)
-      ? (data as Row[])
-      : data?.items ?? [];
+    const batch: Row[] = Array.isArray(data) ? (data as Row[]) : data?.items ?? [];
     if (!batch.length) break;
 
     items.push(...batch);
@@ -151,10 +145,7 @@ async function fetchReportsSummary(rid: string, sel: string) {
 }
 
 /** Seçili aralıktaki son 10 rezervasyon (ciro tablosunun altı için) */
-async function fetchRecentInRange(
-  rid: string,
-  sel: string
-): Promise<Row[]> {
+async function fetchRecentInRange(rid: string, sel: string): Promise<Row[]> {
   const range = rangeParams(sel);
   const { data } = await api.get(`/restaurants/${rid}/reservations`, {
     params: { ...range, limit: 10 },
@@ -180,13 +171,11 @@ const ReportsInner: React.FC = () => {
   const user = authStore.getUser();
 
   // ✅ Currency + active restaurant context is resolved at layout level
-  // IMPORTANT: this hook must run inside RestaurantDesktopLayout tree.
   const { currencySymbol, restaurantId: layoutRestaurantId } =
     useRestaurantDesktopCurrency();
 
   // ✅ Önce layout'tan gelen aktif restaurantId, yoksa legacy restaurantId,
   // yoksa membership'ten ilk restoran.
-  // Not: membership shape farklı olabilir ({ id } veya { restaurant }).
   const firstMembership: any = user?.restaurantMemberships?.[0] ?? null;
   const fallbackMembershipRestaurantId =
     firstMembership?.restaurant ?? firstMembership?.id ?? null;
@@ -271,9 +260,7 @@ const ReportsInner: React.FC = () => {
             fontSize: 12,
             cursor: "pointer",
             background:
-              view === "advanced"
-                ? "var(--rezvix-primary-soft)"
-                : "transparent",
+              view === "advanced" ? "var(--rezvix-primary-soft)" : "transparent",
             color: view === "advanced" ? "#fff" : "var(--rezvix-text-main)",
           }}
         >
@@ -292,9 +279,7 @@ const ReportsInner: React.FC = () => {
       >
         <select
           value={sel}
-          onChange={(e) =>
-            setSel(e.target.value as "today" | "7" | "30" | "90")
-          }
+          onChange={(e) => setSel(e.target.value as "today" | "7" | "30" | "90")}
           style={{
             padding: "6px 10px",
             borderRadius: 12,
@@ -394,15 +379,16 @@ const ReportsInner: React.FC = () => {
             !advanced.error &&
             advanced.data &&
             advanced.data.reservations.totalCount === 0 &&
-            advanced.data.orders.totalCount === 0 && (
+            advanced.data.orders.totalCount === 0 &&
+            ((advanced.data as any).delivery?.totalCount ?? 0) === 0 && (
               <div className="rezvix-empty">
                 <div className="rezvix-empty__icon">📊</div>
                 <div className="rezvix-empty__title">
                   Seçili aralıkta veri bulunamadı
                 </div>
                 <div className="rezvix-empty__text">
-                  Rezervasyon ya da sipariş kaydı yok. Tarih aralığını
-                  genişletebilirsiniz.
+                  Rezervasyon, masa siparişi ya da paket servis kaydı yok. Tarih
+                  aralığını genişletebilirsiniz.
                 </div>
               </div>
             )}
@@ -411,7 +397,8 @@ const ReportsInner: React.FC = () => {
             !advanced.error &&
             advanced.data &&
             (advanced.data.reservations.totalCount > 0 ||
-              advanced.data.orders.totalCount > 0) && (
+              advanced.data.orders.totalCount > 0 ||
+              ((advanced.data as any).delivery?.totalCount ?? 0) > 0) && (
               <AdvancedReportsView
                 data={advanced.data as any}
                 currencySymbol={currencySymbol}
@@ -436,7 +423,6 @@ type ReservationSummaryViewProps = {
 };
 
 const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
-  summaryRows,
   counts,
   totals,
   recent,
@@ -722,6 +708,20 @@ type AdvancedReportsViewProps = {
         revenue: number;
       }>;
     };
+    // ✅ Opsiyonel: Paket servis raporu (backend döndürürse görünür)
+    delivery?: {
+      totalCount: number;
+      grossTotal: number;
+      netTotal: number;
+      statusCounts: Record<string, number>;
+      byDay: Array<{ date: string; orders: number; gross: number; net: number }>;
+      topItems?: Array<{
+        itemId: string | null;
+        title: string;
+        qty: number;
+        revenue: number;
+      }>;
+    };
     tables?: {
       totalSessions: number;
       closedSessions: number;
@@ -745,15 +745,17 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
   data,
   currencySymbol,
 }) => {
-  const { reservations, orders, range, tables } = data;
+  const { reservations, orders, range, tables, delivery } = data;
 
   const totalReservations = reservations.totalCount;
   const totalOrders = orders.totalCount;
+  const totalDelivery = delivery?.totalCount ?? 0;
 
-  // 🔢 Toplam ciro (Rezervasyon + Masa siparişi)
+  // 🔢 Toplam ciro (Rezervasyon + Masa siparişi + Paket servis brüt)
   const totalRevenue =
     Number(reservations.revenueTotal || 0) +
-    Number(orders.revenueTotal || 0);
+    Number(orders.revenueTotal || 0) +
+    Number(delivery?.grossTotal || 0);
 
   // 🔢 Depozito toplamı
   const totalDeposit = Number(reservations.depositTotal || 0);
@@ -762,10 +764,8 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
   const arrived = Number(reservations.statusCounts.arrived || 0);
   const noShow = Number(reservations.statusCounts.no_show || 0);
   const arrivedBase = arrived + noShow;
-  const noShowRate =
-    arrivedBase > 0 ? (noShow / arrivedBase) * 100 : 0;
-  const arriveRate =
-    arrivedBase > 0 ? (arrived / arrivedBase) * 100 : 0;
+  const noShowRate = arrivedBase > 0 ? (noShow / arrivedBase) * 100 : 0;
+  const arriveRate = arrivedBase > 0 ? (arrived / arrivedBase) * 100 : 0;
 
   // 🔢 Masa siparişi kanal bazlı ciro
   const walkinRev = Number(orders.bySource.WALK_IN || 0);
@@ -780,8 +780,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
 
   // 🔢 Adisyon / masa kullanımı
   const totalSessions = tables?.totalSessions ?? 0;
-  const avgSessionDurationMinutes =
-    tables?.avgSessionDurationMinutes ?? 0;
+  const avgSessionDurationMinutes = tables?.avgSessionDurationMinutes ?? 0;
   const payments = tables?.payments || {
     cardTotal: 0,
     payAtVenueTotal: 0,
@@ -791,6 +790,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
 
   const byHour = orders.byHour ?? [];
   const topItems = orders.topItems ?? [];
+  const deliveryTopItems = delivery?.topItems ?? [];
 
   return (
     <div className="rezvix-board-layout">
@@ -798,7 +798,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
       <div className="rezvix-board-column">
         <div className="rezvix-board-column__header">
           <div className="rezvix-board-column__title">
-            Genel Özet (Rezvix + Masa)
+            Genel Özet (Rezvix + Masa + Paket)
           </div>
           <div className="rezvix-board-column__count">
             {range.from} – {range.to}
@@ -827,7 +827,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 color: "var(--rezvix-text-soft)",
               }}
             >
-              Toplam ciro (Rezervasyon + Masa)
+              Toplam ciro (Rezervasyon + Masa + Paket)
             </div>
             <div
               style={{
@@ -867,10 +867,32 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 }}
               >
                 Masa siparişi cirosu:{" "}
-                <strong>
-                  {fmtMoney(orders.revenueTotal || 0, currencySymbol)}
-                </strong>
+                <strong>{fmtMoney(orders.revenueTotal || 0, currencySymbol)}</strong>
               </div>
+              {delivery && (
+                <>
+                  <div
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: 999,
+                      background: "rgba(0,0,0,0.04)",
+                    }}
+                  >
+                    Paket servis (brüt):{" "}
+                    <strong>{fmtMoney(delivery.grossTotal || 0, currencySymbol)}</strong>
+                  </div>
+                  <div
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: 999,
+                      background: "rgba(0,0,0,0.04)",
+                    }}
+                  >
+                    Paket servis (net):{" "}
+                    <strong>{fmtMoney(delivery.netTotal || 0, currencySymbol)}</strong>
+                  </div>
+                </>
+              )}
               <div
                 style={{
                   padding: "4px 10px",
@@ -878,10 +900,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                   background: "rgba(0,0,0,0.04)",
                 }}
               >
-                Toplam depozito:{" "}
-                <strong>
-                  {fmtMoney(totalDeposit, currencySymbol)}
-                </strong>
+                Toplam depozito: <strong>{fmtMoney(totalDeposit, currencySymbol)}</strong>
               </div>
             </div>
           </div>
@@ -900,9 +919,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                   Toplam Rezervasyon
                 </span>
               </div>
-              <div
-                style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
-              >
+              <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {totalReservations}
               </div>
               <div className="rezvix-kitchen-ticket__meta">
@@ -912,13 +929,9 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
 
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">
-                  Gelme Oranı
-                </span>
+                <span className="rezvix-kitchen-ticket__title">Gelme Oranı</span>
               </div>
-              <div
-                style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
-              >
+              <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {arriveRate.toFixed(1)}%
               </div>
               <div className="rezvix-kitchen-ticket__meta">
@@ -928,13 +941,9 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
 
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">
-                  No-show Oranı
-                </span>
+                <span className="rezvix-kitchen-ticket__title">No-show Oranı</span>
               </div>
-              <div
-                style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
-              >
+              <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {noShowRate.toFixed(1)}%
               </div>
               <div className="rezvix-kitchen-ticket__meta">
@@ -946,13 +955,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
           {/* Günlük rezervasyon/depozito/ciro tablosu */}
           {reservations.byDay.length > 0 && (
             <div style={{ marginTop: 12 }}>
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  marginBottom: 6,
-                }}
-              >
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
                 Günlük Rezervasyon & Depozito & Ciro
               </div>
               <div
@@ -972,12 +975,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                   }}
                 >
                   <thead>
-                    <tr
-                      style={{
-                        textAlign: "left",
-                        color: "var(--rezvix-text-soft)",
-                      }}
-                    >
+                    <tr style={{ textAlign: "left", color: "var(--rezvix-text-soft)" }}>
                       <th style={{ padding: "6px 8px" }}>Tarih</th>
                       <th style={{ padding: "6px 8px" }}>Rez.</th>
                       <th style={{ padding: "6px 8px" }}>{`Depozito (${currencySymbol})`}</th>
@@ -986,20 +984,11 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                   </thead>
                   <tbody>
                     {reservations.byDay.map((d) => (
-                      <tr
-                        key={d.date}
-                        style={{ borderTop: "1px solid #eee" }}
-                      >
+                      <tr key={d.date} style={{ borderTop: "1px solid #eee" }}>
                         <td style={{ padding: "6px 8px" }}>{d.date}</td>
-                        <td style={{ padding: "6px 8px" }}>
-                          {d.reservations}
-                        </td>
-                        <td style={{ padding: "6px 8px" }}>
-                          {fmtMoney(d.deposits, currencySymbol)}
-                        </td>
-                        <td style={{ padding: "6px 8px" }}>
-                          {fmtMoney(d.revenue, currencySymbol)}
-                        </td>
+                        <td style={{ padding: "6px 8px" }}>{d.reservations}</td>
+                        <td style={{ padding: "6px 8px" }}>{fmtMoney(d.deposits, currencySymbol)}</td>
+                        <td style={{ padding: "6px 8px" }}>{fmtMoney(d.revenue, currencySymbol)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1008,17 +997,11 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
             </div>
           )}
 
-          {/* En çok satan ürünler */}
+          {/* En çok satan ürünler (masa) */}
           {topItems.length > 0 && (
             <div style={{ marginTop: 12 }}>
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  marginBottom: 6,
-                }}
-              >
-                En çok satan ürünler
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                En çok satan ürünler (Masa)
               </div>
               <div
                 style={{
@@ -1037,12 +1020,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                   }}
                 >
                   <thead>
-                    <tr
-                      style={{
-                        textAlign: "left",
-                        color: "var(--rezvix-text-soft)",
-                      }}
-                    >
+                    <tr style={{ textAlign: "left", color: "var(--rezvix-text-soft)" }}>
                       <th style={{ padding: "6px 8px" }}>Ürün</th>
                       <th style={{ padding: "6px 8px" }}>Adet</th>
                       <th style={{ padding: "6px 8px" }}>{`Ciro (${currencySymbol})`}</th>
@@ -1050,17 +1028,10 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                   </thead>
                   <tbody>
                     {topItems.map((it, idx) => (
-                      <tr
-                        key={it.itemId ?? idx}
-                        style={{ borderTop: "1px solid #eee" }}
-                      >
-                        <td style={{ padding: "6px 8px" }}>
-                          {it.title || "-"}
-                        </td>
+                      <tr key={it.itemId ?? idx} style={{ borderTop: "1px solid #eee" }}>
+                        <td style={{ padding: "6px 8px" }}>{it.title || "-"}</td>
                         <td style={{ padding: "6px 8px" }}>{it.qty}</td>
-                        <td style={{ padding: "6px 8px" }}>
-                          {fmtMoney(it.revenue, currencySymbol)}
-                        </td>
+                        <td style={{ padding: "6px 8px" }}>{fmtMoney(it.revenue, currencySymbol)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1071,18 +1042,177 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
         </div>
       </div>
 
-      {/* SAĞ: Kanal bazlı masa siparişi performansı + adisyon */}
+      {/* SAĞ: Kanal bazlı masa siparişi performansı + adisyon + paket servis */}
       <div className="rezvix-board-column">
         <div className="rezvix-board-column__header">
-          <div className="rezvix-board-column__title">
-            Masa & Menü (Walk-in / QR / Rezvix)
-          </div>
-          <div className="rezvix-board-column__count">
-            {totalOrders} sipariş
-          </div>
+          <div className="rezvix-board-column__title">Masa & Menü</div>
+          <div className="rezvix-board-column__count">{totalOrders} sipariş</div>
         </div>
 
         <div className="rezvix-board-column__body" style={{ gap: 12 }}>
+          {/* Paket servis paneli (opsiyonel) */}
+          {delivery && totalDelivery > 0 && (
+            <div
+              style={{
+                borderRadius: 14,
+                padding: 12,
+                border: "1px solid var(--rezvix-border-subtle)",
+                background: "rgba(255,255,255,0.9)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>Paket Servis</div>
+                <div style={{ fontSize: 11, color: "var(--rezvix-text-soft)" }}>
+                  {totalDelivery} sipariş
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                  gap: 8,
+                  marginTop: 10,
+                }}
+              >
+                <div className="rezvix-kitchen-ticket">
+                  <div className="rezvix-kitchen-ticket__header">
+                    <span className="rezvix-kitchen-ticket__title">Brüt ciro</span>
+                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>
+                    {fmtMoney(delivery.grossTotal || 0, currencySymbol)}
+                  </div>
+                  <div className="rezvix-kitchen-ticket__meta">
+                    Ürün + teslimat ücreti dahil
+                  </div>
+                </div>
+                <div className="rezvix-kitchen-ticket">
+                  <div className="rezvix-kitchen-ticket__header">
+                    <span className="rezvix-kitchen-ticket__title">Net ciro</span>
+                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>
+                    {fmtMoney(delivery.netTotal || 0, currencySymbol)}
+                  </div>
+                  <div className="rezvix-kitchen-ticket__meta">
+                    İade/iptal/indirim sonrası
+                  </div>
+                </div>
+              </div>
+
+              {delivery.statusCounts && Object.keys(delivery.statusCounts).length > 0 && (
+                <div style={{ marginTop: 10, fontSize: 11, color: "var(--rezvix-text-soft)" }}>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      marginBottom: 6,
+                      color: "var(--rezvix-text-main)",
+                    }}
+                  >
+                    Durum kırılımı
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                      gap: 6,
+                    }}
+                  >
+                    {Object.entries(delivery.statusCounts)
+                      .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+                      .map(([k, v]) => (
+                        <div
+                          key={k}
+                          style={{
+                            border: "1px solid var(--rezvix-border-subtle)",
+                            borderRadius: 10,
+                            padding: "6px 8px",
+                            background: "rgba(0,0,0,0.02)",
+                          }}
+                        >
+                          <div style={{ fontWeight: 600 }}>{k}</div>
+                          <div>{v} sipariş</div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {delivery.byDay?.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                    Günlük paket servis (sipariş / brüt / net)
+                  </div>
+                  <div
+                    style={{
+                      maxHeight: 180,
+                      overflowY: "auto",
+                      borderRadius: 10,
+                      border: "1px solid var(--rezvix-border-subtle)",
+                      background: "rgba(255,255,255,0.9)",
+                    }}
+                  >
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ textAlign: "left", color: "var(--rezvix-text-soft)" }}>
+                          <th style={{ padding: "6px 8px" }}>Tarih</th>
+                          <th style={{ padding: "6px 8px" }}>Sipariş</th>
+                          <th style={{ padding: "6px 8px" }}>{`Brüt (${currencySymbol})`}</th>
+                          <th style={{ padding: "6px 8px" }}>{`Net (${currencySymbol})`}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {delivery.byDay.map((d) => (
+                          <tr key={d.date} style={{ borderTop: "1px solid #eee" }}>
+                            <td style={{ padding: "6px 8px" }}>{d.date}</td>
+                            <td style={{ padding: "6px 8px" }}>{d.orders}</td>
+                            <td style={{ padding: "6px 8px" }}>{fmtMoney(d.gross, currencySymbol)}</td>
+                            <td style={{ padding: "6px 8px" }}>{fmtMoney(d.net, currencySymbol)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {deliveryTopItems.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                    En çok satan ürünler (Paket)
+                  </div>
+                  <div
+                    style={{
+                      maxHeight: 180,
+                      overflowY: "auto",
+                      borderRadius: 10,
+                      border: "1px solid var(--rezvix-border-subtle)",
+                      background: "rgba(255,255,255,0.9)",
+                    }}
+                  >
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ textAlign: "left", color: "var(--rezvix-text-soft)" }}>
+                          <th style={{ padding: "6px 8px" }}>Ürün</th>
+                          <th style={{ padding: "6px 8px" }}>Adet</th>
+                          <th style={{ padding: "6px 8px" }}>{`Ciro (${currencySymbol})`}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {deliveryTopItems.map((it, idx) => (
+                          <tr key={it.itemId ?? idx} style={{ borderTop: "1px solid #eee" }}>
+                            <td style={{ padding: "6px 8px" }}>{it.title || "-"}</td>
+                            <td style={{ padding: "6px 8px" }}>{it.qty}</td>
+                            <td style={{ padding: "6px 8px" }}>{fmtMoney(it.revenue, currencySymbol)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Kanal bazlı stacked bar */}
           <div
             style={{
@@ -1092,13 +1222,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
               background: "rgba(255,255,255,0.9)",
             }}
           >
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                marginBottom: 6,
-              }}
-            >
+            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
               Masa siparişi cirosu kanal dağılımı
             </div>
             <div
@@ -1115,28 +1239,28 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                   <div
                     style={{
                       width: `${(walkinRev / channelTotal) * 100}%`,
-                      background: "rgba(46, 204, 113, 0.9)", // Walk-in
+                      background: "rgba(46, 204, 113, 0.9)",
                       transition: "width 0.3s ease",
                     }}
                   />
                   <div
                     style={{
                       width: `${(qrRev / channelTotal) * 100}%`,
-                      background: "rgba(52, 152, 219, 0.9)", // QR
+                      background: "rgba(52, 152, 219, 0.9)",
                       transition: "width 0.3s ease",
                     }}
                   />
                   <div
                     style={{
                       width: `${(rezvixTableRev / channelTotal) * 100}%`,
-                      background: "rgba(155, 89, 182, 0.9)", // Rezvix
+                      background: "rgba(155, 89, 182, 0.9)",
                       transition: "width 0.3s ease",
                     }}
                   />
                   <div
                     style={{
                       width: `${(otherRev / channelTotal) * 100}%`,
-                      background: "rgba(149, 165, 166, 0.9)", // Diğer
+                      background: "rgba(149, 165, 166, 0.9)",
                       transition: "width 0.3s ease",
                     }}
                   />
@@ -1147,8 +1271,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit, minmax(120px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
                 gap: 8,
                 fontSize: 11,
               }}
@@ -1198,13 +1321,9 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
           >
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">
-                  Toplam adisyon
-                </span>
+                <span className="rezvix-kitchen-ticket__title">Toplam adisyon</span>
               </div>
-              <div
-                style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
-              >
+              <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {totalSessions}
               </div>
               <div className="rezvix-kitchen-ticket__meta">
@@ -1218,9 +1337,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                   Ortalama oturma süresi
                 </span>
               </div>
-              <div
-                style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
-              >
+              <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {avgSessionDurationMinutes} dk
               </div>
               <div className="rezvix-kitchen-ticket__meta">
@@ -1230,13 +1347,9 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
 
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">
-                  Masadan alınan ödeme
-                </span>
+                <span className="rezvix-kitchen-ticket__title">Masadan alınan ödeme</span>
               </div>
-              <div
-                style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}
-              >
+              <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {fmtMoney(payments.grandTotal || 0, currencySymbol)}
               </div>
               <div className="rezvix-kitchen-ticket__meta">
@@ -1248,13 +1361,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
           {/* Günlük sipariş & ciro tablosu */}
           {orders.byDay.length > 0 && (
             <div>
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  marginBottom: 6,
-                }}
-              >
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
                 Günlük sipariş & ciro
               </div>
               <div
@@ -1266,20 +1373,9 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                   background: "rgba(255,255,255,0.9)",
                 }}
               >
-                <table
-                  style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    fontSize: 11,
-                  }}
-                >
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>
-                    <tr
-                      style={{
-                        textAlign: "left",
-                        color: "var(--rezvix-text-soft)",
-                      }}
-                    >
+                    <tr style={{ textAlign: "left", color: "var(--rezvix-text-soft)" }}>
                       <th style={{ padding: "6px 8px" }}>Tarih</th>
                       <th style={{ padding: "6px 8px" }}>Sipariş</th>
                       <th style={{ padding: "6px 8px" }}>{`Ciro (${currencySymbol})`}</th>
@@ -1287,15 +1383,10 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                   </thead>
                   <tbody>
                     {orders.byDay.map((d) => (
-                      <tr
-                        key={d.date}
-                        style={{ borderTop: "1px solid #eee" }}
-                      >
+                      <tr key={d.date} style={{ borderTop: "1px solid #eee" }}>
                         <td style={{ padding: "6px 8px" }}>{d.date}</td>
                         <td style={{ padding: "6px 8px" }}>{d.orders}</td>
-                        <td style={{ padding: "6px 8px" }}>
-                          {fmtMoney(d.revenue, currencySymbol)}
-                        </td>
+                        <td style={{ padding: "6px 8px" }}>{fmtMoney(d.revenue, currencySymbol)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1307,13 +1398,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
           {/* Saatlik sipariş & ciro (mini bar chart) */}
           {byHour.length > 0 && (
             <div>
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  marginBottom: 6,
-                }}
-              >
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
                 Saatlik sipariş & ciro
               </div>
               <div
@@ -1327,10 +1412,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 }}
               >
                 {byHour.map((h) => {
-                  const maxRevenue = Math.max(
-                    ...byHour.map((x) => x.revenue || 0),
-                    1
-                  );
+                  const maxRevenue = Math.max(...byHour.map((x) => x.revenue || 0), 1);
                   const width = (h.revenue / maxRevenue) * 100;
                   return (
                     <div
@@ -1362,13 +1444,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                           }}
                         />
                       </div>
-                      <div
-                        style={{
-                          width: 80,
-                          textAlign: "right",
-                          fontSize: 11,
-                        }}
-                      >
+                      <div style={{ width: 80, textAlign: "right", fontSize: 11 }}>
                         {fmtMoney(h.revenue, currencySymbol)}
                       </div>
                     </div>
@@ -1381,13 +1457,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
           {/* En çok kullanılan masalar */}
           {topTables.length > 0 && (
             <div>
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  marginBottom: 6,
-                }}
-              >
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
                 En çok kullanılan masalar
               </div>
               <div
@@ -1399,20 +1469,9 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                   background: "rgba(255,255,255,0.9)",
                 }}
               >
-                <table
-                  style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    fontSize: 11,
-                  }}
-                >
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>
-                    <tr
-                      style={{
-                        textAlign: "left",
-                        color: "var(--rezvix-text-soft)",
-                      }}
-                    >
+                    <tr style={{ textAlign: "left", color: "var(--rezvix-text-soft)" }}>
                       <th style={{ padding: "6px 8px" }}>Masa</th>
                       <th style={{ padding: "6px 8px" }}>Adisyon</th>
                       <th style={{ padding: "6px 8px" }}>{`Ciro (${currencySymbol})`}</th>
@@ -1420,19 +1479,10 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                   </thead>
                   <tbody>
                     {topTables.map((t) => (
-                      <tr
-                        key={t.tableId}
-                        style={{ borderTop: "1px solid #eee" }}
-                      >
-                        <td style={{ padding: "6px 8px" }}>
-                          {t.tableId}
-                        </td>
-                        <td style={{ padding: "6px 8px" }}>
-                          {t.sessionCount}
-                        </td>
-                        <td style={{ padding: "6px 8px" }}>
-                          {fmtMoney(t.revenueTotal, currencySymbol)}
-                        </td>
+                      <tr key={t.tableId} style={{ borderTop: "1px solid #eee" }}>
+                        <td style={{ padding: "6px 8px" }}>{t.tableId}</td>
+                        <td style={{ padding: "6px 8px" }}>{t.sessionCount}</td>
+                        <td style={{ padding: "6px 8px" }}>{fmtMoney(t.revenueTotal, currencySymbol)}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import Reservation from "../models/Reservation.js";
 import Order from "../models/Order.js";
 import OrderSession from "../models/OrderSession.js";
+import DeliveryOrder from "../models/DeliveryOrder.js";
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 
@@ -154,6 +155,98 @@ export const getRestaurantReportsOverview = async (req, res, next) => {
       openedAt: { $gte: start.toDate(), $lte: end.toDate() },
     };
 
+    /* ---------------- Delivery Orders (DeliveryOrder) tarafı ---------------- */
+
+    const deliveryMatch = {
+      restaurantId,
+      createdAt: { $gte: start.toDate(), $lte: end.toDate() },
+    };
+
+    // Status bazlı dağılım (pending / delivered / cancelled / ...)
+    const deliveryByStatusPipeline = [
+      { $match: deliveryMatch },
+      {
+        $group: {
+          _id: "$status",
+          orderCount: { $sum: 1 },
+          grossRevenueTotal: { $sum: { $ifNull: ["$total", 0] } },
+          // Net ciro: cancelled olmayan ve paymentStatus 'failed'/'cancelled' olmayanlar
+          netRevenueTotal: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: ["$status", "cancelled"] },
+                    { $ne: ["$paymentStatus", "failed"] },
+                    { $ne: ["$paymentStatus", "cancelled"] },
+                  ],
+                },
+                { $ifNull: ["$total", 0] },
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ];
+
+    // Günlük dağılım (iptaller dahil görünsün)
+    const deliveryByDayPipeline = [
+      { $match: deliveryMatch },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              date: "$createdAt",
+              format: "%Y-%m-%d",
+            },
+          },
+          orders: { $sum: 1 },
+          grossRevenue: { $sum: { $ifNull: ["$total", 0] } },
+          netRevenue: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: ["$status", "cancelled"] },
+                    { $ne: ["$paymentStatus", "failed"] },
+                    { $ne: ["$paymentStatus", "cancelled"] },
+                  ],
+                },
+                { $ifNull: ["$total", 0] },
+                0,
+              ],
+            },
+          },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ];
+
+    // En çok satan ürünler (delivery) — iptal siparişleri hariç tut (satış datası net kalsın)
+    const deliveryTopItemsPipeline = [
+      {
+        $match: {
+          ...deliveryMatch,
+          status: { $ne: "cancelled" },
+          paymentStatus: { $nin: ["failed", "cancelled"] },
+        },
+      },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: {
+            itemId: "$items.itemId",
+            title: "$items.itemTitle",
+          },
+          qty: { $sum: { $ifNull: ["$items.qty", 0] } },
+          revenue: { $sum: { $ifNull: ["$items.lineTotal", 0] } },
+        },
+      },
+      { $sort: { revenue: -1 } },
+      { $limit: 20 },
+    ];
+
     const [
       reservationsByStatus,
       reservationsByDay,
@@ -162,6 +255,9 @@ export const getRestaurantReportsOverview = async (req, res, next) => {
       ordersByHourRaw,
       topItemsRaw,
       sessions,
+      deliveryByStatus,
+      deliveryByDay,
+      deliveryTopItemsRaw,
     ] = await Promise.all([
       Reservation.aggregate(reservationsByStatusPipeline),
       Reservation.aggregate(reservationsByDayPipeline),
@@ -170,6 +266,9 @@ export const getRestaurantReportsOverview = async (req, res, next) => {
       Order.aggregate(ordersByHourPipeline),
       Order.aggregate(topItemsPipeline),
       OrderSession.find(sessionsMatch).lean(),
+      DeliveryOrder.aggregate(deliveryByStatusPipeline),
+      DeliveryOrder.aggregate(deliveryByDayPipeline),
+      DeliveryOrder.aggregate(deliveryTopItemsPipeline),
     ]);
 
     /* ---------------- Rezervasyon özetleri ---------------- */
@@ -218,6 +317,36 @@ export const getRestaurantReportsOverview = async (req, res, next) => {
     const topItems = topItemsRaw.map((r) => ({
       itemId: r._id.itemId || null,
       title: r._id.title || "",
+      qty: r.qty || 0,
+      revenue: r.revenue || 0,
+    }));
+
+    /* ---------------- Delivery sipariş özetleri ---------------- */
+
+    const deliveryStatusMap = (deliveryByStatus || []).reduce((acc, row) => {
+      const key = (row._id || "unknown").toString();
+      acc[key] = row;
+      return acc;
+    }, {});
+
+    const deliveryTotalCount = (deliveryByStatus || []).reduce(
+      (a, r) => a + (r.orderCount || 0),
+      0
+    );
+
+    const deliveryGrossRevenueTotal = (deliveryByStatus || []).reduce(
+      (a, r) => a + (r.grossRevenueTotal || 0),
+      0
+    );
+
+    const deliveryNetRevenueTotal = (deliveryByStatus || []).reduce(
+      (a, r) => a + (r.netRevenueTotal || 0),
+      0
+    );
+
+    const deliveryTopItems = (deliveryTopItemsRaw || []).map((r) => ({
+      itemId: r._id?.itemId || null,
+      title: r._id?.title || "",
       qty: r.qty || 0,
       revenue: r.revenue || 0,
     }));
@@ -318,6 +447,28 @@ export const getRestaurantReportsOverview = async (req, res, next) => {
         })),
         byHour: ordersByHour, // ⏰ saatlik sipariş & ciro (0–23)
         topItems,             // 🔝 en çok satan ürünler
+      },
+
+      // Delivery siparişleri (paket servis) — iptaller dahil görünür
+      delivery: {
+        totalCount: deliveryTotalCount,
+        // Brüt ve net ayrımı: net ciro, iptal/failed hariç
+        grossRevenueTotal: deliveryGrossRevenueTotal,
+        revenueTotal: deliveryNetRevenueTotal,
+        statusCounts: {
+          new: deliveryStatusMap.new?.orderCount || 0,
+          accepted: deliveryStatusMap.accepted?.orderCount || 0,
+          on_the_way: deliveryStatusMap.on_the_way?.orderCount || 0,
+          delivered: deliveryStatusMap.delivered?.orderCount || 0,
+          cancelled: deliveryStatusMap.cancelled?.orderCount || 0,
+        },
+        byDay: (deliveryByDay || []).map((d) => ({
+          date: d._id,
+          orders: d.orders,
+          grossRevenue: d.grossRevenue,
+          revenue: d.netRevenue,
+        })),
+        topItems: deliveryTopItems,
       },
 
       // Masa / adisyon kullanımı
