@@ -1966,6 +1966,21 @@ export async function restaurantResolveTableService(
 }
 
 /**
+ * POST /api/panel/restaurants/:rid/tables/:tableKey/order-ready
+ * - Self servis için "sipariş hazır" bildirimi gönderir
+ */
+export async function restaurantNotifyOrderReady(
+  rid: string,
+  tableKey: string
+): Promise<{ ok: boolean; notifiedUsers?: number; reason?: string }> {
+  const { data } = await api.post(
+    `/panel/restaurants/${rid}/tables/${tableKey}/order-ready`,
+    {}
+  );
+  return data as { ok: boolean; notifiedUsers?: number; reason?: string };
+}
+
+/**
  * ✅ WALK-IN sipariş oluşturma
  * POST /api/orders/restaurants/:rid/tables/:tableKey/walk-in
  */

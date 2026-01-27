@@ -29,6 +29,8 @@ type Props = {
   onOpenWalkInModal: () => void;
   onResolveService: () => void;
   resolveServicePending: boolean;
+  onNotifyOrderReady: () => void;
+  notifyOrderReadyPending: boolean;
   onCloseSession: () => void;
   closeSessionPending: boolean;
   onPrintLastOrder: () => void;
@@ -277,6 +279,8 @@ export const TableDetailModal: React.FC<Props> = ({
   onOpenWalkInModal,
   onResolveService,
   resolveServicePending,
+  onNotifyOrderReady,
+  notifyOrderReadyPending,
   onCloseSession,
   closeSessionPending,
   onPrintLastOrder,
@@ -376,6 +380,8 @@ export const TableDetailModal: React.FC<Props> = ({
 
   const hasOrders = visibleOrders.length > 0;
   const hasRequests = (tableDetail?.serviceRequests?.length ?? 0) > 0;
+  const isSelfService = table.channel === "QR";
+  const canNotifyOrderReady = isSelfService && hasSession && hasOrders;
 
   const canCancelOrder = React.useCallback((o: any) => {
     const st = String(o?.status ?? "").trim().toLowerCase();
@@ -713,6 +719,17 @@ export const TableDetailModal: React.FC<Props> = ({
               >
                 {resolveServicePending ? "İşleniyor…" : "Çağrı / Hesap Çözüldü"}
               </button>
+
+              {isSelfService && (
+                <button
+                  type="button"
+                  onClick={onNotifyOrderReady}
+                  disabled={notifyOrderReadyPending || !canNotifyOrderReady}
+                  className="w-full rounded-full bg-amber-500 px-4 py-2 text-[12px] font-medium text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  {notifyOrderReadyPending ? "Bildirim Gönderiliyor…" : "Hazırlandı"}
+                </button>
+              )}
 
               <button
                 type="button"

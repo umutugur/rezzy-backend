@@ -8,6 +8,7 @@ import {
   restaurantGetTableDetail,
   restaurantCloseTableSession,
   restaurantResolveTableService,
+  restaurantNotifyOrderReady,
 
   // ❌ LOKAL MENÜ (kalkıyor)
   // restaurantListItems,
@@ -371,6 +372,23 @@ const LiveTablesInner: React.FC<LiveTablesInnerProps> = ({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
       refetchDetail();
+    },
+  });
+
+  const notifyOrderReadyMut = useMutation({
+    mutationFn: () => restaurantNotifyOrderReady(rid, selectedTableId as string),
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ["restaurant-live-tables", rid] });
+      refetchDetail();
+      const count = Number(data?.notifiedUsers || 0);
+      if (count > 0) {
+        showToast(`Hazır bildirimi gönderildi (${count})`, "success");
+      } else {
+        showToast("Bildirim gönderilemedi (kayıtlı kullanıcı yok).", "info");
+      }
+    },
+    onError: (e: any) => {
+      showToast(e?.response?.data?.message || e?.message || "Bildirim gönderilemedi.", "error");
     },
   });
 
@@ -1174,6 +1192,11 @@ const selectedTotal = Object.values(draftItems).reduce(
           resolveServiceMut.mutate();
         }}
         resolveServicePending={resolveServiceMut.isPending}
+        onNotifyOrderReady={() => {
+          if (!selectedTableId || !tableDetail) return;
+          notifyOrderReadyMut.mutate();
+        }}
+        notifyOrderReadyPending={notifyOrderReadyMut.isPending}
         onCloseSession={() => {
           if (!selectedTableId || !(tableDetail as any)?.session) return;
           closeSessionMut.mutate();

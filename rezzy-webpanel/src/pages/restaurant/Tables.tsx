@@ -46,6 +46,8 @@ function statusLabel(status: LiveTable["status"]): string {
       return "Garson Çağrısı";
     case "bill_request":
       return "Hesap İstendi";
+    case "order_ready":
+      return "Sipariş Hazır";
     default:
       return status;
   }
@@ -63,6 +65,8 @@ function statusColor(status: LiveTable["status"]): string {
       return "bg-blue-200 border-blue-500";
     case "bill_request":
       return "bg-red-200 border-red-500";
+    case "order_ready":
+      return "bg-yellow-200 border-yellow-500";
     default:
       return "bg-gray-200 border-gray-300";
   }
@@ -80,6 +84,8 @@ function statusIcon(status: LiveTable["status"]): JSX.Element {
       return <span className="text-blue-500 text-xl">🛎️</span>;
     case "bill_request":
       return <span className="text-red-500 text-xl">💳</span>;
+    case "order_ready":
+      return <span className="text-yellow-600 text-xl">🟡</span>;
     default:
       return <span className="text-gray-400 text-xl">○</span>;
   }
@@ -936,7 +942,9 @@ export default function TablesPage() {
                                 <div className="font-medium">
                                   {r.type === "waiter"
                                     ? "Garson çağrısı"
-                                    : "Hesap istendi"}
+                                    : r.type === "bill"
+                                    ? "Hesap istendi"
+                                    : "Sipariş hazır"}
                                 </div>
                                 <div className="text-[11px] text-gray-600">
                                   {new Date(r.createdAt).toLocaleTimeString(

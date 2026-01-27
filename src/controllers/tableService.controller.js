@@ -2,6 +2,7 @@
 import mongoose from "mongoose";
 import TableServiceRequest from "../models/TableServiceRequest.js";
 import Restaurant from "../models/Restaurant.js";
+import { notifyRestaurantOwner } from "../services/notification.service.js";
 
 /** Masa durumunu belirleyen yardımcı */
 function statusFromType(type) {
@@ -48,7 +49,33 @@ export async function createRequest(req, res) {
       await updateTableStatus(restaurantId, tableId, { status });
     }
 
-    // TODO: burada restorana panel + push bildirimi atılabilir
+    try {
+      const typeLabel =
+        type === "waiter"
+          ? "Garson çağrısı"
+          : type === "bill"
+          ? "Hesap isteği"
+          : "Masa servisi";
+      const title = tableId ? `Masa ${tableId}` : "Masa servisi";
+      const body = `${typeLabel} alındı.`;
+
+      await notifyRestaurantOwner(restaurantId, {
+        title,
+        body,
+        data: {
+          type: "table_service_request",
+          requestId: String(doc._id),
+          restaurantId,
+          tableId: tableId || null,
+          sessionId: sessionId || null,
+          requestType: type,
+        },
+        key: `table-service:${doc._id}`,
+        type: "table_service_request",
+      });
+    } catch (err) {
+      console.warn("[tableService.createRequest] notifyRestaurantOwner warn:", err);
+    }
     return res.json(doc);
   } catch (e) {
     console.error("[tableService.createRequest] err", e);

@@ -6,6 +6,7 @@ import Restaurant from "../models/Restaurant.js";
 import Order from "../models/Order.js";
 import OrderSession from "../models/OrderSession.js";
 import TableServiceRequest from "../models/TableServiceRequest.js";
+import { notifyUser } from "../services/notification.service.js";
 
 /** Yardımcı: param string’ini güvenli ObjectId yap (invalid ise null) */
 const toObjectId = (id) => {
@@ -791,6 +792,126 @@ export const resolveTableServiceRequests = async (req, res, next) => {
     }
 
     res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * POST /api/panel/restaurants/:rid/tables/:tableKey/order-ready
+ * - Self servis için "sipariş hazır" bildirimi gönderir
+ */
+export const notifyOrderReadyForTable = async (req, res, next) => {
+  try {
+    const { rid, tableKey } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(rid)) {
+      return next({ status: 400, message: "Geçersiz restoran id" });
+    }
+
+    const ridObj = toObjectId(rid);
+    if (!ridObj) {
+      return next({ status: 400, message: "Geçersiz restoran id" });
+    }
+
+    const restaurant = await Restaurant.findById(rid).lean();
+    if (!restaurant) {
+      return next({ status: 404, message: "Restoran bulunamadı" });
+    }
+
+    const tables = restaurant.tables || [];
+    const table = tables.find(
+      (t) => String(t._id) === String(tableKey) || t.name === tableKey
+    );
+    if (!table) {
+      return next({ status: 404, message: "Masa bulunamadı" });
+    }
+
+    const tableNames = [table.name];
+    if (table._id) tableNames.push(String(table._id));
+
+    const session = await OrderSession.findOne({
+      restaurantId: ridObj,
+      status: "open",
+      tableId: { $in: tableNames },
+    }).lean();
+
+    if (!session) {
+      return next({ status: 404, message: "Açık adisyon bulunamadı" });
+    }
+
+    const orders = await Order.find({
+      sessionId: session._id,
+      status: { $ne: "cancelled" },
+      paymentStatus: { $in: ["paid", "not_required"] },
+    }).lean();
+
+    if (!orders.length) {
+      return next({ status: 400, message: "Bu masa için aktif sipariş bulunamadı." });
+    }
+
+    // ✅ Aynı session için açık "order_ready" yoksa oluştur
+    const existingReady = await TableServiceRequest.findOne({
+      restaurantId: ridObj,
+      tableId: { $in: tableNames },
+      sessionId: session._id,
+      type: "order_ready",
+      status: "open",
+    });
+
+    if (!existingReady) {
+      await TableServiceRequest.create({
+        restaurantId: ridObj,
+        tableId: String(session.tableId || table.name),
+        sessionId: session._id,
+        type: "order_ready",
+        status: "open",
+      });
+    }
+
+    const userIds = [
+      ...new Set(
+        orders
+          .map((o) => o.userId)
+          .filter(Boolean)
+          .map((id) => String(id))
+      ),
+    ];
+
+    if (!userIds.length) {
+      return res.json({ ok: true, notifiedUsers: 0, reason: "no_users" });
+    }
+
+    const title = "Siparişin hazır";
+    const body = `Masa ${table.name} için siparişin hazırlandı. Teslim almak için gel.`;
+    const keyBase = Date.now();
+
+    const results = await Promise.all(
+      userIds.map(async (uid) => {
+        try {
+          await notifyUser(uid, {
+            title,
+            body,
+            data: {
+              type: "order_ready",
+              restaurantId: String(restaurant._id),
+              tableId: String(table._id || table.name),
+              tableName: table.name,
+              sessionId: String(session._id),
+            },
+            key: `order-ready:${session._id}:${uid}:${keyBase}`,
+            type: "order_ready",
+          });
+          return true;
+        } catch (err) {
+          console.warn("[notifyOrderReadyForTable] notifyUser warn:", err?.message || err);
+          return false;
+        }
+      })
+    );
+
+    const notifiedUsers = results.filter(Boolean).length;
+    return res.json({ ok: true, notifiedUsers });
   } catch (e) {
     next(e);
   }

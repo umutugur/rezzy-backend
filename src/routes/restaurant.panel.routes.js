@@ -12,6 +12,7 @@ import {
   getTableDetailForRestaurant,
   closeTableSessionForRestaurant,
   resolveTableServiceRequests,
+  notifyOrderReadyForTable,
 } from "../controllers/restaurant.panel.controller.js";
 import { getRestaurantReportsOverview } from "../controllers/restaurant.reports.controller.js";
 
@@ -92,6 +93,14 @@ r.post(
   auth(),
   allowLocationManagerOrAdmin("rid"),
   resolveTableServiceRequests
+);
+
+// ✅ Self servis: sipariş hazır bildirimi
+r.post(
+  "/:rid/tables/:tableKey/order-ready",
+  auth(),
+  allowLocationManagerOrAdmin("rid"),
+  notifyOrderReadyForTable
 );
 
 // 🔢 Gelişmiş raporlar (overview)
