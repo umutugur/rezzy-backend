@@ -26,7 +26,10 @@ exports.default = async function notarizing(context) {
 
   const { APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID } = process.env;
   if (!APPLE_ID || !APPLE_APP_SPECIFIC_PASSWORD || !APPLE_TEAM_ID) {
-    throw new Error("Missing notarization env vars: APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID");
+    console.warn(
+      "Notarization skipped: Missing APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID"
+    );
+    return;
   }
 
   const attempts = 8; // 5 yetmiyor bazen
