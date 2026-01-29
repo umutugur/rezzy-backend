@@ -7,6 +7,7 @@ import {
 } from "../layouts/RestaurantDesktopLayout";
 import { authStore } from "../../store/auth";
 import { api, restaurantGetReportsOverview } from "../../api/client";
+import { deliveryListOrders, type DeliveryOrder } from "../../api/delivery";
 import { asId } from "../../lib/id";
 
 // ---- Tipler (Dashboard ile aynı rezervasyon modeli) ----
@@ -28,7 +29,7 @@ type Row = {
 
 type Range = { from?: string; to?: string };
 
-type ViewMode = "reservations" | "advanced";
+type ViewMode = "reservations" | "advanced" | "delivery";
 
 function fmtDT(iso: string) {
   try {
@@ -47,6 +48,30 @@ const trStatus: Record<string, string> = {
 };
 function fmtStatus(s: string) {
   return trStatus[s] ?? s;
+}
+
+const deliveryStatusTr: Record<string, string> = {
+  created: "Oluşturuldu",
+  preparing: "Hazırlanıyor",
+  ready: "Hazır",
+  assigned: "Kuryeye verildi",
+  picked_up: "Yolda",
+  delivered: "Teslim edildi",
+  cancelled: "İptal",
+};
+function fmtDeliveryStatus(s: string) {
+  return deliveryStatusTr[s] ?? s;
+}
+
+function fmtDayLabel(iso: string) {
+  try {
+    return new Date(iso).toLocaleDateString("tr-TR", {
+      day: "2-digit",
+      month: "short",
+    });
+  } catch {
+    return iso;
+  }
 }
 
 // Helper: Formats money with currency symbol (always uses tr-TR locale)
@@ -78,6 +103,50 @@ function rangeParams(sel: string): Range {
   }
 }
 
+type DeliveryRangeSel = "today" | "yesterday" | "week" | "month" | "custom";
+
+function formatYmd(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
+function buildDeliveryRange(sel: DeliveryRangeSel, customFrom?: string, customTo?: string): Range {
+  const today = new Date();
+  const daysAgo = (n: number) => new Date(Date.now() - n * 86400000);
+
+  if (sel === "custom") {
+    const fallback = formatYmd(today);
+    const from = String(customFrom || fallback);
+    const to = String(customTo || fallback);
+    if (from && to && from > to) return { from: to, to: from };
+    return { from, to };
+  }
+
+  switch (sel) {
+    case "today":
+      return { from: formatYmd(today), to: formatYmd(today) };
+    case "yesterday": {
+      const y = daysAgo(1);
+      return { from: formatYmd(y), to: formatYmd(y) };
+    }
+    case "week":
+      return { from: formatYmd(daysAgo(6)), to: formatYmd(today) };
+    case "month":
+    default:
+      return { from: formatYmd(daysAgo(29)), to: formatYmd(today) };
+  }
+}
+
+function buildLastNDays(end: string, days: number) {
+  const base = end ? new Date(end) : new Date();
+  const items: string[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(base);
+    d.setDate(base.getDate() - i);
+    items.push(formatYmd(d));
+  }
+  return items;
+}
+
 /** Cursor'lı listeyi tamamen çeker (seçilen aralık içinde). */
 async function fetchAllReservationsInRange(rid: string, p: Range): Promise<Row[]> {
   const items: Row[] = [];
@@ -98,6 +167,27 @@ async function fetchAllReservationsInRange(rid: string, p: Range): Promise<Row[]
     items.push(...batch);
 
     const nextCursor: string | undefined = (data as any)?.nextCursor;
+    if (!nextCursor) break;
+    cursor = nextCursor;
+  }
+
+  return items;
+}
+
+async function fetchAllDeliveryOrdersInRange(
+  rid: string,
+  p: Range
+): Promise<DeliveryOrder[]> {
+  const items: DeliveryOrder[] = [];
+  let cursor: string | undefined = undefined;
+  const limit = 100;
+
+  for (let page = 0; page < 100; page++) {
+    const params: any = { ...p, limit, status: "all" };
+    if (cursor) params.cursor = cursor;
+    const { items: batch, nextCursor } = await deliveryListOrders(rid, params);
+    if (!batch.length) break;
+    items.push(...batch);
     if (!nextCursor) break;
     cursor = nextCursor;
   }
@@ -187,6 +277,14 @@ const ReportsInner: React.FC = () => {
 
   const [sel, setSel] = React.useState<"today" | "7" | "30" | "90">("today");
   const [view, setView] = React.useState<ViewMode>("reservations");
+  const [deliverySel, setDeliverySel] = React.useState<DeliveryRangeSel>("today");
+  const [deliveryFrom, setDeliveryFrom] = React.useState("");
+  const [deliveryTo, setDeliveryTo] = React.useState("");
+
+  const deliveryRange = React.useMemo(
+    () => buildDeliveryRange(deliverySel, deliveryFrom, deliveryTo),
+    [deliverySel, deliveryFrom, deliveryTo]
+  );
 
   // Rezervasyon bazlı eski özet (mevcut mantık)
   const summary = useQuery({
@@ -206,6 +304,12 @@ const ReportsInner: React.FC = () => {
     queryKey: ["desktop-reports-advanced", rid, sel],
     queryFn: () => restaurantGetReportsOverview(rid, rangeParams(sel)),
     enabled: !!rid && view === "advanced",
+  });
+
+  const deliveryOrders = useQuery({
+    queryKey: ["desktop-reports-delivery", rid, deliveryRange.from, deliveryRange.to],
+    queryFn: () => fetchAllDeliveryOrdersInRange(rid, deliveryRange),
+    enabled: !!rid && view === "delivery",
   });
 
   if (!rid) {
@@ -252,6 +356,21 @@ const ReportsInner: React.FC = () => {
           Rezervasyon Özeti
         </button>
         <button
+          onClick={() => setView("delivery")}
+          style={{
+            border: "none",
+            borderRadius: 999,
+            padding: "6px 14px",
+            fontSize: 12,
+            cursor: "pointer",
+            background:
+              view === "delivery" ? "var(--rezvix-primary-soft)" : "transparent",
+            color: view === "delivery" ? "#fff" : "var(--rezvix-text-main)",
+          }}
+        >
+          Paket Servis
+        </button>
+        <button
           onClick={() => setView("advanced")}
           style={{
             border: "none",
@@ -268,31 +387,91 @@ const ReportsInner: React.FC = () => {
         </button>
       </div>
 
-      {/* Ortak tarih filtresi */}
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          marginBottom: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <select
-          value={sel}
-          onChange={(e) => setSel(e.target.value as "today" | "7" | "30" | "90")}
+      {/* Tarih filtreleri */}
+      {view !== "delivery" && (
+        <div
           style={{
-            padding: "6px 10px",
-            borderRadius: 12,
-            border: "1px solid var(--rezvix-border-subtle)",
-            fontSize: 12,
+            display: "flex",
+            gap: 8,
+            marginBottom: 12,
+            flexWrap: "wrap",
           }}
         >
-          <option value="today">Bugün</option>
-          <option value="7">Son 7 gün</option>
-          <option value="30">Son 30 gün</option>
-          <option value="90">Son 90 gün</option>
-        </select>
-      </div>
+          <select
+            value={sel}
+            onChange={(e) => setSel(e.target.value as "today" | "7" | "30" | "90")}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 12,
+              border: "1px solid var(--rezvix-border-subtle)",
+              fontSize: 12,
+            }}
+          >
+            <option value="today">Bugün</option>
+            <option value="7">Son 7 gün</option>
+            <option value="30">Son 30 gün</option>
+            <option value="90">Son 90 gün</option>
+          </select>
+        </div>
+      )}
+
+      {view === "delivery" && (
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            marginBottom: 12,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          <select
+            value={deliverySel}
+            onChange={(e) => setDeliverySel(e.target.value as DeliveryRangeSel)}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 12,
+              border: "1px solid var(--rezvix-border-subtle)",
+              fontSize: 12,
+            }}
+          >
+            <option value="today">Bugün</option>
+            <option value="yesterday">Dün</option>
+            <option value="week">Haftalık (son 7 gün)</option>
+            <option value="month">Aylık (son 30 gün)</option>
+            <option value="custom">2 tarih arası</option>
+          </select>
+          {deliverySel === "custom" && (
+            <>
+              <input
+                type="date"
+                value={deliveryFrom}
+                onChange={(e) => setDeliveryFrom(e.target.value)}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 12,
+                  border: "1px solid var(--rezvix-border-subtle)",
+                  fontSize: 12,
+                }}
+              />
+              <input
+                type="date"
+                value={deliveryTo}
+                onChange={(e) => setDeliveryTo(e.target.value)}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 12,
+                  border: "1px solid var(--rezvix-border-subtle)",
+                  fontSize: 12,
+                }}
+              />
+            </>
+          )}
+          <div style={{ fontSize: 12, color: "var(--rezvix-text-soft)" }}>
+            {deliveryRange.from} – {deliveryRange.to}
+          </div>
+        </div>
+      )}
 
       {/* -------- View: Rezervasyon Özeti (eski mantık) -------- */}
       {view === "reservations" && (
@@ -402,6 +581,59 @@ const ReportsInner: React.FC = () => {
               <AdvancedReportsView
                 data={advanced.data as any}
                 currencySymbol={currencySymbol}
+              />
+            )}
+        </>
+      )}
+
+      {/* -------- View: Paket Servis -------- */}
+      {view === "delivery" && (
+        <>
+          {deliveryOrders.isLoading && (
+            <div className="rezvix-empty">
+              <div className="rezvix-empty__icon">⏳</div>
+              <div className="rezvix-empty__title">
+                Paket servis raporları hazırlanıyor…
+              </div>
+              <div className="rezvix-empty__text">
+                Seçili tarih aralığındaki siparişler listeleniyor.
+              </div>
+            </div>
+          )}
+
+          {deliveryOrders.error && !deliveryOrders.isLoading && (
+            <div className="rezvix-empty">
+              <div className="rezvix-empty__icon">⚠️</div>
+              <div className="rezvix-empty__title">
+                Paket servis raporları yüklenemedi
+              </div>
+              <div className="rezvix-empty__text">
+                Lütfen sayfayı yenileyin veya bağlantınızı kontrol edin.
+              </div>
+            </div>
+          )}
+
+          {!deliveryOrders.isLoading &&
+            !deliveryOrders.error &&
+            (deliveryOrders.data?.length ?? 0) === 0 && (
+              <div className="rezvix-empty">
+                <div className="rezvix-empty__icon">📦</div>
+                <div className="rezvix-empty__title">
+                  Seçili aralıkta paket servis yok
+                </div>
+                <div className="rezvix-empty__text">
+                  Farklı bir tarih aralığı seçerek tekrar deneyebilirsiniz.
+                </div>
+              </div>
+            )}
+
+          {!deliveryOrders.isLoading &&
+            !deliveryOrders.error &&
+            (deliveryOrders.data?.length ?? 0) > 0 && (
+              <DeliveryReportsView
+                orders={deliveryOrders.data as DeliveryOrder[]}
+                currencySymbol={currencySymbol}
+                range={deliveryRange}
               />
             )}
         </>
@@ -1490,6 +1722,271 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
               </div>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* -------------------------------------------
+ * Alt bileşen: Paket Servis Raporu
+ * ----------------------------------------- */
+
+const DeliveryReportsView: React.FC<{
+  orders: DeliveryOrder[];
+  currencySymbol: string;
+  range: Range;
+}> = ({ orders, currencySymbol, range }) => {
+  const totalOrders = orders.length;
+  const totalRevenue = orders.reduce((acc, o) => acc + Number(o.total || 0), 0);
+
+  const onTheWayCount = orders.filter((o) =>
+    ["assigned", "picked_up"].includes(String(o.status))
+  ).length;
+  const deliveredCount = orders.filter((o) => String(o.status) === "delivered").length;
+  const cancelledCount = orders.filter((o) => String(o.status) === "cancelled").length;
+
+  const byDayMap = orders.reduce((acc: Record<string, { orders: number; revenue: number }>, o) => {
+    const dateKey = o.createdAt ? formatYmd(new Date(o.createdAt)) : "";
+    if (!dateKey) return acc;
+    if (!acc[dateKey]) acc[dateKey] = { orders: 0, revenue: 0 };
+    acc[dateKey].orders += 1;
+    acc[dateKey].revenue += Number(o.total || 0);
+    return acc;
+  }, {});
+
+  const weekDays = buildLastNDays(range.to || formatYmd(new Date()), 7);
+  const weekly = weekDays.map((d) => ({
+    date: d,
+    orders: byDayMap[d]?.orders ?? 0,
+    revenue: byDayMap[d]?.revenue ?? 0,
+  }));
+  const maxOrders = Math.max(...weekly.map((d) => d.orders), 1);
+  const maxRevenue = Math.max(...weekly.map((d) => d.revenue), 1);
+
+  return (
+    <div className="rezvix-board-layout">
+      {/* Sol kolon: özet + chart */}
+      <div className="rezvix-board-column">
+        <div className="rezvix-board-column__header">
+          <div className="rezvix-board-column__title">Paket Servis Özeti</div>
+          <div className="rezvix-board-column__count">
+            {range.from} – {range.to}
+          </div>
+        </div>
+
+        <div className="rezvix-board-column__body" style={{ gap: 12 }}>
+          <div
+            style={{
+              borderRadius: 16,
+              padding: 14,
+              background:
+                "linear-gradient(135deg, rgba(47,128,237,0.12), rgba(255,255,255,0.9))",
+              border: "1px solid var(--rezvix-border-subtle)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 12,
+                textTransform: "uppercase",
+                letterSpacing: 0.6,
+                color: "var(--rezvix-text-soft)",
+              }}
+            >
+              Toplam Paket Servis Cirosu
+            </div>
+            <div style={{ fontSize: 30, fontWeight: 700 }}>
+              {fmtMoney(totalRevenue, currencySymbol)}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--rezvix-text-soft)" }}>
+              {totalOrders} sipariş
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              gap: 10,
+            }}
+          >
+            <div className="rezvix-kitchen-ticket">
+              <div className="rezvix-kitchen-ticket__header">
+                <span className="rezvix-kitchen-ticket__title">Teslim edildi</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
+                {deliveredCount}
+              </div>
+            </div>
+            <div className="rezvix-kitchen-ticket">
+              <div className="rezvix-kitchen-ticket__header">
+                <span className="rezvix-kitchen-ticket__title">Yolda</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
+                {onTheWayCount}
+              </div>
+            </div>
+            <div className="rezvix-kitchen-ticket">
+              <div className="rezvix-kitchen-ticket__header">
+                <span className="rezvix-kitchen-ticket__title">İptal edildi</span>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
+                {cancelledCount}
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              borderRadius: 14,
+              padding: 12,
+              border: "1px solid var(--rezvix-border-subtle)",
+              background: "rgba(255,255,255,0.9)",
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+              Haftalık satış / ciro (son 7 gün)
+            </div>
+            <div style={{ display: "flex", gap: 12, fontSize: 11, marginBottom: 8 }}>
+              <span style={{ color: "rgba(0,0,0,0.6)" }}>
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: "linear-gradient(180deg, #2D9CDB, #2F80ED)",
+                    marginRight: 6,
+                  }}
+                />
+                Sipariş
+              </span>
+              <span style={{ color: "rgba(0,0,0,0.6)" }}>
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: "linear-gradient(180deg, #F2994A, #EB5757)",
+                    marginRight: 6,
+                  }}
+                />
+                Ciro
+              </span>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+                gap: 10,
+                alignItems: "end",
+              }}
+            >
+              {weekly.map((d) => {
+                const orderHeight = (d.orders / maxOrders) * 100;
+                const revenueHeight = (d.revenue / maxRevenue) * 100;
+                return (
+                  <div key={d.date} style={{ textAlign: "center" }}>
+                    <div
+                      style={{
+                        height: 120,
+                        display: "flex",
+                        alignItems: "flex-end",
+                        gap: 4,
+                        padding: "0 4px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          flex: 1,
+                          height: `${orderHeight}%`,
+                          borderRadius: 8,
+                          background: "linear-gradient(180deg, #2D9CDB, #2F80ED)",
+                          boxShadow: "0 6px 12px rgba(47,128,237,0.2)",
+                        }}
+                      />
+                      <div
+                        style={{
+                          flex: 1,
+                          height: `${revenueHeight}%`,
+                          borderRadius: 8,
+                          background: "linear-gradient(180deg, #F2994A, #EB5757)",
+                          boxShadow: "0 6px 12px rgba(235,87,87,0.2)",
+                        }}
+                      />
+                    </div>
+                    <div style={{ fontSize: 11, marginTop: 6, color: "var(--rezvix-text-soft)" }}>
+                      {fmtDayLabel(d.date)}
+                    </div>
+                    <div style={{ fontSize: 10, color: "var(--rezvix-text-soft)" }}>
+                      {d.orders} sip · {fmtMoney(d.revenue, currencySymbol)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Sağ kolon: sipariş listesi */}
+      <div className="rezvix-board-column">
+        <div className="rezvix-board-column__header">
+          <div className="rezvix-board-column__title">Sipariş Listesi</div>
+          <div className="rezvix-board-column__count">{totalOrders} kayıt</div>
+        </div>
+        <div className="rezvix-board-column__body">
+          <div
+            style={{
+              borderRadius: 14,
+              border: "1px solid var(--rezvix-border-subtle)",
+              background: "rgba(255,255,255,0.9)",
+              overflow: "hidden",
+            }}
+          >
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: 12,
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    textAlign: "left",
+                    color: "var(--rezvix-text-soft)",
+                  }}
+                >
+                  <th style={{ padding: "8px 10px" }}>Tarih</th>
+                  <th style={{ padding: "8px 10px" }}>Müşteri</th>
+                  <th style={{ padding: "8px 10px" }}>Telefon</th>
+                  <th style={{ padding: "8px 10px" }}>Tutar</th>
+                  <th style={{ padding: "8px 10px" }}>Durum</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map((o) => (
+                  <tr key={o._id} style={{ borderTop: "1px solid #eee" }}>
+                    <td style={{ padding: "8px 10px" }}>
+                      {o.createdAt ? fmtDT(o.createdAt) : "-"}
+                    </td>
+                    <td style={{ padding: "8px 10px" }}>{o.customerName || "-"}</td>
+                    <td style={{ padding: "8px 10px" }}>{o.customerPhone || "-"}</td>
+                    <td style={{ padding: "8px 10px" }}>
+                      {fmtMoney(o.total || 0, currencySymbol)}
+                    </td>
+                    <td style={{ padding: "8px 10px" }}>{fmtDeliveryStatus(o.status)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

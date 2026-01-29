@@ -249,11 +249,13 @@ export async function sendToDevices(
 /* ------------------------------------------------------------------ */
 
 // ---- Public API ----
-export async function notifyUser(userId, { title, body, data, key, type }) {
+export async function notifyUser(userId, { title, body, data, key, type, sound, channelId }) {
   if (key && (await alreadySent(key))) return { ok: true, dup: true };
 
   const tokens = await getUserPushTokens(userId);
   const payload = { title, body, data };
+  if (sound) payload.sound = sound;
+  if (channelId) payload.channelId = channelId;
   const r = await sendExpoPush(tokens, payload);
 
   // ❗️Sadece gerçekten geçersiz olan token’ları temizle
@@ -276,12 +278,14 @@ export async function notifyUser(userId, { title, body, data, key, type }) {
 
 export async function notifyRestaurantOwner(
   restaurantId,
-  { title, body, data, key, type }
+  { title, body, data, key, type, sound, channelId }
 ) {
   if (key && (await alreadySent(key))) return { ok: true, dup: true };
 
   const tokens = await getRestaurantOwnerTokens(restaurantId);
   const payload = { title, body, data };
+  if (sound) payload.sound = sound;
+  if (channelId) payload.channelId = channelId;
   const r = await sendExpoPush(tokens, payload);
 
   if (r.invalidTokens?.length) {

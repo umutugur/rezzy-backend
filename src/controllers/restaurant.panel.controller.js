@@ -901,6 +901,8 @@ export const notifyOrderReadyForTable = async (req, res, next) => {
             },
             key: `order-ready:${session._id}:${uid}:${keyBase}`,
             type: "order_ready",
+            sound: "order_ready.wav",
+            channelId: "order_ready",
           });
           return true;
         } catch (err) {
