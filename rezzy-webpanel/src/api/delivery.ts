@@ -85,7 +85,7 @@ export type DeliveryZone = {
 // -------------------------
 
 /**
- * GET /panel/restaurants/:rid/delivery/orders
+ * GET /panel/restaurants/:rid/delivery-orders
  */
 export async function deliveryListOrders(
   rid: string,
@@ -98,7 +98,7 @@ export async function deliveryListOrders(
     q?: string; // isim/telefon vs
   }
 ): Promise<{ items: DeliveryOrder[]; nextCursor?: string }> {
-  const { data } = await api.get(`/panel/restaurants/${rid}/delivery/orders`, {
+  const { data } = await api.get(`/panel/restaurants/${rid}/delivery-orders`, {
     params,
   });
   const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
@@ -107,20 +107,20 @@ export async function deliveryListOrders(
 }
 
 /**
- * GET /panel/restaurants/:rid/delivery/orders/:orderId
+ * GET /panel/restaurants/:rid/delivery-orders/:orderId
  */
 export async function deliveryGetOrder(
   rid: string,
   orderId: string
 ): Promise<DeliveryOrder> {
   const { data } = await api.get(
-    `/panel/restaurants/${rid}/delivery/orders/${orderId}`
+    `/panel/restaurants/${rid}/delivery-orders/${orderId}`
   );
   return data as DeliveryOrder;
 }
 
 /**
- * PATCH /panel/restaurants/:rid/delivery/orders/:orderId/status
+ * PATCH /panel/restaurants/:rid/delivery-orders/:orderId/status
  */
 export async function deliveryUpdateOrderStatus(
   rid: string,
@@ -128,14 +128,14 @@ export async function deliveryUpdateOrderStatus(
   status: DeliveryOrderStatus
 ): Promise<{ ok: boolean; order: DeliveryOrder }> {
   const { data } = await api.patch(
-    `/panel/restaurants/${rid}/delivery/orders/${orderId}/status`,
+    `/panel/restaurants/${rid}/delivery-orders/${orderId}/status`,
     { status }
   );
   return data as { ok: boolean; order: DeliveryOrder };
 }
 
 /**
- * POST /panel/restaurants/:rid/delivery/orders/:orderId/assign
+ * POST /panel/restaurants/:rid/delivery-orders/:orderId/assign
  */
 export async function deliveryAssignCourier(
   rid: string,
@@ -143,21 +143,21 @@ export async function deliveryAssignCourier(
   courierId: string
 ): Promise<{ ok: boolean; order: DeliveryOrder }> {
   const { data } = await api.post(
-    `/panel/restaurants/${rid}/delivery/orders/${orderId}/assign`,
+    `/panel/restaurants/${rid}/delivery-orders/${orderId}/assign`,
     { courierId }
   );
   return data as { ok: boolean; order: DeliveryOrder };
 }
 
 /**
- * POST /panel/restaurants/:rid/delivery/orders/:orderId/unassign
+ * POST /panel/restaurants/:rid/delivery-orders/:orderId/unassign
  */
 export async function deliveryUnassignCourier(
   rid: string,
   orderId: string
 ): Promise<{ ok: boolean; order: DeliveryOrder }> {
   const { data } = await api.post(
-    `/panel/restaurants/${rid}/delivery/orders/${orderId}/unassign`,
+    `/panel/restaurants/${rid}/delivery-orders/${orderId}/unassign`,
     {}
   );
   return data as { ok: boolean; order: DeliveryOrder };

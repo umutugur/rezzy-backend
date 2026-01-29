@@ -51,6 +51,9 @@ function fmtStatus(s: string) {
 }
 
 const deliveryStatusTr: Record<string, string> = {
+  new: "Yeni",
+  accepted: "Kabul edildi",
+  on_the_way: "Yolda",
   created: "Oluşturuldu",
   preparing: "Hazırlanıyor",
   ready: "Hazır",
@@ -192,7 +195,18 @@ async function fetchAllDeliveryOrdersInRange(
     cursor = nextCursor;
   }
 
-  return items;
+  if (!p.from && !p.to) return items;
+  const from = p.from || "";
+  const to = p.to || "";
+  const normalizedFrom = from || to;
+  const normalizedTo = to || from;
+  if (!normalizedFrom || !normalizedTo) return items;
+
+  return items.filter((o) => {
+    if (!o.createdAt) return false;
+    const day = formatYmd(new Date(o.createdAt));
+    return day >= normalizedFrom && day <= normalizedTo;
+  });
 }
 
 /** Rapor ekranı için özetler (eski rezervasyon mantığı). */
@@ -1741,7 +1755,7 @@ const DeliveryReportsView: React.FC<{
   const totalRevenue = orders.reduce((acc, o) => acc + Number(o.total || 0), 0);
 
   const onTheWayCount = orders.filter((o) =>
-    ["assigned", "picked_up"].includes(String(o.status))
+    ["assigned", "picked_up", "on_the_way"].includes(String(o.status))
   ).length;
   const deliveredCount = orders.filter((o) => String(o.status) === "delivered").length;
   const cancelledCount = orders.filter((o) => String(o.status) === "cancelled").length;
