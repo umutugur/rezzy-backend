@@ -1814,6 +1814,19 @@ const DeliveryReportsView: React.FC<{
   const maxOrders = Math.max(...weekly.map((d) => d.orders), 1);
   const maxRevenue = Math.max(...weekly.map((d) => d.revenue), 1);
 
+  const PAGE_SIZE = 8;
+  const [page, setPage] = React.useState(1);
+  const totalPages = Math.max(1, Math.ceil(orders.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  React.useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
+
+  const pagedOrders = orders.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE
+  );
+
   const paymentTotal =
     paymentBreakdown.card.revenue +
     paymentBreakdown.cardOnDelivery.revenue +
@@ -2182,8 +2195,52 @@ const DeliveryReportsView: React.FC<{
           <div className="rezvix-board-column__count">{totalOrders} kayıt</div>
         </div>
         <div className="rezvix-board-column__body">
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 8,
+              fontSize: 12,
+              color: "var(--rezvix-text-soft)",
+            }}
+          >
+            <div>
+              Sayfa {safePage} / {totalPages}
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                style={{
+                  border: "1px solid var(--rezvix-border-subtle)",
+                  background: "#fff",
+                  borderRadius: 10,
+                  padding: "4px 10px",
+                  cursor: safePage <= 1 ? "not-allowed" : "pointer",
+                  opacity: safePage <= 1 ? 0.5 : 1,
+                }}
+              >
+                Önceki
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage >= totalPages}
+                style={{
+                  border: "1px solid var(--rezvix-border-subtle)",
+                  background: "#fff",
+                  borderRadius: 10,
+                  padding: "4px 10px",
+                  cursor: safePage >= totalPages ? "not-allowed" : "pointer",
+                  opacity: safePage >= totalPages ? 0.5 : 1,
+                }}
+              >
+                Sonraki
+              </button>
+            </div>
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {orders.map((o) => {
+            {pagedOrders.map((o) => {
               const expanded = expandedId === o._id;
               const items = Array.isArray((o as any).items) ? (o as any).items : [];
               return (
