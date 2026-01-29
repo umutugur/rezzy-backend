@@ -5,6 +5,7 @@ import React, {
   useState,
   createContext,
   useContext,
+  useRef,
 } from "react";
 import "../styles/desktop.css";
 import { TopBar, SummaryChip } from "../components/TopBar";
@@ -14,7 +15,8 @@ import { useNavigate } from "react-router-dom";
 
 import { authStore } from "../../store/auth";
 import { asId } from "../../lib/id";
-import { api } from "../../api/client";
+import { api, restaurantGetLiveTables } from "../../api/client";
+import { restaurantListDeliveryOrders, type DeliveryOrderRow } from "../../api/delivery";
 import { getCurrencySymbolForRegion } from "../../utils/currency";
 
 export type RestaurantDesktopLayoutProps = PropsWithChildren<{
@@ -109,6 +111,13 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
     resolveFallbackRegionFromUser(user)
   );
   const [isRegionResolved, setIsRegionResolved] = useState<boolean>(false);
+  const [deliveryAlert, setDeliveryAlert] = useState(false);
+  const [tablesAlert, setTablesAlert] = useState(false);
+
+  const deliveryPrevRef = useRef<Record<string, DeliveryOrderRow> | null>(null);
+  const tablesPrevRef = useRef<Record<string, string> | null>(null);
+  const deliverySoundRef = useRef<HTMLAudioElement | null>(null);
+  const tablesSoundRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -149,6 +158,118 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rid]);
 
+  useEffect(() => {
+    deliverySoundRef.current = new Audio("/sounds/order-come.mp3");
+    tablesSoundRef.current = new Audio("/sounds/order-come.mp3");
+  }, []);
+
+  // 🔔 Global: Paket servis yeni sipariş + QR sipariş alarmı
+  useEffect(() => {
+    if (!rid) return;
+
+    let alive = true;
+    let timer: any;
+    let tableTimer: any;
+
+    const playSound = (ref: React.MutableRefObject<HTMLAudioElement | null>) => {
+      if (!ref.current) return;
+      try {
+        ref.current.currentTime = 0;
+        ref.current.play().catch(() => {});
+      } catch {}
+    };
+
+    const pollDelivery = async () => {
+      try {
+        const data = await restaurantListDeliveryOrders(rid);
+        if (!alive) return;
+        const orders: DeliveryOrderRow[] = data?.items ?? [];
+        const nowMap: Record<string, DeliveryOrderRow> = {};
+        let hasNew = false;
+        let hasAnyNew = false;
+
+        for (const o of orders) {
+          nowMap[String(o._id)] = o;
+          if ((o as any)?.status === "new") hasAnyNew = true;
+        }
+
+        const prev = deliveryPrevRef.current;
+        if (prev) {
+          for (const id of Object.keys(nowMap)) {
+            if (!prev[id] && (nowMap[id] as any)?.status === "new") {
+              hasNew = true;
+              break;
+            }
+          }
+        }
+
+        if (hasNew) {
+          playSound(deliverySoundRef);
+        }
+        setDeliveryAlert(hasAnyNew);
+        deliveryPrevRef.current = nowMap;
+      } catch {
+        // ignore polling errors
+      }
+    };
+
+    const pollTables = async () => {
+      try {
+        const data = await restaurantGetLiveTables(rid);
+        if (!alive) return;
+        const tables = (data as any)?.tables ?? [];
+
+        const nowMap: Record<string, string> = {};
+        let hasQrActive = false;
+        let hasNewQr = false;
+
+        for (const t of tables) {
+          const channel = String(t?.channel || "");
+          const lastOrderAt = String(t?.lastOrderAt || "");
+          if (channel === "QR" && lastOrderAt) {
+            nowMap[String(t.id)] = lastOrderAt;
+          }
+          if (channel === "QR" && String(t?.status) === "order_active") {
+            hasQrActive = true;
+          }
+        }
+
+        const prev = tablesPrevRef.current;
+        if (prev) {
+          for (const id of Object.keys(nowMap)) {
+            if (!prev[id] && nowMap[id]) {
+              hasNewQr = true;
+              break;
+            }
+            if (prev[id] && prev[id] !== nowMap[id]) {
+              hasNewQr = true;
+              break;
+            }
+          }
+        }
+
+        if (hasNewQr) {
+          playSound(tablesSoundRef);
+        }
+        setTablesAlert(hasQrActive);
+        tablesPrevRef.current = nowMap;
+      } catch {
+        // ignore polling errors
+      }
+    };
+
+    pollDelivery();
+    pollTables();
+    timer = setInterval(pollDelivery, 5000);
+    tableTimer = setInterval(pollTables, 6000);
+
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      clearInterval(tableTimer);
+    };
+  }, [rid]);
+
   const currencySymbol = useMemo(() => {
     return getCurrencySymbolForRegion(normRegion(resolvedRegion));
   }, [resolvedRegion]);
@@ -164,6 +285,8 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
 
   // SideNav tıklamaları → router navigation
   const handleNavigate = (key: DesktopNavKey) => {
+    if (key === "delivery") setDeliveryAlert(false);
+    if (key === "tables") setTablesAlert(false);
     switch (key) {
       case "tables":
         navigate("/restaurant-desktop/tables");
@@ -205,7 +328,11 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
   return (
     <CurrencyCtx.Provider value={currencyCtxValue}>
       <div className={`rezvix-desktop-shell rezvix-theme-${theme}`}>
-        <SideNav active={activeNav} onNavigate={handleNavigate} />
+        <SideNav
+          active={activeNav}
+          onNavigate={handleNavigate}
+          alerts={{ delivery: deliveryAlert, tables: tablesAlert }}
+        />
         <div className="rezvix-desktop-main">
           <TopBar title={title} subtitle={subtitle} summaryChips={summaryChips} />
           <section className="rezvix-desktop-content">{children}</section>

@@ -12,9 +12,10 @@ export type DesktopNavKey =
 export type SideNavProps = {
   active: DesktopNavKey;
   onNavigate?: (key: DesktopNavKey) => void; // Router ile bağlarken kullanırsın
+  alerts?: Partial<Record<DesktopNavKey, boolean>>;
 };
 
-export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate }) => {
+export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate, alerts }) => {
   const handleClick = (key: DesktopNavKey) => {
     if (onNavigate) onNavigate(key);
     // Yoksa router içinde bu componenti wrap ederken kendi navigate'ini vereceksin.
@@ -38,6 +39,7 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate }) => {
             type="button"
             className={
               "rezvix-sidenav__item" +
+              (alerts?.tables ? " rezvix-sidenav__item--alert" : "") +
               (active === "tables" ? " rezvix-sidenav__item--active" : "")
             }
             onClick={() => handleClick("tables")}
@@ -46,6 +48,9 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate }) => {
             <div className="rezvix-sidenav__label">
               <span>Masalar</span>
               <span className="rezvix-sidenav__badge">Canlı</span>
+              {alerts?.tables && (
+                <span className="rezvix-sidenav__alert-badge">Yeni</span>
+              )}
             </div>
           </button>
 
@@ -67,18 +72,22 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate }) => {
         <div style={{ marginTop: 10 }}>
           <div className="rezvix-sidenav__group-label">Rezvix</div>
           <button
-  type="button"
-  className={
-    "rezvix-sidenav__item" +
-    (active === "delivery" ? " rezvix-sidenav__item--active" : "")
-  }
-  onClick={() => handleClick("delivery")}
->
-  <div className="rezvix-sidenav__icon">🛵</div>
-  <div className="rezvix-sidenav__label">
-    <span>Paket Sipariş</span>
-  </div>
-</button>
+            type="button"
+            className={
+              "rezvix-sidenav__item" +
+              (alerts?.delivery ? " rezvix-sidenav__item--alert" : "") +
+              (active === "delivery" ? " rezvix-sidenav__item--active" : "")
+            }
+            onClick={() => handleClick("delivery")}
+          >
+            <div className="rezvix-sidenav__icon">🛵</div>
+            <div className="rezvix-sidenav__label">
+              <span>Paket Sipariş</span>
+              {alerts?.delivery && (
+                <span className="rezvix-sidenav__alert-badge">Yeni</span>
+              )}
+            </div>
+          </button>
           <button
             type="button"
             className={

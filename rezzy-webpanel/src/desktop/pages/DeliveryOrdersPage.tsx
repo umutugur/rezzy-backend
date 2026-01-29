@@ -232,14 +232,7 @@ export const DeliveryOrdersPage: React.FC = () => {
   const { region } = useRestaurantDesktopCurrency();
   const currency: "TRY" | "GBP" = region === "UK" || region === "GB" ? "GBP" : "TRY";
 
-  const soundRef = React.useRef<HTMLAudioElement | null>(null);
-  const prevByIdRef = React.useRef<Record<string, DeliveryOrderRow> | null>(null);
-
   const [selected, setSelected] = React.useState<DeliveryOrderRow | null>(null);
-
-  React.useEffect(() => {
-    soundRef.current = new Audio("/sounds/order-come.mp3");
-  }, []);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["restaurant-delivery-orders", rid],
@@ -251,33 +244,6 @@ export const DeliveryOrdersPage: React.FC = () => {
 
   const orders: DeliveryOrderRow[] = data?.items ?? [];
 
-  React.useEffect(() => {
-    const prev = prevByIdRef.current;
-    const nowMap: Record<string, DeliveryOrderRow> = {};
-    for (const o of orders) nowMap[String(o._id)] = o;
-
-    if (!prev) {
-      prevByIdRef.current = nowMap;
-      return;
-    }
-
-    let shouldPlay = false;
-    for (const id of Object.keys(nowMap)) {
-      if (!prev[id] && (nowMap[id] as any)?.status === "new") {
-        shouldPlay = true;
-        break;
-      }
-    }
-
-    if (shouldPlay && soundRef.current) {
-      try {
-        soundRef.current.currentTime = 0;
-        soundRef.current.play().catch(() => {});
-      } catch {}
-    }
-
-    prevByIdRef.current = nowMap;
-  }, [orders]);
 
   const acceptMut = useMutation({
     mutationFn: async (orderId: string) => restaurantAcceptDeliveryOrder(rid, orderId),

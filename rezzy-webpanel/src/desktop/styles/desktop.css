@@ -176,6 +176,17 @@
   color: var(--rezvix-text-main);
 }
 
+.rezvix-sidenav__item--alert {
+  background: linear-gradient(135deg, rgba(255, 226, 196, 0.45), transparent 60%);
+  border-color: rgba(249, 115, 22, 0.35);
+  color: var(--rezvix-text-main);
+}
+
+.rezvix-sidenav__item--alert .rezvix-sidenav__icon {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.25);
+}
+
 .rezvix-sidenav__icon {
   width: 28px;
   height: 28px;
@@ -201,6 +212,16 @@
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.03);
   color: var(--rezvix-text-soft);
+}
+
+.rezvix-sidenav__alert-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.15);
+  color: #c2410c;
+  border: 1px solid rgba(249, 115, 22, 0.35);
 }
 
 .rezvix-sidenav__footer {
