@@ -1,6 +1,6 @@
 {
   "name": "rezvix-webpanel",
-  "version": "1.3.2",
+  "version": "1.3.5",
   "private": true,
   "type": "module",
   "description": "Rezvix Web Panel Desktop",
@@ -60,6 +60,7 @@
       "electron/**",
       "package.json"
     ],
+    "afterSign": "electron/notarize.cjs",
     "mac": {
       "target": [
         "dmg",
