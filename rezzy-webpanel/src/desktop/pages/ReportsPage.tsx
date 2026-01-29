@@ -1764,6 +1764,32 @@ const DeliveryReportsView: React.FC<{
   const deliveredCount = orders.filter((o) => String(o.status) === "delivered").length;
   const cancelledCount = orders.filter((o) => String(o.status) === "cancelled").length;
 
+  const paymentBreakdown = deliveredOrders.reduce(
+    (acc, o) => {
+      const pm = String((o as any)?.paymentMethod || "");
+      if (pm === "card") {
+        acc.card.count += 1;
+        acc.card.revenue += Number(o.total || 0);
+      } else if (pm === "cash") {
+        acc.cash.count += 1;
+        acc.cash.revenue += Number(o.total || 0);
+      } else if (pm === "card_on_delivery") {
+        acc.cardOnDelivery.count += 1;
+        acc.cardOnDelivery.revenue += Number(o.total || 0);
+      } else {
+        acc.other.count += 1;
+        acc.other.revenue += Number(o.total || 0);
+      }
+      return acc;
+    },
+    {
+      card: { count: 0, revenue: 0 },
+      cash: { count: 0, revenue: 0 },
+      cardOnDelivery: { count: 0, revenue: 0 },
+      other: { count: 0, revenue: 0 },
+    }
+  );
+
   const byDayMap = orders.reduce((acc: Record<string, { orders: number }>, o) => {
     const dateKey = o.createdAt ? formatYmd(new Date(o.createdAt)) : "";
     if (!dateKey) return acc;
@@ -1787,6 +1813,39 @@ const DeliveryReportsView: React.FC<{
   }));
   const maxOrders = Math.max(...weekly.map((d) => d.orders), 1);
   const maxRevenue = Math.max(...weekly.map((d) => d.revenue), 1);
+
+  const paymentTotal =
+    paymentBreakdown.card.revenue +
+    paymentBreakdown.cardOnDelivery.revenue +
+    paymentBreakdown.cash.revenue +
+    paymentBreakdown.other.revenue;
+
+  const paymentSegments = [
+    {
+      key: "card",
+      label: "Online",
+      value: paymentBreakdown.card.revenue,
+      color: "linear-gradient(180deg, #2D9CDB, #2F80ED)",
+    },
+    {
+      key: "card_on_delivery",
+      label: "Kapida Kart",
+      value: paymentBreakdown.cardOnDelivery.revenue,
+      color: "linear-gradient(180deg, #9B51E0, #7C3AED)",
+    },
+    {
+      key: "cash",
+      label: "Kapida Nakit",
+      value: paymentBreakdown.cash.revenue,
+      color: "linear-gradient(180deg, #F2994A, #F97316)",
+    },
+    {
+      key: "other",
+      label: "Diger",
+      value: paymentBreakdown.other.revenue,
+      color: "linear-gradient(180deg, #9CA3AF, #6B7280)",
+    },
+  ].filter((s) => s.value > 0);
 
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const toggleExpanded = (id: string) =>
@@ -1897,6 +1956,127 @@ const DeliveryReportsView: React.FC<{
               <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {cancelledCount}
               </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              borderRadius: 14,
+              padding: 12,
+              border: "1px solid var(--rezvix-border-subtle)",
+              background: "rgba(255,255,255,0.9)",
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+              Ödeme kırılımı (teslim edilenler)
+            </div>
+            <div
+              style={{
+                borderRadius: 999,
+                overflow: "hidden",
+                height: 10,
+                background: "rgba(0,0,0,0.06)",
+                marginBottom: 10,
+              }}
+            >
+              {paymentTotal > 0 && (
+                <div style={{ display: "flex", width: "100%", height: "100%" }}>
+                  {paymentSegments.map((seg) => (
+                    <div
+                      key={seg.key}
+                      style={{
+                        width: `${(seg.value / paymentTotal) * 100}%`,
+                        background: seg.color,
+                        transition: "width 0.25s ease",
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            {paymentTotal > 0 && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                  gap: 6,
+                  marginBottom: 8,
+                  fontSize: 11,
+                  color: "var(--rezvix-text-soft)",
+                }}
+              >
+                {paymentSegments.map((seg) => (
+                  <div key={seg.key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 3,
+                        background: seg.color,
+                        display: "inline-block",
+                      }}
+                    />
+                    <span>
+                      {seg.label}: {((seg.value / paymentTotal) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                gap: 8,
+                fontSize: 12,
+              }}
+            >
+              <div className="rezvix-kitchen-ticket">
+                <div className="rezvix-kitchen-ticket__header">
+                  <span className="rezvix-kitchen-ticket__title">Online Ödeme</span>
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>
+                  {fmtMoney(paymentBreakdown.card.revenue, currencySymbol)}
+                </div>
+                <div className="rezvix-kitchen-ticket__meta">
+                  {paymentBreakdown.card.count} sipariş
+                </div>
+              </div>
+              <div className="rezvix-kitchen-ticket">
+                <div className="rezvix-kitchen-ticket__header">
+                  <span className="rezvix-kitchen-ticket__title">Kapıda Kart</span>
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>
+                  {fmtMoney(paymentBreakdown.cardOnDelivery.revenue, currencySymbol)}
+                </div>
+                <div className="rezvix-kitchen-ticket__meta">
+                  {paymentBreakdown.cardOnDelivery.count} sipariş
+                </div>
+              </div>
+              <div className="rezvix-kitchen-ticket">
+                <div className="rezvix-kitchen-ticket__header">
+                  <span className="rezvix-kitchen-ticket__title">Kapıda Nakit</span>
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>
+                  {fmtMoney(paymentBreakdown.cash.revenue, currencySymbol)}
+                </div>
+                <div className="rezvix-kitchen-ticket__meta">
+                  {paymentBreakdown.cash.count} sipariş
+                </div>
+              </div>
+              {paymentBreakdown.other.count > 0 && (
+                <div className="rezvix-kitchen-ticket">
+                  <div className="rezvix-kitchen-ticket__header">
+                    <span className="rezvix-kitchen-ticket__title">Diğer</span>
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>
+                    {fmtMoney(paymentBreakdown.other.revenue, currencySymbol)}
+                  </div>
+                  <div className="rezvix-kitchen-ticket__meta">
+                    {paymentBreakdown.other.count} sipariş
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
