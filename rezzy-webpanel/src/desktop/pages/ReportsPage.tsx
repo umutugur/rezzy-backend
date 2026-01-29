@@ -1752,7 +1752,11 @@ const DeliveryReportsView: React.FC<{
   range: Range;
 }> = ({ orders, currencySymbol, range }) => {
   const totalOrders = orders.length;
-  const totalRevenue = orders.reduce((acc, o) => acc + Number(o.total || 0), 0);
+  const deliveredOrders = orders.filter((o) => String(o.status) === "delivered");
+  const totalRevenue = deliveredOrders.reduce(
+    (acc, o) => acc + Number(o.total || 0),
+    0
+  );
 
   const onTheWayCount = orders.filter((o) =>
     ["assigned", "picked_up", "on_the_way"].includes(String(o.status))
@@ -1760,12 +1764,18 @@ const DeliveryReportsView: React.FC<{
   const deliveredCount = orders.filter((o) => String(o.status) === "delivered").length;
   const cancelledCount = orders.filter((o) => String(o.status) === "cancelled").length;
 
-  const byDayMap = orders.reduce((acc: Record<string, { orders: number; revenue: number }>, o) => {
+  const byDayMap = orders.reduce((acc: Record<string, { orders: number }>, o) => {
     const dateKey = o.createdAt ? formatYmd(new Date(o.createdAt)) : "";
     if (!dateKey) return acc;
-    if (!acc[dateKey]) acc[dateKey] = { orders: 0, revenue: 0 };
+    if (!acc[dateKey]) acc[dateKey] = { orders: 0 };
     acc[dateKey].orders += 1;
-    acc[dateKey].revenue += Number(o.total || 0);
+    return acc;
+  }, {});
+
+  const byDayRevenue = deliveredOrders.reduce((acc: Record<string, number>, o) => {
+    const dateKey = o.createdAt ? formatYmd(new Date(o.createdAt)) : "";
+    if (!dateKey) return acc;
+    acc[dateKey] = (acc[dateKey] ?? 0) + Number(o.total || 0);
     return acc;
   }, {});
 
@@ -1773,10 +1783,47 @@ const DeliveryReportsView: React.FC<{
   const weekly = weekDays.map((d) => ({
     date: d,
     orders: byDayMap[d]?.orders ?? 0,
-    revenue: byDayMap[d]?.revenue ?? 0,
+    revenue: byDayRevenue[d] ?? 0,
   }));
   const maxOrders = Math.max(...weekly.map((d) => d.orders), 1);
   const maxRevenue = Math.max(...weekly.map((d) => d.revenue), 1);
+
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const toggleExpanded = (id: string) =>
+    setExpandedId((prev) => (prev === id ? null : id));
+
+  const buildAddress = (o: any) => {
+    const addrText = String(o?.addressText || "").trim();
+    if (addrText) return addrText;
+    const line1 = String(o?.addressLine1 || "").trim();
+    const line2 = String(o?.addressLine2 || "").trim();
+    const city = String(o?.city || "").trim();
+    const postcode = String(o?.postcode || "").trim();
+    const parts = [line1, line2, city, postcode].filter(Boolean);
+    return parts.join(" · ");
+  };
+
+  const paymentLabel =
+    (orders[0] as any)?.paymentMethodLabel != null
+      ? (o: any) => String(o?.paymentMethodLabel || "—")
+      : (o: any) => {
+          const m = String(o?.paymentMethod || "");
+          if (m === "card") return "Online Ödeme";
+          if (m === "cash") return "Kapıda Nakit";
+          if (m === "card_on_delivery") return "Kapıda Kart";
+          return "—";
+        };
+
+  const calcLineTotal = (it: any) => {
+    const qty = Math.max(1, Number(it?.qty || 1));
+    const lineTotal = Number(it?.lineTotal || 0);
+    if (Number.isFinite(lineTotal) && lineTotal > 0) return lineTotal;
+    const unitTotal = Number(it?.unitTotal || 0);
+    if (Number.isFinite(unitTotal) && unitTotal > 0) return unitTotal * qty;
+    const price = Number(it?.price ?? 0);
+    if (Number.isFinite(price) && price > 0) return price * qty;
+    return 0;
+  };
 
   return (
     <div className="rezvix-board-layout">
@@ -1955,51 +2002,165 @@ const DeliveryReportsView: React.FC<{
           <div className="rezvix-board-column__count">{totalOrders} kayıt</div>
         </div>
         <div className="rezvix-board-column__body">
-          <div
-            style={{
-              borderRadius: 14,
-              border: "1px solid var(--rezvix-border-subtle)",
-              background: "rgba(255,255,255,0.9)",
-              overflow: "hidden",
-            }}
-          >
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: 12,
-              }}
-            >
-              <thead>
-                <tr
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {orders.map((o) => {
+              const expanded = expandedId === o._id;
+              const items = Array.isArray((o as any).items) ? (o as any).items : [];
+              return (
+                <div
+                  key={o._id}
+                  onClick={() => toggleExpanded(o._id)}
                   style={{
-                    textAlign: "left",
-                    color: "var(--rezvix-text-soft)",
+                    borderRadius: 14,
+                    border: "1px solid var(--rezvix-border-subtle)",
+                    background: "rgba(255,255,255,0.9)",
+                    padding: 12,
+                    cursor: "pointer",
+                    transition: "box-shadow 0.2s ease",
+                    boxShadow: expanded ? "0 10px 24px rgba(15,23,42,0.08)" : "none",
                   }}
                 >
-                  <th style={{ padding: "8px 10px" }}>Tarih</th>
-                  <th style={{ padding: "8px 10px" }}>Müşteri</th>
-                  <th style={{ padding: "8px 10px" }}>Telefon</th>
-                  <th style={{ padding: "8px 10px" }}>Tutar</th>
-                  <th style={{ padding: "8px 10px" }}>Durum</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((o) => (
-                  <tr key={o._id} style={{ borderTop: "1px solid #eee" }}>
-                    <td style={{ padding: "8px 10px" }}>
-                      {o.createdAt ? fmtDT(o.createdAt) : "-"}
-                    </td>
-                    <td style={{ padding: "8px 10px" }}>{o.customerName || "-"}</td>
-                    <td style={{ padding: "8px 10px" }}>{o.customerPhone || "-"}</td>
-                    <td style={{ padding: "8px 10px" }}>
-                      {fmtMoney(o.total || 0, currencySymbol)}
-                    </td>
-                    <td style={{ padding: "8px 10px" }}>{fmtDeliveryStatus(o.status)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>
+                        {(o as any).customerName || "Misafir"}
+                        {o.createdAt ? (
+                          <span style={{ marginLeft: 8, color: "var(--rezvix-text-soft)", fontSize: 11 }}>
+                            {fmtDT(o.createdAt)}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--rezvix-text-soft)" }}>
+                        {(o as any).customerPhone || "Telefon yok"} ·{" "}
+                        {(o as any).shortCode ? `#${String((o as any).shortCode)}` : o._id.slice(-6)}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ fontWeight: 700 }}>
+                        {fmtMoney(o.total || 0, currencySymbol)}
+                      </div>
+                      <div
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          background:
+                            o.status === "delivered"
+                              ? "rgba(34,197,94,0.14)"
+                              : o.status === "cancelled"
+                              ? "rgba(239,68,68,0.12)"
+                              : "rgba(59,130,246,0.12)",
+                          color:
+                            o.status === "delivered"
+                              ? "#15803d"
+                              : o.status === "cancelled"
+                              ? "#b91c1c"
+                              : "#1d4ed8",
+                        }}
+                      >
+                        {fmtDeliveryStatus(o.status)}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--rezvix-text-soft)" }}>
+                        {expanded ? "▲" : "▼"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {expanded && (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        borderTop: "1px solid #eee",
+                        paddingTop: 10,
+                        display: "grid",
+                        gap: 10,
+                      }}
+                    >
+                      <div style={{ fontSize: 12, color: "var(--rezvix-text-soft)" }}>
+                        <strong>Adres:</strong> {buildAddress(o as any) || "—"}
+                      </div>
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                          gap: 8,
+                          fontSize: 12,
+                        }}
+                      >
+                        <div>
+                          <div style={{ color: "var(--rezvix-text-soft)" }}>Ödeme</div>
+                          <div style={{ fontWeight: 600 }}>{paymentLabel(o as any)}</div>
+                        </div>
+                        <div>
+                          <div style={{ color: "var(--rezvix-text-soft)" }}>Ara Toplam</div>
+                          <div style={{ fontWeight: 600 }}>
+                            {fmtMoney((o as any).subtotal || 0, currencySymbol)}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ color: "var(--rezvix-text-soft)" }}>Teslimat</div>
+                          <div style={{ fontWeight: 600 }}>
+                            {fmtMoney((o as any).deliveryFee || 0, currencySymbol)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {String((o as any).customerNote || "").trim() && (
+                        <div style={{ fontSize: 12 }}>
+                          <div style={{ color: "var(--rezvix-text-soft)" }}>Not</div>
+                          <div style={{ fontWeight: 600 }}>{(o as any).customerNote}</div>
+                        </div>
+                      )}
+
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                          Ürünler
+                        </div>
+                        {items.length === 0 ? (
+                          <div style={{ fontSize: 12, color: "var(--rezvix-text-soft)" }}>
+                            Ürün bilgisi yok.
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              display: "grid",
+                              gap: 6,
+                              borderRadius: 10,
+                              background: "rgba(0,0,0,0.02)",
+                              padding: 8,
+                            }}
+                          >
+                            {items.map((it: any, idx: number) => (
+                              <div
+                                key={it.itemId ?? idx}
+                                style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}
+                              >
+                                <div>
+                                  {Math.max(1, Number(it?.qty || 1))}× {it?.title || it?.itemTitle || "Ürün"}
+                                </div>
+                                <div style={{ fontWeight: 600 }}>
+                                  {fmtMoney(calcLineTotal(it), currencySymbol)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
