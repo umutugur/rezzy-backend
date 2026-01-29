@@ -113,6 +113,8 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
   const [isRegionResolved, setIsRegionResolved] = useState<boolean>(false);
   const [deliveryAlert, setDeliveryAlert] = useState(false);
   const [tablesAlert, setTablesAlert] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateReady, setUpdateReady] = useState(false);
 
   const deliveryPrevRef = useRef<Record<string, DeliveryOrderRow> | null>(null);
   const tablesPrevRef = useRef<Record<string, string> | null>(null);
@@ -160,7 +162,21 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
 
   useEffect(() => {
     deliverySoundRef.current = new Audio("/sounds/order-come.mp3");
-    tablesSoundRef.current = new Audio("/sounds/order-come.mp3");
+    tablesSoundRef.current = new Audio("/sounds/notify.mp3");
+  }, []);
+
+  useEffect(() => {
+    const rez = (window as any)?.rezvix;
+    if (!rez?.onUpdateAvailable || !rez?.onUpdateReady) return;
+
+    rez.onUpdateAvailable(() => {
+      setUpdateAvailable(true);
+    });
+
+    rez.onUpdateReady(() => {
+      setUpdateAvailable(false);
+      setUpdateReady(true);
+    });
   }, []);
 
   // 🔔 Global: Paket servis yeni sipariş + QR sipariş alarmı
@@ -335,6 +351,47 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
         />
         <div className="rezvix-desktop-main">
           <TopBar title={title} subtitle={subtitle} summaryChips={summaryChips} />
+          {(updateAvailable || updateReady) && (
+            <div
+              style={{
+                margin: "0 18px 12px",
+                padding: "10px 12px",
+                borderRadius: 14,
+                border: "1px solid var(--rezvix-border-subtle)",
+                background: updateReady
+                  ? "rgba(34,197,94,0.12)"
+                  : "rgba(59,130,246,0.12)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              <div>
+                {updateReady
+                  ? "Yeni sürüm indirildi. Yeniden başlatınca güncellenecek."
+                  : "Yeni sürüm bulundu. Arka planda indiriliyor…"}
+              </div>
+              {updateReady && (
+                <button
+                  onClick={() => (window as any)?.rezvix?.installUpdate?.()}
+                  style={{
+                    border: "none",
+                    borderRadius: 10,
+                    padding: "6px 12px",
+                    background: "#16a34a",
+                    color: "#fff",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                  }}
+                >
+                  Yeniden Başlat
+                </button>
+              )}
+            </div>
+          )}
           <section className="rezvix-desktop-content">{children}</section>
         </div>
       </div>
