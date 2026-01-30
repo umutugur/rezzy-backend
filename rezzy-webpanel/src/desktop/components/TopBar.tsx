@@ -51,7 +51,8 @@ function preserveModeDesktopLoginPath() {
   // Desktop mode detection (hash ya da search)
   const search = window.location.search || window.location.hash.split("?")[1] || "";
   const sp = new URLSearchParams(search);
-  const isDesktopMode = sp.get("mode") === "desktop";
+  const isDesktopMode =
+    sp.get("mode") === "desktop" || !!(window as any)?.rezvix;
   return isDesktopMode ? "/login?mode=desktop" : "/login";
 }
 

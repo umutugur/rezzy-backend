@@ -245,7 +245,8 @@ function LoginPage() {
       "";
 
     const sp = new URLSearchParams(search);
-    const isDesktopMode = sp.get("mode") === "desktop";
+    const isDesktopMode =
+      sp.get("mode") === "desktop" || !!(window as any)?.rezvix;
 
     // 🔥 Desktop users always land on desktop tables
     if (isDesktopMode) {
