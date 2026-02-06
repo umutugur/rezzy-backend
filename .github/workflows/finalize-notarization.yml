@@ -1,10 +1,6 @@
 name: Finalize Notarization (mac)
 
 on:
-  workflow_run:
-    workflows: ["Release Desktop (mac + win)"]
-    types: [completed]
-
   workflow_dispatch:
     inputs:
       run_id:
@@ -22,11 +18,7 @@ permissions:
 
 jobs:
   finalize:
-    if: >
-      ${{
-        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
-        || github.event_name == 'workflow_dispatch'
-      }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: macos-14
     timeout-minutes: 240
 

@@ -1624,6 +1624,41 @@ export const getUserDetail = async (req, res, next) => {
   }
 };
 
+export const resetUserPassword = async (req, res, next) => {
+  try {
+    const uid = toObjectId(req.params.uid);
+    if (!uid) return res.status(400).json({ message: "Invalid user id" });
+
+    let { password } = req.body || {};
+    if (!password || String(password).trim().length < 8) {
+      return res.status(400).json({
+        message: "password is required and must be at least 8 characters",
+      });
+    }
+    password = String(password).trim();
+
+    const user = await User.findById(uid).select("+password +providers");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    user.password = password;
+
+    const providers = Array.isArray(user.providers) ? user.providers : [];
+    const hasPasswordProvider = providers.some((p) => p?.name === "password");
+    if (!hasPasswordProvider) {
+      providers.push({
+        name: "password",
+        sub: user.email || user.phone || String(user._id),
+      });
+      user.providers = providers;
+    }
+
+    await user.save();
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+};
+
 /* ------------ NEW: User Risk History (read-only) ------------ */
 export const getUserRiskHistory = async (req, res, next) => {
   try {

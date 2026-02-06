@@ -22,6 +22,7 @@ import {
   updateRestaurantAdmin,
   listUsers,
   getUserDetail,
+  resetUserPassword,
   getUserRiskHistory,
   banUser,
   unbanUser,
@@ -161,6 +162,12 @@ r.get("/users", auth(), allow("admin"), listUsers);
 r.post("/users", auth(), allow("admin"), createUser);
 r.get("/users/:uid/risk", auth(), allow("admin"), getUserRiskHistory);
 r.get("/users/:uid", auth(), allow("admin"), getUserDetail);
+r.post(
+  "/users/:uid/reset-password",
+  auth(),
+  allow("admin"),
+  resetUserPassword
+);
 r.post("/users/:uid/ban", auth(), allow("admin"), banUser);
 r.post("/users/:uid/unban", auth(), allow("admin"), unbanUser);
 r.post("/users/:uid/role", auth(), allow("admin"), updateUserRole);
