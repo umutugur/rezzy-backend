@@ -498,6 +498,17 @@ export async function adminUpdateUserRole(
   return data;
 }
 
+export async function adminResetUserPassword(
+  uid: string,
+  password: string
+) {
+  const { data } = await api.post(
+    `/admin/users/${uid}/reset-password`,
+    { password }
+  );
+  return data;
+}
+
 // ✅ Risk history
 export type RiskIncidentType =
   | "NO_SHOW"

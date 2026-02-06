@@ -1,9 +1,16 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { api, adminGetUserStats, adminExportUsers } from "../../api/client";
+import {
+  api,
+  adminGetUserStats,
+  adminExportUsers,
+  adminResetUserPassword,
+} from "../../api/client";
 import Sidebar from "../../components/Sidebar";
 import { Stat, StatGrid } from "../../components/Card";
+import Modal from "../../components/Modal";
+import { showToast } from "../../ui/Toast";
 
 type User = {
   _id: string;
@@ -37,6 +44,63 @@ export default function AdminUsersPage() {
       await adminExportUsers();
     } catch {
       // hata toast interceptor tarafından gösteriliyor
+    }
+  };
+
+  const [resetOpen, setResetOpen] = React.useState(false);
+  const [resetTarget, setResetTarget] = React.useState<User | null>(null);
+  const [resetPassword, setResetPassword] = React.useState("");
+  const [resetPassword2, setResetPassword2] = React.useState("");
+  const [resetBusy, setResetBusy] = React.useState(false);
+
+  const openReset = (u: User) => {
+    setResetTarget(u);
+    setResetPassword("");
+    setResetPassword2("");
+    setResetOpen(true);
+  };
+
+  const genRandom = () => {
+    const v = Math.random().toString(36).slice(-10);
+    setResetPassword(v);
+    setResetPassword2(v);
+  };
+
+  const copyPassword = async () => {
+    try {
+      if (!resetPassword) return;
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(resetPassword);
+        showToast("Şifre kopyalandı", "success");
+      }
+    } catch {}
+  };
+
+  const submitReset = async () => {
+    const target = resetTarget;
+    if (!target) return;
+    const p1 = String(resetPassword || "").trim();
+    const p2 = String(resetPassword2 || "").trim();
+    if (p1.length < 8) {
+      showToast("Şifre en az 8 karakter olmalı", "error");
+      return;
+    }
+    if (p1 !== p2) {
+      showToast("Şifreler eşleşmiyor", "error");
+      return;
+    }
+    setResetBusy(true);
+    try {
+      await adminResetUserPassword(target._id, p1);
+      showToast("Şifre sıfırlandı", "success");
+      setResetOpen(false);
+    } catch (e: any) {
+      showToast(
+        e?.response?.data?.message || e?.message || "Şifre sıfırlanamadı",
+        "error"
+      );
+    } finally {
+      setResetBusy(false);
     }
   };
 
@@ -94,6 +158,7 @@ export default function AdminUsersPage() {
                 <th className="py-2 px-4">Rol</th>
                 <th className="py-2 px-4">Risk</th>
                 <th className="py-2 px-4">Durum</th>
+                <th className="py-2 px-4">İşlem</th>
               </tr>
             </thead>
             <tbody>
@@ -148,12 +213,20 @@ export default function AdminUsersPage() {
                         </span>
                       )}
                     </td>
+                    <td className="py-2 px-4">
+                      <button
+                        onClick={() => openReset(u)}
+                        className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm"
+                      >
+                        Şifre Sıfırla
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
               {(!data || data.length === 0) && (
                 <tr>
-                  <td className="py-3 px-4 text-gray-500" colSpan={6}>
+                  <td className="py-3 px-4 text-gray-500" colSpan={7}>
                     Kayıt yok
                   </td>
                 </tr>
@@ -162,6 +235,72 @@ export default function AdminUsersPage() {
           </table>
         </div>
       </div>
+
+      <Modal
+        open={resetOpen}
+        onClose={() => setResetOpen(false)}
+        title="Şifre Sıfırla"
+      >
+        <div className="space-y-3">
+          <div className="text-sm text-gray-600">
+            {resetTarget?.name} • {resetTarget?.email || resetTarget?.phone || resetTarget?._id}
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Yeni Şifre</label>
+            <input
+              type="password"
+              value={resetPassword}
+              onChange={(e) => setResetPassword(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2"
+              placeholder="En az 8 karakter"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Yeni Şifre (Tekrar)</label>
+            <input
+              type="password"
+              value={resetPassword2}
+              onChange={(e) => setResetPassword2(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2"
+              placeholder="Tekrar"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200"
+              onClick={genRandom}
+            >
+              Rastgele Üret
+            </button>
+            <button
+              className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200"
+              onClick={copyPassword}
+              disabled={!resetPassword}
+            >
+              Kopyala
+            </button>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200"
+              onClick={() => setResetOpen(false)}
+              disabled={resetBusy}
+            >
+              Vazgeç
+            </button>
+            <button
+              className="px-3 py-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
+              onClick={submitReset}
+              disabled={resetBusy}
+            >
+              {resetBusy ? "Sıfırlanıyor…" : "Sıfırla"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
