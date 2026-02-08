@@ -14,6 +14,7 @@ export type OrgMembership = {
 
 export type RestaurantMembership = {
   id: string | null;
+  restaurantId?: string | null;
   name: string | null;
   organizationId: string | null;
   status: string | null;
@@ -103,19 +104,26 @@ function sanitizeUser(u: any): MeUser {
       const rest =
         entry?.restaurant && typeof entry.restaurant === "object"
           ? entry.restaurant
+          : entry?.restaurantId && typeof entry.restaurantId === "object"
+          ? entry.restaurantId
           : entry;
 
-      const id =
-        entry?.id ??
-        entry?._id ??
-        rest?._id ??
-        rest ??
+      const restaurantIdRaw =
+        extractObjectId(entry?.restaurantId) ||
+        extractObjectId(entry?.restaurant) ||
+        (typeof entry?.restaurantId === "string" ? entry.restaurantId : null) ||
+        (typeof entry?.restaurant === "string" ? entry.restaurant : null) ||
         null;
 
-      const name =
-        entry?.name ??
-        rest?.name ??
+      const idRaw =
+        restaurantIdRaw ||
+        extractObjectId(entry?.id) ||
+        extractObjectId(entry?._id) ||
+        extractObjectId(rest?._id) ||
+        (typeof entry?.id === "string" ? entry.id : null) ||
         null;
+
+      const name = entry?.name ?? rest?.name ?? null;
 
       const organizationId =
         entry?.organizationId ??
@@ -131,7 +139,12 @@ function sanitizeUser(u: any): MeUser {
       const role = (entry?.role as RestaurantMembershipRole) ?? null;
 
       return {
-        id: id ? String(id) : null,
+        id: idRaw ? String(idRaw) : null,
+        restaurantId: restaurantIdRaw
+          ? String(restaurantIdRaw)
+          : idRaw
+          ? String(idRaw)
+          : null,
         name,
         organizationId: organizationId ? String(organizationId) : null,
         status,

@@ -3,7 +3,7 @@ import React, { useMemo, useState } from "react";
 import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
 import { authStore, MeUser } from "../../store/auth";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import {
@@ -234,6 +234,7 @@ function Drawer({
 
 /* ---------------- Page ---------------- */
 export default function OrgDashboardPage() {
+  const nav = useNavigate();
   const user = authStore.getUser();
   const orgs = useMemo(() => getUserOrganizations(user), [user]);
 
@@ -468,8 +469,7 @@ export default function OrgDashboardPage() {
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                window.history.pushState({}, "", `/org/organizations/${orgId}/menu`);
-                                window.dispatchEvent(new PopStateEvent("popstate"));
+                                nav(`/org/organizations/${orgId}/menu`);
                               }}
                             >
                               Menüyü Yönet
