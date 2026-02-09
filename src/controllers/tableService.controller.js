@@ -50,18 +50,8 @@ export async function createRequest(req, res) {
     }
 
     try {
-      const typeLabel =
-        type === "waiter"
-          ? "Garson çağrısı"
-          : type === "bill"
-          ? "Hesap isteği"
-          : "Masa servisi";
-      const title = tableId ? `Masa ${tableId}` : "Masa servisi";
-      const body = `${typeLabel} alındı.`;
-
       await notifyRestaurantOwner(restaurantId, {
-        title,
-        body,
+        i18n: { key: "table_service_request", vars: { tableId, requestType: type } },
         data: {
           type: "table_service_request",
           requestId: String(doc._id),

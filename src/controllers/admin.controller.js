@@ -8,6 +8,7 @@ import Organization from "../models/Organization.js";
 import BranchRequest from "../models/BranchRequest.js";
 // EN ÜSTE EKLE (diğer importların yanına)
 import { Parser } from "json2csv";
+import { normalizeLang } from "../utils/i18n.js";
 
 /* ------------ helpers ------------ */
 function toObjectId(id) {
@@ -546,7 +547,7 @@ export const createOrganization = async (req, res, next) => {
     region = String(region).trim().toUpperCase();
 
     if (defaultLanguage) {
-      defaultLanguage = String(defaultLanguage).trim();
+      defaultLanguage = normalizeLang(defaultLanguage, "tr");
     }
 
     const org = await Organization.create({
@@ -1258,6 +1259,7 @@ export const getRestaurantDetail = async (req, res, next) => {
         "businessType categorySet " +
         "depositRequired depositAmount depositRate depositType " +
         "checkinWindowBeforeMinutes checkinWindowAfterMinutes underattendanceThresholdPercent " +
+        "preferredLanguage " +
         "mapAddress placeId googleMapsUrl location"
       )
       .lean();
@@ -1415,6 +1417,11 @@ export const updateRestaurantAdmin = async (req, res, next) => {
     if (body.businessType != null) {
       const v = String(body.businessType).trim();
       patch.businessType = v || undefined;
+    }
+
+    if (body.preferredLanguage != null) {
+      const v = normalizeLang(body.preferredLanguage, null);
+      if (v) patch.preferredLanguage = v;
     }
 
     if (body.categorySet != null) {

@@ -4,6 +4,8 @@ import NotificationLog from "../models/NotificationLog.js";
 import User from "../models/User.js";
 import Restaurant from "../models/Restaurant.js";
 import device from "../models/Device.js";
+import { normalizeLang } from "../utils/i18n.js";
+import { renderNotification } from "./notification.i18n.js";
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
 
@@ -12,25 +14,43 @@ const isLikelyExpoToken = (t) =>
   typeof t === "string" && /^ExponentPushToken\[/i.test(t);
 
 // ---- Token toplama ----
-async function getUserPushTokens(userId) {
+async function getUserPushTarget(userId) {
   const u = await User.findById(userId)
-    .select("pushTokens notificationPrefs")
+    .select("pushTokens notificationPrefs preferredLanguage")
     .lean()
     .catch(() => null);
-  if (!u) return [];
-  if (u.notificationPrefs?.push === false) return [];
-  return (u.pushTokens || [])
+
+  const lang = normalizeLang(u?.preferredLanguage, "tr");
+  if (!u) return { tokens: [], lang };
+  if (u.notificationPrefs?.push === false) return { tokens: [], lang };
+
+  const tokens = (u.pushTokens || [])
     .filter((t) => t?.isActive && t?.token && isLikelyExpoToken(t.token))
     .map((t) => t.token);
+
+  return { tokens, lang };
 }
 
-async function getRestaurantOwnerTokens(restaurantId) {
+async function getRestaurantOwnerTarget(restaurantId) {
   const r = await Restaurant.findById(restaurantId)
-    .select("owner")
+    .select("owner preferredLanguage")
     .lean()
     .catch(() => null);
-  if (!r?.owner) return [];
-  return getUserPushTokens(r.owner);
+
+  const restLang = normalizeLang(r?.preferredLanguage, null);
+
+  if (!r?.owner) {
+    return { tokens: [], lang: restLang || normalizeLang(null, "tr"), ownerId: null };
+  }
+
+  const ownerTarget = await getUserPushTarget(r.owner);
+  const lang = normalizeLang(restLang || ownerTarget.lang, "tr");
+
+  return {
+    tokens: ownerTarget.tokens,
+    lang,
+    ownerId: r.owner,
+  };
 }
 
 // ---- Idempotency log ----
@@ -249,14 +269,29 @@ export async function sendToDevices(
 /* ------------------------------------------------------------------ */
 
 // ---- Public API ----
-export async function notifyUser(userId, { title, body, data, key, type, sound, channelId }) {
+export async function notifyUser(
+  userId,
+  { title, body, data, key, type, sound, channelId, i18n }
+) {
   if (key && (await alreadySent(key))) return { ok: true, dup: true };
 
-  const tokens = await getUserPushTokens(userId);
-  const payload = { title, body, data };
+  const target = await getUserPushTarget(userId);
+  const lang = normalizeLang(i18n?.lang || target.lang, "tr");
+
+  let finalTitle = title;
+  let finalBody = body;
+  if (i18n?.key) {
+    const rendered = renderNotification(i18n.key, i18n.vars || {}, lang);
+    finalTitle = rendered.title || finalTitle;
+    finalBody = rendered.body || finalBody;
+  }
+  if (!finalTitle) finalTitle = "Bildirim";
+  if (finalBody == null) finalBody = "";
+
+  const payload = { title: finalTitle, body: finalBody, data };
   if (sound) payload.sound = sound;
   if (channelId) payload.channelId = channelId;
-  const r = await sendExpoPush(tokens, payload);
+  const r = await sendExpoPush(target.tokens, payload);
 
   // ❗️Sadece gerçekten geçersiz olan token’ları temizle
   if (r.invalidTokens?.length) {
@@ -271,31 +306,39 @@ export async function notifyUser(userId, { title, body, data, key, type, sound, 
     type,
     userId,
     payload,
-    meta: { sent: r.sent, invalidTokens: r.invalidTokens, invalidCodes: r.invalidCodes },
+    meta: { sent: r.sent, invalidTokens: r.invalidTokens, invalidCodes: r.invalidCodes, lang },
   });
   return r;
 }
 
 export async function notifyRestaurantOwner(
   restaurantId,
-  { title, body, data, key, type, sound, channelId }
+  { title, body, data, key, type, sound, channelId, i18n }
 ) {
   if (key && (await alreadySent(key))) return { ok: true, dup: true };
 
-  const tokens = await getRestaurantOwnerTokens(restaurantId);
-  const payload = { title, body, data };
+  const target = await getRestaurantOwnerTarget(restaurantId);
+  const lang = normalizeLang(i18n?.lang || target.lang, "tr");
+
+  let finalTitle = title;
+  let finalBody = body;
+  if (i18n?.key) {
+    const rendered = renderNotification(i18n.key, i18n.vars || {}, lang);
+    finalTitle = rendered.title || finalTitle;
+    finalBody = rendered.body || finalBody;
+  }
+  if (!finalTitle) finalTitle = "Bildirim";
+  if (finalBody == null) finalBody = "";
+
+  const payload = { title: finalTitle, body: finalBody, data };
   if (sound) payload.sound = sound;
   if (channelId) payload.channelId = channelId;
-  const r = await sendExpoPush(tokens, payload);
+  const r = await sendExpoPush(target.tokens, payload);
 
   if (r.invalidTokens?.length) {
-    const rest = await Restaurant.findById(restaurantId)
-      .select("owner")
-      .lean()
-      .catch(() => null);
-    if (rest?.owner) {
+    if (target.ownerId) {
       await User.updateOne(
-        { _id: rest.owner },
+        { _id: target.ownerId },
         { $pull: { pushTokens: { token: { $in: r.invalidTokens } } } }
       ).catch(() => {});
     }
@@ -306,7 +349,7 @@ export async function notifyRestaurantOwner(
     type,
     restaurantId,
     payload,
-    meta: { sent: r.sent, invalidTokens: r.invalidTokens, invalidCodes: r.invalidCodes },
+    meta: { sent: r.sent, invalidTokens: r.invalidTokens, invalidCodes: r.invalidCodes, lang },
   });
   return r;
 }

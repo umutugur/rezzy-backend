@@ -106,6 +106,19 @@ export async function fetchMe() {
   return data;
 }
 
+export async function updateMe(patch: {
+  name?: string;
+  phone?: string;
+  email?: string;
+  avatarUrl?: string | null;
+  notificationPrefs?: { push?: boolean; sms?: boolean; email?: boolean };
+  preferredRegion?: string;
+  preferredLanguage?: string;
+}) {
+  const { data } = await api.patch("/auth/me", patch);
+  return data;
+}
+
 // =========================
 // ADMIN — Notifications
 // =========================
@@ -139,6 +152,7 @@ export interface AdminOrganization {
   region?: string;
   logoUrl?: string;
   taxNumber?: string;
+  defaultLanguage?: string;
   createdAt?: string;
   updatedAt?: string;
   // Backend tarafında ek alanlar varsa onları da taşıyabilirsin
@@ -169,6 +183,7 @@ export async function adminCreateOrganization(input: {
   logoUrl?: string;
   taxNumber?: string;
   ownerId?:string;
+  defaultLanguage?: string;
 }) {
   const { data } = await api.post("/admin/organizations", input);
   return data as AdminOrganization;
@@ -763,6 +778,7 @@ export async function restaurantUpdateProfile(rid: string, form: any) {
     priceRange: form.priceRange ?? "₺₺",
     mapAddress: form.mapAddress ?? "",
     placeId: form.placeId ?? "",
+    preferredLanguage: form.preferredLanguage ?? undefined,
   };
 
   if (typeof form.region === "string") {
@@ -1516,6 +1532,28 @@ export async function orgListMyOrganizationRestaurants(
     typeof data?.nextCursor === "string" ? data.nextCursor : undefined;
 
   return { items, nextCursor };
+}
+
+/**
+ * PATCH /org/organizations/:id
+ * - Org owner / admin (ve admin) için organizasyon güncelleme
+ */
+export async function orgUpdateMyOrganization(
+  id: string,
+  input: { defaultLanguage: string }
+) {
+  const { data } = await api.patch(`/org/organizations/${id}`, input);
+  return data;
+}
+
+/**
+ * Admin ekranlarından da aynı endpoint kullanılabilir (admin rolü izinli).
+ */
+export async function adminUpdateOrganization(
+  id: string,
+  input: { defaultLanguage: string }
+) {
+  return orgUpdateMyOrganization(id, input);
 }
 // =========================
 // ORG — Branch Requests

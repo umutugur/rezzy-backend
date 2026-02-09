@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { OAuth2Client } from "google-auth-library";
 import appleSignin from "apple-signin-auth";
+import { normalizeLang } from "../utils/i18n.js";
 // ❌ ensureRestaurantForOwner kaldırıldı – tüm restoran sahipliği artık admin + membership akışlarıyla yönetiliyor
 
 const GOOGLE_AUDIENCES = [
@@ -20,11 +21,11 @@ const BASE_USER_SELECT =
   "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt organizations restaurantMemberships";
 
 const USER_POPULATE = [
-  { path: "restaurantId", select: "_id name" },
-  { path: "organizations.organization", select: "_id name region" },
+  { path: "restaurantId", select: "_id name preferredLanguage" },
+  { path: "organizations.organization", select: "_id name region defaultLanguage" },
   {
     path: "restaurantMemberships.restaurant",
-    select: "_id name organizationId status",
+    select: "_id name organizationId status preferredLanguage",
   },
 ];
 
@@ -125,15 +126,20 @@ function signRefreshToken(user) {
 function toClientUser(u) {
   const preferredRegion = u.preferredRegion ?? null;
   const preferredLanguage =
-    u.preferredLanguage ?? null;
+    normalizeLang(u.preferredLanguage, null);
 
   // restaurantId hem ObjectId hem populate edilmiş obje olabilir
   let restaurantId = null;
   let restaurantName = null;
+  let restaurantPreferredLanguage = null;
   if (u.restaurantId) {
     if (u.restaurantId._id) {
       restaurantId = u.restaurantId._id.toString();
       restaurantName = u.restaurantId.name || null;
+      restaurantPreferredLanguage = normalizeLang(
+        u.restaurantId.preferredLanguage,
+        null
+      );
     } else {
       restaurantId = u.restaurantId.toString?.() || null;
     }
@@ -147,6 +153,7 @@ if (Array.isArray(u.organizations)) {
     let orgId = null;
     let orgName = null;
     let orgRegion = null;
+    let orgDefaultLanguage = null;
 
     const org = entry?.organization;
     if (org) {
@@ -154,6 +161,7 @@ if (Array.isArray(u.organizations)) {
         orgId = org._id.toString();
         orgName = org.name || null;
         orgRegion = org.region || null; // ✅ EKLENDİ
+        orgDefaultLanguage = normalizeLang(org.defaultLanguage, null);
       } else {
         orgId = org.toString?.() || null;
       }
@@ -163,6 +171,7 @@ if (Array.isArray(u.organizations)) {
       id: orgId,
       name: orgName,
       region: orgRegion, // ✅ EKLENDİ
+      defaultLanguage: orgDefaultLanguage,
       role,
     };
   });
@@ -177,6 +186,7 @@ if (Array.isArray(u.organizations)) {
       let restId = null;
       let restName = null;
       let organizationId = null;
+      let preferredLanguage = null;
       let status = null;
 
       const rest = entry?.restaurant;
@@ -195,6 +205,7 @@ if (Array.isArray(u.organizations)) {
           }
 
           status = rest.status || null;
+          preferredLanguage = normalizeLang(rest.preferredLanguage, null);
         } else {
           // populate edilmemişse sadece id
           restId = rest.toString?.() || null;
@@ -206,6 +217,7 @@ if (Array.isArray(u.organizations)) {
         name: restName,
         organizationId,
         status,
+        preferredLanguage,
         role,
       };
     });
@@ -220,6 +232,7 @@ if (Array.isArray(u.organizations)) {
     // 🔹 Legacy alanlar — DOKUNMUYORUZ
     restaurantId,
     restaurantName,
+    restaurantPreferredLanguage,
     avatarUrl: u.avatarUrl ?? null,
     notificationPrefs: {
       push: u.notificationPrefs?.push ?? true,
@@ -554,12 +567,9 @@ export const updateMe = async (req, res, next) => {
     }
 
     // 🔹 Dil: tr / en / ru / el
-    const ALLOWED_LANGS = ["tr", "en", "ru", "el"];
-    if (
-      preferredLanguage &&
-      ALLOWED_LANGS.includes(preferredLanguage)
-    ) {
-      patch.preferredLanguage = preferredLanguage;
+    if (preferredLanguage) {
+      const lang = normalizeLang(preferredLanguage, null);
+      if (lang) patch.preferredLanguage = lang;
     }
 
     const u = await User.findByIdAndUpdate(

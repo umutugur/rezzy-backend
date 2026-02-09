@@ -4,6 +4,7 @@ import { allowOrgOwnerOrAdmin } from "../middlewares/roles.js";
 import {
   listMyOrganizations,
   getMyOrganizationDetail,
+  updateMyOrganization,
   listOrganizationRestaurantsForOwner,
   createBranchRequest,
   listMyBranchRequests,
@@ -18,6 +19,13 @@ r.get(
   auth(),
   allowOrgOwnerOrAdmin("oid"),
   getMyOrganizationDetail
+);
+
+r.patch(
+  "/organizations/:oid",
+  auth(),
+  allowOrgOwnerOrAdmin("oid"),
+  updateMyOrganization
 );
 
 r.get(

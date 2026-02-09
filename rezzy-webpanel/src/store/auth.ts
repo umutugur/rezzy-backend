@@ -9,6 +9,7 @@ export type OrgMembership = {
   id: string | null;
   name: string | null;
   region: string | null;
+  defaultLanguage?: string | null;
   role: OrgMembershipRole | null;
 };
 
@@ -18,6 +19,7 @@ export type RestaurantMembership = {
   name: string | null;
   organizationId: string | null;
   status: string | null;
+  preferredLanguage?: string | null;
   role: RestaurantMembershipRole | null;
 };
 
@@ -28,6 +30,8 @@ export type MeUser = {
   phone?: string | null;
   role: Role;
   region?: string | null;
+  preferredLanguage?: string | null;
+  restaurantPreferredLanguage?: string | null;
 
   // Legacy
   restaurantId?: string | null;
@@ -70,7 +74,14 @@ function sanitizeUser(u: any): MeUser {
       ? String(u.restaurantName)
       : null;
 
-  // organizations[] → { id, name, region, role }
+  const preferredLanguage = u?.preferredLanguage ?? null;
+  const restaurantPreferredLanguage =
+    u?.restaurantPreferredLanguage ??
+    u?.restaurantId?.preferredLanguage ??
+    u?.restaurant?.preferredLanguage ??
+    null;
+
+  // organizations[] → { id, name, region, defaultLanguage, role }
   const organizationsRaw = Array.isArray(u?.organizations) ? u.organizations : [];
   const organizations: OrgMembership[] = organizationsRaw.map((entry: any) => {
     const id =
@@ -90,9 +101,20 @@ function sanitizeUser(u: any): MeUser {
       entry?.organization?.region ??
       null;
 
+    const defaultLanguage =
+      entry?.defaultLanguage ??
+      entry?.organization?.defaultLanguage ??
+      null;
+
     const role = (entry?.role as OrgMembershipRole) ?? null;
 
-    return { id: id ? String(id) : null, name, region: region ? String(region) : null, role };
+    return {
+      id: id ? String(id) : null,
+      name,
+      region: region ? String(region) : null,
+      defaultLanguage: defaultLanguage ? String(defaultLanguage) : null,
+      role,
+    };
   });
 
   // restaurantMemberships[] → { id, name, organizationId, status, role }
@@ -136,6 +158,11 @@ function sanitizeUser(u: any): MeUser {
         rest?.status ??
         null;
 
+      const preferredLanguage =
+        entry?.preferredLanguage ??
+        rest?.preferredLanguage ??
+        null;
+
       const role = (entry?.role as RestaurantMembershipRole) ?? null;
 
       return {
@@ -148,6 +175,7 @@ function sanitizeUser(u: any): MeUser {
         name,
         organizationId: organizationId ? String(organizationId) : null,
         status,
+        preferredLanguage: preferredLanguage ? String(preferredLanguage) : null,
         role,
       };
     }
@@ -174,6 +202,10 @@ function sanitizeUser(u: any): MeUser {
     phone: u.phone ?? null,
     role: (u.role as Role) ?? "customer",
     region,
+    preferredLanguage: preferredLanguage ? String(preferredLanguage) : null,
+    restaurantPreferredLanguage: restaurantPreferredLanguage
+      ? String(restaurantPreferredLanguage)
+      : null,
     restaurantId: rid,
     restaurantName,
     avatarUrl: u.avatarUrl ?? null,

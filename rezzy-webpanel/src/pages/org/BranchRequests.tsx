@@ -11,15 +11,22 @@ import {
   type OrgMyOrganization,
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
+import { useI18n, setLocale } from "../../i18n";
+import { setActiveOrgId } from "../../i18n/panel";
+import { DEFAULT_LANGUAGE } from "../../utils/languages";
 
 type OrgLite = {
   id: string;
   name: string;
   region?: string | null;
+  defaultLanguage?: string | null;
   role?: string;
 };
 
-function getUserOrganizations(u: MeUser | null): OrgLite[] {
+function getUserOrganizations(
+  u: MeUser | null,
+  t: (key: string, options?: any) => string
+): OrgLite[] {
   if (!u || !Array.isArray(u.organizations)) return [];
 
   return u.organizations
@@ -38,9 +45,10 @@ function getUserOrganizations(u: MeUser | null): OrgLite[] {
       return {
         id: String(id),
         // toClientUser -> name alanını zaten koyuyor
-        name: o.name || o.organizationName || "İsimsiz Organizasyon",
+        name: o.name || o.organizationName || t("İsimsiz Organizasyon"),
         // Şu an backend region göndermiyor ama ileride eklersen buraya düşer
         region: o.region ?? null,
+        defaultLanguage: o.defaultLanguage ?? null,
         role: o.role,
       };
     })
@@ -55,8 +63,9 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function OrgBranchRequestsPage() {
   const qc = useQueryClient();
+  const { t } = useI18n();
   const user = authStore.getUser();
-  const orgs = getUserOrganizations(user);
+  const orgs = getUserOrganizations(user, t);
 
   const [selectedOrgId, setSelectedOrgId] = React.useState<string>(
     orgs[0]?.id ?? ""
@@ -64,6 +73,15 @@ export default function OrgBranchRequestsPage() {
   const [statusFilter, setStatusFilter] = React.useState<string>("");
 
   const [cursor, setCursor] = React.useState<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    if (selectedOrgId) setActiveOrgId(selectedOrgId);
+    const lang =
+      orgs.find((o) => o.id === selectedOrgId)?.defaultLanguage ||
+      orgs[0]?.defaultLanguage ||
+      DEFAULT_LANGUAGE;
+    setLocale(lang);
+  }, [orgs, selectedOrgId]);
 
   // Liste çekme
   const listQ = useQuery({
@@ -123,7 +141,7 @@ export default function OrgBranchRequestsPage() {
         notes: notes.trim() || undefined,
       }),
     onSuccess: () => {
-      showToast("Şube talebi oluşturuldu", "success");
+      showToast(t("Şube talebi oluşturuldu"), "success");
       setName("");
       setCity("");
       setRegion("");
@@ -143,7 +161,7 @@ export default function OrgBranchRequestsPage() {
       const msg =
         err?.response?.data?.message ||
         err?.message ||
-        "Şube talebi oluşturulamadı";
+        t("Şube talebi oluşturulamadı");
       showToast(msg, "error");
     },
   });
@@ -151,11 +169,11 @@ export default function OrgBranchRequestsPage() {
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrgId) {
-      showToast("Önce bir organizasyon seçin", "error");
+      showToast(t("Önce bir organizasyon seçin"), "error");
       return;
     }
     if (!name.trim()) {
-      showToast("Şube adı zorunlu", "error");
+      showToast(t("Şube adı zorunlu"), "error");
       return;
     }
     createMut.mutate();
@@ -184,11 +202,11 @@ export default function OrgBranchRequestsPage() {
         <h2 className="text-lg font-semibold">Şube Talepleri</h2>
 
         {/* Filtreler */}
-        <Card title="Filtreler">
+        <Card title={t("Filtreler")}>
           <div className="grid md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                Organizasyon
+                {t("Organizasyon")}
               </label>
               <select
                 className="border rounded-lg px-3 py-2 w-full text-sm"
@@ -202,36 +220,36 @@ export default function OrgBranchRequestsPage() {
                   </option>
                 ))}
                 {orgs.length === 0 && (
-                  <option value="">Organizasyon bulunamadı</option>
+                  <option value="">{t("Organizasyon bulunamadı")}</option>
                 )}
               </select>
             </div>
 
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                Durum
+                {t("Durum")}
               </label>
               <select
                 className="border rounded-lg px-3 py-2 w-full text-sm"
                 value={statusFilter}
                 onChange={(e) => handleChangeStatus(e.target.value)}
               >
-                <option value="">Hepsi</option>
-                <option value="pending">Beklemede</option>
-                <option value="approved">Onaylandı</option>
-                <option value="rejected">Reddedildi</option>
+                <option value="">{t("Hepsi")}</option>
+                <option value="pending">{t("Beklemede")}</option>
+                <option value="approved">{t("Onaylandı")}</option>
+                <option value="rejected">{t("Reddedildi")}</option>
               </select>
             </div>
           </div>
         </Card>
 
         {/* Liste */}
-        <Card title="Mevcut Talepler">
+        <Card title={t("Mevcut Talepler")}>
           {listQ.isLoading ? (
-            <div className="text-sm text-gray-500">Yükleniyor…</div>
+            <div className="text-sm text-gray-500">{t("Yükleniyor…")}</div>
           ) : items.length === 0 ? (
             <div className="text-sm text-gray-500">
-              Henüz şube talebi yok.
+              {t("Henüz şube talebi yok.")}
             </div>
           ) : (
             <>
@@ -239,11 +257,11 @@ export default function OrgBranchRequestsPage() {
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="text-left text-gray-500">
-                      <th className="py-2 px-4">Şube Adı</th>
-                      <th className="py-2 px-4">Şehir</th>
-                      <th className="py-2 px-4">Durum</th>
-                      <th className="py-2 px-4">Oluşturma</th>
-                      <th className="py-2 px-4">Son İşlem</th>
+                      <th className="py-2 px-4">{t("Şube Adı")}</th>
+                      <th className="py-2 px-4">{t("Şehir")}</th>
+                      <th className="py-2 px-4">{t("Durum")}</th>
+                      <th className="py-2 px-4">{t("Oluşturma")}</th>
+                      <th className="py-2 px-4">{t("Son İşlem")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -265,7 +283,7 @@ export default function OrgBranchRequestsPage() {
                                 : "bg-amber-50 text-amber-700"
                             }`}
                           >
-                            {STATUS_LABEL[r.status] ?? r.status}
+                            {t(STATUS_LABEL[r.status] ?? r.status)}
                           </span>
                         </td>
                         <td className="py-2 px-4">
@@ -273,7 +291,9 @@ export default function OrgBranchRequestsPage() {
                         </td>
                         <td className="py-2 px-4">
                           {r.status === "rejected" && r.rejectReason
-                            ? `Reddedildi: ${r.rejectReason}`
+                            ? t("Reddedildi: {reason}", {
+                                reason: r.rejectReason,
+                              })
                             : r.resolvedAt
                             ? fmtDate(r.resolvedAt)
                             : "-"}
@@ -292,7 +312,7 @@ export default function OrgBranchRequestsPage() {
                     onClick={() => setCursor(nextCursor)}
                     disabled={listQ.isFetching}
                   >
-                    Daha Fazla Yükle
+                    {t("Daha Fazla Yükle")}
                   </button>
                 </div>
               )}
@@ -301,14 +321,14 @@ export default function OrgBranchRequestsPage() {
         </Card>
 
         {/* Yeni talep formu */}
-        <Card title="Yeni Şube Talebi Oluştur">
+        <Card title={t("Yeni Şube Talebi Oluştur")}>
           <form
             onSubmit={handleCreate}
             className="grid md:grid-cols-3 gap-3"
           >
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                Şube Adı *
+                {t("Şube Adı *")}
               </label>
               <input
                 type="text"
@@ -320,7 +340,7 @@ export default function OrgBranchRequestsPage() {
             </div>
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                Şehir
+                {t("Şehir")}
               </label>
               <input
                 type="text"
@@ -331,7 +351,7 @@ export default function OrgBranchRequestsPage() {
             </div>
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                Bölge (ülke kodu, örn: TR, UK)
+                {t("Bölge (ülke kodu, örn: TR, UK)")}
               </label>
               <input
                 type="text"
@@ -344,7 +364,7 @@ export default function OrgBranchRequestsPage() {
 
             <div className="md:col-span-2">
               <label className="block text-xs text-gray-600 mb-1">
-                Adres
+                {t("Adres")}
               </label>
               <input
                 type="text"
@@ -355,7 +375,7 @@ export default function OrgBranchRequestsPage() {
             </div>
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                Telefon
+                {t("Telefon")}
               </label>
               <input
                 type="text"
@@ -367,7 +387,7 @@ export default function OrgBranchRequestsPage() {
 
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                IBAN
+                {t("IBAN")}
               </label>
               <input
                 type="text"
@@ -378,7 +398,7 @@ export default function OrgBranchRequestsPage() {
             </div>
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                Fiyat Aralığı
+                {t("Fiyat Aralığı")}
               </label>
               <select
                 className="border rounded-lg px-3 py-2 w-full text-sm"
@@ -393,25 +413,25 @@ export default function OrgBranchRequestsPage() {
             </div>
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                İşletme Türü
+                {t("İşletme Türü")}
               </label>
               <select
                 className="border rounded-lg px-3 py-2 w-full text-sm"
                 value={businessType}
                 onChange={(e) => setBusinessType(e.target.value)}
               >
-                <option value="restaurant">Restaurant</option>
-                <option value="bar">Bar</option>
-                <option value="pub">Pub</option>
-                <option value="cafe">Cafe</option>
-                <option value="meyhane">Meyhane</option>
-                <option value="other">Diğer</option>
+                <option value="restaurant">{t("Restaurant")}</option>
+                <option value="bar">{t("Bar")}</option>
+                <option value="pub">{t("Pub")}</option>
+                <option value="cafe">{t("Cafe")}</option>
+                <option value="meyhane">{t("Meyhane")}</option>
+                <option value="other">{t("Diğer")}</option>
               </select>
             </div>
 
             <div className="md:col-span-3">
               <label className="block text-xs text-gray-600 mb-1">
-                Açıklama (opsiyonel)
+                {t("Açıklama (opsiyonel)")}
               </label>
               <textarea
                 className="border rounded-lg px-3 py-2 w-full text-sm min-h-[60px]"
@@ -421,7 +441,7 @@ export default function OrgBranchRequestsPage() {
             </div>
             <div className="md:col-span-3">
               <label className="block text-xs text-gray-600 mb-1">
-                Not (sadece admin için, opsiyonel)
+                {t("Not (sadece admin için, opsiyonel)")}
               </label>
               <textarea
                 className="border rounded-lg px-3 py-2 w-full text-sm min-h-[60px]"
@@ -437,8 +457,8 @@ export default function OrgBranchRequestsPage() {
                 className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm disabled:opacity-60"
               >
                 {createMut.isPending
-                  ? "Talep gönderiliyor…"
-                  : "Şube Talebi Oluştur"}
+                  ? t("Talep gönderiliyor…")
+                  : t("Şube Talebi Oluştur")}
               </button>
             </div>
           </form>

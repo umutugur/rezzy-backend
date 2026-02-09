@@ -15,6 +15,10 @@ import {
   OrgMenuItem,
 } from "../../api/client";
 import { getCurrencySymbolForRegion } from "../../utils/currency";
+import { authStore } from "../../store/auth";
+import { DEFAULT_LANGUAGE } from "../../utils/languages";
+import { useI18n, setLocale } from "../../i18n";
+import { setActiveOrgId } from "../../i18n/panel";
 
 type RouteParams = {
   id: string; // /org/organizations/:id/menu
@@ -24,6 +28,7 @@ export default function OrgMenuManagerPage() {
   const { id } = useParams<RouteParams>();
   const oid = id || "";
   const qc = useQueryClient();
+  const { t } = useI18n();
   
   // ---------- Query: Org Menü ----------
   const menuQ = useQuery({
@@ -31,6 +36,16 @@ export default function OrgMenuManagerPage() {
     queryFn: () => orgGetMenu(oid),
     enabled: !!oid,
   });
+
+  React.useEffect(() => {
+    if (!oid) return;
+    setActiveOrgId(oid);
+    const user = authStore.getUser();
+    const lang =
+      user?.organizations?.find((o) => String(o?.id) === String(oid))
+        ?.defaultLanguage || DEFAULT_LANGUAGE;
+    setLocale(lang);
+  }, [oid]);
 
   const categories: OrgMenuCategory[] = menuQ.data?.categories ?? [];
   const [selectedCatId, setSelectedCatId] = React.useState<string | null>(null);
@@ -238,8 +253,9 @@ export default function OrgMenuManagerPage() {
   if (!oid) {
     return (
       <div className="p-4 text-sm text-red-600">
-        Organizasyon ID bulunamadı. Route parametresini kontrol et
-        (`/org/organizations/:id/menu` gibi).
+        {t(
+          "Organizasyon ID bulunamadı. Route parametresini kontrol et (/org/organizations/:id/menu gibi)."
+        )}
       </div>
     );
   }
@@ -247,26 +263,26 @@ export default function OrgMenuManagerPage() {
   return (
     <div className="flex-1 space-y-6">
       <h2 className="text-lg font-semibold">
-        Organizasyon Menüsü — Kategori & Ürünler
+        {t("Organizasyon Menüsü — Kategori & Ürünler")}
       </h2>
 
       {menuQ.isLoading && (
-        <div className="text-sm text-gray-500">Menü yükleniyor…</div>
+        <div className="text-sm text-gray-500">{t("Menü yükleniyor…")}</div>
       )}
 
       {menuQ.data && (
         <div className="text-sm text-gray-500">
-          Organizasyon:{" "}
+          {t("Organizasyon")}:{" "}
           <span className="font-medium">
             {menuQ.data.organization?.name}
           </span>{" "}
-          ({menuQ.data.organization?.region || "region yok"})
+          ({menuQ.data.organization?.region || t("Bölge yok")})
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ---------- Categories Column ---------- */}
-        <Card title="Org Kategorileri">
+        <Card title={t("Org Kategorileri")}>
           <div className="space-y-3">
             {categories.map((c) => {
               const isSelected = c._id === selectedCatId;
@@ -292,7 +308,10 @@ export default function OrgMenuManagerPage() {
                           </div>
                         )}
                         <div className="text-xs text-gray-400 mt-1">
-                          Sıra: {c.order} • {c.isActive ? "Aktif" : "Pasif"}
+                          {t("Sıra: {order} • {status}", {
+                            order: c.order,
+                            status: c.isActive ? t("Aktif") : t("Pasif"),
+                          })}
                         </div>
                       </button>
 
@@ -309,17 +328,23 @@ export default function OrgMenuManagerPage() {
                             });
                           }}
                         >
-                          Düzenle
+                          {t("Düzenle")}
                         </button>
                         <button
                           className="px-2 py-1 text-xs rounded bg-red-50 text-red-700 hover:bg-red-100"
                           onClick={() => {
-                            if (confirm(`"${c.title}" kategorisi pasif yapılsın mı?`)) {
+                            if (
+                              confirm(
+                                t("\"{title}\" kategorisi pasif yapılsın mı?", {
+                                  title: c.title,
+                                })
+                              )
+                            ) {
                               deleteCatMut.mutate(c._id);
                             }
                           }}
                         >
-                          Pasif Yap
+                          {t("Pasif Yap")}
                         </button>
                       </div>
                     </>
@@ -328,7 +353,7 @@ export default function OrgMenuManagerPage() {
                       <input
                         className="w-full border rounded px-2 py-1 text-sm"
                         value={editingCat.title ?? ""}
-                        placeholder="Kategori adı"
+                        placeholder={t("Kategori adı")}
                         onChange={(e) =>
                           setEditingCat((p) => ({ ...p, title: e.target.value }))
                         }
@@ -336,7 +361,7 @@ export default function OrgMenuManagerPage() {
                       <input
                         className="w-full border rounded px-2 py-1 text-sm"
                         value={editingCat.description ?? ""}
-                        placeholder="Açıklama"
+                        placeholder={t("Açıklama")}
                         onChange={(e) =>
                           setEditingCat((p) => ({
                             ...p,
@@ -347,7 +372,7 @@ export default function OrgMenuManagerPage() {
                       <div className="flex gap-2 items-center">
                         <div className="flex flex-col">
                           <label className="text-xs text-gray-500 mb-1">
-                            Sıra (menüde görünme)
+                            {t("Sıra (menüde görünme)")}
                           </label>
                           <input
                             type="number"
@@ -373,7 +398,7 @@ export default function OrgMenuManagerPage() {
                               }))
                             }
                           />
-                          Aktif
+                          {t("Aktif")}
                         </label>
                       </div>
 
@@ -388,13 +413,13 @@ export default function OrgMenuManagerPage() {
                             setEditingCatId(null);
                           }}
                         >
-                          Kaydet
+                          {t("Kaydet")}
                         </button>
                         <button
                           className="px-3 py-1.5 text-xs rounded bg-gray-100 hover:bg-gray-200"
                           onClick={() => setEditingCatId(null)}
                         >
-                          Vazgeç
+                          {t("Vazgeç")}
                         </button>
                       </div>
                     </div>
@@ -405,10 +430,10 @@ export default function OrgMenuManagerPage() {
 
             {/* New Category */}
             <div className="border rounded-lg p-3 bg-white space-y-2">
-              <div className="text-sm font-medium">Yeni Org Kategorisi</div>
+              <div className="text-sm font-medium">{t("Yeni Org Kategorisi")}</div>
               <input
                 className="w-full border rounded px-2 py-1 text-sm"
-                placeholder="Başlık"
+                placeholder={t("Başlık")}
                 value={newCat.title}
                 onChange={(e) =>
                   setNewCat((p) => ({ ...p, title: e.target.value }))
@@ -416,7 +441,7 @@ export default function OrgMenuManagerPage() {
               />
               <input
                 className="w-full border rounded px-2 py-1 text-sm"
-                placeholder="Açıklama"
+                placeholder={t("Açıklama")}
                 value={newCat.description}
                 onChange={(e) =>
                   setNewCat((p) => ({ ...p, description: e.target.value }))
@@ -425,12 +450,12 @@ export default function OrgMenuManagerPage() {
               <div className="flex items-center gap-3">
                 <div className="flex flex-col w-32">
                   <label className="text-xs text-gray-500 mb-1">
-                    Sıra (menüde görünme)
+                    {t("Sıra (menüde görünme)")}
                   </label>
                   <input
                     type="number"
                     className="border rounded px-2 py-1 text-sm"
-                    placeholder="Örn: 10"
+                    placeholder={t("Örn: 10")}
                     value={newCat.order}
                     onChange={(e) =>
                       setNewCat((p) => ({
@@ -448,7 +473,7 @@ export default function OrgMenuManagerPage() {
                       setNewCat((p) => ({ ...p, isActive: e.target.checked }))
                     }
                   />
-                  Aktif
+                  {t("Aktif")}
                 </label>
               </div>
               <button
@@ -464,7 +489,7 @@ export default function OrgMenuManagerPage() {
                   });
                 }}
               >
-                Kategori Ekle
+                {t("Kategori Ekle")}
               </button>
             </div>
           </div>
@@ -475,13 +500,13 @@ export default function OrgMenuManagerPage() {
           <Card
             title={
               selectedCat
-                ? `Org Ürünleri — ${selectedCat.title}`
-                : "Org Ürünleri"
+                ? t("Org Ürünleri — {title}", { title: selectedCat.title })
+                : t("Org Ürünleri")
             }
           >
             {!selectedCat && (
               <div className="text-sm text-gray-500">
-                Sol taraftan bir kategori seç.
+                {t("Sol taraftan bir kategori seç.")}
               </div>
             )}
 
@@ -502,13 +527,15 @@ export default function OrgMenuManagerPage() {
                               </div>
                             )}
                             <div className="text-xs text-gray-400 mt-1">
-                              sıra: {it.order} •{" "}
-                              {it.isActive ? "aktif" : "pasif"}
+                              {t("sıra: {order} • {status}", {
+                                order: it.order,
+                                status: it.isActive ? t("aktif") : t("pasif"),
+                              })}
                             </div>
                           </div>
 
                           <div className="md:col-span-2 text-sm">
-                            Varsayılan fiyat:{" "}
+                            {t("Varsayılan fiyat")}:{" "}
                             <b>
                               {it.defaultPrice} {currencySymbol}
                             </b>
@@ -527,7 +554,7 @@ export default function OrgMenuManagerPage() {
                               />
                             ) : (
                               <div className="w-20 h-16 rounded border bg-gray-50 flex items-center justify-center text-xs text-gray-400">
-                                Foto yok
+                                {t("Foto yok")}
                               </div>
                             )}
                           </div>
@@ -550,17 +577,23 @@ export default function OrgMenuManagerPage() {
                             });
                           }}
                             >
-                              Düzenle
+                              {t("Düzenle")}
                             </button>
                             <button
                               className="px-2 py-1 text-xs rounded bg-red-50 text-red-700 hover:bg-red-100"
                               onClick={() => {
-                                if (confirm(`"${it.title}" pasif yapılsın mı?`)) {
+                                if (
+                                  confirm(
+                                    t("\"{title}\" pasif yapılsın mı?", {
+                                      title: it.title,
+                                    })
+                                  )
+                                ) {
                                   deleteItemMut.mutate(it._id);
                                 }
                               }}
                             >
-                              Pasif Yap
+                              {t("Pasif Yap")}
                             </button>
                           </div>
                         </div>
@@ -569,12 +602,12 @@ export default function OrgMenuManagerPage() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                             <div className="flex flex-col">
                               <label className="text-xs text-gray-500 mb-1">
-                                Ürün adı
+                                {t("Ürün adı")}
                               </label>
                               <input
                                 className="border rounded px-2 py-1 text-sm"
                                 value={editingItem.title ?? ""}
-                                placeholder="Örn: Serpme Kahvaltı"
+                                placeholder={t("Örn: Serpme Kahvaltı")}
                                 onChange={(e) =>
                                   setEditingItem((p) => ({
                                     ...p,
@@ -586,13 +619,15 @@ export default function OrgMenuManagerPage() {
 
                             <div className="flex flex-col">
                               <label className="text-xs text-gray-500 mb-1">
-                                Varsayılan fiyat ({currencySymbol})
+                                {t("Varsayılan fiyat ({currencySymbol})", {
+                                  currencySymbol,
+                                })}
                               </label>
                               <input
                                 type="number"
                                 className="border rounded px-2 py-1 text-sm"
                                 value={editingItem.defaultPrice ?? 0}
-                                placeholder="Örn: 450"
+                                placeholder={t("Örn: 450")}
                                 onChange={(e) =>
                                   setEditingItem((p) => ({
                                     ...p,
@@ -607,7 +642,7 @@ export default function OrgMenuManagerPage() {
                           <input
                             className="w-full border rounded px-2 py-1 text-sm"
                             value={editingItem.description ?? ""}
-                            placeholder="Açıklama"
+                            placeholder={t("Açıklama")}
                             onChange={(e) =>
                               setEditingItem((p) => ({
                                 ...p,
@@ -619,7 +654,9 @@ export default function OrgMenuManagerPage() {
                           <input
                             className="w-full border rounded px-2 py-1 text-sm"
                             value={editingItem.tagsText ?? ""}
-                            placeholder="Etiketler (virgülle) örn: acı, signature"
+                            placeholder={t(
+                              "Etiketler (virgülle) örn: acı, signature"
+                            )}
                             onChange={(e) =>
                               setEditingItem((p) => ({
                                 ...p,
@@ -631,13 +668,13 @@ export default function OrgMenuManagerPage() {
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
                             <div className="flex flex-col">
                               <label className="text-xs text-gray-500 mb-1">
-                                Sıra (bu kategoride)
+                                {t("Sıra (bu kategoride)")}
                               </label>
                               <input
                                 type="number"
                                 className="border rounded px-2 py-1 text-sm"
                                 value={editingItem.order ?? 0}
-                                placeholder="Örn: 1"
+                                placeholder={t("Örn: 1")}
                                 onChange={(e) =>
                                   setEditingItem((p) => ({
                                     ...p,
@@ -648,7 +685,9 @@ export default function OrgMenuManagerPage() {
                             </div>
 
                             <div className="flex flex-col">
-                              <label className="text-xs text-gray-500 mb-1">Fotoğraf</label>
+                              <label className="text-xs text-gray-500 mb-1">
+                                {t("Fotoğraf")}
+                              </label>
 
                               <div className="flex items-center gap-3 mb-2">
                                 {editingItem.photoPreviewUrl ? (
@@ -663,7 +702,7 @@ export default function OrgMenuManagerPage() {
                                   />
                                 ) : (
                                   <div className="w-20 h-16 rounded border bg-gray-50 flex items-center justify-center text-xs text-gray-400">
-                                    Foto yok
+                                    {t("Foto yok")}
                                   </div>
                                 )}
 
@@ -679,7 +718,7 @@ export default function OrgMenuManagerPage() {
                                         }))
                                       }
                                     />
-                                    Fotoğrafı kaldır
+                                    {t("Fotoğrafı kaldır")}
                                   </label>
                                 )}
                               </div>
@@ -703,7 +742,7 @@ export default function OrgMenuManagerPage() {
                                   }))
                                 }
                               />
-                              Aktif
+                              {t("Aktif")}
                             </label>
                           </div>
 
@@ -740,7 +779,7 @@ export default function OrgMenuManagerPage() {
                                 setEditingItem({});
                               }}
                             >
-                              Kaydet
+                              {t("Kaydet")}
                             </button>
                             <button
                               className="px-3 py-1.5 text-xs rounded bg-gray-100 hover:bg-gray-200"
@@ -749,7 +788,7 @@ export default function OrgMenuManagerPage() {
                                 setEditingItem({});
                               }}
                             >
-                              Vazgeç
+                              {t("Vazgeç")}
                             </button>
                           </div>
                         </div>
@@ -760,16 +799,16 @@ export default function OrgMenuManagerPage() {
 
                 {items.length === 0 && (
                   <div className="text-sm text-gray-500">
-                    Bu org kategorisinde ürün yok.
+                    {t("Bu org kategorisinde ürün yok.")}
                   </div>
                 )}
 
                 {/* New Item */}
                 <div className="border rounded-lg p-3 bg-white space-y-2">
-                  <div className="text-sm font-medium">Yeni Org Ürünü</div>
+                  <div className="text-sm font-medium">{t("Yeni Org Ürünü")}</div>
                   <input
                     className="w-full border rounded px-2 py-1 text-sm"
-                    placeholder="Ürün adı"
+                    placeholder={t("Ürün adı")}
                     value={newItem.title}
                     onChange={(e) =>
                       setNewItem((p) => ({ ...p, title: e.target.value }))
@@ -777,7 +816,7 @@ export default function OrgMenuManagerPage() {
                   />
                   <input
                     className="w-full border rounded px-2 py-1 text-sm"
-                    placeholder="Açıklama"
+                    placeholder={t("Açıklama")}
                     value={newItem.description}
                     onChange={(e) =>
                       setNewItem((p) => ({
@@ -789,12 +828,14 @@ export default function OrgMenuManagerPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div className="flex flex-col">
                       <label className="text-xs text-gray-500 mb-1">
-                        Varsayılan fiyat ({currencySymbol})
+                        {t("Varsayılan fiyat ({currencySymbol})", {
+                          currencySymbol,
+                        })}
                       </label>
                       <input
                         type="number"
                         className="border rounded px-2 py-1 text-sm"
-                        placeholder="Örn: 350"
+                        placeholder={t("Örn: 350")}
                         value={newItem.defaultPrice}
                         onChange={(e) =>
                           setNewItem((p) => ({
@@ -807,12 +848,12 @@ export default function OrgMenuManagerPage() {
 
                     <div className="flex flex-col">
                       <label className="text-xs text-gray-500 mb-1">
-                        Sıra (bu kategoride)
+                        {t("Sıra (bu kategoride)")}
                       </label>
                       <input
                         type="number"
                         className="border rounded px-2 py-1 text-sm"
-                        placeholder="Örn: 1"
+                        placeholder={t("Örn: 1")}
                         value={newItem.order}
                         onChange={(e) =>
                           setNewItem((p) => ({
@@ -825,11 +866,11 @@ export default function OrgMenuManagerPage() {
 
                     <div className="flex flex-col">
                       <label className="text-xs text-gray-500 mb-1">
-                        Etiketler (virgülle)
+                        {t("Etiketler (virgülle)")}
                       </label>
                       <input
                         className="border rounded px-2 py-1 text-sm"
-                        placeholder="signature, paylaşım, acı"
+                        placeholder={t("signature, paylaşım, acı")}
                         value={newItem.tagsText}
                         onChange={(e) =>
                           setNewItem((p) => ({
@@ -842,7 +883,9 @@ export default function OrgMenuManagerPage() {
                   </div>
 
                   <div className="flex flex-col">
-                    <label className="text-xs text-gray-500 mb-1">Fotoğraf</label>
+                    <label className="text-xs text-gray-500 mb-1">
+                      {t("Fotoğraf")}
+                    </label>
 
                     <div className="flex items-center gap-3 mb-2">
                       {newItem.photoPreviewUrl ? (
@@ -850,12 +893,12 @@ export default function OrgMenuManagerPage() {
                           src={newItem.photoPreviewUrl}
                           className="w-20 h-16 object-cover rounded border"
                         />
-                      ) : (
-                        <div className="w-20 h-16 rounded border bg-gray-50 flex items-center justify-center text-xs text-gray-400">
-                          Foto yok
-                        </div>
-                      )}
-                    </div>
+                    ) : (
+                      <div className="w-20 h-16 rounded border bg-gray-50 flex items-center justify-center text-xs text-gray-400">
+                        {t("Foto yok")}
+                      </div>
+                    )}
+                  </div>
 
                     <input
                       type="file"
@@ -876,7 +919,7 @@ export default function OrgMenuManagerPage() {
                         }))
                       }
                     />
-                    Aktif
+                    {t("Aktif")}
                   </label>
 
                   <button
@@ -922,7 +965,7 @@ export default function OrgMenuManagerPage() {
                       });
                     }}
                   >
-                    Ürün Ekle
+                    {t("Ürün Ekle")}
                   </button>
                 </div>
               </div>

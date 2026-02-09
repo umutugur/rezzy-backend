@@ -11,7 +11,11 @@ import {
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import { authStore, MeUser } from "./store/auth";
-import { fetchMe, loginWithEmail } from "./api/client";
+import { fetchMe, loginWithEmail, updateMe } from "./api/client";
+import { LANG_OPTIONS, DEFAULT_LANGUAGE } from "./utils/languages";
+import { useI18n, setLocale } from "./i18n";
+import { resolvePanelLanguage } from "./i18n/panel";
+import { showToast } from "./ui/Toast";
 
 // Pages
 import AdminDashboardPage from "./pages/admin/Dashboard";
@@ -104,20 +108,76 @@ function hasOrgPanelAccess(user: MeUser | null): boolean {
 
 // ---- Basit UI parçaları ----
 function Shell({ children }: { children: React.ReactNode }) {
-  const u = authStore.getUser();
+  const [u, setU] = React.useState<MeUser | null>(authStore.getUser());
   const nav = useNavigate();
+  const location = useLocation();
+  const { t } = useI18n();
+  const isAdminRoute = location.pathname.startsWith("/admin");
+  const [lang, setLang] = React.useState<string>(
+    u?.preferredLanguage || DEFAULT_LANGUAGE
+  );
+  const [langSaving, setLangSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    const onChange = () => setU(authStore.getUser());
+    window.addEventListener("auth:changed", onChange);
+    return () => window.removeEventListener("auth:changed", onChange);
+  }, []);
+
+  React.useEffect(() => {
+    if (u?.preferredLanguage) {
+      setLang(u.preferredLanguage);
+    }
+  }, [u?.preferredLanguage]);
+
+  const handleAdminLangChange = async (value: string) => {
+    if (!u) return;
+    setLang(value);
+    setLangSaving(true);
+    try {
+      const updated = await updateMe({ preferredLanguage: value });
+      authStore.setUser(updated);
+      setLocale(value);
+      showToast(t("Dil güncellendi"), "success");
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message || err?.message || t("Dil güncellenemedi");
+      showToast(msg, "error");
+      setLang(u.preferredLanguage || DEFAULT_LANGUAGE);
+    } finally {
+      setLangSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-full">
       <header className="bg-white shadow-sm">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-semibold">Rezvix Web Panel</h1>
+          <h1 className="text-lg font-semibold">{t("Rezvix Web Panel")}</h1>
           <div className="flex items-center gap-3">
+            {u?.role === "admin" && isAdminRoute && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">{t("Dil")}</span>
+                <select
+                  className="border rounded-md px-2 py-1 text-xs"
+                  value={lang}
+                  onChange={(e) => handleAdminLangChange(e.target.value)}
+                  disabled={langSaving}
+                >
+                  {LANG_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {u?.role === "admin" && (
               <button
                 onClick={() => nav("/admin/notifications")}
                 className="px-3 py-1.5 text-sm rounded-md bg-black text-white hover:opacity-90"
               >
-                Bildirim Gönder
+                {t("Bildirim Gönder")}
               </button>
             )}
             <UserBadge />
@@ -132,6 +192,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 function UserBadge() {
   const [user, setUser] = React.useState<MeUser | null>(authStore.getUser());
   const nav = useNavigate();
+  const { t } = useI18n();
 
   React.useEffect(() => {
     const onChange = () => setUser(authStore.getUser());
@@ -144,20 +205,26 @@ function UserBadge() {
   // Rol label'ı: admin / org_owner / location_manager vs.
   const roleLabel = React.useMemo(() => {
     if (!user) return "-";
-    if (user.role === "admin") return "Admin";
+    if (user.role === "admin") return t("Admin");
 
     const orgOwner = user.organizations?.find((o) => o.role === "org_owner");
-    if (orgOwner) return `Org Owner • ${orgOwner.name ?? "—"}`;
+    if (orgOwner) {
+      return t("Org Owner • {name}", { name: orgOwner.name ?? "—" });
+    }
 
     const locManager = user.restaurantMemberships?.find(
       (m) => m.role === "location_manager"
     );
-    if (locManager) return `Lokasyon Müdürü • ${locManager.name ?? "—"}`;
+    if (locManager) {
+      return t("Lokasyon Müdürü • {name}", {
+        name: locManager.name ?? "—",
+      });
+    }
 
-    if (user.role === "restaurant") return "Restaurant Kullanıcısı";
+    if (user.role === "restaurant") return t("Restaurant Kullanıcısı");
 
-    return user.role;
-  }, [user]);
+    return user.role ? t(String(user.role)) : "-";
+  }, [t, user]);
 
   return (
     <div className="flex items-center gap-3">
@@ -171,7 +238,7 @@ function UserBadge() {
           (nav as any)("/login", { replace: true });
         }}
       >
-        Çıkış
+        {t("Çıkış")}
       </button>
     </div>
   );
@@ -233,6 +300,7 @@ function LoginPage() {
   const [error, setError] = React.useState<string | null>(null);
   const nav = useNavigate();
   const location = useLocation() as any;
+  const { t } = useI18n();
 
   const computeRedirect = (u: MeUser | null): string => {
     if (!u) return "/login";
@@ -277,7 +345,7 @@ function LoginPage() {
       const redirect = location?.state?.from?.pathname || fallback;
       nav(redirect, { replace: true });
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Giriş başarısız");
+      setError(err?.response?.data?.message || t("Giriş başarısız"));
     } finally {
       setLoading(false);
     }
@@ -301,9 +369,11 @@ function LoginPage() {
         onSubmit={handleSubmit}
         className="w-full max-w-sm bg-white rounded-2xl shadow-soft p-6 space-y-4"
       >
-        <h2 className="text-xl font-semibold">Panele Giriş</h2>
+        <h2 className="text-xl font-semibold">{t("Panele Giriş")}</h2>
         <div>
-          <label className="block text-sm text-gray-600 mb-1">E-posta</label>
+          <label className="block text-sm text-gray-600 mb-1">
+            {t("E-posta")}
+          </label>
           <input
             type="email"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400"
@@ -314,7 +384,9 @@ function LoginPage() {
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-600 mb-1">Şifre</label>
+          <label className="block text-sm text-gray-600 mb-1">
+            {t("Şifre")}
+          </label>
           <input
             type="password"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400"
@@ -329,7 +401,7 @@ function LoginPage() {
           disabled={loading}
           className="w-full rounded-lg bg-brand-600 hover:bg-brand-700 text-white py-2 font-medium disabled:opacity-60"
         >
-          {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
+          {loading ? t("Giriş yapılıyor...") : t("Giriş Yap")}
         </button>
       </form>
     </div>
@@ -338,16 +410,24 @@ function LoginPage() {
 
 export default function App() {
   const nav = useNavigate();
+  const location = useLocation();
+  const [user, setUser] = React.useState<MeUser | null>(authStore.getUser());
 
   React.useEffect(() => {
     const onChange = () => {
       const t = authStore.getToken();
       const u = authStore.getUser();
+      setUser(u);
       if (!t || !u) (nav as any)("/login", { replace: true });
     };
     window.addEventListener("auth:changed", onChange);
     return () => window.removeEventListener("auth:changed", onChange);
   }, [nav]);
+
+  React.useEffect(() => {
+    const nextLang = resolvePanelLanguage(user, location.pathname);
+    setLocale(nextLang);
+  }, [user, location.pathname]);
 
   return (
     <Routes>

@@ -2,6 +2,7 @@
 import User from "../models/User.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import bcrypt from "bcrypt";
+import { normalizeLang } from "../utils/i18n.js";
 
 /** GET /users/me */
 /** GET /users/me */
@@ -74,7 +75,8 @@ export const updateMe = async (req, res, next) => {
 
     // 🔹 Dil tercihi
     if (preferredLanguage != null) {
-      allowed.preferredLanguage = String(preferredLanguage).trim();
+      const lang = normalizeLang(preferredLanguage, null);
+      if (lang) allowed.preferredLanguage = lang;
     }
 
     const u = await User.findByIdAndUpdate(

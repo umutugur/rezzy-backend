@@ -9,6 +9,7 @@ const objectId = (value, helpers) => {
 };
 
 const anyObject = Joi.object({}).unknown(true);
+const LANGS = ["tr", "en", "ru", "el"];
 
 /* ---------- LIST ORGANIZATIONS (ADMIN) ---------- */
 export const listOrganizationsAdminSchema = Joi.object({
@@ -40,7 +41,7 @@ export const createOrganizationAdminSchema = Joi.object({
     legalName: Joi.string().allow("", null),
     logoUrl: Joi.string().uri().allow("", null),
     region: Joi.string().trim().uppercase().min(2).max(3).required(),
-    defaultLanguage: Joi.string().trim().min(2).max(10).default("tr"),
+    defaultLanguage: Joi.string().valid(...LANGS).default("tr"),
     description: Joi.string().allow("", null),
     taxNumber: Joi.string().allow("", null),
     taxOffice: Joi.string().allow("", null),

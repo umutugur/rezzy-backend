@@ -21,6 +21,8 @@ import { showToast } from "../../ui/Toast";
 import { parseLatLngFromGoogleMaps } from "../../utils/geo";
 import { Card } from "../../components/Card";
 import DeliveryZoneMap from "../components/DeliveryZoneMap";
+import { DEFAULT_LANGUAGE, LANG_OPTIONS } from "../../utils/languages";
+import { useI18n, setLocale } from "../../i18n";
 
 // === Tipler ===
 type OpeningHour = { day: number; open: string; close: string; isClosed?: boolean };
@@ -59,6 +61,7 @@ type Restaurant = {
   email?: string;
   phone?: string;
   region?: string;
+  preferredLanguage?: string;
   city?: string;
   address?: string;
   description?: string;
@@ -246,6 +249,7 @@ export const SettingsPage: React.FC = () => {
     asId(user?.restaurantId || fallbackMembershipRestaurantId) || "";
 
   const qc = useQueryClient();
+  const { t } = useI18n();
 
   const [tab, setTab] = React.useState<TabKey>("general");
 
@@ -327,7 +331,9 @@ export const SettingsPage: React.FC = () => {
     if (!placeholderZonesCreatedRef.current) {
       placeholderZonesCreatedRef.current = true;
       showToast(
-        "Varsayılan teslimat bölgeleri oluşturuldu. Haritada tıklayıp aktif/pasif yapabilir ve düzenleyebilirsiniz.",
+        t(
+          "Varsayılan teslimat bölgeleri oluşturuldu. Haritada tıklayıp aktif/pasif yapabilir ve düzenleyebilirsiniz."
+        ),
         "success"
       );
     }
@@ -345,6 +351,7 @@ export const SettingsPage: React.FC = () => {
       email: data.email,
       phone: data.phone,
       region: data.region ?? "",
+      preferredLanguage: data.preferredLanguage ?? DEFAULT_LANGUAGE,
       city: data.city,
       address: data.address,
       description: data.description,
@@ -401,6 +408,12 @@ export const SettingsPage: React.FC = () => {
           ? data.checkinWindowAfterMinutes
           : DEFAULT_POLICIES.checkinWindowAfterMinutes,
     });
+
+    const nextLang = data.preferredLanguage ?? DEFAULT_LANGUAGE;
+    setLocale(nextLang);
+    if (user && nextLang) {
+      authStore.setUser({ ...user, restaurantPreferredLanguage: nextLang });
+    }
 
     // --- Delivery settings hydrate ---
     // Prefer /delivery-settings (authoritative), but gracefully fall back to restaurant detail.
@@ -480,7 +493,9 @@ export const SettingsPage: React.FC = () => {
 
         setDeliveryZones(next);
         showToast(
-          "Teslimat bölgeleri eski formattan yeni (ax) formata taşındı. Lütfen Kaydet’e basın.",
+          t(
+            "Teslimat bölgeleri eski formattan yeni (ax) formata taşındı. Lütfen Kaydet’e basın."
+          ),
           "success"
         );
       }
@@ -531,7 +546,7 @@ export const SettingsPage: React.FC = () => {
     try {
       const tableKey = table._id || table.name;
       if (!tableKey) {
-        showToast("Bu masa için geçerli bir anahtar bulunamadı", "error");
+        showToast(t("Bu masa için geçerli bir anahtar bulunamadı"), "error");
         return;
       }
 
@@ -591,7 +606,7 @@ export const SettingsPage: React.FC = () => {
       showToast(
         e?.response?.data?.message ||
           e?.message ||
-          "QR poster paketi indirilemedi",
+          t("QR poster paketi indirilemedi"),
         "error"
       );
     } finally {
@@ -608,7 +623,10 @@ export const SettingsPage: React.FC = () => {
 
       if (deliveryEnabled) {
         if (!Number.isFinite(lng) || !Number.isFinite(lat) || (lng === 0 && lat === 0)) {
-          showToast("Paket servis için önce restoran konumunu kaydedin (Lat/Lng)", "error");
+          showToast(
+            t("Paket servis için önce restoran konumunu kaydedin (Lat/Lng)"),
+            "error"
+          );
           throw new Error("Missing restaurant location for delivery");
         }
       }
@@ -654,7 +672,7 @@ export const SettingsPage: React.FC = () => {
       await api.put(`/restaurants/${rid}/delivery-settings`, payload);
     },
     onSuccess: () => {
-      showToast("Teslimat bölgeleri güncellendi", "success");
+      showToast(t("Teslimat bölgeleri güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["delivery-settings", rid] });
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
@@ -663,7 +681,7 @@ export const SettingsPage: React.FC = () => {
         e?.response?.data?.message ||
         e?.message ||
         (typeof e === "string" ? e : null) ||
-        "Teslimat bölgeleri kaydedilemedi";
+        t("Teslimat bölgeleri kaydedilemedi");
       showToast(msg, "error");
     },
   });
@@ -692,12 +710,18 @@ export const SettingsPage: React.FC = () => {
       return restaurantUpdateProfile(rid, payload);
     },
     onSuccess: () => {
-      showToast("Kaydedildi", "success");
+      showToast(t("Kaydedildi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
+      const nextLang =
+        (form as any).preferredLanguage || DEFAULT_LANGUAGE;
+      if (user && nextLang) {
+        authStore.setUser({ ...user, restaurantPreferredLanguage: nextLang });
+      }
+      setLocale(nextLang);
     },
     onError: (e: any) =>
       showToast(
-        e?.response?.data?.message || e?.message || "Kaydedilemedi",
+        e?.response?.data?.message || e?.message || t("Kaydedilemedi"),
         "error"
       ),
   });
@@ -705,12 +729,12 @@ export const SettingsPage: React.FC = () => {
   const uploadMut = useMutation({
     mutationFn: (file: File) => restaurantAddPhoto(rid, file),
     onSuccess: () => {
-      showToast("Fotoğraf yüklendi", "success");
+      showToast(t("Fotoğraf yüklendi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
     onError: (e: any) =>
       showToast(
-        e?.response?.data?.message || e?.message || "Fotoğraf yüklenemedi",
+        e?.response?.data?.message || e?.message || t("Fotoğraf yüklenemedi"),
         "error"
       ),
   });
@@ -718,12 +742,12 @@ export const SettingsPage: React.FC = () => {
   const removePhotoMut = useMutation({
     mutationFn: (url: string) => restaurantRemovePhoto(rid, url),
     onSuccess: () => {
-      showToast("Silindi", "success");
+      showToast(t("Silindi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
     onError: (e: any) =>
       showToast(
-        e?.response?.data?.message || e?.message || "Silinemedi",
+        e?.response?.data?.message || e?.message || t("Silinemedi"),
         "error"
       ),
   });
@@ -731,10 +755,10 @@ export const SettingsPage: React.FC = () => {
   const uploadLogoMut = useMutation({
     mutationFn: (file: File) => api.postForm(`/restaurants/${rid}/logo`, { file }),
     onSuccess: ()=>{
-      showToast("Logo yüklendi","success");
+      showToast(t("Logo yüklendi"),"success");
       qc.invalidateQueries({queryKey:["restaurant-detail",rid]});
     },
-    onError:(e:any)=> showToast(e?.response?.data?.message||"Logo yüklenemedi","error")
+    onError:(e:any)=> showToast(e?.response?.data?.message||t("Logo yüklenemedi"),"error")
   });
 
   const saveMenusMut = useMutation({
@@ -748,12 +772,12 @@ export const SettingsPage: React.FC = () => {
       await api.put(`/restaurants/${rid}/menus`, { menus: payload });
     },
     onSuccess: () => {
-      showToast("Menüler güncellendi", "success");
+      showToast(t("Menüler güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
     onError: (e: any) =>
       showToast(
-        e?.response?.data?.message || e?.message || "Menüler kaydedilemedi",
+        e?.response?.data?.message || e?.message || t("Menüler kaydedilemedi"),
         "error"
       ),
   });
@@ -763,12 +787,12 @@ export const SettingsPage: React.FC = () => {
       await api.put(`/restaurants/${rid}/tables`, { tables });
     },
     onSuccess: () => {
-      showToast("Masalar güncellendi", "success");
+      showToast(t("Masalar güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
     onError: (e: any) =>
       showToast(
-        e?.response?.data?.message || e?.message || "Masalar kaydedilemedi",
+        e?.response?.data?.message || e?.message || t("Masalar kaydedilemedi"),
         "error"
       ),
   });
@@ -780,12 +804,12 @@ export const SettingsPage: React.FC = () => {
       });
     },
     onSuccess: () => {
-      showToast("Çalışma saatleri güncellendi", "success");
+      showToast(t("Çalışma saatleri güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
     onError: (e: any) =>
       showToast(
-        e?.response?.data?.message || e?.message || "Saatler kaydedilemedi",
+        e?.response?.data?.message || e?.message || t("Saatler kaydedilemedi"),
         "error"
       ),
   });
@@ -811,12 +835,12 @@ export const SettingsPage: React.FC = () => {
       await api.put(`/restaurants/${rid}/policies`, payload);
     },
     onSuccess: () => {
-      showToast("Politikalar güncellendi", "success");
+      showToast(t("Politikalar güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
     onError: (e: any) =>
       showToast(
-        e?.response?.data?.message || e?.message || "Politikalar kaydedilemedi",
+        e?.response?.data?.message || e?.message || t("Politikalar kaydedilemedi"),
         "error"
       ),
   });
@@ -985,6 +1009,25 @@ const selectZone = React.useCallback(
                 <p className="mt-1 text-xs text-gray-500">
                   2-3 harfli ISO ülke kodu girin (örn. TR, CY, UK).
                 </p>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Dil</label>
+                <select
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 bg-white"
+                  value={(form as any).preferredLanguage || DEFAULT_LANGUAGE}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      preferredLanguage: e.target.value,
+                    }))
+                  }
+                >
+                  {LANG_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Şehir */}

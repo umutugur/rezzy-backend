@@ -14,6 +14,8 @@ import {
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
 import {parseLatLngFromGoogleMaps} from "../../utils/geo"
+import { LANG_OPTIONS, DEFAULT_LANGUAGE } from "../../utils/languages";
+import { useI18n, setLocale } from "../../i18n";
 // === Tipler ===
 type OpeningHour = { day: number; open: string; close: string; isClosed?: boolean };
 type MenuItem = { name: string; price: number; description?: string; isActive?: boolean };
@@ -36,6 +38,7 @@ type Restaurant = {
   email?: string;
   phone?: string;
   region?: string;
+  preferredLanguage?: string;
   city?: string;
   address?: string;
   description?: string;
@@ -87,6 +90,7 @@ type TabKey = "general" | "photos" | "menus" | "tables" | "hours" | "policies";
 export default function RestaurantProfilePage() {
   const rid = asId(authStore.getUser()?.restaurantId) || "";
   const qc = useQueryClient();
+  const { t } = useI18n();
 
   const [tab, setTab] = React.useState<TabKey>("general");
 
@@ -116,6 +120,7 @@ export default function RestaurantProfilePage() {
       email: data.email,
       phone: data.phone,
       region: data.region ?? "",
+      preferredLanguage: data.preferredLanguage ?? DEFAULT_LANGUAGE,
       city: data.city,
       address: data.address,
       description: data.description,
@@ -173,6 +178,13 @@ export default function RestaurantProfilePage() {
         ? data.checkinWindowAfterMinutes
         : DEFAULT_POLICIES.checkinWindowAfterMinutes,
     });
+
+    const nextLang = data.preferredLanguage ?? DEFAULT_LANGUAGE;
+    setLocale(nextLang);
+    const u = authStore.getUser();
+    if (u && nextLang) {
+      authStore.setUser({ ...u, restaurantPreferredLanguage: nextLang });
+    }
   }, [data]);
 
   // Mutations
@@ -197,28 +209,46 @@ export default function RestaurantProfilePage() {
       return restaurantUpdateProfile(rid, payload);
     },
     onSuccess: () => {
-      showToast("Kaydedildi", "success");
+      showToast(t("Kaydedildi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
+      const nextLang =
+        (form.preferredLanguage as string) || DEFAULT_LANGUAGE;
+      const u = authStore.getUser();
+      if (u && nextLang) {
+        authStore.setUser({ ...u, restaurantPreferredLanguage: nextLang });
+      }
+      setLocale(nextLang);
     },
     onError: (e: any) =>
-      showToast(e?.response?.data?.message || e?.message || "Kaydedilemedi", "error"),
+      showToast(
+        e?.response?.data?.message || e?.message || t("Kaydedilemedi"),
+        "error"
+      ),
   });
   const uploadMut = useMutation({
     mutationFn: (file: File) => restaurantAddPhoto(rid, file),
     onSuccess: () => {
-      showToast("Fotoğraf yüklendi", "success");
+      showToast(t("Fotoğraf yüklendi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
-    onError: (e: any) => showToast(e?.response?.data?.message || e?.message || "Fotoğraf yüklenemedi", "error"),
+    onError: (e: any) =>
+      showToast(
+        e?.response?.data?.message || e?.message || t("Fotoğraf yüklenemedi"),
+        "error"
+      ),
   });
 
   const removePhotoMut = useMutation({
     mutationFn: (url: string) => restaurantRemovePhoto(rid, url),
     onSuccess: () => {
-      showToast("Silindi", "success");
+      showToast(t("Silindi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
-    onError: (e: any) => showToast(e?.response?.data?.message || e?.message || "Silinemedi", "error"),
+    onError: (e: any) =>
+      showToast(
+        e?.response?.data?.message || e?.message || t("Silinemedi"),
+        "error"
+      ),
   });
 
   const saveMenusMut = useMutation({
@@ -232,11 +262,14 @@ export default function RestaurantProfilePage() {
       await api.put(`/restaurants/${rid}/menus`, { menus: payload });
     },
     onSuccess: () => {
-      showToast("Menüler güncellendi", "success");
+      showToast(t("Menüler güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
     onError: (e: any) =>
-      showToast(e?.response?.data?.message || e?.message || "Menüler kaydedilemedi", "error"),
+      showToast(
+        e?.response?.data?.message || e?.message || t("Menüler kaydedilemedi"),
+        "error"
+      ),
   });
 
   const saveTablesMut = useMutation({
@@ -244,10 +277,14 @@ export default function RestaurantProfilePage() {
       await api.put(`/restaurants/${rid}/tables`, { tables });
     },
     onSuccess: () => {
-      showToast("Masalar güncellendi", "success");
+      showToast(t("Masalar güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
-    onError: (e: any) => showToast(e?.response?.data?.message || e?.message || "Masalar kaydedilemedi", "error"),
+    onError: (e: any) =>
+      showToast(
+        e?.response?.data?.message || e?.message || t("Masalar kaydedilemedi"),
+        "error"
+      ),
   });
 
   const saveHoursMut = useMutation({
@@ -255,11 +292,14 @@ export default function RestaurantProfilePage() {
       await api.put(`/restaurants/${rid}/opening-hours`, { openingHours: hours });
     },
     onSuccess: () => {
-      showToast("Çalışma saatleri güncellendi", "success");
+      showToast(t("Çalışma saatleri güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
     onError: (e: any) =>
-      showToast(e?.response?.data?.message || e?.message || "Saatler kaydedilemedi", "error"),
+      showToast(
+        e?.response?.data?.message || e?.message || t("Saatler kaydedilemedi"),
+        "error"
+      ),
   });
 
   const savePoliciesMut = useMutation({
@@ -277,11 +317,14 @@ export default function RestaurantProfilePage() {
       await api.put(`/restaurants/${rid}/policies`, payload);
     },
     onSuccess: () => {
-      showToast("Politikalar güncellendi", "success");
+      showToast(t("Politikalar güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
     onError: (e: any) =>
-      showToast(e?.response?.data?.message || e?.message || "Politikalar kaydedilemedi", "error"),
+      showToast(
+        e?.response?.data?.message || e?.message || t("Politikalar kaydedilemedi"),
+        "error"
+      ),
   });
 
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -310,7 +353,7 @@ export default function RestaurantProfilePage() {
             (tab === k ? "bg-brand-600 text-white" : "bg-gray-100 hover:bg-gray-200")
           }
         >
-          {label}
+          {t(label)}
         </button>
       ))}
     </div>
@@ -327,19 +370,19 @@ export default function RestaurantProfilePage() {
       />
       <div className="flex-1 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Profil & Ayarlar</h2>
+          <h2 className="text-lg font-semibold">{t("Profil & Ayarlar")}</h2>
           {TabBar}
         </div>
 
-        {isLoading && <div>Yükleniyor…</div>}
-        {error && <div className="text-red-600 text-sm">Bilgiler alınamadı</div>}
+        {isLoading && <div>{t("Yükleniyor…")}</div>}
+        {error && <div className="text-red-600 text-sm">{t("Bilgiler alınamadı")}</div>}
 
         {/* === GENEL === */}
         {tab === "general" && (
-          <Card title="Temel Bilgiler">
+          <Card title={t("Temel Bilgiler")}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Ad</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Ad")}</label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
                   value={form.name || ""}
@@ -347,7 +390,7 @@ export default function RestaurantProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">E-posta</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("E-posta")}</label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
                   value={form.email || ""}
@@ -355,7 +398,7 @@ export default function RestaurantProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Telefon</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Telefon")}</label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
                   value={form.phone || ""}
@@ -363,10 +406,10 @@ export default function RestaurantProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Bölge (ülke kodu)</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Bölge (ülke kodu)")}</label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                  placeholder="TR, US, UK..."
+                  placeholder={t("TR, US, UK...")}
                   value={(form as any).region || ""}
                   onChange={(e) =>
                     setForm((f) => ({
@@ -376,11 +419,30 @@ export default function RestaurantProfilePage() {
                   }
                 />
                 <p className="mt-1 text-xs text-gray-500">
-                  2-3 harfli ISO ülke kodu girin (örn. TR, US, UK).
+                  {t("2-3 harfli ISO ülke kodu girin (örn. TR, US, UK).")}
                 </p>
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Şehir</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Dil")}</label>
+                <select
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 bg-white"
+                  value={(form as any).preferredLanguage || DEFAULT_LANGUAGE}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      preferredLanguage: e.target.value,
+                    }))
+                  }
+                >
+                  {LANG_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">{t("Şehir")}</label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
                   value={form.city || ""}
@@ -388,7 +450,7 @@ export default function RestaurantProfilePage() {
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm text-gray-600 mb-1">Adres</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Adres")}</label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
                   value={form.address || ""}
@@ -396,7 +458,7 @@ export default function RestaurantProfilePage() {
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm text-gray-600 mb-1">Açıklama</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Açıklama")}</label>
                 <textarea
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 h-40"
                   value={form.description || ""}
@@ -406,25 +468,25 @@ export default function RestaurantProfilePage() {
 
               {/* Ödeme bilgileri */}
               <div>
-                <label className="block text-sm text-gray-600 mb-1">IBAN</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("IBAN")}</label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                  placeholder="TR.."
+                  placeholder={t("TR..")}
                   value={form.iban || ""}
                   onChange={(e) => setForm((f) => ({ ...f, iban: e.target.value }))}
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">IBAN Adı</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("IBAN Adı")}</label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                  placeholder="Hesap Sahibi"
+                  placeholder={t("Hesap Sahibi")}
                   value={form.ibanName || ""}
                   onChange={(e) => setForm((f) => ({ ...f, ibanName: e.target.value }))}
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Banka Adı</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Banka Adı")}</label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
                   value={form.bankName || ""}
@@ -436,14 +498,14 @@ export default function RestaurantProfilePage() {
             
                       {/* --- Konum Bilgileri --- */}
 <div className="md:col-span-2 border-t pt-4 mt-6">
-  <h3 className="text-sm font-semibold text-gray-700 mb-2">Konum Bilgileri</h3>
+  <h3 className="text-sm font-semibold text-gray-700 mb-2">{t("Konum Bilgileri")}</h3>
 
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div>
-      <label className="block text-sm text-gray-600 mb-1">Harita Adresi</label>
+      <label className="block text-sm text-gray-600 mb-1">{t("Harita Adresi")}</label>
       <input
         className="w-full rounded-lg border border-gray-300 px-3 py-2"
-        placeholder="Google Harita üzerindeki adres"
+        placeholder={t("Google Harita üzerindeki adres")}
         value={form.mapAddress || ""}
         onChange={(e) =>
           setForm((f) => ({ ...f, mapAddress: e.target.value }))
@@ -451,10 +513,10 @@ export default function RestaurantProfilePage() {
       />
     </div>
     <div>
-      <label className="block text-sm text-gray-600 mb-1">Google Maps URL</label>
+      <label className="block text-sm text-gray-600 mb-1">{t("Google Maps URL")}</label>
       <input
   className="w-full rounded-lg border border-gray-300 px-3 py-2"
-  placeholder="https://maps.google.com/?q=..."
+  placeholder={t("https://maps.google.com/?q=...")}
   value={form.googleMapsUrl || ""}
   onChange={(e) => {
     const val = e.target.value;
@@ -474,7 +536,7 @@ export default function RestaurantProfilePage() {
 />
     </div>
     <div>
-      <label className="block text-sm text-gray-600 mb-1">Latitude (enlem)</label>
+      <label className="block text-sm text-gray-600 mb-1">{t("Latitude (enlem)")}</label>
       <input
         type="number"
         step="0.000001"
@@ -495,7 +557,7 @@ export default function RestaurantProfilePage() {
       />
     </div>
     <div>
-      <label className="block text-sm text-gray-600 mb-1">Longitude (boylam)</label>
+      <label className="block text-sm text-gray-600 mb-1">{t("Longitude (boylam)")}</label>
       <input
         type="number"
         step="0.000001"
@@ -537,7 +599,7 @@ export default function RestaurantProfilePage() {
                 disabled={saveGeneralMut.isPending}
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 disabled:opacity-60"
               >
-                {saveGeneralMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                {saveGeneralMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
               </button>
             </div>
           </Card>
@@ -545,10 +607,12 @@ export default function RestaurantProfilePage() {
 
         {/* === FOTOĞRAFLAR === */}
         {tab === "photos" && (
-          <Card title="Fotoğraflar">
+          <Card title={t("Fotoğraflar")}>
             <div className="mb-3 flex items-center gap-3">
               <input type="file" accept="image/*" onChange={onFile} />
-              {uploadMut.isPending && <span className="text-sm text-gray-500">Yükleniyor…</span>}
+              {uploadMut.isPending && (
+                <span className="text-sm text-gray-500">{t("Yükleniyor…")}</span>
+              )}
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -560,12 +624,12 @@ export default function RestaurantProfilePage() {
                     disabled={removePhotoMut.isPending}
                     className="absolute top-2 right-2 text-xs rounded-md bg-black/60 text-white px-2 py-1 opacity-0 group-hover:opacity-100 disabled:opacity-60"
                   >
-                    Sil
+                    {t("Sil")}
                   </button>
                 </div>
               ))}
               {(!data?.photos || data.photos.length === 0) && (
-                <div className="text-sm text-gray-500">Fotoğraf yok</div>
+                <div className="text-sm text-gray-500">{t("Fotoğraf yok")}</div>
               )}
             </div>
           </Card>
@@ -573,7 +637,7 @@ export default function RestaurantProfilePage() {
 
         {/* === MENÜLER === */}
         {tab === "menus" && (
-          <Card title="Menüler">
+          <Card title={t("Menüler")}>
             <div className="space-y-3">
               {menus.map((m, idx) => (
                 <div
@@ -583,7 +647,7 @@ export default function RestaurantProfilePage() {
                   {/* Ad */}
                   <input
                     className="border rounded-lg px-3 py-2"
-                    placeholder="Ad"
+                    placeholder={t("Ad")}
                     value={m.name}
                     onChange={(e) =>
                       setMenus((prev) =>
@@ -599,7 +663,7 @@ export default function RestaurantProfilePage() {
                     type="number"
                     min={0}
                     className="border rounded-lg px-3 py-2"
-                    placeholder="Fiyat"
+                    placeholder={t("Fiyat")}
                     value={String(m.price)}
                     onChange={(e) =>
                       setMenus((prev) =>
@@ -616,7 +680,7 @@ export default function RestaurantProfilePage() {
                   <div className="md:col-span-3">
                     <textarea
                       className="w-full border rounded-lg px-3 py-2 h-24"
-                      placeholder="Açıklama"
+                      placeholder={t("Açıklama")}
                       value={m.description || ""}
                       onChange={(e) =>
                         setMenus((prev) =>
@@ -631,7 +695,7 @@ export default function RestaurantProfilePage() {
                   {/* Aktif */}
                   <div className="flex items-center">
                     <label className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-600">Aktif</span>
+                      <span className="text-gray-600">{t("Aktif")}</span>
                       <input
                         type="checkbox"
                         checked={m.isActive ?? true}
@@ -654,13 +718,13 @@ export default function RestaurantProfilePage() {
                         setMenus((prev) => prev.filter((_, i) => i !== idx))
                       }
                     >
-                      Sil
+                      {t("Sil")}
                     </button>
                   </div>
                 </div>
               ))}
               {menus.length === 0 && (
-                <div className="text-sm text-gray-500">Kayıt yok</div>
+                <div className="text-sm text-gray-500">{t("Kayıt yok")}</div>
               )}
               <button
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
@@ -671,7 +735,7 @@ export default function RestaurantProfilePage() {
                   ])
                 }
               >
-                Yeni Menü
+                {t("Yeni Menü")}
               </button>
             </div>
 
@@ -681,7 +745,7 @@ export default function RestaurantProfilePage() {
                 disabled={saveMenusMut.isPending}
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
               >
-                {saveMenusMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                {saveMenusMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
               </button>
             </div>
           </Card>
@@ -689,13 +753,13 @@ export default function RestaurantProfilePage() {
 
         {/* === MASALAR === */}
         {tab === "tables" && (
-          <Card title="Masalar">
+          <Card title={t("Masalar")}>
             <div className="space-y-3">
               {tables.map((t, idx) => (
                 <div key={idx} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
                   <input
                     className="border rounded-lg px-3 py-2"
-                    placeholder="Ad"
+                    placeholder={t("Ad")}
                     value={t.name}
                     onChange={(e) =>
                       setTables((prev) => prev.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))
@@ -705,7 +769,7 @@ export default function RestaurantProfilePage() {
                     type="number"
                     min={1}
                     className="border rounded-lg px-3 py-2"
-                    placeholder="Kapasite"
+                    placeholder={t("Kapasite")}
                     value={String(t.capacity)}
                     onChange={(e) =>
                       setTables((prev) =>
@@ -714,7 +778,7 @@ export default function RestaurantProfilePage() {
                     }
                   />
                   <label className="flex items-center gap-2 text-sm">
-                    <span className="text-gray-600">Aktif</span>
+                    <span className="text-gray-600">{t("Aktif")}</span>
                     <input
                       type="checkbox"
                       checked={t.isActive ?? true}
@@ -729,18 +793,21 @@ export default function RestaurantProfilePage() {
                     className="rounded-lg bg-gray-100 hover:bg-gray-200 px-3 py-2"
                     onClick={() => setTables((prev) => prev.filter((_, i) => i !== idx))}
                   >
-                    Sil
+                    {t("Sil")}
                   </button>
                 </div>
               ))}
-              {tables.length === 0 && <div className="text-sm text-gray-500">Kayıt yok</div>}
+              {tables.length === 0 && <div className="text-sm text-gray-500">{t("Kayıt yok")}</div>}
               <button
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
                 onClick={() =>
-                  setTables((prev) => [...prev, { name: `Masa ${prev.length + 1}`, capacity: 2, isActive: true }])
+                  setTables((prev) => [
+                    ...prev,
+                    { name: t("Masa {index}", { index: prev.length + 1 }), capacity: 2, isActive: true },
+                  ])
                 }
               >
-                Yeni Masa
+                {t("Yeni Masa")}
               </button>
             </div>
 
@@ -750,7 +817,7 @@ export default function RestaurantProfilePage() {
                 disabled={saveTablesMut.isPending}
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
               >
-                {saveTablesMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                {saveTablesMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
               </button>
             </div>
           </Card>
@@ -758,13 +825,15 @@ export default function RestaurantProfilePage() {
 
         {/* === SAATLER === */}
         {tab === "hours" && (
-          <Card title="Çalışma Saatleri">
+          <Card title={t("Çalışma Saatleri")}>
             <div className="space-y-3">
               {hours.map((h, idx) => (
                 <div key={idx} className="flex items-center gap-3">
-                  <div className="w-20 text-sm text-gray-600">{DAYS[h.day] ?? `Gün ${h.day}`}</div>
+                  <div className="w-20 text-sm text-gray-600">
+                    {DAYS[h.day] ? t(DAYS[h.day]) : t("Gün {day}", { day: h.day })}
+                  </div>
                   <label className="flex items-center gap-2 text-sm">
-                    <span className="text-gray-600">Kapalı</span>
+                    <span className="text-gray-600">{t("Kapalı")}</span>
                     <input
                       type="checkbox"
                       checked={!!h.isClosed}
@@ -804,7 +873,7 @@ export default function RestaurantProfilePage() {
                 disabled={saveHoursMut.isPending}
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
               >
-                {saveHoursMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                {saveHoursMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
               </button>
             </div>
           </Card>
@@ -812,10 +881,10 @@ export default function RestaurantProfilePage() {
 
         {/* === POLİTİKALAR === */}
         {tab === "policies" && (
-          <Card title="Rezervasyon Politikaları">
+          <Card title={t("Rezervasyon Politikaları")}>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Minimum kişi</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Minimum kişi")}</label>
                 <input
                   type="number"
                   min={1}
@@ -827,7 +896,7 @@ export default function RestaurantProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Maksimum kişi</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Maksimum kişi")}</label>
                 <input
                   type="number"
                   min={policies.minPartySize}
@@ -842,7 +911,7 @@ export default function RestaurantProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Slot süresi (dk)</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Slot süresi (dk)")}</label>
                 <input
                   type="number"
                   min={30}
@@ -857,7 +926,7 @@ export default function RestaurantProfilePage() {
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
         <label className="block text-sm text-gray-600 mb-1">
-          Check-in Penceresi (ÖNCE, dk)
+          {t("Check-in Penceresi (ÖNCE, dk)")}
         </label>
         <input
           type="number"
@@ -872,13 +941,13 @@ export default function RestaurantProfilePage() {
           }
         />
         <div className="text-xs text-gray-500 mt-1">
-          Rezervasyon saatinden <b>önce</b> kaç dakika içinde giriş kabul edilir.
+          {t("Rezervasyon saatinden önce kaç dakika içinde giriş kabul edilir.")}
         </div>
       </div>
 
       <div>
         <label className="block text-sm text-gray-600 mb-1">
-          Check-in Penceresi (SONRA, dk)
+          {t("Check-in Penceresi (SONRA, dk)")}
         </label>
         <input
           type="number"
@@ -893,13 +962,13 @@ export default function RestaurantProfilePage() {
           }
         />
         <div className="text-xs text-gray-500 mt-1">
-          Rezervasyon saatinden <b>sonra</b> kaç dakika içinde giriş kabul edilir.
+          {t("Rezervasyon saatinden sonra kaç dakika içinde giriş kabul edilir.")}
         </div>
       </div>
     </div>
             <div className="mt-4 flex items-center gap-4">
               <label className="flex items-center gap-2 text-sm">
-                <span className="text-gray-600">Depozito gerekli</span>
+                <span className="text-gray-600">{t("Depozito gerekli")}</span>
                 <input
                   type="checkbox"
                   checked={!!policies.depositRequired}
@@ -908,7 +977,7 @@ export default function RestaurantProfilePage() {
               </label>
               {policies.depositRequired && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Tutar (₺)</span>
+                  <span className="text-sm text-gray-600">{t("Tutar (₺)")}</span>
                   <input
                     type="number"
                     min={0}
@@ -923,10 +992,10 @@ export default function RestaurantProfilePage() {
             </div>
 
             <div className="mt-6">
-              <div className="mb-2 font-medium">Kara Günler (YYYY-MM-DD)</div>
+              <div className="mb-2 font-medium">{t("Kara Günler (YYYY-MM-DD)")}</div>
               <div className="flex flex-wrap gap-2 mb-3">
                 {policies.blackoutDates.length === 0 && (
-                  <div className="text-sm text-gray-500">Liste boş.</div>
+                  <div className="text-sm text-gray-500">{t("Liste boş.")}</div>
                 )}
                 {policies.blackoutDates.map((d, i) => (
                   <div
@@ -950,7 +1019,7 @@ export default function RestaurantProfilePage() {
               </div>
               <div className="flex items-center gap-2">
                 <input
-                  placeholder="2025-12-31"
+                  placeholder={t("2025-12-31")}
                   className="rounded-lg border border-gray-300 px-3 py-2"
                   value={newBlackout}
                   onChange={(e) => setNewBlackout(e.target.value)}
@@ -965,7 +1034,7 @@ export default function RestaurantProfilePage() {
                     }
                   }}
                 >
-                  Ekle
+                  {t("Ekle")}
                 </button>
               </div>
             </div>
@@ -976,7 +1045,7 @@ export default function RestaurantProfilePage() {
                 disabled={savePoliciesMut.isPending}
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
               >
-                {savePoliciesMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                {savePoliciesMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
               </button>
             </div>
           </Card>

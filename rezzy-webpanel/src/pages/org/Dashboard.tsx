@@ -4,7 +4,7 @@ import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
 import { authStore, MeUser } from "../../store/auth";
 import { Link, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   orgGetSummary,
@@ -12,8 +12,13 @@ import {
   orgGetTopRestaurants,
   orgGetRestaurantSummary,
 } from "../../api/orgAnalytics";
+import { orgUpdateMyOrganization } from "../../api/client";
 
 import { getCurrencySymbolForRegion } from "../../utils/currency";
+import { DEFAULT_LANGUAGE, LANG_OPTIONS } from "../../utils/languages";
+import { showToast } from "../../ui/Toast";
+import { useI18n, setLocale } from "../../i18n";
+import { setActiveOrgId } from "../../i18n/panel";
 
 import {
   ResponsiveContainer,
@@ -32,6 +37,7 @@ type OrgLite = {
   id: string;
   name: string;
   region?: string | null;
+  defaultLanguage?: string | null;
   role?: string;
 };
 
@@ -44,7 +50,10 @@ type Metric =
   | "deposits";
 
 /* ---------------- Helpers ---------------- */
-function getUserOrganizations(u: MeUser | null): OrgLite[] {
+function getUserOrganizations(
+  u: MeUser | null,
+  t: (key: string, options?: any) => string
+): OrgLite[] {
   if (!u || !Array.isArray((u as any).organizations)) return [];
   return (u as any).organizations
     .map((o: any) => {
@@ -55,25 +64,26 @@ function getUserOrganizations(u: MeUser | null): OrgLite[] {
 
       return {
         id: String(id),
-        name: o.name || o.organizationName || "İsimsiz Organizasyon",
+        name: o.name || o.organizationName || t("İsimsiz Organizasyon"),
         region: o.region ?? null,
+        defaultLanguage: o.defaultLanguage ?? null,
         role: o.role,
       };
     })
     .filter(Boolean) as OrgLite[];
 }
 
-function prettyOrgRole(role?: string) {
+function prettyOrgRole(role: string | undefined, t: (key: string, options?: any) => string) {
   if (!role) return "-";
   switch (role) {
     case "org_owner":
-      return "Owner";
+      return t("Owner");
     case "org_admin":
-      return "Admin";
+      return t("Admin");
     case "org_finance":
-      return "Finans";
+      return t("Finans");
     case "org_staff":
-      return "Staff";
+      return t("Staff");
     default:
       return role;
   }
@@ -109,35 +119,43 @@ function toDateInputValue(d: Date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function labelOfPreset(p: string) {
+function labelOfPreset(p: string, t: (key: string, options?: any) => string) {
   switch (p) {
     case "day":
-      return "Günlük";
+      return t("Günlük");
     case "week":
-      return "Haftalık";
+      return t("Haftalık");
     case "month":
-      return "Aylık";
+      return t("Aylık");
     case "year":
-      return "Yıllık";
+      return t("Yıllık");
     default:
       return p;
   }
 }
 
-function metricLabel(m: Metric, symbol: string) {
+function metricLabel(
+  m: Metric,
+  symbol: string,
+  t: (key: string, options?: any) => string
+) {
   switch (m) {
     case "sales":
-      return symbol ? `Satış (${symbol})` : "Satış";
+      return symbol
+        ? t("Satış ({symbol})", { symbol })
+        : t("Satış");
     case "orders":
-      return "Sipariş (adet)";
+      return t("Sipariş (adet)");
     case "reservations":
-      return "Rezervasyon (adet)";
+      return t("Rezervasyon (adet)");
     case "no_show":
-      return "No-show (adet)";
+      return t("No-show (adet)");
     case "cancelled":
-      return "İptal (adet)";
+      return t("İptal (adet)");
     case "deposits":
-      return symbol ? `Depozito (${symbol})` : "Depozito";
+      return symbol
+        ? t("Depozito ({symbol})", { symbol })
+        : t("Depozito");
     default:
       return m;
   }
@@ -234,19 +252,64 @@ function Drawer({
 
 /* ---------------- Page ---------------- */
 export default function OrgDashboardPage() {
+  const qc = useQueryClient();
   const nav = useNavigate();
   const user = authStore.getUser();
-  const orgs = useMemo(() => getUserOrganizations(user), [user]);
+  const { t } = useI18n();
+  const orgs = useMemo(() => getUserOrganizations(user, t), [user, t]);
 
   const [selectedOrgId, setSelectedOrgId] = useState<string>(() => orgs?.[0]?.id || "");
   React.useEffect(() => {
     if (!selectedOrgId && orgs?.[0]?.id) setSelectedOrgId(orgs[0].id);
   }, [orgs, selectedOrgId]);
 
+  React.useEffect(() => {
+    if (selectedOrgId) setActiveOrgId(selectedOrgId);
+  }, [selectedOrgId]);
+
   const selectedOrg = useMemo(
     () => orgs.find((o) => o.id === selectedOrgId) || orgs[0] || null,
     [orgs, selectedOrgId]
   );
+  const [orgLang, setOrgLang] = useState<string>(
+    selectedOrg?.defaultLanguage || DEFAULT_LANGUAGE
+  );
+  const [orgLangBase, setOrgLangBase] = useState<string>(
+    selectedOrg?.defaultLanguage || DEFAULT_LANGUAGE
+  );
+
+  React.useEffect(() => {
+    const nextLang = selectedOrg?.defaultLanguage || DEFAULT_LANGUAGE;
+    setOrgLang(nextLang);
+    setOrgLangBase(nextLang);
+    setLocale(nextLang);
+  }, [selectedOrg?.id]);
+
+  const updateOrgLangMut = useMutation({
+    mutationFn: (lang: string) =>
+      orgUpdateMyOrganization(selectedOrgId, { defaultLanguage: lang }),
+    onSuccess: (_resp, lang) => {
+      showToast(t("Organizasyon dili güncellendi"), "success");
+      setOrgLangBase(lang);
+      setLocale(lang);
+      const u = authStore.getUser();
+      if (u?.organizations?.length) {
+        const nextOrgs = u.organizations.map((o: any) =>
+          String(o?.id ?? o?.organization ?? o?._id) === String(selectedOrgId)
+            ? { ...o, defaultLanguage: lang }
+            : o
+        );
+        authStore.setUser({ ...u, organizations: nextOrgs });
+      }
+      qc.invalidateQueries({ queryKey: ["org-analytics", "summary", selectedOrgId] });
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.message || err?.message || t("Dil güncellenemedi");
+      showToast(msg, "error");
+      setOrgLang(orgLangBase);
+    },
+  });
 
   const currencySymbol = selectedOrg?.region
     ? getCurrencySymbolForRegion(selectedOrg.region)
@@ -354,21 +417,21 @@ export default function OrgDashboardPage() {
   const kpiCards = useMemo(() => {
     return [
       {
-        title: "Toplam Satış",
+        title: t("Toplam Satış"),
         value: totals
           ? fmtMoneyWithSymbol(totals.salesTotal, currencySymbol, locale)
           : "-",
       },
-      { title: "Sipariş", value: totals ? fmtInt(totals.ordersCount, locale) : "-" },
+      { title: t("Sipariş"), value: totals ? fmtInt(totals.ordersCount, locale) : "-" },
       {
-        title: "Rezervasyon",
+        title: t("Rezervasyon"),
         value: totals ? fmtInt(totals.reservationsCount, locale) : "-",
       },
-      { title: "No-show Oranı", value: totals ? pct(noShowRate) : "-" },
-      { title: "İptal Oranı", value: totals ? pct(cancelRate) : "-" },
-      { title: "Depozito Dönüşüm", value: totals ? pct(depositConversion) : "-" },
+      { title: t("No-show oranı"), value: totals ? pct(noShowRate) : "-" },
+      { title: t("İptal oranı"), value: totals ? pct(cancelRate) : "-" },
+      { title: t("Depozito dönüşüm"), value: totals ? pct(depositConversion) : "-" },
     ];
-  }, [totals, currencySymbol, locale, noShowRate, cancelRate, depositConversion]);
+  }, [t, totals, currencySymbol, locale, noShowRate, cancelRate, depositConversion]);
 
   const chartData = useMemo(() => {
     return points.map((p: any) => ({
@@ -402,13 +465,15 @@ export default function OrgDashboardPage() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold">Organizasyon Paneli</h2>
-            <div className="text-xs text-gray-500">KPI • Trend • Restoran karşılaştırma</div>
+            <h2 className="text-lg font-semibold">{t("Organizasyon Paneli")}</h2>
+            <div className="text-xs text-gray-500">
+              {t("KPI • Trend • Restoran karşılaştırma")}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Organizasyon</span>
+              <span className="text-xs text-gray-500">{t("Organizasyon")}</span>
               <select
                 className="text-sm border rounded px-2 py-1 bg-white"
                 value={selectedOrgId}
@@ -427,30 +492,60 @@ export default function OrgDashboardPage() {
               </select>
             </div>
 
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">{t("Dil")}</span>
+              <select
+                className="text-sm border rounded px-2 py-1 bg-white"
+                value={orgLang}
+                onChange={(e) => setOrgLang(e.target.value)}
+                disabled={!selectedOrgId}
+              >
+                {LANG_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="px-2 py-1 text-xs rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
+                onClick={() => updateOrgLangMut.mutate(orgLang)}
+                disabled={
+                  !selectedOrgId ||
+                  updateOrgLangMut.isPending ||
+                  orgLang === orgLangBase
+                }
+              >
+                {t("Kaydet")}
+              </button>
+            </div>
+
             <label className="flex items-center gap-2 text-xs text-gray-600">
               <input
                 type="checkbox"
                 checked={demoMode}
                 onChange={(e) => setDemoMode(e.target.checked)}
               />
-              Demo aktif (örnek veriler)
+              {t("Demo aktif (örnek veriler)")}
             </label>
           </div>
         </div>
 
         {/* Orgs */}
-        <Card title="Bağlı Olduğunuz Organizasyonlar">
+        <Card title={t("Bağlı Olduğunuz Organizasyonlar")}>
           {orgs.length === 0 ? (
-            <div className="text-sm text-gray-500">Herhangi bir organizasyona bağlı değilsiniz.</div>
+            <div className="text-sm text-gray-500">
+              {t("Herhangi bir organizasyona bağlı değilsiniz.")}
+            </div>
           ) : (
             <div className="overflow-auto">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-500">
-                    <th className="py-2 px-4">Ad</th>
-                    <th className="py-2 px-4">Bölge</th>
-                    <th className="py-2 px-4">Rolünüz</th>
-                    <th className="py-2 px-4 text-right">İşlemler</th>
+                    <th className="py-2 px-4">{t("Ad")}</th>
+                    <th className="py-2 px-4">{t("Bölge")}</th>
+                    <th className="py-2 px-4">{t("Rolünüz")}</th>
+                    <th className="py-2 px-4 text-right">{t("İşlemler")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -460,7 +555,7 @@ export default function OrgDashboardPage() {
                       <tr key={orgId} className="border-t">
                         <td className="py-2 px-4">{o.name}</td>
                         <td className="py-2 px-4">{o.region || "-"}</td>
-                        <td className="py-2 px-4">{prettyOrgRole(o.role)}</td>
+                        <td className="py-2 px-4">{prettyOrgRole(o.role, t)}</td>
                         <td className="py-2 px-4 text-right">
                           {orgId && (
                             <button
@@ -472,7 +567,7 @@ export default function OrgDashboardPage() {
                                 nav(`/org/organizations/${orgId}/menu`);
                               }}
                             >
-                              Menüyü Yönet
+                              {t("Menüyü Yönet")}
                             </button>
                           )}
                         </td>
@@ -485,30 +580,35 @@ export default function OrgDashboardPage() {
           )}
 
           <p className="mt-3 text-xs text-gray-500">
-            Yeni şube açma ihtiyaçlarınızı{" "}
+            {t("Yeni şube açma ihtiyaçlarınızı")}{" "}
             <Link to="/org/branch-requests" className="text-brand-700 underline">
-              Şube Talepleri
+              {t("Şube Talepleri")}
             </Link>{" "}
-            ekranından iletebilirsiniz.
+            {t("ekranından iletebilirsiniz.")}
           </p>
         </Card>
 
         {/* Reports */}
-        <Card title={`Raporlar (Organizasyon Genel) • ${labelOfPreset(preset)}`}>
+        <Card
+          title={`${t("Raporlar (Organizasyon Genel)")} • ${labelOfPreset(
+            preset,
+            t
+          )}`}
+        >
           {/* Range controls */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Periyot</span>
+              <span className="text-xs text-gray-500">{t("Periyot")}</span>
               <select
                 className="text-sm border rounded px-2 py-1 bg-white"
                 value={preset}
                 onChange={(e) => setPreset(e.target.value as any)}
                 disabled={useCustomRange || demoMode}
               >
-                <option value="day">Günlük</option>
-                <option value="week">Haftalık</option>
-                <option value="month">Aylık</option>
-                <option value="year">Yıllık</option>
+                <option value="day">{t("Günlük")}</option>
+                <option value="week">{t("Haftalık")}</option>
+                <option value="month">{t("Aylık")}</option>
+                <option value="year">{t("Yıllık")}</option>
               </select>
             </div>
 
@@ -519,13 +619,13 @@ export default function OrgDashboardPage() {
                 onChange={(e) => setUseCustomRange(e.target.checked)}
                 disabled={demoMode}
               />
-              Tarih aralığı seç
+              {t("Tarih aralığı seç")}
             </label>
 
             {useCustomRange && !demoMode && (
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">Başlangıç</span>
+                  <span className="text-xs text-gray-500">{t("Başlangıç")}</span>
                   <input
                     type="date"
                     className="text-sm border rounded px-2 py-1 bg-white"
@@ -534,7 +634,7 @@ export default function OrgDashboardPage() {
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">Bitiş</span>
+                  <span className="text-xs text-gray-500">{t("Bitiş")}</span>
                   <input
                     type="date"
                     className="text-sm border rounded px-2 py-1 bg-white"
@@ -547,10 +647,10 @@ export default function OrgDashboardPage() {
 
             <div className="ml-auto text-xs text-gray-500">
               {demoMode
-                ? "Demo aktif (örnek veriler)"
+                ? t("Demo aktif (örnek veriler)")
                 : summaryQ.isFetching || tsQ.isFetching || topQ.isFetching
-                ? "Güncelleniyor..."
-                : "Canlı veri"}
+                ? t("Güncelleniyor...")
+                : t("Canlı veri")}
             </div>
           </div>
 
@@ -565,7 +665,9 @@ export default function OrgDashboardPage() {
           </div>
 
           {!demoMode && (summaryQ.isError || tsQ.isError || topQ.isError) && (
-            <div className="mt-4 text-sm text-red-600">Rapor verisi alınırken hata oluştu.</div>
+            <div className="mt-4 text-sm text-red-600">
+              {t("Rapor verisi alınırken hata oluştu.")}
+            </div>
           )}
 
           {/* Charts row */}
@@ -574,9 +676,15 @@ export default function OrgDashboardPage() {
             <div className="rounded-xl border bg-white p-4 shadow-sm lg:col-span-2">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="font-semibold text-sm">Trend</div>
+                  <div className="font-semibold text-sm">{t("Trend")}</div>
                   <div className="text-xs text-gray-500">
-                    {metricLabel(tsMetric, currencySymbol)} • bucket: {tsBucket}
+                    {metricLabel(tsMetric, currencySymbol, t)} •{" "}
+                    {t("bucket")}:{" "}
+                    {tsBucket === "day"
+                      ? t("Gün")
+                      : tsBucket === "week"
+                      ? t("Hafta")
+                      : t("Ay")}
                   </div>
                 </div>
 
@@ -586,12 +694,12 @@ export default function OrgDashboardPage() {
                     value={tsMetric}
                     onChange={(e) => setTsMetric(e.target.value as Metric)}
                   >
-                    <option value="sales">Satış</option>
-                    <option value="orders">Sipariş</option>
-                    <option value="reservations">Rezervasyon</option>
-                    <option value="no_show">No-show</option>
-                    <option value="cancelled">İptal</option>
-                    <option value="deposits">Depozito</option>
+                    <option value="sales">{t("Satış")}</option>
+                    <option value="orders">{t("Sipariş")}</option>
+                    <option value="reservations">{t("Rezervasyon")}</option>
+                    <option value="no_show">{t("No-show")}</option>
+                    <option value="cancelled">{t("İptaller")}</option>
+                    <option value="deposits">{t("Depozito")}</option>
                   </select>
 
                   <select
@@ -599,9 +707,9 @@ export default function OrgDashboardPage() {
                     value={tsBucket}
                     onChange={(e) => setTsBucket(e.target.value as any)}
                   >
-                    <option value="day">Gün</option>
-                    <option value="week">Hafta</option>
-                    <option value="month">Ay</option>
+                    <option value="day">{t("Gün")}</option>
+                    <option value="week">{t("Hafta")}</option>
+                    <option value="month">{t("Ay")}</option>
                   </select>
                 </div>
               </div>
@@ -609,7 +717,7 @@ export default function OrgDashboardPage() {
               <div className="mt-3 h-64">
                 {chartData.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-sm text-gray-500">
-                    Veri yok.
+                    {t("Veri yok.")}
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
@@ -640,12 +748,14 @@ export default function OrgDashboardPage() {
 
             {/* Quick stats */}
             <div className="rounded-xl border bg-white p-4 shadow-sm">
-              <div className="font-semibold text-sm">Hızlı İstatistik</div>
-              <div className="mt-1 text-xs text-gray-500">Rezervasyon davranış metrikleri</div>
+              <div className="font-semibold text-sm">{t("Hızlı İstatistik")}</div>
+              <div className="mt-1 text-xs text-gray-500">
+                {t("Rezervasyon davranış metrikleri")}
+              </div>
 
               <div className="mt-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-700">No-show oranı</div>
+                  <div className="text-sm text-gray-700">{t("No-show oranı")}</div>
                   <div className="text-sm font-semibold">{pct(noShowRate)}</div>
                 </div>
                 <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
@@ -656,7 +766,7 @@ export default function OrgDashboardPage() {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-700">İptal oranı</div>
+                  <div className="text-sm text-gray-700">{t("İptal oranı")}</div>
                   <div className="text-sm font-semibold">{pct(cancelRate)}</div>
                 </div>
                 <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
@@ -667,7 +777,7 @@ export default function OrgDashboardPage() {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-700">Depozito dönüşüm</div>
+                  <div className="text-sm text-gray-700">{t("Depozito dönüşüm")}</div>
                   <div className="text-sm font-semibold">{pct(depositConversion)}</div>
                 </div>
                 <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
@@ -684,14 +794,14 @@ export default function OrgDashboardPage() {
           <div className="mt-4 rounded-xl border bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="font-semibold text-sm">Top Restoranlar</div>
+                <div className="font-semibold text-sm">{t("Top Restoranlar")}</div>
                 <div className="text-xs text-gray-500">
                   {topMetric === "sales"
-                    ? `Ciro (${currencySymbol})`
+                    ? t("Ciro ({symbol})", { symbol: currencySymbol })
                     : topMetric === "orders"
-                    ? "Sipariş"
-                    : "Rezervasyon"}{" "}
-                  bazlı
+                    ? t("Sipariş")
+                    : t("Rezervasyon")}{" "}
+                  {t("bazlı")}
                 </div>
               </div>
 
@@ -700,9 +810,9 @@ export default function OrgDashboardPage() {
                 value={topMetric}
                 onChange={(e) => setTopMetric(e.target.value as any)}
               >
-                <option value="sales">Satış</option>
-                <option value="orders">Sipariş</option>
-                <option value="reservations">Rezervasyon</option>
+                <option value="sales">{t("Satış")}</option>
+                <option value="orders">{t("Sipariş")}</option>
+                <option value="reservations">{t("Rezervasyon")}</option>
               </select>
             </div>
 
@@ -711,7 +821,7 @@ export default function OrgDashboardPage() {
               <div className="h-72">
                 {topRows.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-sm text-gray-500">
-                    Veri yok.
+                    {t("Veri yok.")}
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
@@ -728,7 +838,12 @@ export default function OrgDashboardPage() {
                       <XAxis type="number" tick={{ fontSize: 12 }} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={160} />
                       <Tooltip content={<ModernTooltip valueFormatter={topValueFormatter} />} />
-                      <Bar dataKey="value" name="Değer" fill="#4F46E5" radius={[8, 8, 8, 8]} />
+                      <Bar
+                        dataKey="value"
+                        name={t("Değer")}
+                        fill="#4F46E5"
+                        radius={[8, 8, 8, 8]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -739,16 +854,16 @@ export default function OrgDashboardPage() {
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="text-left text-gray-500">
-                      <th className="py-2 px-3">Restoran</th>
-                      <th className="py-2 px-3 text-right">Değer</th>
-                      <th className="py-2 px-3 text-right">İşlem</th>
+                      <th className="py-2 px-3">{t("Restoran")}</th>
+                      <th className="py-2 px-3 text-right">{t("Değer")}</th>
+                      <th className="py-2 px-3 text-right">{t("İşlem")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {topRows.length === 0 ? (
                       <tr className="border-t">
                         <td className="py-2 px-3 text-gray-500" colSpan={3}>
-                          Veri yok.
+                          {t("Veri yok.")}
                         </td>
                       </tr>
                     ) : (
@@ -774,9 +889,9 @@ export default function OrgDashboardPage() {
                                   setOpenRestaurantId(rid);
                                   setOpenRestaurantName(rname);
                                 }}
-                                title="Restoran raporunu görüntüle"
+                                title={t("Restoran raporunu görüntüle")}
                               >
-                                Detay
+                                {t("Detay")}
                               </button>
                             </td>
                           </tr>
@@ -786,7 +901,9 @@ export default function OrgDashboardPage() {
                   </tbody>
                 </table>
 
-                <div className="p-3 text-xs text-gray-500">Detay raporu yan panelde açılır.</div>
+                <div className="p-3 text-xs text-gray-500">
+                  {t("Detay raporu yan panelde açılır.")}
+                </div>
               </div>
             </div>
           </div>
@@ -796,7 +913,7 @@ export default function OrgDashboardPage() {
       {/* Drawer */}
       <Drawer
         open={Boolean(openRestaurantId)}
-        title={<span>Restoran Raporu • {openRestaurantName}</span>}
+        title={<span>{t("Restoran Raporu")} • {openRestaurantName}</span>}
         onClose={() => {
           setOpenRestaurantId(null);
           setOpenRestaurantName("");
@@ -805,48 +922,48 @@ export default function OrgDashboardPage() {
         {demoMode ? (
           <div className="space-y-4">
             <div className="text-sm text-gray-600">
-              Demo açıkken restoran raporu gösterilmez. Demo’yu kapatıp tekrar deneyin.
+              {t("Demo açıkken restoran raporu gösterilmez. Demo’yu kapatıp tekrar deneyin.")}
             </div>
           </div>
         ) : restSummaryQ.isLoading ? (
-          <div className="text-sm text-gray-500">Yükleniyor...</div>
+          <div className="text-sm text-gray-500">{t("Yükleniyor...")}</div>
         ) : restSummaryQ.isError ? (
-          <div className="text-sm text-red-600">Restoran raporu alınamadı.</div>
+          <div className="text-sm text-red-600">{t("Restoran raporu alınamadı.")}</div>
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <div className="rounded-xl border bg-white p-3 shadow-sm">
-                <div className="text-[11px] tracking-wide text-gray-500">Satış</div>
+                <div className="text-[11px] tracking-wide text-gray-500">{t("Satış")}</div>
                 <div className="mt-1 text-base font-semibold">
                   {fmtMoneyWithSymbol(restSummaryQ.data?.totals?.salesTotal, currencySymbol, locale)}
                 </div>
               </div>
               <div className="rounded-xl border bg-white p-3 shadow-sm">
-                <div className="text-[11px] tracking-wide text-gray-500">Sipariş</div>
+                <div className="text-[11px] tracking-wide text-gray-500">{t("Sipariş")}</div>
                 <div className="mt-1 text-base font-semibold">
                   {fmtInt(restSummaryQ.data?.totals?.ordersCount, locale)}
                 </div>
               </div>
               <div className="rounded-xl border bg-white p-3 shadow-sm">
-                <div className="text-[11px] tracking-wide text-gray-500">Rezervasyon</div>
+                <div className="text-[11px] tracking-wide text-gray-500">{t("Rezervasyon")}</div>
                 <div className="mt-1 text-base font-semibold">
                   {fmtInt(restSummaryQ.data?.totals?.reservationsCount, locale)}
                 </div>
               </div>
               <div className="rounded-xl border bg-white p-3 shadow-sm">
-                <div className="text-[11px] tracking-wide text-gray-500">No-show</div>
+                <div className="text-[11px] tracking-wide text-gray-500">{t("No-show")}</div>
                 <div className="mt-1 text-base font-semibold">
                   {fmtInt(restSummaryQ.data?.totals?.noShowCount, locale)}
                 </div>
               </div>
               <div className="rounded-xl border bg-white p-3 shadow-sm">
-                <div className="text-[11px] tracking-wide text-gray-500">İptal</div>
+                <div className="text-[11px] tracking-wide text-gray-500">{t("İptaller")}</div>
                 <div className="mt-1 text-base font-semibold">
                   {fmtInt(restSummaryQ.data?.totals?.cancelledCount, locale)}
                 </div>
               </div>
               <div className="rounded-xl border bg-white p-3 shadow-sm">
-                <div className="text-[11px] tracking-wide text-gray-500">Depozito</div>
+                <div className="text-[11px] tracking-wide text-gray-500">{t("Depozito")}</div>
                 <div className="mt-1 text-base font-semibold">
                   {fmtMoneyWithSymbol(
                     restSummaryQ.data?.totals?.depositPaidTotal,

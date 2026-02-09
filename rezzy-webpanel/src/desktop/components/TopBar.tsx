@@ -3,6 +3,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { authStore, type MeUser } from "../../store/auth";
 import { useRestaurantDesktopCurrency } from "../layouts/RestaurantDesktopLayout";
+import { useI18n } from "../../i18n";
 
 export type SummaryChipTone = "success" | "warning" | "danger" | "neutral";
 
@@ -27,24 +28,24 @@ function initialsFromName(name?: string | null) {
   return (a + b).toUpperCase();
 }
 
-function roleLabelFromUser(user: MeUser | null): string {
+function roleLabelFromUser(user: MeUser | null, t: (key: string, options?: any) => string): string {
   if (!user) return "-";
-  if (user.role === "admin") return "Admin";
+  if (user.role === "admin") return t("Admin");
 
   const orgOwner = user.organizations?.find((o) => o.role === "org_owner");
-  if (orgOwner) return "Org Owner";
+  if (orgOwner) return t("Org Owner");
 
   const orgAdmin = user.organizations?.find((o) => o.role === "org_admin");
-  if (orgAdmin) return "Org Admin";
+  if (orgAdmin) return t("Org Admin");
 
   const locManager = user.restaurantMemberships?.find((m) => m.role === "location_manager");
-  if (locManager) return "Lokasyon Müdürü";
+  if (locManager) return t("Lokasyon Müdürü");
 
   const staff = user.restaurantMemberships?.find((m) => m.role === "staff");
-  if (staff) return "Personel";
+  if (staff) return t("Personel");
 
-  if (user.role === "restaurant") return "Restaurant Kullanıcısı";
-  return user.role;
+  if (user.role === "restaurant") return t("Restaurant Kullanıcısı");
+  return user.role ? t(String(user.role)) : "-";
 }
 
 function preserveModeDesktopLoginPath() {
@@ -59,6 +60,7 @@ function preserveModeDesktopLoginPath() {
 export const TopBar: React.FC<TopBarProps> = ({ title, subtitle, summaryChips }) => {
   const nav = useNavigate();
   const { currencySymbol } = useRestaurantDesktopCurrency();
+  const { t } = useI18n();
 
   const [user, setUser] = React.useState<MeUser | null>(authStore.getUser());
 
@@ -80,9 +82,9 @@ export const TopBar: React.FC<TopBarProps> = ({ title, subtitle, summaryChips })
   const chips: SummaryChip[] = hasCustomSummary
     ? summaryChips!
     : [
-        { label: "Bugün kişi", value: `${todaySummary.covers} kişi`, tone: "success" },
-        { label: "Toplam hesap", value: `${todaySummary.total} ${currencySymbol}`, tone: "warning" },
-        { label: "Rezvix oranı", value: `%${todaySummary.rezvixRate}`, tone: "danger" },
+        { label: t("Bugün kişi"), value: `${todaySummary.covers} ${t("kişi")}`, tone: "success" },
+        { label: t("Toplam hesap"), value: `${todaySummary.total} ${currencySymbol}`, tone: "warning" },
+        { label: t("Rezvix oranı"), value: `%${todaySummary.rezvixRate}`, tone: "danger" },
       ];
 
   const dotClass = (tone?: SummaryChipTone) => {
@@ -93,7 +95,7 @@ export const TopBar: React.FC<TopBarProps> = ({ title, subtitle, summaryChips })
 
   const userInitials = initialsFromName(user?.name);
   const userName = user?.name ?? "—";
-  const userRole = roleLabelFromUser(user);
+  const userRole = roleLabelFromUser(user, t);
 
   return (
     <header className="rezvix-topbar">
@@ -126,9 +128,9 @@ export const TopBar: React.FC<TopBarProps> = ({ title, subtitle, summaryChips })
               authStore.logout();
               (nav as any)(preserveModeDesktopLoginPath(), { replace: true });
             }}
-            title="Çıkış"
+            title={t("Çıkış")}
           >
-            Çıkış
+            {t("Çıkış")}
           </button>
         </div>
       </div>

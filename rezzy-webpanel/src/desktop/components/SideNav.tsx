@@ -1,4 +1,5 @@
 import React from "react";
+import { useI18n } from "../../i18n";
 
 export type DesktopNavKey =
   | "tables"
@@ -16,6 +17,7 @@ export type SideNavProps = {
 };
 
 export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate, alerts }) => {
+  const { t } = useI18n();
   const handleClick = (key: DesktopNavKey) => {
     if (onNavigate) onNavigate(key);
     // Yoksa router içinde bu componenti wrap ederken kendi navigate'ini vereceksin.
@@ -27,13 +29,13 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate, alerts }) 
         <div className="rezvix-sidenav__logo">Rz</div>
         <div className="rezvix-sidenav__title">
           <span className="rezvix-sidenav__title-main">Rezvix</span>
-          <span className="rezvix-sidenav__title-sub">Restaurant Desktop</span>
+          <span className="rezvix-sidenav__title-sub">{t("Restaurant Desktop")}</span>
         </div>
       </div>
 
       <nav className="rezvix-sidenav__nav">
         <div>
-          <div className="rezvix-sidenav__group-label">Servis</div>
+          <div className="rezvix-sidenav__group-label">{t("Servis")}</div>
 
           <button
             type="button"
@@ -46,10 +48,10 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate, alerts }) 
           >
             <div className="rezvix-sidenav__icon">🍽️</div>
             <div className="rezvix-sidenav__label">
-              <span>Masalar</span>
-              <span className="rezvix-sidenav__badge">Canlı</span>
+              <span>{t("Masalar")}</span>
+              <span className="rezvix-sidenav__badge">{t("Canlı")}</span>
               {alerts?.tables && (
-                <span className="rezvix-sidenav__alert-badge">Yeni</span>
+                <span className="rezvix-sidenav__alert-badge">{t("Yeni")}</span>
               )}
             </div>
           </button>
@@ -64,7 +66,7 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate, alerts }) 
           >
             <div className="rezvix-sidenav__icon">👨‍🍳</div>
             <div className="rezvix-sidenav__label">
-              <span>Mutfak</span>
+              <span>{t("Mutfak")}</span>
             </div>
           </button>
         </div>
@@ -82,9 +84,9 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate, alerts }) 
           >
             <div className="rezvix-sidenav__icon">🛵</div>
             <div className="rezvix-sidenav__label">
-              <span>Paket Sipariş</span>
+              <span>{t("Paket Sipariş")}</span>
               {alerts?.delivery && (
-                <span className="rezvix-sidenav__alert-badge">Yeni</span>
+                <span className="rezvix-sidenav__alert-badge">{t("Yeni")}</span>
               )}
             </div>
           </button>
@@ -98,7 +100,7 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate, alerts }) 
           >
             <div className="rezvix-sidenav__icon">📲</div>
             <div className="rezvix-sidenav__label">
-              <span>Rezvix &amp; QR</span>
+              <span>{t("Rezvix & QR")}</span>
             </div>
           </button>
 
@@ -112,7 +114,7 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate, alerts }) 
           >
             <div className="rezvix-sidenav__icon">🧾</div>
             <div className="rezvix-sidenav__label">
-              <span>Menü Yönetimi</span>
+              <span>{t("Menü Yönetimi")}</span>
             </div>
           </button>
 
@@ -126,13 +128,13 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate, alerts }) 
           >
             <div className="rezvix-sidenav__icon">📊</div>
             <div className="rezvix-sidenav__label">
-              <span>Raporlar</span>
+              <span>{t("Raporlar")}</span>
             </div>
           </button>
         </div>
 
         <div style={{ marginTop: 10 }}>
-          <div className="rezvix-sidenav__group-label">Sistem</div>
+          <div className="rezvix-sidenav__group-label">{t("Sistem")}</div>
 
           <button
             type="button"
@@ -144,16 +146,16 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate, alerts }) 
           >
             <div className="rezvix-sidenav__icon">⚙️</div>
             <div className="rezvix-sidenav__label">
-              <span>Ayarlar</span>
+              <span>{t("Ayarlar")}</span>
             </div>
           </button>
         </div>
       </nav>
 
       <div className="rezvix-sidenav__footer">
-        <div className="rezvix-sidenav__footer-title">Servis Modu</div>
+        <div className="rezvix-sidenav__footer-title">{t("Servis Modu")}</div>
         <div className="rezvix-sidenav__footer-sub">
-          Masa, mutfak ve Rezvix siparişlerini tek ekrandan yönetin.
+          {t("Masa, mutfak ve Rezvix siparişlerini tek ekrandan yönetin.")}
         </div>
       </div>
     </aside>

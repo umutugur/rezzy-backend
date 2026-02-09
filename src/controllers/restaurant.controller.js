@@ -6,6 +6,7 @@ import MenuCategory from "../models/MenuCategory.js";
 import { generateQRDataURL, signQR } from "../utils/qr.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import Restaurant, { BUSINESS_TYPES } from "../models/Restaurant.js";
+import { normalizeLang } from "../utils/i18n.js";
 
 // --- AuthZ helper (multi-organization aware) ---
 function canManageRestaurant(user, restaurantId) {
@@ -40,6 +41,10 @@ export const createRestaurant = async (req, res, next) => {
     if (typeof body.region === "string") {
       const r = body.region.trim().toUpperCase();
       body.region = r || undefined;
+    }
+
+    if (typeof body.preferredLanguage === "string") {
+      body.preferredLanguage = normalizeLang(body.preferredLanguage, "tr");
     }
 
     // GeoJSON location normalize
@@ -359,6 +364,7 @@ export const updateRestaurant = async (req, res, next) => {
       "mapAddress",
       "placeId",
       "googleMapsUrl",
+      "preferredLanguage",
 
       // ✅ NEW
       "businessType",
@@ -383,6 +389,12 @@ export const updateRestaurant = async (req, res, next) => {
       const r = $set.region.trim().toUpperCase();
       if (r) $set.region = r;
       else delete $set.region;
+    }
+
+    if (typeof $set.preferredLanguage === "string") {
+      const lang = normalizeLang($set.preferredLanguage, null);
+      if (lang) $set.preferredLanguage = lang;
+      else delete $set.preferredLanguage;
     }
 
     // ✅ businessType normalize + core list kontrol

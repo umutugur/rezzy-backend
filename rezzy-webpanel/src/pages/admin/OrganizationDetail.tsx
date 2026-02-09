@@ -13,9 +13,11 @@ import {
   adminSearchUsers,
   adminAddOrganizationMember,
   adminRemoveOrganizationMember,
+  adminUpdateOrganization,
   type AdminOrganization,
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
+import { DEFAULT_LANGUAGE, LANG_OPTIONS } from "../../utils/languages";
 
 type OrgDetail = AdminOrganization & {
   // Backend'te farklı isimler kullanılabilir; hepsini zorlamıyoruz
@@ -70,6 +72,29 @@ export default function AdminOrganizationDetailPage() {
   });
 
   const org = orgQ.data;
+  const [orgLang, setOrgLang] = React.useState<string>(DEFAULT_LANGUAGE);
+
+  React.useEffect(() => {
+    if (org?.defaultLanguage) {
+      setOrgLang(String(org.defaultLanguage));
+    } else {
+      setOrgLang(DEFAULT_LANGUAGE);
+    }
+  }, [org?.defaultLanguage]);
+
+  const updateOrgLangMut = useMutation({
+    mutationFn: () =>
+      adminUpdateOrganization(oid, { defaultLanguage: orgLang }),
+    onSuccess: () => {
+      showToast("Organizasyon dili güncellendi", "success");
+      qc.invalidateQueries({ queryKey: ["admin-organization", oid] });
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.message || err?.message || "Dil güncellenemedi";
+      showToast(msg, "error");
+    },
+  });
 
   const restaurants: Array<{
     _id: string;
@@ -297,32 +322,64 @@ export default function AdminOrganizationDetailPage() {
               Kayıt bulunamadı.
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <span className="text-gray-500 text-sm">Ad</span>
-                <div>{org.name}</div>
-              </div>
-              <div>
-                <span className="text-gray-500 text-sm">Bölge</span>
-                <div>{org.region || "-"}</div>
-              </div>
-              <div>
-                <span className="text-gray-500 text-sm">
-                  Vergi No
-                </span>
-                <div>{org.taxNumber || "-"}</div>
-              </div>
-              <div>
-                <span className="text-gray-500 text-sm">
-                  Oluşturulma
-                </span>
+            <div className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  {org.createdAt
-                    ? new Date(
-                        org.createdAt
-                      ).toLocaleString("tr-TR")
-                    : "-"}
+                  <span className="text-gray-500 text-sm">Ad</span>
+                  <div>{org.name}</div>
                 </div>
+                <div>
+                  <span className="text-gray-500 text-sm">Bölge</span>
+                  <div>{org.region || "-"}</div>
+                </div>
+                <div>
+                  <span className="text-gray-500 text-sm">
+                    Vergi No
+                  </span>
+                  <div>{org.taxNumber || "-"}</div>
+                </div>
+                <div>
+                  <span className="text-gray-500 text-sm">
+                    Oluşturulma
+                  </span>
+                  <div>
+                    {org.createdAt
+                      ? new Date(
+                          org.createdAt
+                        ).toLocaleString("tr-TR")
+                      : "-"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">
+                    Varsayılan Dil
+                  </label>
+                  <select
+                    className="border rounded-lg px-3 py-2 text-sm bg-white"
+                    value={orgLang}
+                    onChange={(e) => setOrgLang(e.target.value)}
+                  >
+                    {LANG_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs disabled:opacity-60"
+                  onClick={() => updateOrgLangMut.mutate()}
+                  disabled={
+                    updateOrgLangMut.isPending ||
+                    orgLang === (org.defaultLanguage || DEFAULT_LANGUAGE)
+                  }
+                >
+                  {updateOrgLangMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                </button>
               </div>
             </div>
           )}

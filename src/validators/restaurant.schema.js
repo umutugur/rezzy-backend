@@ -19,6 +19,7 @@ const BUSINESS_TYPES = [
   "pub",
   "other",
 ];
+const LANGS = ["tr", "en", "ru", "el"];
 
 const anyObject = Joi.object({}).unknown(true);
 
@@ -127,6 +128,7 @@ export const createRestaurantSchema = Joi.object({
     businessType: Joi.string()
       .valid(...BUSINESS_TYPES)
       .default("restaurant"),
+    preferredLanguage: Joi.string().valid(...LANGS).default("tr"),
 
     // ✅ NEW: Delivery ayarları (opsiyonel)
     delivery: deliverySchema.optional(),
@@ -177,6 +179,7 @@ export const createOrganizationRestaurantAdminSchema = Joi.object({
     businessType: Joi.string()
       .valid(...BUSINESS_TYPES)
       .default("restaurant"),
+    preferredLanguage: Joi.string().valid(...LANGS).default("tr"),
 
     // ✅ NEW: Delivery ayarları (opsiyonel)
     delivery: deliverySchema.optional(),
@@ -248,6 +251,7 @@ export const updateRestaurantSchema = Joi.object({
     placeId: Joi.string().allow("", null),
     googleMapsUrl: Joi.string().allow("", null),
     businessType: Joi.string().valid(...BUSINESS_TYPES),
+    preferredLanguage: Joi.string().valid(...LANGS),
 
     // ✅ NEW: Delivery ayarları (opsiyonel)
     delivery: deliverySchema.optional(),

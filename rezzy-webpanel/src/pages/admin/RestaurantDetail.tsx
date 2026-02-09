@@ -14,6 +14,7 @@ import {
   adminRemoveRestaurantMember,
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
+import { DEFAULT_LANGUAGE, LANG_OPTIONS } from "../../utils/languages";
 
 // ---- Tipler
 type RestaurantMember = {
@@ -32,6 +33,7 @@ type RestaurantInfo = {
   phone?: string;
   email?: string;
   isActive?: boolean;
+  preferredLanguage?: string;
 
   // commission
   commissionRate?: number; // 0..1
@@ -115,6 +117,7 @@ export default function AdminRestaurantDetailPage() {
     phone: "",
     email: "",
     region: "",
+    preferredLanguage: DEFAULT_LANGUAGE,
 
     businessType: "",
     categorySet: "",
@@ -172,6 +175,7 @@ export default function AdminRestaurantDetailPage() {
       phone: String(d.phone || ""),
       email: String(d.email || ""),
       region: String(d.region || ""),
+      preferredLanguage: String(d.preferredLanguage || DEFAULT_LANGUAGE),
 
       businessType: String(d.businessType || ""),
       categorySet: String(d.categorySet || ""),
@@ -349,6 +353,10 @@ export default function AdminRestaurantDetailPage() {
         if (up !== String(current.region || "")) patch.region = up;
       }
 
+      const nLang = String(infoForm.preferredLanguage || "").trim();
+      const curLang = String((current as any).preferredLanguage || "").trim();
+      if (nLang && nLang !== curLang) patch.preferredLanguage = nLang;
+
       // allow clearing with empty string (backend v || undefined)
       if (infoForm.city !== String(current.city || "")) patch.city = infoForm.city;
       if (infoForm.address !== String(current.address || "")) patch.address = infoForm.address;
@@ -518,6 +526,23 @@ export default function AdminRestaurantDetailPage() {
                   <div className="text-xs text-gray-400 mt-1">
                     Örn: TR / DE / US
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-gray-500 text-sm block">Dil</label>
+                  <select
+                    className="border rounded-lg px-3 py-2 w-full text-sm bg-white"
+                    value={infoForm.preferredLanguage}
+                    onChange={(e) =>
+                      setInfoField("preferredLanguage", e.target.value)
+                    }
+                  >
+                    {LANG_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Business Type */}

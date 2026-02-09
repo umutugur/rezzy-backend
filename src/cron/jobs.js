@@ -23,8 +23,7 @@ export async function jobReminder24h() {
   for (const r of list) {
     if (!isInWindow(r.dateTimeUTC, 24*60, 15)) continue;
     await notifyUser(r.userId, {
-      title: "Yarın görüşüyoruz – QR kodunu unutma",
-      body:  "Girişte QR kodunu okutacaksın.",
+      i18n: { key: "reminder_24h" },
       data:  { type: "reminder_24h", rid: String(r._id), section: "qrcode" },
       key:   `cust:rem24:${r._id}`,
       type:  "reminder_24h"
@@ -48,8 +47,7 @@ export async function jobReminder3h() {
   for (const r of list) {
     if (!isInWindow(r.dateTimeUTC, 3*60, 10)) continue;
     await notifyUser(r.userId, {
-      title: "3 saat kaldı – QR kodunu hazırla",
-      body:  "Uygulama içinden QR kodunu açmayı unutma.",
+      i18n: { key: "reminder_3h" },
       data:  { type: "reminder_3h", rid: String(r._id), section: "qrcode" },
       key:   `cust:rem3:${r._id}`,
       type:  "reminder_3h"
@@ -75,8 +73,7 @@ export async function jobRestaurantPendingReminder() {
   let sent = 0;
   for (const r of list) {
     await notifyRestaurantOwner(r.restaurantId, {
-      title: "Bekleyen rezervasyon isteği",
-      body:  "Yanıtlanmamış bir rezervasyon talebiniz var.",
+      i18n: { key: "restaurant_pending_reminder" },
       data:  { type: "restaurant_pending_reminder", rid: String(r._id) },
       key:   `rest:pendingRem:${r._id}`,
       type:  "restaurant_pending_reminder"

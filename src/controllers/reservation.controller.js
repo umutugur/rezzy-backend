@@ -3,7 +3,7 @@ import Menu from "../models/Menu.js";
 import Restaurant from "../models/Restaurant.js";
 import Reservation from "../models/Reservation.js";
 import User from "../models/User.js"; // ✅ Stripe müşteri için
-import { fmtTR, dayjs} from "../utils/dates.js";
+import { dayjs } from "../utils/dates.js";
 import { generateQRDataURL, verifyQR } from "../utils/qr.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import { notifyUser, notifyRestaurantOwner } from "../services/notification.service.js";
@@ -546,8 +546,7 @@ export const uploadReceipt = async (req, res, next) => {
 
     // Müşteri — pending
     await notifyUser(r.userId, {
-      title: "Talebin alındı ✅",
-      body: `${fmtTR(r.dateTimeUTC)} için talebin restorana iletildi. Onaylanınca QR kodun açılacak.`,
+      i18n: { key: "reservation_pending", vars: { dateTime: r.dateTimeUTC } },
       data: {
         type: "reservation_pending",
         rid: String(r._id),
@@ -559,8 +558,10 @@ export const uploadReceipt = async (req, res, next) => {
 
     // Restoran sahibi — yeni istek
     await notifyRestaurantOwner(r.restaurantId, {
-      title: "Yeni rezervasyon talebi",
-      body: `${fmtTR(r.dateTimeUTC)} • ${r.partySize} kişilik rezervasyon bekliyor. Lütfen kontrol edin.`,
+      i18n: {
+        key: "restaurant_new_request",
+        vars: { dateTime: r.dateTimeUTC, partySize: r.partySize },
+      },
       data: {
         type: "restaurant_new_request",
         rid: String(r._id),
@@ -786,8 +787,7 @@ export const approveReservation = async (req, res, next) => {
     // Müşteri — onay
     try {
       await notifyUser(r.userId, {
-        title: "Rezervasyonun onaylandı 🎉",
-        body: `${fmtTR(r.dateTimeUTC)} • QR kodun hazır. Rezvix > Rezervasyonlarım üzerinden erişebilirsin.`,
+        i18n: { key: "reservation_approved", vars: { dateTime: r.dateTimeUTC } },
         data: { type: "reservation_approved", rid: String(r._id), section: "qrcode" },
         key: `cust:approved:${r._id}`,
         type: "reservation_approved",
@@ -815,8 +815,7 @@ export const rejectReservation = async (req, res, next) => {
 
     // Müşteri — reddedildi
     await notifyUser(r.userId, {
-      title: "Üzgünüz, rezervasyon onaylanmadı",
-      body: `Uygun başka bir saat deneyebilirsin. İstersen farklı bir restoran da seçebilirsin.`,
+      i18n: { key: "reservation_rejected" },
       data: { type: "reservation_rejected", rid: String(r._id), section: "reservation" },
       key: `cust:rejected:${r._id}`,
       type: "reservation_rejected",
@@ -858,8 +857,7 @@ export const cancelReservation = async (req, res, next) => {
     // Restoran — müşteri iptali
     try {
       await notifyRestaurantOwner(toIdString(r.restaurantId?._id || r.restaurantId), {
-        title: "Rezervasyon iptal edildi",
-        body: `${fmtTR(r.dateTimeUTC)} tarihli rezervasyon, müşteri tarafından iptal edildi.`,
+        i18n: { key: "reservation_cancelled", vars: { dateTime: r.dateTimeUTC } },
         data: { type: "reservation_cancelled", rid: String(r._id), section: "reservations" },
         key: `rest:cancelled:${r._id}`,
         type: "reservation_cancelled",
@@ -1008,8 +1006,7 @@ export const checkin = async (req, res, next) => {
     // Müşteri — check-in
     try {
       await notifyUser(r.userId, {
-        title: "Check-in tamam ✅",
-        body: `İyi eğlenceler! ${fmtTR(r.dateTimeUTC)} rezervasyonun için girişin alındı.`,
+        i18n: { key: "checkin", vars: { dateTime: r.dateTimeUTC } },
         data: { type: "checkin", rid: String(r._id), section: "reservation" },
         key: `cust:checkin:${r._id}`,
         type: "checkin",

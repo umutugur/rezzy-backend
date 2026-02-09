@@ -882,16 +882,13 @@ export const notifyOrderReadyForTable = async (req, res, next) => {
       return res.json({ ok: true, notifiedUsers: 0, reason: "no_users" });
     }
 
-    const title = "Siparişin hazır";
-    const body = `Masa ${table.name} için siparişin hazırlandı. Teslim almak için gel.`;
     const keyBase = Date.now();
 
     const results = await Promise.all(
       userIds.map(async (uid) => {
         try {
           await notifyUser(uid, {
-            title,
-            body,
+            i18n: { key: "order_ready", vars: { tableName: table.name } },
             data: {
               type: "order_ready",
               restaurantId: String(restaurant._id),

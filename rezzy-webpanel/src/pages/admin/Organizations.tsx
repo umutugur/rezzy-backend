@@ -10,6 +10,7 @@ import {
   type AdminOrganization,
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
+import { LANG_OPTIONS, DEFAULT_LANGUAGE } from "../../utils/languages";
 
 type UserLite = { _id: string; name?: string; email?: string; role?: string };
 
@@ -35,6 +36,8 @@ export default function AdminOrganizationsPage() {
   const [name, setName] = React.useState("");
   const [region, setRegion] = React.useState("");
   const [taxNumber, setTaxNumber] = React.useState("");
+  const [defaultLanguage, setDefaultLanguage] =
+    React.useState(DEFAULT_LANGUAGE);
 
   // Owner seçimi
   const [ownerQuery, setOwnerQuery] = React.useState("");
@@ -52,6 +55,7 @@ export default function AdminOrganizationsPage() {
         name: name.trim(),
         region: region.trim() || undefined,
         taxNumber: taxNumber.trim() || undefined,
+        defaultLanguage,
         ownerId: owner?._id as string,
       }),
     onSuccess: (org) => {
@@ -59,6 +63,7 @@ export default function AdminOrganizationsPage() {
       setName("");
       setRegion("");
       setTaxNumber("");
+      setDefaultLanguage(DEFAULT_LANGUAGE);
       setOwner(null);
       setOwnerQuery("");
 
@@ -303,6 +308,22 @@ export default function AdminOrganizationsPage() {
                   onChange={(e) => setRegion(e.target.value.toUpperCase())}
                   maxLength={3}
                 />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">
+                  Varsayılan Dil
+                </label>
+                <select
+                  className="border rounded-lg px-3 py-2 w-full text-sm bg-white"
+                  value={defaultLanguage}
+                  onChange={(e) => setDefaultLanguage(e.target.value)}
+                >
+                  {LANG_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">

@@ -4,6 +4,7 @@ import BranchRequest from "../models/BranchRequest.js";
 import Organization from "../models/Organization.js";
 import Restaurant from "../models/Restaurant.js";
 import User from "../models/User.js";
+import { normalizeLang } from "../utils/i18n.js";
 
 function toObjectId(id) {
   try {
@@ -155,7 +156,7 @@ export const getMyOrganizationDetail = async (req, res, next) => {
 
     // Bu organizasyona bağlı restoranlar
     const restaurants = await Restaurant.find({ organizationId: oid })
-      .select("_id name city region isActive")
+      .select("_id name city region isActive preferredLanguage")
       .sort({ name: 1 })
       .lean();
 
@@ -184,6 +185,48 @@ export const getMyOrganizationDetail = async (req, res, next) => {
       restaurants,
       members,
     });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * Org owner / admin → Organizasyon dilini güncelle
+ * PATCH /api/org/organizations/:oid
+ * body: { defaultLanguage: "tr" | "en" | "ru" | "el" }
+ */
+export const updateMyOrganization = async (req, res, next) => {
+  try {
+    const oid = toObjectId(req.params.oid);
+    if (!oid) {
+      return res.status(400).json({ message: "Invalid organization id" });
+    }
+
+    const { defaultLanguage } = req.body || {};
+    if (defaultLanguage == null) {
+      return res.status(400).json({ message: "defaultLanguage is required" });
+    }
+
+    const lang = normalizeLang(defaultLanguage, null);
+    if (!lang) {
+      return res.status(400).json({ message: "Invalid defaultLanguage" });
+    }
+
+    const org = await Organization.findByIdAndUpdate(
+      oid,
+      { $set: { defaultLanguage: lang } },
+      { new: true }
+    )
+      .select(
+        "_id name legalName logoUrl region defaultLanguage description taxNumber taxOffice createdAt updatedAt"
+      )
+      .lean();
+
+    if (!org) {
+      return res.status(404).json({ message: "Organization not found" });
+    }
+
+    return res.json({ ok: true, organization: org });
   } catch (e) {
     next(e);
   }
@@ -238,7 +281,7 @@ export const listOrganizationRestaurantsForOwner = async (
       .sort({ _id: -1 })
       .limit(limit + 1)
       .select(
-        "_id name city address phone email region isActive organizationId"
+        "_id name city address phone email region isActive organizationId preferredLanguage"
       )
       .lean();
 
