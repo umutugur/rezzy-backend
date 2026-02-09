@@ -755,14 +755,16 @@ export default function RestaurantProfilePage() {
         {tab === "tables" && (
           <Card title={t("Masalar")}>
             <div className="space-y-3">
-              {tables.map((t, idx) => (
+              {tables.map((table, idx) => (
                 <div key={idx} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-center">
                   <input
                     className="border rounded-lg px-3 py-2"
                     placeholder={t("Ad")}
-                    value={t.name}
+                    value={table.name}
                     onChange={(e) =>
-                      setTables((prev) => prev.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))
+                      setTables((prev) =>
+                        prev.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x))
+                      )
                     }
                   />
                   <input
@@ -770,7 +772,7 @@ export default function RestaurantProfilePage() {
                     min={1}
                     className="border rounded-lg px-3 py-2"
                     placeholder={t("Kapasite")}
-                    value={String(t.capacity)}
+                    value={String(table.capacity)}
                     onChange={(e) =>
                       setTables((prev) =>
                         prev.map((x, i) => (i === idx ? { ...x, capacity: Number(e.target.value) || 1 } : x))
@@ -781,7 +783,7 @@ export default function RestaurantProfilePage() {
                     <span className="text-gray-600">{t("Aktif")}</span>
                     <input
                       type="checkbox"
-                      checked={t.isActive ?? true}
+                      checked={table.isActive ?? true}
                       onChange={(e) =>
                         setTables((prev) =>
                           prev.map((x, i) => (i === idx ? { ...x, isActive: e.target.checked } : x))
