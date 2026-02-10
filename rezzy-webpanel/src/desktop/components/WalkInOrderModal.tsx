@@ -132,7 +132,6 @@ export const WalkInOrderModal: React.FC<Props> = ({
   submitPending,
 }) => {
   const { t } = useI18n();
-  if (!open) return null;
 
   const { region } = useRestaurantDesktopCurrency();
 
@@ -373,6 +372,8 @@ export const WalkInOrderModal: React.FC<Props> = ({
 
     closeModifierPicker();
   }
+
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(7,9,20,0.46)] backdrop-blur-md">
