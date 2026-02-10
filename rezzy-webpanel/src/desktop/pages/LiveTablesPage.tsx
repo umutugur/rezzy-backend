@@ -1108,10 +1108,13 @@ function handleAddWithModifiers(
   }
 
   const selectedTable = selectedTableId
-    ? tables.find((t) => t.id === selectedTableId)
+    ? tables.find(
+        (t) => String(t.id) === selectedTableId || t.name === selectedTableId
+      ) || (tableDetail as any)?.table
     : undefined;
 
-  const selectedTableName = selectedTable?.name ?? "";
+  const selectedTableName =
+    selectedTable?.name ?? (tableDetail as any)?.table?.name ?? "";
 
   const selectedItemCount = Object.values(draftItems).reduce(
   (sum, it) => sum + Number(it.qty || 0),
@@ -1155,7 +1158,9 @@ const selectedTotal = Object.values(draftItems).reduce(
                 <div
                   key={t.id}
                   onClick={() => {
-                    setSelectedTableId(t.id);
+                    const tableKey = t.id ? String(t.id) : t.name;
+                    if (!tableKey) return;
+                    setSelectedTableId(tableKey);
                     setIsDetailModalOpen(true);
                   }}
                   className="cursor-pointer"
