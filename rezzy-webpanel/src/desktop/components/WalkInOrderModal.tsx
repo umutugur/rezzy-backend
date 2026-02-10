@@ -320,8 +320,12 @@ export const WalkInOrderModal: React.FC<Props> = ({
       const gid = String(g._id);
       const set = modifierSelections[gid] ?? new Set<string>();
       const { min, max } = getGroupLimits(g);
-      if (set.size < min) return `“${g.title}” için en az ${min} seçim zorunlu.`;
-      if (max > 0 && set.size > max) return `“${g.title}” için en fazla ${max} seçim yapılabilir.`;
+      if (set.size < min) {
+        return t("{title} için en az {count} seçim zorunlu.", { title: g.title, count: min });
+      }
+      if (max > 0 && set.size > max) {
+        return t("{title} için en fazla {count} seçim yapılabilir.", { title: g.title, count: max });
+      }
     }
     return "";
   }
