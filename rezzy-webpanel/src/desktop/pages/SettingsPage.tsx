@@ -1436,8 +1436,8 @@ const selectZone = React.useCallback(
             }
           >
             <div className="space-y-3">
-              {tables.map((t, idx) => {
-                const tableKey = t._id || t.name;
+              {tables.map((table, idx) => {
+                const tableKey = table._id || table.name;
                 const isDownloadingThis =
                   downloadingTableKey !== null &&
                   downloadingTableKey === String(tableKey);
@@ -1450,7 +1450,7 @@ const selectZone = React.useCallback(
                     <input
                       className="border rounded-lg px-3 py-2"
                       placeholder={t("Ad")}
-                      value={t.name}
+                      value={table.name}
                       onChange={(e) =>
                         setTables((prev) =>
                           prev.map((x, i) =>
@@ -1464,7 +1464,7 @@ const selectZone = React.useCallback(
                       min={1}
                       className="border rounded-lg px-3 py-2"
                       placeholder={t("Kapasite")}
-                      value={String(t.capacity)}
+                      value={String(table.capacity)}
                       onChange={(e) =>
                         setTables((prev) =>
                           prev.map((x, i) =>
@@ -1482,7 +1482,7 @@ const selectZone = React.useCallback(
                       <span className="text-gray-600">{t("Aktif")}</span>
                       <input
                         type="checkbox"
-                        checked={t.isActive ?? true}
+                        checked={table.isActive ?? true}
                         onChange={(e) =>
                           setTables((prev) =>
                             prev.map((x, i) =>
@@ -1498,7 +1498,7 @@ const selectZone = React.useCallback(
                     {/* Tek masa QR posteri indir */}
                     <button
                       type="button"
-                      onClick={() => downloadPosterForTable(t)}
+                      onClick={() => downloadPosterForTable(table)}
                       disabled={isDownloadingThis}
                       className="rounded-lg bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-2 text-sm disabled:opacity-60"
                     >
