@@ -291,26 +291,6 @@ export const TableDetailModal: React.FC<Props> = ({
   hideCancelledOrders,
 }) => {
   const { t } = useI18n();
-  if (!open) return null;
-  const activeTable = table ?? (tableDetail as any)?.table;
-  if (!activeTable) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(7,9,20,0.42)] backdrop-blur-md">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_20px_50px_rgba(15,23,42,0.25)] px-6 py-5">
-          <div className="text-sm text-slate-600">{t("Masa bulunamadı")}</div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-4 px-3 py-1.5 text-xs rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
-          >
-            {t("Kapat")}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const mins = minutesSince(activeTable.lastOrderAt ?? null);
   const user = authStore.getUser();
 
   const qc = useQueryClient();
@@ -370,7 +350,6 @@ export const TableDetailModal: React.FC<Props> = ({
   //  3) first organization region
   //  4) TR
   const userRegionRaw = String((user as any)?.region ?? "").trim();
-
   const membershipOrgId = String((user as any)?.restaurantMemberships?.[0]?.organizationId ?? "").trim();
   const orgs = Array.isArray((user as any)?.organizations) ? (user as any).organizations : [];
   const matchedOrg = membershipOrgId
@@ -399,7 +378,9 @@ export const TableDetailModal: React.FC<Props> = ({
 
   const hasOrders = visibleOrders.length > 0;
   const hasRequests = (tableDetail?.serviceRequests?.length ?? 0) > 0;
-  const isSelfService = activeTable.channel === "QR";
+  const activeTable = table ?? (tableDetail as any)?.table;
+  const mins = minutesSince(activeTable?.lastOrderAt ?? null);
+  const isSelfService = activeTable?.channel === "QR";
   const canNotifyOrderReady = isSelfService && hasSession && hasOrders;
 
   const canCancelOrder = React.useCallback((o: any) => {
@@ -425,6 +406,25 @@ export const TableDetailModal: React.FC<Props> = ({
   const hasError = !!error;
   const errorMessage =
     error instanceof Error ? error.message : t("Masa detayı getirilemedi.");
+
+  if (!open) return null;
+
+  if (!activeTable) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(7,9,20,0.42)] backdrop-blur-md">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_20px_50px_rgba(15,23,42,0.25)] px-6 py-5">
+          <div className="text-sm text-slate-600">{t("Masa bulunamadı")}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-4 px-3 py-1.5 text-xs rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+          >
+            {t("Kapat")}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(7,9,20,0.42)] backdrop-blur-md">
