@@ -16,6 +16,7 @@ import {
   restaurantCancelDeliveryOrder,
   type DeliveryOrderRow,
 } from "../../api/delivery";
+import { useI18n, t as i18nT } from "../../i18n";
 
 type Status = "new" | "accepted" | "on_the_way" | "delivered" | "cancelled";
 type PaymentMethod = "card" | "cash" | "card_on_delivery" | string | undefined;
@@ -36,10 +37,10 @@ function formatMoney(amount: number, currency: "TRY" | "GBP") {
 }
 
 function paymentLabel(m: PaymentMethod): string {
-  if (m === "card") return "Online Ödeme";
-  if (m === "cash") return "Kapıda Nakit";
-  if (m === "card_on_delivery") return "Kapıda Kart";
-  return "—";
+  if (m === "card") return i18nT("Online Ödeme");
+  if (m === "cash") return i18nT("Kapıda Nakit");
+  if (m === "card_on_delivery") return i18nT("Kapıda Kart");
+  return i18nT("—");
 }
 
 function safeStr(v: any) {
@@ -77,7 +78,7 @@ function buildSelectedModifiersHtml(it: any): string {
       const opts = Array.isArray(g?.options) ? g.options : [];
       const optTitles = opts.map((o: any) => safeStr(o?.optionTitle)).filter(Boolean);
       if (!gTitle && optTitles.length === 0) return "";
-      return `<div><span class="bold">${gTitle || "Opsiyon"}:</span> ${optTitles.join(", ")}</div>`;
+      return `<div><span class="bold">${gTitle || i18nT("Opsiyon")}:</span> ${optTitles.join(", ")}</div>`;
     })
     .filter(Boolean)
     .join("");
@@ -130,7 +131,7 @@ function buildPrintHtml(o: DeliveryOrderRow, currency: "TRY" | "GBP") {
         dateStyle: "short",
         timeStyle: "short",
       })
-    : "-";
+    : i18nT("-");
 
   // Helper: detect old-style modifier summaries in note
   const looksLikeModifierSummary = (s: string) => {
@@ -158,7 +159,7 @@ function buildPrintHtml(o: DeliveryOrderRow, currency: "TRY" | "GBP") {
       const showNote = !!noteText && (!hasMods || !looksLikeModifierSummary(noteText));
 
       const noteHtml = showNote
-        ? `<div class="small" style="margin-top:3px;">Not: ${noteText}</div>`
+        ? `<div class="small" style="margin-top:3px;">${i18nT("Not")}: ${noteText}</div>`
         : "";
 
       return `
@@ -169,7 +170,7 @@ function buildPrintHtml(o: DeliveryOrderRow, currency: "TRY" | "GBP") {
     })
     .join("");
 
-  const addr = safeStr((o as any).addressText) || "-";
+  const addr = safeStr((o as any).addressText) || i18nT("-");
   const note = safeStr((o as any).customerNote);
   const pay = paymentLabel((o as any).paymentMethod);
 
@@ -177,45 +178,45 @@ function buildPrintHtml(o: DeliveryOrderRow, currency: "TRY" | "GBP") {
   const customerPhone = safeStr((o as any).customerPhone);
 
   return `
-    <div class="center bold">${safeStr((o as any).restaurantName) || "Restoran"}</div>
-    <div class="center small">PAKET SİPARİŞ</div>
+    <div class="center bold">${safeStr((o as any).restaurantName) || i18nT("Restoran")}</div>
+    <div class="center small">${i18nT("PAKET SİPARİŞ")}</div>
     <div class="line"></div>
 
-    <div class="row small"><span>Sipariş</span><span>#${safeStr((o as any).shortCode) || String(o._id).slice(-6)}</span></div>
-    <div class="row small"><span>Tarih</span><span>${created}</span></div>
-    <div class="row small"><span>Ödeme</span><span>${pay}</span></div>
+    <div class="row small"><span>${i18nT("Sipariş")}</span><span>#${safeStr((o as any).shortCode) || String(o._id).slice(-6)}</span></div>
+    <div class="row small"><span>${i18nT("Tarih")}</span><span>${created}</span></div>
+    <div class="row small"><span>${i18nT("Ödeme")}</span><span>${pay}</span></div>
 
     ${
       customerName || customerPhone
         ? `
           <div class="line"></div>
-          ${customerName ? `<div class="row small"><span>Müşteri</span><span>${customerName}</span></div>` : ""}
-          ${customerPhone ? `<div class="row small"><span>Telefon</span><span>${customerPhone}</span></div>` : ""}
+          ${customerName ? `<div class="row small"><span>${i18nT("Müşteri")}</span><span>${customerName}</span></div>` : ""}
+          ${customerPhone ? `<div class="row small"><span>${i18nT("Telefon")}</span><span>${customerPhone}</span></div>` : ""}
         `
         : ""
     }
 
     <div class="line"></div>
-    <div class="bold">Adres</div>
+    <div class="bold">${i18nT("Adres")}</div>
     <div class="small">${addr}</div>
 
     ${
       note
-        ? `<div class="line"></div><div class="bold">Sipariş Notu</div><div class="small">${note}</div>`
+        ? `<div class="line"></div><div class="bold">${i18nT("Sipariş Notu")}</div><div class="small">${note}</div>`
         : ""
     }
 
     <div class="line"></div>
-    <div class="row bold"><span>Ürün</span><span>Tutar</span></div>
-    ${itemsHtml || `<div class="small">Ürün yok.</div>`}
+    <div class="row bold"><span>${i18nT("Ürün")}</span><span>${i18nT("Tutar")}</span></div>
+    ${itemsHtml || `<div class="small">${i18nT("Ürün yok.")}</div>`}
 
     <div class="line"></div>
-    <div class="row"><span>Ara Toplam</span><span>${formatMoney((o as any).subtotal || 0, currency)}</span></div>
-    <div class="row"><span>Teslimat</span><span>${formatMoney((o as any).deliveryFee || 0, currency)}</span></div>
-    <div class="row bold"><span>Toplam</span><span>${formatMoney((o as any).total || 0, currency)}</span></div>
+    <div class="row"><span>${i18nT("Ara Toplam")}</span><span>${formatMoney((o as any).subtotal || 0, currency)}</span></div>
+    <div class="row"><span>${i18nT("Teslimat")}</span><span>${formatMoney((o as any).deliveryFee || 0, currency)}</span></div>
+    <div class="row bold"><span>${i18nT("Toplam")}</span><span>${formatMoney((o as any).total || 0, currency)}</span></div>
 
     <div class="line"></div>
-    <div class="center small">Rezvix</div>
+    <div class="center small">${i18nT("Rezvix")}</div>
   `;
 }
 
@@ -224,6 +225,7 @@ function cx(...s: Array<string | false | null | undefined>) {
 }
 
 export const DeliveryOrdersPage: React.FC = () => {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const user = authStore.getUser();
   const fallbackMembershipRestaurantId = user?.restaurantMemberships?.[0]?.id ?? null;
@@ -248,45 +250,45 @@ export const DeliveryOrdersPage: React.FC = () => {
   const acceptMut = useMutation({
     mutationFn: async (orderId: string) => restaurantAcceptDeliveryOrder(rid, orderId),
     onSuccess: () => {
-      showToast("Sipariş onaylandı.", "success");
+      showToast(t("Sipariş onaylandı."), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-delivery-orders", rid] });
       setSelected(null);
     },
     onError: (e: any) =>
-      showToast(e?.response?.data?.message || e?.message || "Onaylanamadı.", "error"),
+      showToast(e?.response?.data?.message || e?.message || t("Onaylanamadı."), "error"),
   });
 
   const onTheWayMut = useMutation({
     mutationFn: async (orderId: string) => restaurantSetDeliveryOrderOnTheWay(rid, orderId),
     onSuccess: () => {
-      showToast("Yola çıktı olarak işaretlendi.", "success");
+      showToast(t("Yola çıktı olarak işaretlendi."), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-delivery-orders", rid] });
       setSelected(null);
     },
     onError: (e: any) =>
-      showToast(e?.response?.data?.message || e?.message || "Güncellenemedi.", "error"),
+      showToast(e?.response?.data?.message || e?.message || t("Güncellenemedi."), "error"),
   });
 
   const deliveredMut = useMutation({
     mutationFn: async (orderId: string) => restaurantSetDeliveryOrderDelivered(rid, orderId),
     onSuccess: () => {
-      showToast("Teslim edildi.", "success");
+      showToast(t("Teslim edildi."), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-delivery-orders", rid] });
       setSelected(null);
     },
     onError: (e: any) =>
-      showToast(e?.response?.data?.message || e?.message || "Güncellenemedi.", "error"),
+      showToast(e?.response?.data?.message || e?.message || t("Güncellenemedi."), "error"),
   });
 
   const cancelMut = useMutation({
     mutationFn: async (orderId: string) => restaurantCancelDeliveryOrder(rid, orderId),
     onSuccess: () => {
-      showToast("Sipariş iptal edildi.", "success");
+      showToast(t("Sipariş iptal edildi."), "success");
       qc.invalidateQueries({ queryKey: ["restaurant-delivery-orders", rid] });
       setSelected(null);
     },
     onError: (e: any) =>
-      showToast(e?.response?.data?.message || e?.message || "İptal edilemedi.", "error"),
+      showToast(e?.response?.data?.message || e?.message || t("İptal edilemedi."), "error"),
   });
 
   const groups = React.useMemo(() => {
@@ -305,24 +307,24 @@ export const DeliveryOrdersPage: React.FC = () => {
     return by;
   }, [orders]);
 const handlePrintOnly = (o: DeliveryOrderRow) => {
-  const w = openPrintWindow("Paket Sipariş");
+  const w = openPrintWindow(t("Paket Sipariş"));
   if (!w) {
-    showToast("Tarayıcı yazdırma penceresini engelledi. Popup izni ver.", "error");
+    showToast(t("Tarayıcı yazdırma penceresini engelledi. Popup izni ver."), "error");
     return;
   }
 
   const html = buildPrintHtml(o, currency);
-  writeAndPrint80mm(w, "Paket Sipariş", html);
+  writeAndPrint80mm(w, t("Paket Sipariş"), html);
 };
   const handleAcceptAndPrint = (o: DeliveryOrderRow) => {
-    const w = openPrintWindow("Paket Sipariş");
+    const w = openPrintWindow(t("Paket Sipariş"));
     if (!w) {
-      showToast("Tarayıcı yazdırma penceresini engelledi. Popup izni ver.", "error");
+      showToast(t("Tarayıcı yazdırma penceresini engelledi. Popup izni ver."), "error");
       return;
     }
 
     const html = buildPrintHtml(o, currency);
-    writeAndPrint80mm(w, "Paket Sipariş", html);
+    writeAndPrint80mm(w, t("Paket Sipariş"), html);
 
     acceptMut.mutate(String(o._id));
   };
@@ -334,12 +336,12 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
   return (
     <RestaurantDesktopLayout
       activeNav="delivery"
-      title="Paket Sipariş"
-      subtitle="Yeni siparişleri inceleyin, onaylayın ve durumlarını yönetin."
+      title={t("Paket Sipariş")}
+      subtitle={t("Yeni siparişleri inceleyin, onaylayın ve durumlarını yönetin.")}
       summaryChips={[
-        { label: "Yeni", value: `${groups.new.length}`, tone: groups.new.length ? "danger" : "neutral" },
-        { label: "Onaylı", value: `${groups.accepted.length}`, tone: groups.accepted.length ? "warning" : "neutral" },
-        { label: "Yolda", value: `${groups.on_the_way.length}`, tone: groups.on_the_way.length ? "success" : "neutral" },
+        { label: t("Yeni"), value: t("{count}", { count: groups.new.length }), tone: groups.new.length ? "danger" : "neutral" },
+        { label: t("Onaylı"), value: t("{count}", { count: groups.accepted.length }), tone: groups.accepted.length ? "warning" : "neutral" },
+        { label: t("Yolda"), value: t("{count}", { count: groups.on_the_way.length }), tone: groups.on_the_way.length ? "success" : "neutral" },
       ]}
     >
       <style>{`
@@ -381,29 +383,29 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
 
       {isLoading && (
         <div className="rezvix-empty">
-          <div className="rezvix-empty__title">Siparişler yükleniyor…</div>
+          <div className="rezvix-empty__title">{t("Siparişler yükleniyor…")}</div>
         </div>
       )}
 
       {isError && !isLoading && (
         <div className="rezvix-empty">
-          <div className="rezvix-empty__title">Siparişler yüklenemedi</div>
+          <div className="rezvix-empty__title">{t("Siparişler yüklenemedi")}</div>
         </div>
       )}
 
       {!isLoading && !isError && orders.length === 0 && (
         <div className="rezvix-empty">
           <div className="rezvix-empty__icon">🛵</div>
-          <div className="rezvix-empty__title">Paket sipariş yok</div>
-          <div className="rezvix-empty__text">Yeni sipariş geldiğinde burada göreceksiniz.</div>
+          <div className="rezvix-empty__title">{t("Paket sipariş yok")}</div>
+          <div className="rezvix-empty__text">{t("Yeni sipariş geldiğinde burada göreceksiniz.")}</div>
         </div>
       )}
 
       {!isLoading && !isError && orders.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-          <Column title="Yeni" items={groups.new} currency={currency} onPick={setSelected} compactNew />
-          <Column title="Onaylı" items={groups.accepted} currency={currency} onPick={setSelected} />
-          <Column title="Yolda" items={groups.on_the_way} currency={currency} onPick={setSelected} />
+          <Column title={t("Yeni")} items={groups.new} currency={currency} onPick={setSelected} compactNew />
+          <Column title={t("Onaylı")} items={groups.accepted} currency={currency} onPick={setSelected} />
+          <Column title={t("Yolda")} items={groups.on_the_way} currency={currency} onPick={setSelected} />
         </div>
       )}
 
@@ -412,20 +414,20 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
           <div className="rez-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
   <div className="rez-modal-title">
-    Sipariş #{(selected as any).shortCode || String(selected._id).slice(-6)}
+    {t("Sipariş")} #{(selected as any).shortCode || String(selected._id).slice(-6)}
   </div>
 
   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
     <button
       className="rezvix-btn"
       onClick={() => handlePrintOnly(selected)}
-      title="Yazdır"
+      title={t("Yazdır")}
     >
-      Yazdır
+      {t("Yazdır")}
     </button>
 
     <button className="rezvix-btn" onClick={() => setSelected(null)}>
-      Kapat
+      {t("Kapat")}
     </button>
   </div>
 </div>
@@ -434,35 +436,35 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
               <span className="rez-badge">{paymentLabel((selected as any).paymentMethod)}</span>
               <span className="rez-badge">
                 {(selected as any).status === "new"
-                  ? "Yeni"
+                  ? t("Yeni")
                   : (selected as any).status === "accepted"
-                  ? "Onaylı"
+                  ? t("Onaylı")
                   : (selected as any).status === "on_the_way"
-                  ? "Yolda"
+                  ? t("Yolda")
                   : (selected as any).status === "delivered"
-                  ? "Teslim"
-                  : "İptal"}
+                  ? t("Teslim")
+                  : t("İptal")}
               </span>
             </div>
 
             <div className="rez-hr" />
 
             <div className="rez-kv">
-              <span>Tarih</span>
+              <span>{t("Tarih")}</span>
               <span>
                 {(selected as any).createdAt
                   ? new Date((selected as any).createdAt).toLocaleString("tr-TR", {
                       dateStyle: "short",
                       timeStyle: "short",
                     })
-                  : "—"}
+                  : t("—")}
               </span>
             </div>
 
             {/* ✅ Müşteri satırı */}
             {(safeStr((selected as any).customerName) || safeStr((selected as any).customerPhone)) ? (
               <div className="rez-kv" style={{ marginTop: 6 }}>
-                <span>Müşteri</span>
+                <span>{t("Müşteri")}</span>
                 <span style={{ textAlign: "right", maxWidth: 320 }}>
                   {[
                     safeStr((selected as any).customerName),
@@ -473,15 +475,15 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
             ) : null}
 
             <div className="rez-kv" style={{ marginTop: 6 }}>
-              <span>Adres</span>
+              <span>{t("Adres")}</span>
               <span style={{ textAlign: "right", maxWidth: 320 }}>
-                {safeStr((selected as any).addressText) || "—"}
+                {safeStr((selected as any).addressText) || t("—")}
               </span>
             </div>
 
             {safeStr((selected as any).customerNote) ? (
               <div style={{ marginTop: 10 }}>
-                <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>Sipariş Notu</div>
+                <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>{t("Sipariş Notu")}</div>
                 <div style={{ fontSize: 13, opacity: 0.9 }}>
                   {safeStr((selected as any).customerNote)}
                 </div>
@@ -490,7 +492,7 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
 
             <div className="rez-hr" />
 
-            <div style={{ fontWeight: 900, marginBottom: 8 }}>Ürünler</div>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>{t("Ürünler")}</div>
             <div>
               {(selected as any).items?.length ? (
                 (selected as any).items.map((it: any, idx: number) => {
@@ -517,7 +519,7 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
 
                               return (
                                 <div key={`${gTitle || "ops"}-${gi}`}>
-                                  <span style={{ fontWeight: 800 }}>{gTitle || "Opsiyon"}:</span>{" "}
+                                  <span style={{ fontWeight: 800 }}>{gTitle || t("Opsiyon")}:</span>{" "}
                                   <span>{optTitles.join(", ")}</span>
                                 </div>
                               );
@@ -527,7 +529,7 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
 
                         {safeStr(it?.note) ? (
                           <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-                            Not: {safeStr(it.note)}
+                            {t("Not")}: {safeStr(it.note)}
                           </div>
                         ) : null}
                       </div>
@@ -539,15 +541,15 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
                   );
                 })
               ) : (
-                <div style={{ fontSize: 13, opacity: 0.8 }}>Ürün yok.</div>
+                <div style={{ fontSize: 13, opacity: 0.8 }}>{t("Ürün yok.")}</div>
               )}
             </div>
 
             <div className="rez-hr" />
 
-            <div className="rez-kv"><span>Ara Toplam</span><span>{formatMoney((selected as any).subtotal || 0, currency)}</span></div>
-            <div className="rez-kv" style={{ marginTop: 6 }}><span>Teslimat</span><span>{formatMoney((selected as any).deliveryFee || 0, currency)}</span></div>
-            <div className="rez-kv" style={{ marginTop: 6, fontWeight: 900, opacity: 1 }}><span>Toplam</span><span>{formatMoney((selected as any).total || 0, currency)}</span></div>
+            <div className="rez-kv"><span>{t("Ara Toplam")}</span><span>{formatMoney((selected as any).subtotal || 0, currency)}</span></div>
+            <div className="rez-kv" style={{ marginTop: 6 }}><span>{t("Teslimat")}</span><span>{formatMoney((selected as any).deliveryFee || 0, currency)}</span></div>
+            <div className="rez-kv" style={{ marginTop: 6, fontWeight: 900, opacity: 1 }}><span>{t("Toplam")}</span><span>{formatMoney((selected as any).total || 0, currency)}</span></div>
 
             <div className="rez-hr" />
 
@@ -555,14 +557,14 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
               {((selected as any).status === "new") && (
                 <>
                 <button className="rezvix-btn" onClick={() => handlePrintOnly(selected)}>
-  Yazdır
+  {t("Yazdır")}
 </button>
                   <button
                     className="rezvix-btn rezvix-btn--primary"
                     disabled={acceptMut.isPending}
                     onClick={() => handleAcceptAndPrint(selected)}
                   >
-                    {acceptMut.isPending ? "Onaylanıyor…" : "Onayla"}
+                    {acceptMut.isPending ? t("Onaylanıyor…") : t("Onayla")}
                   </button>
 
                   <button
@@ -570,7 +572,7 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
                     disabled={cancelMut.isPending}
                     onClick={() => handleReject(selected)}
                   >
-                    {cancelMut.isPending ? "İptal…" : "Reddet"}
+                    {cancelMut.isPending ? t("İptal…") : t("Reddet")}
                   </button>
                 </>
               )}
@@ -582,7 +584,7 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
                     disabled={onTheWayMut.isPending}
                     onClick={() => handleOnTheWay(selected)}
                   >
-                    {onTheWayMut.isPending ? "Güncelleniyor…" : "Yola Çıktı"}
+                    {onTheWayMut.isPending ? t("Güncelleniyor…") : t("Yola Çıktı")}
                   </button>
 
                   <button
@@ -590,7 +592,7 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
                     disabled={cancelMut.isPending}
                     onClick={() => handleReject(selected)}
                   >
-                    {cancelMut.isPending ? "İptal…" : "İptal"}
+                    {cancelMut.isPending ? t("İptal…") : t("İptal")}
                   </button>
                 </>
               )}
@@ -602,7 +604,7 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
                     disabled={deliveredMut.isPending}
                     onClick={() => handleDelivered(selected)}
                   >
-                    {deliveredMut.isPending ? "Güncelleniyor…" : "Teslim Edildi"}
+                    {deliveredMut.isPending ? t("Güncelleniyor…") : t("Teslim Edildi")}
                   </button>
 
                   <button
@@ -610,13 +612,13 @@ const handlePrintOnly = (o: DeliveryOrderRow) => {
                     disabled={cancelMut.isPending}
                     onClick={() => handleReject(selected)}
                   >
-                    {cancelMut.isPending ? "İptal…" : "İptal"}
+                    {cancelMut.isPending ? t("İptal…") : t("İptal")}
                   </button>
                 </>
               )}
 
               {((selected as any).status === "delivered" || (selected as any).status === "cancelled") && (
-                <button className="rezvix-btn" onClick={() => setSelected(null)}>Kapat</button>
+                <button className="rezvix-btn" onClick={() => setSelected(null)}>{t("Kapat")}</button>
               )}
             </div>
           </div>

@@ -1,6 +1,7 @@
 import axios from "axios";
 import { authStore } from "../store/auth";
 import { showToast } from "../ui/Toast";
+import { t as i18nT } from "../i18n";
 
 const baseURL = import.meta.env.VITE_API_BASE || "/api";
 
@@ -81,7 +82,7 @@ api.interceptors.response.use(
       const msg =
         err?.response?.data?.message ||
         err?.message ||
-        "İstek başarısız";
+        i18nT("İstek başarısız");
       showToast(msg, "error");
     }
 

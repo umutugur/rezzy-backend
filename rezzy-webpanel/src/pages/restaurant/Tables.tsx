@@ -19,6 +19,7 @@ import {
   useDraggable,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { t as i18nT, useI18n } from "../../i18n";
 
 const notifySound = new Audio("/sounds/notify.mp3");
 
@@ -37,17 +38,17 @@ async function updateTables(rid: string, tables: TableItem[]) {
 function statusLabel(status: LiveTable["status"]): string {
   switch (status) {
     case "empty":
-      return "Boş";
+      return i18nT("Boş");
     case "occupied":
-      return "Dolu";
+      return i18nT("Dolu");
     case "order_active":
-      return "Sipariş Var";
+      return i18nT("Sipariş Var");
     case "waiter_call":
-      return "Garson Çağrısı";
+      return i18nT("Garson Çağrısı");
     case "bill_request":
-      return "Hesap İstendi";
+      return i18nT("Hesap İstendi");
     case "order_ready":
-      return "Sipariş Hazır";
+      return i18nT("Sipariş Hazır");
     default:
       return status;
   }
@@ -251,11 +252,11 @@ function TableBox({
         <div className="flex flex-col items-center">
           <span className="text-3xl mb-1">🍽️</span>
           <span className="font-semibold text-base truncate max-w-[120px] text-center">
-            {table.name || "İsimsiz"}
+            {table.name || i18nT("İsimsiz")}
           </span>
         </div>
         <div className="flex items-center gap-1 mt-1 text-sm font-medium">
-          <span title="Kapasite" className="text-gray-700">
+          <span title={i18nT("Kapasite")} className="text-gray-700">
             👥
           </span>
           <span>{table.capacity || 2}</span>
@@ -269,12 +270,12 @@ function TableBox({
         </div>
         {alert && (
           <div className="absolute top-2 right-2 bg-rose-600 text-white text-xs px-2 py-1 rounded-lg shadow font-bold animate-bounce">
-            Yeni Sipariş!
+            {i18nT("Yeni Sipariş!")}
           </div>
         )}
         {table.openServiceRequests > 0 && (
           <div className="absolute bottom-2 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded-lg shadow font-bold">
-            {table.openServiceRequests} çağrı
+            {i18nT("{count} çağrı", { count: table.openServiceRequests })}
           </div>
         )}
       </div>
@@ -323,6 +324,7 @@ function DraggableTableBox({
 export default function TablesPage() {
   const rid = authStore.getUser()?.restaurantId || "";
   const qc = useQueryClient();
+  const { t } = useI18n();
 
   // =======================
   // CANLI MASALAR
@@ -397,7 +399,7 @@ export default function TablesPage() {
       td?.table?.restaurantName ||
       td?.table?.restaurant?.name ||
       td?.table?.name ||
-      "Restoran";
+      i18nT("Restoran");
 
     const last = td.orders[td.orders.length - 1];
     const dateStr = new Date(last.createdAt).toLocaleString("tr-TR", {
@@ -413,24 +415,24 @@ export default function TablesPage() {
                 `<div class="row"><span>${it.qty}× ${it.title}</span><span>${(Number(it.price || 0) * Number(it.qty || 1)).toFixed(2)}₺</span></div>`
             )
             .join("")
-        : `<div class="small">Ürün yok.</div>`;
+        : `<div class="small">${i18nT("Ürün yok.")}</div>`;
 
     const html = `
       <div class="center header-name">${restaurantName}</div>
-      <div class="center header-sub">SON SİPARİŞ ÖZETİ</div>
+      <div class="center header-sub">${i18nT("SON SİPARİŞ ÖZETİ")}</div>
       <div class="line"></div>
-      <div class="row small"><span>Tarih</span><span>${dateStr}</span></div>
-      <div class="row small"><span>Masa</span><span>${td.table?.name ?? "-"}</span></div>
+      <div class="row small"><span>${i18nT("Tarih")}</span><span>${dateStr}</span></div>
+      <div class="row small"><span>${i18nT("Masa")}</span><span>${td.table?.name ?? "-"}</span></div>
       <div class="line"></div>
-      <div class="row header-row"><span>Ürün</span><span>Tutar</span></div>
+      <div class="row header-row"><span>${i18nT("Ürün")}</span><span>${i18nT("Tutar")}</span></div>
       ${itemsHtml}
       <div class="line"></div>
-      <div class="row total"><span>Toplam</span><span>${Number(last.total || 0).toFixed(2)}₺</span></div>
+      <div class="row total"><span>${i18nT("Toplam")}</span><span>${Number(last.total || 0).toFixed(2)}₺</span></div>
       <div class="line"></div>
-      <div class="center tiny">Bu fiş Rezvix masa yönetim sistemi ile oluşturulmuştur.</div>
+      <div class="center tiny">${i18nT("Bu fiş Rezvix masa yönetim sistemi ile oluşturulmuştur.")}</div>
     `;
 
-    printContent("Son Sipariş", html);
+    printContent(i18nT("Son Sipariş"), html);
   }
 
   function handlePrintFullBill(td: any) {
@@ -440,7 +442,7 @@ export default function TablesPage() {
       td?.table?.restaurantName ||
       td?.table?.restaurant?.name ||
       td?.table?.name ||
-      "Restoran";
+      i18nT("Restoran");
 
     const nowStr = new Date().toLocaleString("tr-TR", {
       dateStyle: "short",
@@ -451,7 +453,7 @@ export default function TablesPage() {
 
     const ordersHtml =
       orders.length === 0
-        ? `<div class="small">Henüz sipariş yok.</div>`
+        ? `<div class="small">${i18nT("Henüz sipariş yok.")}</div>`
         : orders
             .map((o: any, index: number) => {
               const timeStr = new Date(o.createdAt).toLocaleTimeString("tr-TR", {
@@ -467,14 +469,14 @@ export default function TablesPage() {
                           `<div class="row small"><span>${it.qty}× ${it.title}</span><span>${(Number(it.price || 0) * Number(it.qty || 1)).toFixed(2)}₺</span></div>`
                       )
                       .join("")
-                  : `<div class="small">Ürün yok.</div>`;
+                  : `<div class="small">${i18nT("Ürün yok.")}</div>`;
 
               return `
                 <div class="small">
                   <div class="line"></div>
-                  <div class="row"><span>Sipariş ${index + 1}</span><span>${timeStr}</span></div>
+                  <div class="row"><span>${i18nT("Sipariş {index}", { index: index + 1 })}</span><span>${timeStr}</span></div>
                   ${itemsHtml}
-                  <div class="row total"><span>Ara Toplam</span><span>${Number(o.total || 0).toFixed(2)}₺</span></div>
+                  <div class="row total"><span>${i18nT("Ara Toplam")}</span><span>${Number(o.total || 0).toFixed(2)}₺</span></div>
                 </div>
               `;
             })
@@ -486,24 +488,24 @@ export default function TablesPage() {
 
     const footer = `
       <div class="line"></div>
-      <div class="row small"><span>Kart</span><span>${card.toFixed(2)}₺</span></div>
-      <div class="row small"><span>Nakit / Mekanda</span><span>${payAtVenue.toFixed(2)}₺</span></div>
-      <div class="row total"><span>Genel Toplam</span><span>${grand.toFixed(2)}₺</span></div>
+      <div class="row small"><span>${i18nT("Kart")}</span><span>${card.toFixed(2)}₺</span></div>
+      <div class="row small"><span>${i18nT("Nakit / Mekanda")}</span><span>${payAtVenue.toFixed(2)}₺</span></div>
+      <div class="row total"><span>${i18nT("Genel Toplam")}</span><span>${grand.toFixed(2)}₺</span></div>
       <div class="line"></div>
     `;
 
     const html = `
       <div class="center header-name">${restaurantName}</div>
-      <div class="center header-sub">HESAP DÖKÜMÜ</div>
+      <div class="center header-sub">${i18nT("HESAP DÖKÜMÜ")}</div>
       <div class="line"></div>
-      <div class="row small"><span>Tarih</span><span>${nowStr}</span></div>
-      <div class="row small"><span>Masa</span><span>${td.table?.name ?? "-"}</span></div>
+      <div class="row small"><span>${i18nT("Tarih")}</span><span>${nowStr}</span></div>
+      <div class="row small"><span>${i18nT("Masa")}</span><span>${td.table?.name ?? "-"}</span></div>
       ${ordersHtml}
       ${footer}
-      <div class="center tiny">Rezervasyon ve masa yönetimi Rezvix ile sağlanmaktadır.</div>
+      <div class="center tiny">${i18nT("Rezervasyon ve masa yönetimi Rezvix ile sağlanmaktadır.")}</div>
     `;
 
-    printContent("Adisyon", html);
+    printContent(i18nT("Adisyon"), html);
   }
 
   // =======================
@@ -696,10 +698,10 @@ export default function TablesPage() {
             onClick={() => { window.location.href = "/restaurant"; }}
             className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
           >
-            ← Panele Dön
+            ← {t("Panele Dön")}
           </button>
         </div>
-        <div className="text-sm text-red-600">Restoran ID bulunamadı.</div>
+        <div className="text-sm text-red-600">{t("Restoran ID bulunamadı.")}</div>
       </div>
     );
   }
@@ -725,39 +727,39 @@ export default function TablesPage() {
           onClick={() => { window.location.href = "/restaurant"; }}
           className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
         >
-          ← Panele Dön
+          ← {t("Panele Dön")}
         </button>
-        <h1 className="text-base font-semibold text-gray-900">Canlı Masalar</h1>
+        <h1 className="text-base font-semibold text-gray-900">{t("Canlı Masalar")}</h1>
       </div>
       <div className="flex flex-col gap-6">
         <section className="space-y-4">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold">Canlı Masalar</h2>
+            <h2 className="text-lg font-semibold">{t("Canlı Masalar")}</h2>
             <div className="flex flex-wrap gap-2 text-xs">
               <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1">
                 <span className="h-2 w-2 rounded-full bg-gray-400" />
-                Boş
+                {t("Boş")}
               </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1">
                 <span className="h-2 w-2 rounded-full bg-amber-500" />
-                Dolu
+                {t("Dolu")}
               </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1">
                 <span className="h-2 w-2 rounded-full bg-green-500" />
-                Sipariş Var
+                {t("Sipariş Var")}
               </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1">
                 <span className="h-2 w-2 rounded-full bg-blue-500" />
-                Garson Çağrısı
+                {t("Garson Çağrısı")}
               </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-1">
                 <span className="h-2 w-2 rounded-full bg-red-500" />
-                Hesap İstendi
+                {t("Hesap İstendi")}
               </span>
             </div>
           </div>
           <div className="flex items-center gap-3 mb-2">
-            <span className="text-xs text-gray-600 font-medium">Kat:</span>
+            <span className="text-xs text-gray-600 font-medium">{t("Kat:")}</span>
             {floors.map((f) => (
               <button
                 key={f}
@@ -786,7 +788,7 @@ export default function TablesPage() {
             >
               {liveLoading && (
                 <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-                  Canlı veriler yükleniyor…
+                  {t("Canlı veriler yükleniyor…")}
                 </div>
               )}
               {!liveLoading && (
@@ -812,7 +814,7 @@ export default function TablesPage() {
               )}
               {floorTables.length === 0 && !liveLoading && (
                 <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-                  Bu katta masa yok.
+                  {t("Bu katta masa yok.")}
                 </div>
               )}
             </div>
@@ -823,9 +825,9 @@ export default function TablesPage() {
                   <div className="flex flex-col gap-2 max-h-[440px] overflow-y-auto pr-1">
                     <div className="flex items-center justify-between">
                       <h3 className="text-base font-semibold">
-                        Masa Detayı
+                        {t("Masa Detayı")}
                         {selected && (
-                          <> — {selected.name} ({selected.capacity || 2} kişilik)</>
+                          <> — {selected.name} ({t("{count} kişilik", { count: selected.capacity || 2 })})</>
                         )}
                       </h3>
                       <button
@@ -833,50 +835,50 @@ export default function TablesPage() {
                         onClick={() => setSelectedTableKey(null)}
                         className="text-xs text-gray-400 hover:text-gray-700"
                       >
-                        Kapat
+                        {t("Kapat")}
                       </button>
                     </div>
                     {detailLoading && (
-                      <div className="text-sm text-gray-500">Detay yükleniyor…</div>
+                      <div className="text-sm text-gray-500">{t("Detay yükleniyor…")}</div>
                     )}
                     {detailError && (
                       <div className="text-sm text-red-600">
-                        Masa detayı getirilemedi.
+                        {t("Masa detayı getirilemedi.")}
                       </div>
                     )}
                     {tableDetail && (
                       <div className="space-y-3 text-sm">
                         <div className="flex flex-wrap gap-3">
                           <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs">
-                            Durum:{" "}
+                            {t("Durum:")}{" "}
                             <span className="ml-1 font-medium">
                               {statusLabel(tableDetail.table.status)}
                             </span>
                           </span>
                           <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs">
-                            Kat: {tableDetail.table.floor ?? 1}
+                            {t("Kat:")} {tableDetail.table.floor ?? 1}
                           </span>
                           <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs">
-                            Adisyon:{" "}
-                            {tableDetail.session ? "Açık" : "Yok"}
+                            {t("Adisyon:")}{" "}
+                            {tableDetail.session ? t("Açık") : t("Yok")}
                           </span>
                         </div>
                         {tableDetail.totals && (
                           <div className="rounded-xl bg-gray-50 px-3 py-2">
                             <div className="flex items-center justify-between text-xs">
-                              <span>Kart</span>
+                              <span>{t("Kart")}</span>
                               <span className="font-semibold">
                                 {tableDetail.totals.cardTotal.toFixed(2)}
                               </span>
                             </div>
                             <div className="mt-1 flex items-center justify-between text-xs">
-                              <span>Nakit / Mekanda</span>
+                              <span>{t("Nakit / Mekanda")}</span>
                               <span className="font-semibold">
                                 {tableDetail.totals.payAtVenueTotal.toFixed(2)}
                               </span>
                             </div>
                             <div className="mt-1 flex items-center justify-between text-xs">
-                              <span className="font-semibold">Toplam</span>
+                              <span className="font-semibold">{t("Toplam")}</span>
                               <span className="font-semibold">
                                 {tableDetail.totals.grandTotal.toFixed(2)}
                               </span>
@@ -886,11 +888,11 @@ export default function TablesPage() {
                         {/* Siparişler */}
                         <div className="space-y-1">
                           <div className="text-xs font-semibold text-gray-700">
-                            Siparişler
+                            {t("Siparişler")}
                           </div>
                           {tableDetail.orders.length === 0 && (
                             <div className="text-xs text-gray-500">
-                              Henüz sipariş yok.
+                              {t("Henüz sipariş yok.")}
                             </div>
                           )}
                           {tableDetail.orders.map((o) => (
@@ -926,11 +928,11 @@ export default function TablesPage() {
                         {/* Servis istekleri */}
                         <div className="space-y-1">
                           <div className="text-xs font-semibold text-gray-700">
-                            Garson / Hesap İstekleri
+                            {t("Garson / Hesap İstekleri")}
                           </div>
                           {tableDetail.serviceRequests.length === 0 && (
                             <div className="text-xs text-gray-500">
-                              Açık servis isteği yok.
+                              {t("Açık servis isteği yok.")}
                             </div>
                           )}
                           {tableDetail.serviceRequests.map((r) => (
@@ -941,10 +943,10 @@ export default function TablesPage() {
                               <div>
                                 <div className="font-medium">
                                   {r.type === "waiter"
-                                    ? "Garson çağrısı"
+                                    ? t("Garson çağrısı")
                                     : r.type === "bill"
-                                    ? "Hesap istendi"
-                                    : "Sipariş hazır"}
+                                    ? t("Hesap istendi")
+                                    : t("Sipariş hazır")}
                                 </div>
                                 <div className="text-[11px] text-gray-600">
                                   {new Date(r.createdAt).toLocaleTimeString(
@@ -973,8 +975,8 @@ export default function TablesPage() {
                         className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
                       >
                         {resolveServiceMut.isPending
-                          ? "İşleniyor…"
-                          : "Çağrı / Hesap Çözüldü"}
+                          ? t("İşleniyor…")
+                          : t("Çağrı / Hesap Çözüldü")}
                       </button>
                       <button
                         type="button"
@@ -987,8 +989,8 @@ export default function TablesPage() {
                         className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
                       >
                         {closeSessionMut.isPending
-                          ? "Adisyon Kapatılıyor…"
-                          : "Adisyonu Kapat"}
+                          ? t("Adisyon Kapatılıyor…")
+                          : t("Adisyonu Kapat")}
                       </button>
                       <button
                         type="button"
@@ -1000,7 +1002,7 @@ export default function TablesPage() {
                           }
                         }}
                       >
-                        Son Siparişi Yazdır
+                        {t("Son Siparişi Yazdır")}
                       </button>
                       <button
                         type="button"
@@ -1012,7 +1014,7 @@ export default function TablesPage() {
                           }
                         }}
                       >
-                        Hesap Yazdır
+                        {t("Hesap Yazdır")}
                       </button>
                     </div>
                   </div>
@@ -1027,13 +1029,13 @@ export default function TablesPage() {
               disabled={layoutMut.isPending}
               className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 text-sm disabled:cursor-not-allowed disabled:bg-brand-300"
             >
-              {layoutMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+              {layoutMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
             </button>
             {layoutMut.isSuccess && (
-              <span className="text-green-700 text-sm">Kaydedildi.</span>
+              <span className="text-green-700 text-sm">{t("Kaydedildi.")}</span>
             )}
             {layoutMut.isError && (
-              <span className="text-red-700 text-sm">Hata oluştu.</span>
+              <span className="text-red-700 text-sm">{t("Hata oluştu.")}</span>
             )}
           </div>
         </section>
@@ -1041,24 +1043,24 @@ export default function TablesPage() {
         <section className="space-y-3">
           <details className="rounded-md border border-gray-200 bg-white open:shadow-lg">
             <summary className="p-4 text-lg font-semibold cursor-pointer select-none">
-              Masa Tanımları (Liste Görünümü)
+              {t("Masa Tanımları (Liste Görünümü)")}
             </summary>
             <div className="p-4">
-              {isLoading && <div>Yükleniyor…</div>}
+              {isLoading && <div>{t("Yükleniyor…")}</div>}
               {error && (
-                <div className="text-red-600 text-sm">Veri getirilemedi</div>
+                <div className="text-red-600 text-sm">{t("Veri getirilemedi")}</div>
               )}
               <Card>
                 <div className="space-y-3">
-                  {rows.map((t, idx) => (
+                  {rows.map((row, idx) => (
                     <div
                       key={idx}
                       className="grid grid-cols-1 md:grid-cols-5 gap-3 items-center"
                     >
                       <input
                         className="border rounded-lg px-3 py-2"
-                        placeholder="Masa adı"
-                        value={t.name}
+                        placeholder={t("Masa adı")}
+                        value={row.name}
                         onChange={(e) =>
                           setRows((prev) =>
                             prev.map((x, i) =>
@@ -1071,8 +1073,8 @@ export default function TablesPage() {
                         type="number"
                         min={1}
                         className="border rounded-lg px-3 py-2"
-                        placeholder="Kapasite"
-                        value={t.capacity}
+                        placeholder={t("Kapasite")}
+                        value={row.capacity}
                         onChange={(e) =>
                           setRows((prev) =>
                             prev.map((x, i) =>
@@ -1084,10 +1086,10 @@ export default function TablesPage() {
                         }
                       />
                       <label className="flex items-center gap-2 text-sm">
-                        <span className="text-gray-600">Aktif</span>
+                        <span className="text-gray-600">{t("Aktif")}</span>
                         <input
                           type="checkbox"
-                          checked={t.isActive ?? true}
+                          checked={row.isActive ?? true}
                           onChange={(e) =>
                             setRows((prev) =>
                               prev.map((x, i) =>
@@ -1101,18 +1103,18 @@ export default function TablesPage() {
                         className="rounded-lg bg-gray-100 hover:bg-gray-200 px-3 py-2 text-sm"
                         onClick={() => delRow(idx)}
                       >
-                        Sil
+                        {t("Sil")}
                       </button>
                     </div>
                   ))}
                   {rows.length === 0 && (
-                    <div className="text-sm text-gray-500">Kayıt yok</div>
+                    <div className="text-sm text-gray-500">{t("Kayıt yok")}</div>
                   )}
                   <button
                     className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 text-sm"
                     onClick={addRow}
                   >
-                    Yeni Masa
+                    {t("Yeni Masa")}
                   </button>
                 </div>
                 <div className="mt-4">
@@ -1121,16 +1123,16 @@ export default function TablesPage() {
                     disabled={mut.isPending}
                     className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 text-sm disabled:cursor-not-allowed disabled:bg-brand-300"
                   >
-                    {mut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                    {mut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
                   </button>
                   {mut.isSuccess && (
                     <span className="ml-3 text-sm text-green-700">
-                      Güncellendi.
+                      {t("Güncellendi.")}
                     </span>
                   )}
                   {mut.isError && (
                     <span className="ml-3 text-sm text-red-700">
-                      Hata oluştu.
+                      {t("Hata oluştu.")}
                     </span>
                   )}
                 </div>

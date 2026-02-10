@@ -6,8 +6,10 @@ import {
 } from "../layouts/RestaurantDesktopLayout";
 import { useNavigate } from "react-router-dom";
 import { authStore } from "../../store/auth";
+import { useI18n } from "../../i18n";
 
 function DesktopMenuInner() {
+  const { t } = useI18n();
   const { restaurantId } = useRestaurantDesktopCurrency();
   const nav = useNavigate();
   const user = authStore.getUser();
@@ -16,14 +18,14 @@ function DesktopMenuInner() {
   if (!restaurantId) {
     return (
       <div className="p-4 space-y-3">
-        <div className="text-sm text-red-600">RestaurantId bulunamadı.</div>
+        <div className="text-sm text-red-600">{t("RestaurantId bulunamadı.")}</div>
         {fallbackOrgId && (
           <button
             type="button"
             className="px-3 py-1.5 text-xs rounded bg-brand-600 text-white hover:bg-brand-700"
             onClick={() => nav(`/org/organizations/${fallbackOrgId}/menu`)}
           >
-            Organizasyon menüsüne git
+            {t("Organizasyon menüsüne git")}
           </button>
         )}
       </div>
@@ -34,11 +36,12 @@ function DesktopMenuInner() {
 }
 
 export function DesktopMenuManagerPage() {
+  const { t } = useI18n();
   return (
     <RestaurantDesktopLayout
       activeNav={"menu" as any}
-      title="Menü Yönetimi"
-      subtitle="Kategoriler ve ürünler"
+      title={t("Menü Yönetimi")}
+      subtitle={t("Kategoriler ve ürünler")}
     >
       <DesktopMenuInner />
     </RestaurantDesktopLayout>

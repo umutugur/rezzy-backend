@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
+import { useI18n } from "../../i18n";
 
 type Counts = Partial<Record<"total"|"pending"|"confirmed"|"arrived"|"cancelled"|"no_show", number>>;
 type Totals = { revenue?: number; deposits?: number };
@@ -35,6 +36,7 @@ async function fetchKpi(p: { start?: string; end?: string }): Promise<KpiResp> {
 }
 
 export default function AdminDashboardPage() {
+  const { t } = useI18n();
   const [kind, setKind] = React.useState<RangeKind>("today");
   const [start, setStart] = React.useState<string>(() => fmt(new Date()));
   const [end, setEnd] = React.useState<string>(() => fmt(new Date()));
@@ -73,40 +75,40 @@ export default function AdminDashboardPage() {
     <div className="flex gap-6">
       <Sidebar
         items={[
-          { to: "/admin", label: "Dashboard" },
-          { to: "/admin/banners", label: "Bannerlar" },
-          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
-          { to: "/admin/organizations", label: "Organizasyonlar" },
-          { to: "/admin/restaurants", label: "Restoranlar" },
-          { to: "/admin/users", label: "Kullanıcılar" },
-          { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" },
-          { to: "/admin/notifications", label: "Bildirim Gönder" },
+          { to: "/admin", label: t("Dashboard") },
+          { to: "/admin/banners", label: t("Bannerlar") },
+          { to: "/admin/commissions", label: t("Komisyonlar") }, // ✅ menüye eklendi
+          { to: "/admin/organizations", label: t("Organizasyonlar") },
+          { to: "/admin/restaurants", label: t("Restoranlar") },
+          { to: "/admin/users", label: t("Kullanıcılar") },
+          { to: "/admin/reservations", label: t("Rezervasyonlar") },
+          { to: "/admin/moderation", label: t("Moderasyon") },
+          { to: "/admin/notifications", label: t("Bildirim Gönder") },
         ]}
       />
 
       <div className="flex-1 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Genel KPI</h2>
+          <h2 className="text-lg font-semibold">{t("Genel KPI")}</h2>
 
           {/* Tarih seçimi */}
           <div className="flex items-end gap-2">
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Ön Ayar</label>
+              <label className="block text-xs text-gray-600 mb-1">{t("Ön Ayar")}</label>
               <select
                 className="border rounded-lg px-3 py-2 text-sm"
                 value={kind}
                 onChange={(e)=>setKind(e.target.value as RangeKind)}
               >
-                <option value="today">Bugün</option>
-                <option value="week">Bu Hafta</option>
-                <option value="year">Bu Yıl</option>
-                <option value="custom">Özel Aralık</option>
+                <option value="today">{t("Bugün")}</option>
+                <option value="week">{t("Bu Hafta")}</option>
+                <option value="year">{t("Bu Yıl")}</option>
+                <option value="custom">{t("Özel Aralık")}</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Başlangıç</label>
+              <label className="block text-xs text-gray-600 mb-1">{t("Başlangıç")}</label>
               <input
                 type="date"
                 className="border rounded-lg px-3 py-2 text-sm"
@@ -115,7 +117,7 @@ export default function AdminDashboardPage() {
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Bitiş</label>
+              <label className="block text-xs text-gray-600 mb-1">{t("Bitiş")}</label>
               <input
                 type="date"
                 className="border rounded-lg px-3 py-2 text-sm"
@@ -126,27 +128,27 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {isLoading && <div>Yükleniyor…</div>}
-        {error && <div className="text-red-600 text-sm">Veri alınamadı</div>}
+        {isLoading && <div>{t("Yükleniyor…")}</div>}
+        {error && <div className="text-red-600 text-sm">{t("Veri alınamadı")}</div>}
 
         {/* KPI'lar */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card title="Toplam Rezervasyon"><div className="text-2xl font-semibold">{total}</div></Card>
-          <Card title="Onaylı"><div className="text-2xl font-semibold">{counts.confirmed ?? 0}</div></Card>
-          <Card title="İptal"><div className="text-2xl font-semibold">{counts.cancelled ?? 0}</div></Card>
+          <Card title={t("Toplam Rezervasyon")}><div className="text-2xl font-semibold">{total}</div></Card>
+          <Card title={t("Onaylı")}><div className="text-2xl font-semibold">{counts.confirmed ?? 0}</div></Card>
+          <Card title={t("İptal")}><div className="text-2xl font-semibold">{counts.cancelled ?? 0}</div></Card>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card title="Bekleyen"><div className="text-2xl font-semibold">{counts.pending ?? 0}</div></Card>
-          <Card title="Gelen"><div className="text-2xl font-semibold">{counts.arrived ?? 0}</div></Card>
-          <Card title="Gelmedi"><div className="text-2xl font-semibold">{counts.no_show ?? 0}</div></Card>
+          <Card title={t("Bekleyen")}><div className="text-2xl font-semibold">{counts.pending ?? 0}</div></Card>
+          <Card title={t("Gelen")}><div className="text-2xl font-semibold">{counts.arrived ?? 0}</div></Card>
+          <Card title={t("Gelmedi")}><div className="text-2xl font-semibold">{counts.no_show ?? 0}</div></Card>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card title="Toplam Ciro (₺)">
+          <Card title={t("Toplam Ciro (₺)")}>
             <div className="text-2xl font-semibold">{Number(revenue || 0).toLocaleString("tr-TR")}</div>
           </Card>
-          <Card title="Toplam Depozito (₺)">
+          <Card title={t("Toplam Depozito (₺)")}>
             <div className="text-2xl font-semibold">{Number(deposits || 0).toLocaleString("tr-TR")}</div>
           </Card>
         </div>

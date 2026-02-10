@@ -12,6 +12,7 @@ import {
 import { showToast } from "../../ui/Toast";
 import Modal from "../../components/Modal";
 import { parseLatLngFromGoogleMaps } from "../../utils/geo";
+import { useI18n } from "../../i18n";
 
 type UserLite = { _id: string; name?: string; email?: string; role?: string };
 
@@ -29,6 +30,7 @@ const BUSINESS_TYPES = [
 
 export default function AdminRestaurantCreatePage() {
   const nav = useNavigate();
+  const { t } = useI18n();
 
   // Owner seçimi
   const [ownerQuery, setOwnerQuery] = React.useState("");
@@ -131,13 +133,13 @@ export default function AdminRestaurantCreatePage() {
     },
     onSuccess: (res: any) => {
       const rid = res?.restaurant?._id || res?._id;
-      showToast("Restoran oluşturuldu", "success");
+      showToast(t("Restoran oluşturuldu"), "success");
       if (rid) nav(`/admin/restaurants/${rid}`, { replace: true });
       else nav("/admin/restaurants", { replace: true });
     },
     onError: (e: any) => {
       showToast(
-        e?.response?.data?.message || "Restoran oluşturulamadı",
+        e?.response?.data?.message || t("Restoran oluşturulamadı"),
         "error"
       );
     },
@@ -154,7 +156,7 @@ export default function AdminRestaurantCreatePage() {
     onSuccess: (resp: any) => {
       // ✅ backend { ok, user } döndürse de patlamasın
       const u = resp?.user ?? resp;
-      showToast("Kullanıcı oluşturuldu", "success");
+      showToast(t("Kullanıcı oluşturuldu"), "success");
       setOwner({ _id: u._id, name: u.name, email: u.email, role: u.role });
       setOwnerQuery(u.email || u.name || "");
       setUserModalOpen(false);
@@ -165,7 +167,7 @@ export default function AdminRestaurantCreatePage() {
     },
     onError: (e: any) =>
       showToast(
-        e?.response?.data?.message || "Kullanıcı oluşturulamadı",
+        e?.response?.data?.message || t("Kullanıcı oluşturulamadı"),
         "error"
       ),
   });
@@ -180,42 +182,40 @@ export default function AdminRestaurantCreatePage() {
     <div className="flex gap-6">
       <Sidebar
         items={[
-          { to: "/admin", label: "Dashboard" },
-          { to: "/admin/banners", label: "Bannerlar" },
-          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
-          { to: "/admin/organizations", label: "Organizasyonlar" },
-          { to: "/admin/restaurants", label: "Restoranlar" },
-          { to: "/admin/users", label: "Kullanıcılar" },
-          { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" },
-          { to: "/admin/notifications", label: "Bildirim Gönder" },
+          { to: "/admin", label: t("Dashboard") },
+          { to: "/admin/banners", label: t("Bannerlar") },
+          { to: "/admin/commissions", label: t("Komisyonlar") }, // ✅ menüye eklendi
+          { to: "/admin/organizations", label: t("Organizasyonlar") },
+          { to: "/admin/restaurants", label: t("Restoranlar") },
+          { to: "/admin/users", label: t("Kullanıcılar") },
+          { to: "/admin/reservations", label: t("Rezervasyonlar") },
+          { to: "/admin/moderation", label: t("Moderasyon") },
+          { to: "/admin/notifications", label: t("Bildirim Gönder") },
         ]}
       />
 
       <div className="flex-1 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Yeni Restoran Ekle</h2>
+          <h2 className="text-lg font-semibold">{t("Yeni Restoran Ekle")}</h2>
           <button
             onClick={() => nav(-1)}
             className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200"
           >
-            Geri
+            {t("Geri")}
           </button>
         </div>
 
-        <Card title="Sahip (Owner) Seçimi">
+        <Card title={t("Sahip (Owner) Seçimi")}>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <div className="flex items-end gap-2 mb-1">
-                <label className="block text-sm text-gray-600">
-                  Kullanıcı Ara
-                </label>
+                <label className="block text-sm text-gray-600">{t("Kullanıcı Ara")}</label>
                 <button
                   type="button"
                   onClick={() => setUserModalOpen(true)}
                   className="ml-auto px-2.5 py-1.5 text-xs rounded-md bg-brand-600 text-white hover:bg-brand-700"
                 >
-                  Yeni Kullanıcı
+                  {t("Yeni Kullanıcı")}
                 </button>
               </div>
               <input
@@ -225,19 +225,19 @@ export default function AdminRestaurantCreatePage() {
                   setOwnerQuery(e.target.value);
                   setOwner(null);
                 }}
-                placeholder="İsim veya e-posta yaz"
+                placeholder={t("İsim veya e-posta yaz")}
                 className="w-full border rounded-lg px-3 py-2"
               />
               {ownerQuery.trim().length >= 2 && (
                 <div className="mt-2 max-h-48 overflow-auto border rounded-lg">
                   {searchQ.isLoading && (
                     <div className="px-3 py-2 text-sm text-gray-500">
-                      Aranıyor…
+                      {t("Aranıyor…")}
                     </div>
                   )}
                   {searchQ.data?.length === 0 && (
                     <div className="px-3 py-2 text-sm text-gray-500">
-                      Sonuç yok
+                      {t("Sonuç yok")}
                     </div>
                   )}
                   {(searchQ.data ?? []).map((u: UserLite) => (
@@ -249,7 +249,7 @@ export default function AdminRestaurantCreatePage() {
                         owner?._id === u._id ? "bg-brand-50" : ""
                       }`}
                     >
-                      <div className="font-medium">{u.name || "-"}</div>
+                      <div className="font-medium">{u.name || t("-")}</div>
                       <div className="text-gray-500">{u.email || ""}</div>
                     </button>
                   ))}
@@ -259,19 +259,19 @@ export default function AdminRestaurantCreatePage() {
 
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Seçilen Sahip
+                {t("Seçilen Sahip")}
               </label>
               <div className="border rounded-lg px-3 py-2 min-h-[42px]">
                 {owner ? (
                   <div>
-                    <div className="font-medium">{owner.name || "-"}</div>
+                    <div className="font-medium">{owner.name || t("-")}</div>
                     <div className="text-gray-500 text-sm">
                       {owner.email || ""}
                     </div>
                   </div>
                 ) : (
                   <span className="text-gray-500 text-sm">
-                    Henüz seçilmedi
+                    {t("Henüz seçilmedi")}
                   </span>
                 )}
               </div>
@@ -279,11 +279,11 @@ export default function AdminRestaurantCreatePage() {
           </div>
         </Card>
 
-        <Card title="Restoran Bilgileri">
+        <Card title={t("Restoran Bilgileri")}>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Ad *
+                {t("Ad *")}
               </label>
               <input
                 value={name}
@@ -295,16 +295,16 @@ export default function AdminRestaurantCreatePage() {
             {/* ✅ BusinessType */}
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                İşletme Tipi *
+                {t("İşletme Tipi *")}
               </label>
               <select
                 value={businessType}
                 onChange={(e) => setBusinessType(e.target.value)}
                 className="w-full border rounded-lg px-3 py-2"
               >
-                {BUSINESS_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
+                {BUSINESS_TYPES.map((bt) => (
+                  <option key={bt.value} value={bt.value}>
+                    {t(bt.label)}
                   </option>
                 ))}
               </select>
@@ -312,22 +312,21 @@ export default function AdminRestaurantCreatePage() {
 
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Bölge (ülke kodu) *
+                {t("Bölge (ülke kodu) *")}
               </label>
               <input
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
-                placeholder="TR, US, UK..."
+                placeholder={t("TR, US, UK...")}
                 className="w-full border rounded-lg px-3 py-2"
               />
               <p className="mt-1 text-xs text-gray-500">
-                2-3 harfli ISO ülke kodu girin (örn. TR, US,
-                UK).
+                {t("2-3 harfli ISO ülke kodu girin (örn. TR, US, UK).")}
               </p>
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Şehir
+                {t("Şehir")}
               </label>
               <input
                 value={city}
@@ -337,7 +336,7 @@ export default function AdminRestaurantCreatePage() {
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm text-gray-600 mb-1">
-                Adres
+                {t("Adres")}
               </label>
               <input
                 value={address}
@@ -347,7 +346,7 @@ export default function AdminRestaurantCreatePage() {
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Telefon
+                {t("Telefon")}
               </label>
               <input
                 value={phone}
@@ -357,7 +356,7 @@ export default function AdminRestaurantCreatePage() {
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                E-posta
+                {t("E-posta")}
               </label>
               <input
                 type="email"
@@ -369,33 +368,33 @@ export default function AdminRestaurantCreatePage() {
           </div>
         </Card>
 
-        <Card title="Konum Bilgileri">
+        <Card title={t("Konum Bilgileri")}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Harita Adresi
+                {t("Harita Adresi")}
               </label>
               <input
                 value={mapAddress}
                 onChange={(e) => setMapAddress(e.target.value)}
-                placeholder="Google Harita üzerindeki adres"
+                placeholder={t("Google Harita üzerindeki adres")}
                 className="w-full border rounded-lg px-3 py-2"
               />
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Google Maps URL
+                {t("Google Maps URL")}
               </label>
               <input
                 value={googleMapsUrl}
                 onChange={(e) => setGoogleMapsUrl(e.target.value)}
-                placeholder="https://maps.google.com/... veya https://maps.app.goo.gl/..."
+                placeholder={t("https://maps.google.com/... veya https://maps.app.goo.gl/...")}
                 className="w-full border rounded-lg px-3 py-2"
               />
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Latitude (enlem)
+                {t("Latitude (enlem)")}
               </label>
               <input
                 type="number"
@@ -413,7 +412,7 @@ export default function AdminRestaurantCreatePage() {
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Longitude (boylam)
+                {t("Longitude (boylam)")}
               </label>
               <input
                 type="number"
@@ -437,7 +436,7 @@ export default function AdminRestaurantCreatePage() {
             Number.isFinite(lng) && (
               <div className="mt-4">
                 <iframe
-                  title="map"
+                  title={t("Harita")}
                   width="100%"
                   height="250"
                   className="rounded-lg border"
@@ -448,11 +447,11 @@ export default function AdminRestaurantCreatePage() {
             )}
         </Card>
 
-        <Card title="Kurallar & Finans">
+        <Card title={t("Kurallar & Finans")}>
           <div className="grid md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Komisyon (%)
+                {t("Komisyon (%)")}
               </label>
               <input
                 type="number"
@@ -465,7 +464,7 @@ export default function AdminRestaurantCreatePage() {
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Depozito Zorunlu mu?
+                {t("Depozito Zorunlu mu?")}
               </label>
               <select
                 value={depositRequired ? "yes" : "no"}
@@ -474,13 +473,13 @@ export default function AdminRestaurantCreatePage() {
                 }
                 className="w-full border rounded-lg px-3 py-2"
               >
-                <option value="no">Hayır</option>
-                <option value="yes">Evet</option>
+                <option value="no">{t("Hayır")}</option>
+                <option value="yes">{t("Evet")}</option>
               </select>
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Depozito Tutarı
+                {t("Depozito Tutarı")}
               </label>
               <input
                 type="number"
@@ -496,7 +495,7 @@ export default function AdminRestaurantCreatePage() {
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Check-in Önce (dk)
+                {t("Check-in Önce (dk)")}
               </label>
               <input
                 type="number"
@@ -511,7 +510,7 @@ export default function AdminRestaurantCreatePage() {
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Check-in Sonra (dk)
+                {t("Check-in Sonra (dk)")}
               </label>
               <input
                 type="number"
@@ -526,7 +525,7 @@ export default function AdminRestaurantCreatePage() {
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Eksik Katılım Eşiği (%)
+                {t("Eksik Katılım Eşiği (%)")}
               </label>
               <input
                 type="number"
@@ -549,10 +548,10 @@ export default function AdminRestaurantCreatePage() {
             disabled={!canSubmit || createMut.isPending}
             className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-60"
           >
-            {createMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+            {createMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
           </button>
           <span className="text-sm text-gray-500">
-            * zorunlu alan
+            {t("* zorunlu alan")}
           </span>
         </div>
       </div>
@@ -560,12 +559,12 @@ export default function AdminRestaurantCreatePage() {
       <Modal
         open={userModalOpen}
         onClose={() => setUserModalOpen(false)}
-        title="Yeni Kullanıcı Oluştur"
+        title={t("Yeni Kullanıcı Oluştur")}
       >
         <div className="space-y-3">
           <div>
             <label className="block text-sm text-gray-600 mb-1">
-              Ad *
+              {t("Ad *")}
             </label>
             <input
               value={newName}
@@ -575,7 +574,7 @@ export default function AdminRestaurantCreatePage() {
           </div>
           <div>
             <label className="block text-sm text-gray-600 mb-1">
-              E-posta
+              {t("E-posta")}
             </label>
             <input
               type="email"
@@ -586,7 +585,7 @@ export default function AdminRestaurantCreatePage() {
           </div>
           <div>
             <label className="block text-sm text-gray-600 mb-1">
-              Telefon
+              {t("Telefon")}
             </label>
             <input
               value={newPhone}
@@ -596,7 +595,7 @@ export default function AdminRestaurantCreatePage() {
           </div>
           <div>
             <label className="block text-sm text-gray-600 mb-1">
-              Şifre (opsiyonel)
+              {t("Şifre (opsiyonel)")}
             </label>
             <input
               type="password"
@@ -613,7 +612,7 @@ export default function AdminRestaurantCreatePage() {
               className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200"
               onClick={() => setUserModalOpen(false)}
             >
-              Vazgeç
+              {t("Vazgeç")}
             </button>
             <button
               className="px-3 py-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
@@ -621,8 +620,8 @@ export default function AdminRestaurantCreatePage() {
               onClick={() => createUserMut.mutate()}
             >
               {createUserMut.isPending
-                ? "Oluşturuluyor…"
-                : "Oluştur"}
+                ? t("Oluşturuluyor…")
+                : t("Oluştur")}
             </button>
           </div>
         </div>

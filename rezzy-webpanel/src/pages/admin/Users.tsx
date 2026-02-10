@@ -11,6 +11,7 @@ import Sidebar from "../../components/Sidebar";
 import { Stat, StatGrid } from "../../components/Card";
 import Modal from "../../components/Modal";
 import { showToast } from "../../ui/Toast";
+import { useI18n } from "../../i18n";
 
 type User = {
   _id: string;
@@ -29,6 +30,7 @@ async function fetchUsers(): Promise<User[]> {
 }
 
 export default function AdminUsersPage() {
+  const { t } = useI18n();
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-users"],
     queryFn: fetchUsers,
@@ -71,7 +73,7 @@ export default function AdminUsersPage() {
       if (!resetPassword) return;
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(resetPassword);
-        showToast("Şifre kopyalandı", "success");
+        showToast(t("Şifre kopyalandı"), "success");
       }
     } catch {}
   };
@@ -82,21 +84,21 @@ export default function AdminUsersPage() {
     const p1 = String(resetPassword || "").trim();
     const p2 = String(resetPassword2 || "").trim();
     if (p1.length < 8) {
-      showToast("Şifre en az 8 karakter olmalı", "error");
+      showToast(t("Şifre en az 8 karakter olmalı"), "error");
       return;
     }
     if (p1 !== p2) {
-      showToast("Şifreler eşleşmiyor", "error");
+      showToast(t("Şifreler eşleşmiyor"), "error");
       return;
     }
     setResetBusy(true);
     try {
       await adminResetUserPassword(target._id, p1);
-      showToast("Şifre sıfırlandı", "success");
+      showToast(t("Şifre sıfırlandı"), "success");
       setResetOpen(false);
     } catch (e: any) {
       showToast(
-        e?.response?.data?.message || e?.message || "Şifre sıfırlanamadı",
+        e?.response?.data?.message || e?.message || t("Şifre sıfırlanamadı"),
         "error"
       );
     } finally {
@@ -108,57 +110,57 @@ export default function AdminUsersPage() {
     <div className="flex gap-6">
       <Sidebar
          items={[
-          { to: "/admin", label: "Dashboard" },
-          { to: "/admin/banners", label: "Bannerlar" },
-          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
-          { to: "/admin/organizations", label: "Organizasyonlar" },
-          { to: "/admin/restaurants", label: "Restoranlar" },
-          { to: "/admin/users", label: "Kullanıcılar" },
-          { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" },
-          { to: "/admin/notifications", label: "Bildirim Gönder" },
+          { to: "/admin", label: t("Dashboard") },
+          { to: "/admin/banners", label: t("Bannerlar") },
+          { to: "/admin/commissions", label: t("Komisyonlar") }, // ✅ menüye eklendi
+          { to: "/admin/organizations", label: t("Organizasyonlar") },
+          { to: "/admin/restaurants", label: t("Restoranlar") },
+          { to: "/admin/users", label: t("Kullanıcılar") },
+          { to: "/admin/reservations", label: t("Rezervasyonlar") },
+          { to: "/admin/moderation", label: t("Moderasyon") },
+          { to: "/admin/notifications", label: t("Bildirim Gönder") },
         ]}
       />
 
       <div className="flex-1 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Kullanıcılar</h2>
+          <h2 className="text-lg font-semibold">{t("Kullanıcılar")}</h2>
           <button
             onClick={handleExport}
             className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm"
           >
-            CSV Dışa Aktar
+            {t("CSV Dışa Aktar")}
           </button>
         </div>
 
         {/* İstatistik Kartları */}
         {statsQ.data && (
           <StatGrid>
-            <Stat label="Toplam Kullanıcı" value={statsQ.data.total} />
-            <Stat label="Banlı" value={statsQ.data.banned} />
-            <Stat label="Yüksek Riskli" value={statsQ.data.highRisk} />
+            <Stat label={t("Toplam Kullanıcı")} value={statsQ.data.total} />
+            <Stat label={t("Banlı")} value={statsQ.data.banned} />
+            <Stat label={t("Yüksek Riskli")} value={statsQ.data.highRisk} />
             <Stat
-              label="Ortalama Risk"
+              label={t("Ortalama Risk")}
               value={statsQ.data.avgRisk.toFixed(1)}
               helper="/100"
             />
           </StatGrid>
         )}
 
-        {isLoading && <div>Yükleniyor…</div>}
-        {error && <div className="text-red-600 text-sm">Liste çekilemedi</div>}
+        {isLoading && <div>{t("Yükleniyor…")}</div>}
+        {error && <div className="text-red-600 text-sm">{t("Liste çekilemedi")}</div>}
 
         <div className="overflow-auto bg-white rounded-2xl shadow-soft">
           <table className="min-w-full text-sm">
             <thead className="sticky top-0 bg-gray-50 border-b">
               <tr className="text-left text-gray-500">
-                <th className="py-2 px-4">Ad</th>
-                <th className="py-2 px-4">E-posta</th>
-                <th className="py-2 px-4">Telefon</th>
-                <th className="py-2 px-4">Rol</th>
-                <th className="py-2 px-4">Risk</th>
-                <th className="py-2 px-4">Durum</th>
-                <th className="py-2 px-4">İşlem</th>
+                <th className="py-2 px-4">{t("Ad")}</th>
+                <th className="py-2 px-4">{t("E-posta")}</th>
+                <th className="py-2 px-4">{t("Telefon")}</th>
+                <th className="py-2 px-4">{t("Rol")}</th>
+                <th className="py-2 px-4">{t("Risk")}</th>
+                <th className="py-2 px-4">{t("Durum")}</th>
+                <th className="py-2 px-4">{t("İşlem")}</th>
               </tr>
             </thead>
             <tbody>
@@ -190,26 +192,26 @@ export default function AdminUsersPage() {
                               ? "bg-red-100 text-red-700 border-red-200"
                               : "bg-gray-100 text-gray-700 border-gray-200"
                           }`}
-                          title="Risk skoru (0–100)"
+                          title={t("Risk skoru (0–100)")}
                         >
                           {u.riskScore ?? 0}
                         </span>
                         {typeof u.noShowCount === "number" && (
                           <span
                             className="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-600 border border-gray-200"
-                            title="No-show sayısı"
+                            title={t("No-show sayısı")}
                           >
-                            NS: {u.noShowCount}
+                            {t("NS: {count}", { count: u.noShowCount })}
                           </span>
                         )}
                       </div>
                     </td>
                     <td className="py-2 px-4">
                       {u.banned ? (
-                        <span className="text-red-600 font-medium">Banlı</span>
+                        <span className="text-red-600 font-medium">{t("Banlı")}</span>
                       ) : (
                         <span className="text-green-700 font-medium">
-                          Aktif
+                          {t("Aktif")}
                         </span>
                       )}
                     </td>
@@ -218,7 +220,7 @@ export default function AdminUsersPage() {
                         onClick={() => openReset(u)}
                         className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm"
                       >
-                        Şifre Sıfırla
+                        {t("Şifre Sıfırla")}
                       </button>
                     </td>
                   </tr>
@@ -227,7 +229,7 @@ export default function AdminUsersPage() {
               {(!data || data.length === 0) && (
                 <tr>
                   <td className="py-3 px-4 text-gray-500" colSpan={7}>
-                    Kayıt yok
+                    {t("Kayıt yok")}
                   </td>
                 </tr>
               )}
@@ -239,7 +241,7 @@ export default function AdminUsersPage() {
       <Modal
         open={resetOpen}
         onClose={() => setResetOpen(false)}
-        title="Şifre Sıfırla"
+        title={t("Şifre Sıfırla")}
       >
         <div className="space-y-3">
           <div className="text-sm text-gray-600">
@@ -247,23 +249,23 @@ export default function AdminUsersPage() {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Yeni Şifre</label>
+            <label className="block text-sm text-gray-600 mb-1">{t("Yeni Şifre")}</label>
             <input
               type="password"
               value={resetPassword}
               onChange={(e) => setResetPassword(e.target.value)}
               className="w-full border rounded-lg px-3 py-2"
-              placeholder="En az 8 karakter"
+              placeholder={t("En az 8 karakter")}
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Yeni Şifre (Tekrar)</label>
+            <label className="block text-sm text-gray-600 mb-1">{t("Yeni Şifre (Tekrar)")}</label>
             <input
               type="password"
               value={resetPassword2}
               onChange={(e) => setResetPassword2(e.target.value)}
               className="w-full border rounded-lg px-3 py-2"
-              placeholder="Tekrar"
+              placeholder={t("Tekrar")}
             />
           </div>
 
@@ -272,14 +274,14 @@ export default function AdminUsersPage() {
               className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200"
               onClick={genRandom}
             >
-              Rastgele Üret
+              {t("Rastgele Üret")}
             </button>
             <button
               className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200"
               onClick={copyPassword}
               disabled={!resetPassword}
             >
-              Kopyala
+              {t("Kopyala")}
             </button>
           </div>
 
@@ -289,14 +291,14 @@ export default function AdminUsersPage() {
               onClick={() => setResetOpen(false)}
               disabled={resetBusy}
             >
-              Vazgeç
+              {t("Vazgeç")}
             </button>
             <button
               className="px-3 py-1.5 rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
               onClick={submitReset}
               disabled={resetBusy}
             >
-              {resetBusy ? "Sıfırlanıyor…" : "Sıfırla"}
+              {resetBusy ? t("Sıfırlanıyor…") : t("Sıfırla")}
             </button>
           </div>
         </div>

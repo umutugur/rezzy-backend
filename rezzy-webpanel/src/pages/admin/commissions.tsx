@@ -5,6 +5,7 @@ import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
 import { adminPreviewCommissions, adminExportCommissions } from "../../api/client";
 import { showToast } from "../../ui/Toast";
+import { useI18n } from "../../i18n";
 
 function currentMonth() {
   const d = new Date();
@@ -14,6 +15,7 @@ function currentMonth() {
 }
 
 export default function AdminCommissionsPage() {
+  const { t } = useI18n();
   const [month, setMonth] = React.useState<string>(currentMonth());
 
   const q = useQuery({
@@ -33,7 +35,7 @@ export default function AdminCommissionsPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e: any) {
-      showToast(e?.message || "Excel indirilemedi", "error");
+      showToast(e?.message || t("Excel indirilemedi"), "error");
     }
   };
 
@@ -45,24 +47,24 @@ export default function AdminCommissionsPage() {
     <div className="flex gap-6">
       <Sidebar
         items={[
-          { to: "/admin", label: "Dashboard" },
-          { to: "/admin/banners", label: "Bannerlar" },
-          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
-          { to: "/admin/organizations", label: "Organizasyonlar" },
-          { to: "/admin/restaurants", label: "Restoranlar" },
-          { to: "/admin/users", label: "Kullanıcılar" },
-          { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" },
-          { to: "/admin/notifications", label: "Bildirim Gönder" },
+          { to: "/admin", label: t("Dashboard") },
+          { to: "/admin/banners", label: t("Bannerlar") },
+          { to: "/admin/commissions", label: t("Komisyonlar") }, // ✅ menüye eklendi
+          { to: "/admin/organizations", label: t("Organizasyonlar") },
+          { to: "/admin/restaurants", label: t("Restoranlar") },
+          { to: "/admin/users", label: t("Kullanıcılar") },
+          { to: "/admin/reservations", label: t("Rezervasyonlar") },
+          { to: "/admin/moderation", label: t("Moderasyon") },
+          { to: "/admin/notifications", label: t("Bildirim Gönder") },
         ]}
       />
 
       <div className="flex-1 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Aylık Komisyonlar</h2>
+          <h2 className="text-lg font-semibold">{t("Aylık Komisyonlar")}</h2>
           <div className="flex items-end gap-2">
             <div>
-              <label className="block text-xs text-gray-600 mb-1">Ay</label>
+              <label className="block text-xs text-gray-600 mb-1">{t("Ay")}</label>
               <input
                 type="month"
                 className="border rounded-lg px-3 py-2 text-sm"
@@ -75,26 +77,26 @@ export default function AdminCommissionsPage() {
               onClick={downloadExcel}
               disabled={q.isLoading}
             >
-              {q.isLoading ? "Hazırlanıyor…" : "Excel’e Aktar"}
+              {q.isLoading ? t("Hazırlanıyor…") : t("Excel’e Aktar")}
             </button>
           </div>
         </div>
 
-        {q.isLoading && <div>Yükleniyor…</div>}
-        {q.error && <div className="text-red-600 text-sm">Veri alınamadı</div>}
+        {q.isLoading && <div>{t("Yükleniyor…")}</div>}
+        {q.error && <div className="text-red-600 text-sm">{t("Veri alınamadı")}</div>}
 
-        <Card title={`Özet • ${q.data?.month || month}`}>
+        <Card title={t("Özet • {month}", { month: q.data?.month || month })}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-3 bg-gray-50 rounded-lg border">
-              <div className="text-xs text-gray-600">Arrived Rezervasyon</div>
+              <div className="text-xs text-gray-600">{t("Arrived Rezervasyon")}</div>
               <div className="text-xl font-semibold">{totalArrived}</div>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg border">
-              <div className="text-xs text-gray-600">Arrived Toplam (₺)</div>
+              <div className="text-xs text-gray-600">{t("Arrived Toplam (₺)")}</div>
               <div className="text-xl font-semibold">{totalRevenue.toLocaleString("tr-TR")}</div>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg border">
-              <div className="text-xs text-gray-600">Komisyon Toplamı (₺)</div>
+              <div className="text-xs text-gray-600">{t("Komisyon Toplamı (₺)")}</div>
               <div className="text-xl font-semibold">{totalCommission.toLocaleString("tr-TR")}</div>
             </div>
           </div>
@@ -104,21 +106,21 @@ export default function AdminCommissionsPage() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-gray-500">
-                <th className="py-2 px-4">Restoran</th>
-                <th className="py-2 px-4">Sahip</th>
-                <th className="py-2 px-4">E-posta</th>
-                <th className="py-2 px-4">Arrived</th>
-                <th className="py-2 px-4">Arrived Toplam (₺)</th>
-                <th className="py-2 px-4">Komisyon Oranı</th>
-                <th className="py-2 px-4">Komisyon (₺)</th>
+                <th className="py-2 px-4">{t("Restoran")}</th>
+                <th className="py-2 px-4">{t("Sahip")}</th>
+                <th className="py-2 px-4">{t("E-posta")}</th>
+                <th className="py-2 px-4">{t("Arrived")}</th>
+                <th className="py-2 px-4">{t("Arrived Toplam (₺)")}</th>
+                <th className="py-2 px-4">{t("Komisyon Oranı")}</th>
+                <th className="py-2 px-4">{t("Komisyon (₺)")}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r:any)=>(
                 <tr key={r._id} className="border-t">
                   <td className="py-2 px-4">{r.restaurantName}</td>
-                  <td className="py-2 px-4">{r.ownerName || "—"}</td>
-                  <td className="py-2 px-4">{r.ownerEmail || "—"}</td>
+                  <td className="py-2 px-4">{r.ownerName || t("—")}</td>
+                  <td className="py-2 px-4">{r.ownerEmail || t("—")}</td>
                   <td className="py-2 px-4">{r.arrivedCount}</td>
                   <td className="py-2 px-4">{Number(r.revenueArrived || 0).toLocaleString("tr-TR")}</td>
                   <td className="py-2 px-4">{Number(r.commissionRate || 0)}</td>
@@ -126,7 +128,7 @@ export default function AdminCommissionsPage() {
                 </tr>
               ))}
               {rows.length === 0 && (
-                <tr><td className="py-4 px-4 text-gray-500" colSpan={7}>Kayıt yok</td></tr>
+                <tr><td className="py-4 px-4 text-gray-500" colSpan={7}>{t("Kayıt yok")}</td></tr>
               )}
             </tbody>
           </table>

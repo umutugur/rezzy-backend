@@ -23,6 +23,7 @@ import {
   restaurantDeleteModifierOption,
 } from "../../api/client";
 import { Card } from "../../components/Card";
+import { useI18n, t as i18nT } from "../../i18n";
 
 /* =======================
    Types
@@ -142,10 +143,10 @@ function money(v: any) {
 }
 
 function badgeFor(src: ResolvedSource) {
-  if (src === "org") return { text: "Merkez", cls: "bg-blue-50 text-blue-700 border border-blue-100" };
+  if (src === "org") return { text: i18nT("Merkez"), cls: "bg-blue-50 text-blue-700 border border-blue-100" };
   if (src === "org_branch_override")
-    return { text: "Şube", cls: "bg-emerald-50 text-emerald-700 border border-emerald-100" };
-  return { text: "Özel", cls: "bg-gray-100 text-gray-700 border border-gray-200" };
+    return { text: i18nT("Şube"), cls: "bg-emerald-50 text-emerald-700 border border-emerald-100" };
+  return { text: i18nT("Özel"), cls: "bg-gray-100 text-gray-700 border border-gray-200" };
 }
 
 /* =======================
@@ -164,6 +165,7 @@ function Modal({
   onClose: () => void;
   footer?: React.ReactNode;
 }) {
+  const { t } = useI18n();
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">
@@ -172,7 +174,7 @@ function Modal({
         <div className="w-full max-w-2xl bg-white rounded-2xl shadow-soft border border-gray-100">
           <div className="flex items-center justify-between px-5 py-4 border-b">
             <div className="font-semibold">{title}</div>
-            <button className="px-2 py-1 rounded hover:bg-gray-100" onClick={onClose} aria-label="Close">
+            <button className="px-2 py-1 rounded hover:bg-gray-100" onClick={onClose} aria-label={t("Kapat")}>
               ✕
             </button>
           </div>
@@ -233,6 +235,7 @@ function ModifierGroupEditorModal({
   }) => void;
   saving: boolean;
 }) {
+  const { t } = useI18n();
   const open = state.open;
   const [form, setForm] = React.useState({
     title: "",
@@ -270,7 +273,7 @@ function ModifierGroupEditorModal({
             className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
             onClick={onClose}
           >
-            Vazgeç
+            {t("Vazgeç")}
           </button>
           <button
             className="px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
@@ -286,14 +289,14 @@ function ModifierGroupEditorModal({
               })
             }
           >
-            Kaydet
+            {t("Kaydet")}
           </button>
         </div>
       }
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="md:col-span-2">
-          <label className="text-xs text-gray-500">Grup adı</label>
+          <label className="text-xs text-gray-500">{t("Grup adı")}</label>
           <input
             className="w-full border rounded-lg px-3 py-2 text-sm"
             value={form.title}
@@ -301,7 +304,7 @@ function ModifierGroupEditorModal({
           />
         </div>
         <div className="md:col-span-2">
-          <label className="text-xs text-gray-500">Açıklama</label>
+          <label className="text-xs text-gray-500">{t("Açıklama")}</label>
           <input
             className="w-full border rounded-lg px-3 py-2 text-sm"
             value={form.description}
@@ -309,7 +312,7 @@ function ModifierGroupEditorModal({
           />
         </div>
         <div>
-          <label className="text-xs text-gray-500">Min seçim</label>
+          <label className="text-xs text-gray-500">{t("Min seçim")}</label>
           <input
             type="number"
             className="w-full border rounded-lg px-3 py-2 text-sm"
@@ -318,7 +321,7 @@ function ModifierGroupEditorModal({
           />
         </div>
         <div>
-          <label className="text-xs text-gray-500">Max seçim</label>
+          <label className="text-xs text-gray-500">{t("Max seçim")}</label>
           <input
             type="number"
             className="w-full border rounded-lg px-3 py-2 text-sm"
@@ -327,7 +330,7 @@ function ModifierGroupEditorModal({
           />
         </div>
         <div>
-          <label className="text-xs text-gray-500">Sıra</label>
+          <label className="text-xs text-gray-500">{t("Sıra")}</label>
           <input
             type="number"
             className="w-full border rounded-lg px-3 py-2 text-sm"
@@ -341,10 +344,10 @@ function ModifierGroupEditorModal({
             checked={form.isActive}
             onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
           />
-          <span className="text-sm">Aktif</span>
+          <span className="text-sm">{t("Aktif")}</span>
         </div>
         {invalid ? (
-          <div className="md:col-span-2 text-xs text-red-600">maxSelect, minSelect'ten küçük olamaz.</div>
+          <div className="md:col-span-2 text-xs text-red-600">{t("maxSelect, minSelect'ten küçük olamaz.")}</div>
         ) : null}
       </div>
     </Modal>
@@ -362,6 +365,7 @@ function ModifierOptionEditorModal({
   onSave: (payload: { title: string; price: number; order: number; isActive: boolean }) => void;
   saving: boolean;
 }) {
+  const { t } = useI18n();
   const open = state.open;
   const [form, setForm] = React.useState({ title: "", price: 0, order: 0, isActive: true });
 
@@ -388,7 +392,7 @@ function ModifierOptionEditorModal({
             className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
             onClick={onClose}
           >
-            Vazgeç
+            {t("Vazgeç")}
           </button>
           <button
             className="px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
@@ -402,14 +406,14 @@ function ModifierOptionEditorModal({
               })
             }
           >
-            Kaydet
+            {t("Kaydet")}
           </button>
         </div>
       }
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="md:col-span-2">
-          <label className="text-xs text-gray-500">Opsiyon adı</label>
+          <label className="text-xs text-gray-500">{t("Opsiyon adı")}</label>
           <input
             className="w-full border rounded-lg px-3 py-2 text-sm"
             value={form.title}
@@ -417,7 +421,7 @@ function ModifierOptionEditorModal({
           />
         </div>
         <div>
-          <label className="text-xs text-gray-500">Fiyat farkı (₺)</label>
+          <label className="text-xs text-gray-500">{t("Fiyat farkı (₺)")}</label>
           <input
             type="number"
             className="w-full border rounded-lg px-3 py-2 text-sm"
@@ -426,7 +430,7 @@ function ModifierOptionEditorModal({
           />
         </div>
         <div>
-          <label className="text-xs text-gray-500">Sıra</label>
+          <label className="text-xs text-gray-500">{t("Sıra")}</label>
           <input
             type="number"
             className="w-full border rounded-lg px-3 py-2 text-sm"
@@ -440,7 +444,7 @@ function ModifierOptionEditorModal({
             checked={form.isActive}
             onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
           />
-          <span className="text-sm">Aktif</span>
+          <span className="text-sm">{t("Aktif")}</span>
         </div>
       </div>
     </Modal>
@@ -472,6 +476,7 @@ function CategoryEditorModal({
   onSave: (payload: { title: string; description: string; order: number }) => void;
   saving: boolean;
 }) {
+  const { t } = useI18n();
   const open = state.open;
   const [form, setForm] = React.useState({ title: "", description: "", order: 0 });
 
@@ -499,7 +504,7 @@ function CategoryEditorModal({
             className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
             onClick={onClose}
           >
-            Vazgeç
+            {t("Vazgeç")}
           </button>
           <button
             className="px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
@@ -512,7 +517,7 @@ function CategoryEditorModal({
               })
             }
           >
-            Kaydet
+            {t("Kaydet")}
           </button>
         </div>
       }
@@ -521,7 +526,7 @@ function CategoryEditorModal({
         {!isOrgOverride && (
           <>
             <div className="md:col-span-2">
-              <label className="text-xs text-gray-500">Başlık</label>
+              <label className="text-xs text-gray-500">{t("Başlık")}</label>
               <input
                 className="w-full border rounded-lg px-3 py-2 text-sm"
                 value={form.title}
@@ -529,7 +534,7 @@ function CategoryEditorModal({
               />
             </div>
             <div className="md:col-span-2">
-              <label className="text-xs text-gray-500">Açıklama</label>
+              <label className="text-xs text-gray-500">{t("Açıklama")}</label>
               <input
                 className="w-full border rounded-lg px-3 py-2 text-sm"
                 value={form.description}
@@ -540,7 +545,7 @@ function CategoryEditorModal({
         )}
 
         <div>
-          <label className="text-xs text-gray-500">Sıra</label>
+          <label className="text-xs text-gray-500">{t("Sıra")}</label>
           <input
             type="number"
             className="w-full border rounded-lg px-3 py-2 text-sm"
@@ -551,7 +556,7 @@ function CategoryEditorModal({
 
         {isOrgOverride && (
           <div className="md:col-span-2 text-xs text-gray-500">
-            Merkez kategorinin başlık/açıklaması burada değişmez. Sadece şube sırası yönetilir.
+            {t("Merkez kategorinin başlık/açıklaması burada değişmez. Sadece şube sırası yönetilir.")}
           </div>
         )}
       </div>
@@ -607,6 +612,7 @@ function ItemEditorModal({
   saving: boolean;
   modifierGroups: ModifierGroup[];
 }) {
+  const { t } = useI18n();
   const open = state.open;
   const [form, setForm] = React.useState({
     title: "",
@@ -650,7 +656,7 @@ function ItemEditorModal({
               disabled={disabled || saving}
               onClick={onQuickDisable}
             >
-              Bu şubede kapat
+              {t("Bu şubede kapat")}
             </button>
           )}
 
@@ -659,7 +665,7 @@ function ItemEditorModal({
               className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
               onClick={onClose}
             >
-              Vazgeç
+              {t("Vazgeç")}
             </button>
 
             <button
@@ -678,7 +684,7 @@ function ItemEditorModal({
                 })
               }
             >
-              Kaydet
+              {t("Kaydet")}
             </button>
           </div>
         </div>
@@ -688,7 +694,7 @@ function ItemEditorModal({
         {!isOrgOverride && (
           <>
             <div className="md:col-span-2">
-              <label className="text-xs text-gray-500">Ürün adı</label>
+              <label className="text-xs text-gray-500">{t("Ürün adı")}</label>
               <input
                 className="w-full border rounded-lg px-3 py-2 text-sm"
                 value={form.title}
@@ -697,7 +703,7 @@ function ItemEditorModal({
             </div>
 
             <div className="md:col-span-2">
-              <label className="text-xs text-gray-500">Açıklama</label>
+              <label className="text-xs text-gray-500">{t("Açıklama")}</label>
               <input
                 className="w-full border rounded-lg px-3 py-2 text-sm"
                 value={form.description}
@@ -708,7 +714,7 @@ function ItemEditorModal({
         )}
 
         <div>
-          <label className="text-xs text-gray-500">Fiyat (₺)</label>
+          <label className="text-xs text-gray-500">{t("Fiyat (₺)")}</label>
           <input
             type="number"
             className="w-full border rounded-lg px-3 py-2 text-sm"
@@ -718,7 +724,7 @@ function ItemEditorModal({
         </div>
 
         <div>
-          <label className="text-xs text-gray-500">Sıra</label>
+          <label className="text-xs text-gray-500">{t("Sıra")}</label>
           <input
             type="number"
             className="w-full border rounded-lg px-3 py-2 text-sm"
@@ -729,7 +735,7 @@ function ItemEditorModal({
 
         {!isOrgOverride && (
           <div className="md:col-span-2">
-            <label className="text-xs text-gray-500">Etiketler (virgülle)</label>
+            <label className="text-xs text-gray-500">{t("Etiketler (virgülle)")}</label>
             <input
               className="w-full border rounded-lg px-3 py-2 text-sm"
               value={form.tagsText}
@@ -740,10 +746,10 @@ function ItemEditorModal({
 
         {!isOrgOverride && (
           <div className="md:col-span-2">
-            <label className="text-xs text-gray-500">Opsiyon Grupları</label>
+            <label className="text-xs text-gray-500">{t("Opsiyon Grupları")}</label>
             <div className="mt-1 border rounded-lg p-2 max-h-40 overflow-auto">
               {modifierGroups.filter((g) => g.isActive !== false).length === 0 ? (
-                <div className="text-xs text-gray-500">Opsiyon grubu yok. Önce bir grup oluştur.</div>
+                <div className="text-xs text-gray-500">{t("Opsiyon grubu yok. Önce bir grup oluştur.")}</div>
               ) : (
                 <div className="space-y-2">
                   {modifierGroups
@@ -774,7 +780,7 @@ function ItemEditorModal({
                 </div>
               )}
             </div>
-            <div className="mt-1 text-[11px] text-gray-500">Bu seçimler sipariş ekranında ürün opsiyonlarını açar.</div>
+            <div className="mt-1 text-[11px] text-gray-500">{t("Bu seçimler sipariş ekranında ürün opsiyonlarını açar.")}</div>
           </div>
         )}
 
@@ -785,12 +791,12 @@ function ItemEditorModal({
               checked={form.isAvailable}
               onChange={(e) => setForm((p) => ({ ...p, isAvailable: e.target.checked }))}
             />
-            Serviste
+            {t("Serviste")}
           </label>
 
           {!isOrgOverride && (
             <label className="text-sm">
-              <span className="text-xs text-gray-500 mr-2">Fotoğraf</span>
+              <span className="text-xs text-gray-500 mr-2">{t("Fotoğraf")}</span>
               <input
                 type="file"
                 accept="image/*"
@@ -802,7 +808,7 @@ function ItemEditorModal({
 
         {isOrgOverride && (
           <div className="md:col-span-2 text-xs text-gray-500">
-            Merkez üründe başlık/açıklama/etiket/foto burada değişmez. Şubede sadece fiyat, sıra ve serviste durumu yönetilir.
+            {t("Merkez üründe başlık/açıklama/etiket/foto burada değişmez. Şubede sadece fiyat, sıra ve serviste durumu yönetilir.")}
           </div>
         )}
       </div>
@@ -828,6 +834,7 @@ type CategoryVM = {
 export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) {
   const rid = restaurantId || authStore.getUser()?.restaurantId || "";
   const qc = useQueryClient();
+  const { t } = useI18n();
 
   const [mode, setMode] = React.useState<"manage" | "preview">("manage");
 
@@ -1056,7 +1063,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
     setCategoryModal({
       open: true,
       mode: "create_local",
-      title: "Yeni Kategori",
+      title: t("Yeni Kategori"),
       initial: { title: "", description: "", order: 0 },
     });
   }, []);
@@ -1075,7 +1082,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
       setCategoryModal({
         open: true,
         mode: "edit_local",
-        title: "Kategori Düzenle",
+        title: t("Kategori Düzenle"),
         categoryId: cid,
         initial: { title: lc.title ?? "", description: lc.description ?? "", order: Number(lc.order ?? 0) },
       });
@@ -1087,7 +1094,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
     setCategoryModal({
       open: true,
       mode: "edit_org_override",
-      title: "Kategori Sırası",
+      title: t("Kategori Sırası"),
       orgCategoryId,
       initial: {
         title: selectedResolved.title ?? "",
@@ -1101,7 +1108,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
     setItemModal({
       open: true,
       mode: "create_local",
-      title: "Yeni Ürün",
+      title: t("Yeni Ürün"),
       initial: { title: "", description: "", price: 0, tagsText: "", order: 0, isAvailable: true, modifierGroupIds: [] },
     });
   }, []);
@@ -1111,7 +1118,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
       setItemModal({
         open: true,
         mode: "edit_local",
-        title: "Ürün Düzenle",
+        title: t("Ürün Düzenle"),
         itemId: getId(it),
         initial: {
           title: it.title ?? "",
@@ -1131,7 +1138,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
     setItemModal({
       open: true,
       mode: "edit_org_override",
-      title: "Ürün (Şube Ayarları)",
+      title: t("Ürün (Şube Ayarları)"),
       orgItemId,
       initial: {
         title: it.title ?? "",
@@ -1149,7 +1156,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
     setModGroupModal({
       open: true,
       mode: "create",
-      title: "Yeni Opsiyon Grubu",
+      title: t("Yeni Opsiyon Grubu"),
       initial: { title: "", description: "", minSelect: 0, maxSelect: 1, order: 0, isActive: true },
     });
   }, []);
@@ -1158,7 +1165,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
     setModGroupModal({
       open: true,
       mode: "edit",
-      title: "Opsiyon Grubu Düzenle",
+      title: t("Opsiyon Grubu Düzenle"),
       groupId: g._id,
       initial: {
         title: g.title ?? "",
@@ -1175,7 +1182,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
     setModOptionModal({
       open: true,
       mode: "create",
-      title: "Opsiyon Ekle",
+      title: t("Opsiyon Ekle"),
       groupId: gid,
       initial: { title: "", price: 0, order: 0, isActive: true },
     });
@@ -1184,7 +1191,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
     setModOptionModal({
       open: true,
       mode: "edit",
-      title: "Opsiyon Düzenle",
+      title: t("Opsiyon Düzenle"),
       groupId: gid,
       optionId: o._id,
       initial: {
@@ -1212,7 +1219,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Menü</h2>
+          <h2 className="text-lg font-semibold">{t("Menü")}</h2>
         </div>
 
         <div className="flex items-center gap-2">
@@ -1224,7 +1231,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
             }`}
             onClick={() => setMode("manage")}
           >
-            Yönetim
+            {t("Yönetim")}
           </button>
 
           <button
@@ -1235,7 +1242,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
             }`}
             onClick={() => setMode("preview")}
           >
-            Önizleme
+            {t("Önizleme")}
           </button>
 
           {mode === "manage" && manageTab === "modifiers" && (
@@ -1243,7 +1250,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
               className="px-3 py-1.5 text-sm rounded bg-brand-600 text-white hover:bg-brand-700"
               onClick={openCreateModifierGroup}
             >
-              + Grup
+              {t("+ Grup")}
             </button>
           )}
 
@@ -1251,7 +1258,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
             className="px-3 py-1.5 text-sm rounded border border-gray-200 bg-white hover:bg-gray-50"
             onClick={refreshAll}
           >
-            Yenile
+            {t("Yenile")}
           </button>
         </div>
       </div>
@@ -1266,7 +1273,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
               onClick={() => setManageTab("items")}
               type="button"
             >
-              Kategoriler & Ürünler
+              {t("Kategoriler & Ürünler")}
             </button>
             <button
               className={`px-3 py-1.5 text-sm border-l border-gray-200 ${
@@ -1275,17 +1282,17 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
               onClick={() => setManageTab("modifiers")}
               type="button"
             >
-              Opsiyon Grupları
+              {t("Opsiyon Grupları")}
             </button>
           </div>
         </div>
       )}
 
-      {!rid && <div className="text-sm text-red-600">RestaurantId bulunamadı.</div>}
+      {!rid && <div className="text-sm text-red-600">{t("RestaurantId bulunamadı.")}</div>}
 
-      {loading && <div className="text-sm text-gray-500">Yükleniyor…</div>}
+      {loading && <div className="text-sm text-gray-500">{t("Yükleniyor…")}</div>}
 
-      {anyError && <div className="text-sm text-red-600">Menü verisi alınırken hata oluştu.</div>}
+      {anyError && <div className="text-sm text-red-600">{t("Menü verisi alınırken hata oluştu.")}</div>}
 
       {/* =======================
           MANAGE
@@ -1293,10 +1300,10 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
       {mode === "manage" && (
         <div className="space-y-6">
           {manageTab === "modifiers" && (
-            <Card title={<div className="flex items-center justify-between"><span>Opsiyon Grupları</span></div>}>
+            <Card title={<div className="flex items-center justify-between"><span>{t("Opsiyon Grupları")}</span></div>}>
               <div className="space-y-3">
                 {modifierGroups.length === 0 ? (
-                  <div className="text-sm text-gray-500">Henüz opsiyon grubu yok.</div>
+                  <div className="text-sm text-gray-500">{t("Henüz opsiyon grubu yok.")}</div>
                 ) : (
                   <div className="space-y-2">
                     {modifierGroups.map((g) => {
@@ -1314,7 +1321,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                                 <div className="min-w-0">
                                   <div className="font-medium truncate">{g.title}</div>
                                   <div className="text-[11px] text-gray-500 mt-0.5">
-                                    Min: {Number(g.minSelect ?? 0)} • Max: {Number(g.maxSelect ?? 1)} • Sıra: {Number(g.order ?? 0)} • {g.isActive !== false ? "Aktif" : "Pasif"}
+                                    {t("Min")}: {Number(g.minSelect ?? 0)} • {t("Max")}: {Number(g.maxSelect ?? 1)} • {t("Sıra")}: {Number(g.order ?? 0)} • {g.isActive !== false ? t("Aktif") : t("Pasif")}
                                   </div>
                                 </div>
                                 <div className="shrink-0 text-gray-400">
@@ -1333,7 +1340,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                                 onClick={() => openEditModifierGroup(g)}
                                 type="button"
                               >
-                                Düzenle
+                                {t("Düzenle")}
                               </button>
 
                               <button
@@ -1341,19 +1348,19 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                                 onClick={() => openCreateModifierOption(g._id)}
                                 type="button"
                               >
-                                + Opsiyon
+                                {t("+ Opsiyon")}
                               </button>
 
                               <button
                                 className="px-2 py-1 text-xs rounded bg-red-50 text-red-700 hover:bg-red-100"
                                 onClick={() => {
-                                  if (confirm(`\"${g.title}\" grubunu kapatmak istiyor musun?`)) {
+                                  if (confirm(t("{title} grubunu kapatmak istiyor musun?", { title: g.title }))) {
                                     deleteModGroupMut.mutate(g._id);
                                   }
                                 }}
                                 type="button"
                               >
-                                Kapat
+                                {t("Kapat")}
                               </button>
                             </div>
                           </div>
@@ -1362,23 +1369,23 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                           {isOpen && (
                             <div className="border-t bg-gray-50/40">
                               <div className="px-4 py-2 text-xs text-gray-600 flex items-center justify-between">
-                                <span>Opsiyonlar</span>
+                                <span>{t("Opsiyonlar")}</span>
                                 <span className="text-[11px] text-gray-500">
-                                  {(g.options ?? []).filter((x) => x.isActive !== false).length} aktif
+                                  {t("{count} aktif", { count: (g.options ?? []).filter((x) => x.isActive !== false).length })}
                                 </span>
                               </div>
 
                               <div className="overflow-auto">
                                 {(g.options ?? []).length === 0 ? (
-                                  <div className="px-4 py-3 text-sm text-gray-500">Opsiyon yok.</div>
+                                  <div className="px-4 py-3 text-sm text-gray-500">{t("Opsiyon yok.")}</div>
                                 ) : (
                                   <table className="min-w-full text-sm">
                                     <thead className="bg-white text-gray-500">
                                       <tr className="border-t">
-                                        <th className="text-left font-medium px-4 py-2">Ad</th>
-                                        <th className="text-left font-medium px-4 py-2">Fiyat</th>
-                                        <th className="text-left font-medium px-4 py-2">Durum</th>
-                                        <th className="text-right font-medium px-4 py-2">Aksiyon</th>
+                                        <th className="text-left font-medium px-4 py-2">{t("Ad")}</th>
+                                        <th className="text-left font-medium px-4 py-2">{t("Fiyat")}</th>
+                                        <th className="text-left font-medium px-4 py-2">{t("Durum")}</th>
+                                        <th className="text-right font-medium px-4 py-2">{t("Aksiyon")}</th>
                                       </tr>
                                     </thead>
                                     <tbody>
@@ -1386,13 +1393,13 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                                         <tr key={o._id} className="border-t">
                                           <td className="px-4 py-2">
                                             <div className="font-medium">{o.title}</div>
-                                            <div className="text-[11px] text-gray-400">Sıra: {Number(o.order ?? 0)}</div>
+                                            <div className="text-[11px] text-gray-400">{t("Sıra")}: {Number(o.order ?? 0)}</div>
                                           </td>
                                           <td className="px-4 py-2 whitespace-nowrap">
                                             <b>{money(o.price)} ₺</b>
                                           </td>
                                           <td className="px-4 py-2">
-                                            <span className="text-xs text-gray-600">{o.isActive !== false ? "Aktif" : "Pasif"}</span>
+                                            <span className="text-xs text-gray-600">{o.isActive !== false ? t("Aktif") : t("Pasif")}</span>
                                           </td>
                                           <td className="px-4 py-2 text-right">
                                             <div className="inline-flex gap-2">
@@ -1401,18 +1408,18 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                                                 onClick={() => openEditModifierOption(g._id, o)}
                                                 type="button"
                                               >
-                                                Düzenle
+                                                {t("Düzenle")}
                                               </button>
                                               <button
                                                 className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200"
                                                 onClick={() => {
-                                                  if (confirm(`\"${o.title}\" opsiyonunu kapatmak istiyor musun?`)) {
+                                                  if (confirm(t("{title} opsiyonunu kapatmak istiyor musun?", { title: o.title }))) {
                                                     deleteModOptionMut.mutate({ gid: g._id, oid: o._id });
                                                   }
                                                 }}
                                                 type="button"
                                               >
-                                                Kapat
+                                                {t("Kapat")}
                                               </button>
                                             </div>
                                           </td>
@@ -1441,12 +1448,12 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
               <Card
                 title={
                   <div className="flex items-center justify-between">
-                    <span>Kategoriler</span>
+                    <span>{t("Kategoriler")}</span>
                     <button
                       className="px-3 py-1.5 text-xs rounded bg-brand-600 text-white hover:bg-brand-700"
                       onClick={openCreateLocalCategory}
                     >
-                      + Kategori
+                      {t("+ Kategori")}
                     </button>
                   </div>
                 }
@@ -1454,14 +1461,14 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                 <div className="space-y-3">
                   <input
                     className="w-full border rounded-lg px-3 py-2 text-sm"
-                    placeholder="Ara…"
+                    placeholder={t("Ara…")}
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                   />
 
                   <div className="max-h-[520px] overflow-auto pr-1 space-y-2">
                     {list.length === 0 ? (
-                      <div className="text-sm text-gray-500 p-2">Kayıt yok.</div>
+                      <div className="text-sm text-gray-500 p-2">{t("Kayıt yok.")}</div>
                     ) : (
                       list.map((c) => {
                         const isSelected = c.key === selectedKey;
@@ -1480,7 +1487,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                               <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
                             </div>
                             <div className="text-[11px] text-gray-400 mt-1">
-                              Sıra: {c.order} • {c.isActive ? "Açık" : "Kapalı"}
+                              {t("Sıra")}: {c.order} • {c.isActive ? t("Açık") : t("Kapalı")}
                             </div>
                           </button>
                         );
@@ -1498,13 +1505,13 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="truncate">{selected ? selected.title : "Seçim yok"}</span>
+                        <span className="truncate">{selected ? selected.title : t("Seçim yok")}</span>
                         {selectedBadge && (
                           <span className={`text-[11px] px-2 py-0.5 rounded ${selectedBadge.cls}`}>{selectedBadge.text}</span>
                         )}
                         {selected && !selected.isActive && (
                           <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
-                            Kapalı
+                            {t("Kapalı")}
                           </span>
                         )}
                       </div>
@@ -1517,13 +1524,13 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                         onClick={openCreateLocalItem}
                         title={
                           !selectedLocalCatId
-                            ? "Şubeye özel kategori seç"
+                            ? t("Şubeye özel kategori seç")
                             : selectedResolved?.isActive === false
-                            ? "Kategori kapalı"
+                            ? t("Kategori kapalı")
                             : ""
                         }
                       >
-                        + Ürün
+                        {t("+ Ürün")}
                       </button>
 
                       <button
@@ -1531,7 +1538,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                         disabled={!selectedResolved}
                         onClick={openEditSelectedCategory}
                       >
-                        Düzenle
+                        {t("Düzenle")}
                       </button>
 
                       {selectedResolved && (
@@ -1558,14 +1565,14 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                             });
                           }}
                         >
-                          {selectedResolved.isActive !== false ? "Bu şubede kapat" : "Aç"}
+                          {selectedResolved.isActive !== false ? t("Bu şubede kapat") : t("Aç")}
                         </button>
                       )}
                     </div>
                   </div>
                 }
               >
-                {!selectedResolved && <div className="text-sm text-gray-500">Soldan kategori seç.</div>}
+                {!selectedResolved && <div className="text-sm text-gray-500">{t("Soldan kategori seç.")}</div>}
 
                 {selectedResolved && (
                   <>
@@ -1579,7 +1586,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                           onClick={() => setItemTab("active")}
                           type="button"
                         >
-                          Aktif
+                          {t("Aktif")}
                         </button>
                         <button
                           className={`px-3 py-1.5 text-sm border-l border-gray-200 ${
@@ -1588,7 +1595,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                           onClick={() => setItemTab("closed")}
                           type="button"
                         >
-                          Kapalı
+                          {t("Kapalı")}
                           {closedCount > 0 ? (
                             <span className="ml-2 inline-flex items-center justify-center text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
                               {closedCount}
@@ -1603,11 +1610,11 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                       <table className="min-w-full text-sm">
                         <thead className="bg-gray-50 text-gray-600">
                           <tr>
-                            <th className="text-left font-medium px-3 py-2">Ürün</th>
-                            <th className="text-left font-medium px-3 py-2">Fiyat</th>
-                            <th className="text-left font-medium px-3 py-2">Durum</th>
-                            <th className="text-left font-medium px-3 py-2">Kaynak</th>
-                            <th className="text-right font-medium px-3 py-2">Aksiyon</th>
+                            <th className="text-left font-medium px-3 py-2">{t("Ürün")}</th>
+                            <th className="text-left font-medium px-3 py-2">{t("Fiyat")}</th>
+                            <th className="text-left font-medium px-3 py-2">{t("Durum")}</th>
+                            <th className="text-left font-medium px-3 py-2">{t("Kaynak")}</th>
+                            <th className="text-right font-medium px-3 py-2">{t("Aksiyon")}</th>
                           </tr>
                         </thead>
 
@@ -1616,7 +1623,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                             selectedItems.length === 0 ? (
                               <tr>
                                 <td className="px-3 py-4 text-gray-500" colSpan={5}>
-                                  Ürün yok.
+                                  {t("Ürün yok.")}
                                 </td>
                               </tr>
                             ) : (
@@ -1639,7 +1646,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                                       )}
                                       {Array.isArray(it.modifierGroupIds) && it.modifierGroupIds.length > 0 ? (
                                         <div className="mt-1 text-[11px] text-gray-500">
-                                          Opsiyon: {it.modifierGroupIds.length} grup
+                                          {t("Opsiyon: {count} grup", { count: it.modifierGroupIds.length })}
                                         </div>
                                       ) : null}
                                     </td>
@@ -1650,8 +1657,8 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
 
                                     <td className="px-3 py-2">
                                       <div className="text-xs text-gray-600">
-                                        {it.isActive === false ? "Kapalı" : "Açık"} •{" "}
-                                        {it.isAvailable === false ? "Stok yok" : "Serviste"}
+                                        {it.isActive === false ? t("Kapalı") : t("Açık")} •{" "}
+                                        {it.isAvailable === false ? t("Stok yok") : t("Serviste")}
                                       </div>
                                     </td>
 
@@ -1666,7 +1673,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                                           disabled={!canEdit}
                                           onClick={() => openEditItem(it, src)}
                                         >
-                                          Düzenle
+                                          {t("Düzenle")}
                                         </button>
 
                                         <button
@@ -1687,25 +1694,25 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                                             updateLocalItemMut.mutate({ iid: getId(it), isActive: false } as any);
                                           }}
                                         >
-                                          Bu şubede kapat
+                                          {t("Bu şubede kapat")}
                                         </button>
 
                                         {src === "local" && (
                                           <button
                                             className="px-2 py-1 text-xs rounded bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60"
                                             disabled={selectedResolved.isActive === false}
-                                            onClick={() => {
-                                              if (selectedResolved.isActive === false) return;
-                                              if (confirm(`"${it.title}" silinsin mi?`)) {
-                                                deleteLocalItemMut.mutate(getId(it));
-                                              }
-                                            }}
-                                          >
-                                            Sil
-                                          </button>
-                                        )}
-                                      </div>
-                                    </td>
+                                          onClick={() => {
+                                            if (selectedResolved.isActive === false) return;
+                                            if (confirm(t("\"{title}\" silinsin mi?", { title: it.title }))) {
+                                              deleteLocalItemMut.mutate(getId(it));
+                                            }
+                                          }}
+                                        >
+                                            {t("Sil")}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
                                   </tr>
                                 );
                               })
@@ -1713,7 +1720,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                           ) : selectedItems.length === 0 ? (
                             <tr>
                               <td className="px-3 py-4 text-gray-500" colSpan={5}>
-                                Kapalı ürün yok.
+                                {t("Kapalı ürün yok.")}
                               </td>
                             </tr>
                           ) : (
@@ -1732,7 +1739,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                                     <b>{money(it.price)} ₺</b>
                                   </td>
                                   <td className="px-3 py-2">
-                                    <div className="text-xs text-gray-600">Kapalı</div>
+                                    <div className="text-xs text-gray-600">{t("Kapalı")}</div>
                                   </td>
                                   <td className="px-3 py-2">
                                     <span className={`text-[11px] px-2 py-0.5 rounded ${b.cls}`}>{b.text}</span>
@@ -1755,7 +1762,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                                           }
                                         }}
                                       >
-                                        Aç
+                                        {t("Aç")}
                                       </button>
                                     </div>
                                   </td>
@@ -1780,8 +1787,8 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
       ======================= */}
       {mode === "preview" && (
         <div className="space-y-4">
-          <Card title="Önizleme">
-            {!resolvedQ.data?.categories?.length && <div className="text-sm text-gray-500">Menü boş.</div>}
+          <Card title={t("Önizleme")}>
+            {!resolvedQ.data?.categories?.length && <div className="text-sm text-gray-500">{t("Menü boş.")}</div>}
 
             <div className="space-y-4">
               {sortByOrder(resolvedQ.data?.categories ?? []).map((c, idx) => (
@@ -1797,7 +1804,7 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
                             <img src={it.photoUrl} className="w-24 h-16 object-cover rounded border" alt={it.title} />
                           ) : (
                             <div className="w-24 h-16 rounded border bg-gray-50 flex items-center justify-center text-xs text-gray-400">
-                              Foto yok
+                              {t("Foto yok")}
                             </div>
                           )}
                         </div>
@@ -1812,13 +1819,13 @@ export default function MenuManagerPage({ restaurantId }: MenuManagerPageProps) 
 
                           {Array.isArray(it.modifierGroupIds) && it.modifierGroupIds.length > 0 ? (
                             <div className="mt-2 text-[11px] text-gray-500">
-                              Opsiyon: {it.modifierGroupIds.length} grup
+                              {t("Opsiyon: {count} grup", { count: it.modifierGroupIds.length })}
                             </div>
                           ) : null}
                         </div>
                       </div>
                     ))}
-                    {(!c.items || c.items.length === 0) && <div className="text-sm text-gray-500">Bu kategoride ürün yok.</div>}
+                    {(!c.items || c.items.length === 0) && <div className="text-sm text-gray-500">{t("Bu kategoride ürün yok.")}</div>}
                   </div>
                 </div>
               ))}

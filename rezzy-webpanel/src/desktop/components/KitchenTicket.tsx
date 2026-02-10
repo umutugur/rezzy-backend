@@ -1,5 +1,6 @@
 // src/desktop/components/KitchenTicket.tsx
 import React from "react";
+import { t as i18nT } from "../../i18n";
 
 export type KitchenTicketStatus = "NEW" | "IN_PROGRESS" | "READY" | "SERVED";
 
@@ -23,9 +24,9 @@ export type KitchenTicketProps = {
 };
 
 function getSourceLabel(source: "WALK_IN" | "QR" | "REZVIX") {
-  if (source === "WALK_IN") return "Lokal";
-  if (source === "QR") return "QR Menü";
-  return "Rezvix";
+  if (source === "WALK_IN") return i18nT("Lokal");
+  if (source === "QR") return i18nT("QR Menü");
+  return i18nT("Rezvix");
 }
 
 function getFooterTexts(status: KitchenTicketStatus): {
@@ -34,13 +35,13 @@ function getFooterTexts(status: KitchenTicketStatus): {
 } {
   switch (status) {
     case "NEW":
-      return { primary: "Yeni sipariş", secondary: "Hazırlamaya alınabilir" };
+      return { primary: i18nT("Yeni sipariş"), secondary: i18nT("Hazırlamaya alınabilir") };
     case "IN_PROGRESS":
-      return { primary: "Hazırlanıyor", secondary: "Servise hazır olacak" };
+      return { primary: i18nT("Hazırlanıyor"), secondary: i18nT("Servise hazır olacak") };
     case "READY":
-      return { primary: "Servise hazır", secondary: "Teslim edilmeyi bekliyor" };
+      return { primary: i18nT("Servise hazır"), secondary: i18nT("Teslim edilmeyi bekliyor") };
     case "SERVED":
-      return { primary: "Teslim edildi", secondary: "Tamamlandı" };
+      return { primary: i18nT("Teslim edildi"), secondary: i18nT("Tamamlandı") };
     default:
       return { primary: "" };
   }
@@ -67,7 +68,7 @@ export const KitchenTicket: React.FC<KitchenTicketProps> = ({
       <header className="rezvix-kitchen-ticket__header">
         <div className="rezvix-kitchen-ticket__title">{tableLabel}</div>
         <div className="rezvix-kitchen-ticket__meta">
-          {getSourceLabel(source)} · +{minutesAgo} dk
+          {getSourceLabel(source)} · {i18nT("+{count} dk", { count: minutesAgo })}
         </div>
       </header>
 
@@ -91,19 +92,19 @@ export const KitchenTicket: React.FC<KitchenTicketProps> = ({
         <div className="actions">
           {status === "NEW" && (
             <button className="kbtn primary" onClick={() => onStart?.(id)}>
-              Hazırlamaya al
+              {i18nT("Hazırlamaya al")}
             </button>
           )}
 
           {status === "IN_PROGRESS" && (
             <button className="kbtn warning" onClick={() => onReady?.(id)}>
-              Hazır
+              {i18nT("Hazır")}
             </button>
           )}
 
           {status === "READY" && (
             <button className="kbtn success" onClick={() => onServe?.(id)}>
-              Teslim edildi
+              {i18nT("Teslim edildi")}
             </button>
           )}
         </div>

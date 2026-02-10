@@ -5,6 +5,7 @@ import { api } from "../../api/client";
 import Sidebar from "../../components/Sidebar";
 import { authStore } from "../../store/auth";
 import { Card } from "../../components/Card";
+import { useI18n } from "../../i18n";
 
 type MenuItem = {
   _id?: string;
@@ -45,6 +46,7 @@ async function updateMenus(rid: string, menus: MenuItem[]) {
 export default function MenusPage() {
   const rid = authStore.getUser()?.restaurantId || "";
   const qc = useQueryClient();
+  const { t } = useI18n();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["menus", rid],
@@ -74,28 +76,28 @@ export default function MenusPage() {
     <div className="flex gap-6">
       <Sidebar
         items={[
-          { to: "/restaurant", label: "Dashboard" },
-          { to: "/restaurant/reservations", label: "Rezervasyonlar" },
-          { to: "/restaurant/opening-hours", label: "Çalışma Saatleri" },
-          { to: "/restaurant/tables", label: "Masalar" },
+          { to: "/restaurant", label: t("Dashboard") },
+          { to: "/restaurant/reservations", label: t("Rezervasyonlar") },
+          { to: "/restaurant/opening-hours", label: t("Çalışma Saatleri") },
+          { to: "/restaurant/tables", label: t("Masalar") },
 
           // ✅ YENİ: kategori + ürün yönetimi
-          { to: "/restaurant/menu-manager", label: "Menü Yönetimi" },
+          { to: "/restaurant/menu-manager", label: t("Menü Yönetimi") },
 
           // (Legacy sabit menüler)
-          { to: "/restaurant/menus", label: "Menüler" },
+          { to: "/restaurant/menus", label: t("Menüler") },
 
-          { to: "/restaurant/policies", label: "Politikalar" },
-          { to: "/restaurant/photos", label: "Fotoğraflar" },
-          { to: "/restaurant/profile", label: "Profil & Ayarlar" },
+          { to: "/restaurant/policies", label: t("Politikalar") },
+          { to: "/restaurant/photos", label: t("Fotoğraflar") },
+          { to: "/restaurant/profile", label: t("Profil & Ayarlar") },
         ]}
       />
 
       <div className="flex-1 space-y-6">
-        <h2 className="text-lg font-semibold">Menüler</h2>
+        <h2 className="text-lg font-semibold">{t("Menüler")}</h2>
 
-        {isLoading && <div>Yükleniyor…</div>}
-        {error && <div className="text-red-600 text-sm">Veri getirilemedi</div>}
+        {isLoading && <div>{t("Yükleniyor…")}</div>}
+        {error && <div className="text-red-600 text-sm">{t("Veri getirilemedi")}</div>}
 
         <Card>
           <div className="space-y-4">
@@ -106,7 +108,7 @@ export default function MenusPage() {
               >
                 <input
                   className="md:col-span-2 border rounded-lg px-3 py-2"
-                  placeholder="Menü adı"
+                  placeholder={t("Menü adı")}
                   value={m.title}
                   onChange={(e) =>
                     setRows((prev) =>
@@ -116,7 +118,7 @@ export default function MenusPage() {
                 />
                 <textarea
                   className="md:col-span-4 border rounded-lg px-3 py-2 h-[42px]"
-                  placeholder="Açıklama (opsiyonel)"
+                  placeholder={t("Açıklama (opsiyonel)")}
                   value={m.description ?? ""}
                   onChange={(e) =>
                     setRows((prev) =>
@@ -130,7 +132,7 @@ export default function MenusPage() {
                   type="number"
                   min={0}
                   className="border rounded-lg px-3 py-2"
-                  placeholder="Kişi başı ₺"
+                  placeholder={t("Kişi başı ₺")}
                   value={m.pricePerPerson}
                   onChange={(e) =>
                     setRows((prev) =>
@@ -144,7 +146,7 @@ export default function MenusPage() {
                 />
                 <div className="flex items-center gap-2">
                   <label className="flex items-center gap-2 text-sm">
-                    <span className="text-gray-600">Aktif</span>
+                    <span className="text-gray-600">{t("Aktif")}</span>
                     <input
                       type="checkbox"
                       checked={m.isActive ?? true}
@@ -161,21 +163,21 @@ export default function MenusPage() {
                     className="rounded-lg bg-gray-100 hover:bg-gray-200 px-3 py-2"
                     onClick={() => delRow(idx)}
                   >
-                    Sil
+                    {t("Sil")}
                   </button>
                 </div>
               </div>
             ))}
 
             {rows.length === 0 && (
-              <div className="text-sm text-gray-500">Kayıt yok</div>
+              <div className="text-sm text-gray-500">{t("Kayıt yok")}</div>
             )}
 
             <button
               className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
               onClick={addRow}
             >
-              Yeni Menü
+              {t("Yeni Menü")}
             </button>
           </div>
 
@@ -185,13 +187,13 @@ export default function MenusPage() {
               disabled={mut.isPending}
               className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 disabled:opacity-60"
             >
-              {mut.isPending ? "Kaydediliyor…" : "Kaydet"}
+              {mut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
             </button>
             {mut.isSuccess && (
-              <span className="ml-3 text-sm text-green-700">Güncellendi.</span>
+              <span className="ml-3 text-sm text-green-700">{t("Güncellendi.")}</span>
             )}
             {mut.isError && (
-              <span className="ml-3 text-sm text-red-700">Hata oluştu.</span>
+              <span className="ml-3 text-sm text-red-700">{t("Hata oluştu.")}</span>
             )}
           </div>
         </Card>

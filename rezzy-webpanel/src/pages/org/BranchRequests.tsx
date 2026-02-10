@@ -199,7 +199,7 @@ export default function OrgBranchRequestsPage() {
       />
 
       <div className="flex-1 space-y-6">
-        <h2 className="text-lg font-semibold">Şube Talepleri</h2>
+        <h2 className="text-lg font-semibold">{t("Şube Talepleri")}</h2>
 
         {/* Filtreler */}
         <Card title={t("Filtreler")}>

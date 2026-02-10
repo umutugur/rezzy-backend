@@ -1,6 +1,7 @@
 // src/desktop/components/WalkInOrderModal.tsx
 import React from "react";
 import { useRestaurantDesktopCurrency } from "../layouts/RestaurantDesktopLayout";
+import { useI18n } from "../../i18n";
 
 type MenuCategory = {
   _id: string;
@@ -130,6 +131,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
   onSubmit,
   submitPending,
 }) => {
+  const { t } = useI18n();
   if (!open) return null;
 
   const { region } = useRestaurantDesktopCurrency();
@@ -138,6 +140,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
     region === "UK" || region === "GB" ? "GBP" : "TRY";
 
   const effectiveCurrency: CurrencyCode = currency ?? defaultCurrency;
+  const tableLabel = tableName || t("Seçili masa");
 
   // Normalize modifierGroupsById so parent can pass either a map or an array-like payload
   const modifierGroupMap: Record<string, ModifierGroup> = React.useMemo(() => {
@@ -256,8 +259,14 @@ export const WalkInOrderModal: React.FC<Props> = ({
       const mapKeyCount = Object.keys(modifierGroupMap || {}).length;
       setModifierError(
         hasIds
-          ? `Bu ürün opsiyonlu görünüyor ama opsiyon detayları yüklenmedi.\n\nBeklenen: modifierGroups + options verisi.\nMevcut: modifierGroupIds var (${Array.isArray(ids) ? ids.length : 0} adet), modifierGroupsById map key sayısı: ${mapKeyCount}.\n\nÇözüm: LiveTablesPage (parent) resolved menüden modifierGroups/option'ları alıp WalkInOrderModal'a modifierGroupsById olarak geçmeli.`
-          : "Bu ürün için opsiyon bulunamadı."
+          ? t(
+              "Bu ürün opsiyonlu görünüyor ama opsiyon detayları yüklenmedi.\n\nBeklenen: modifierGroups + options verisi.\nMevcut: modifierGroupIds var ({count} adet), modifierGroupsById map key sayısı: {mapKeyCount}.\n\nÇözüm: LiveTablesPage (parent) resolved menüden modifierGroups/option'ları alıp WalkInOrderModal'a modifierGroupsById olarak geçmeli.",
+              {
+                count: Array.isArray(ids) ? ids.length : 0,
+                mapKeyCount,
+              }
+            )
+          : t("Bu ürün için opsiyon bulunamadı.")
       );
       setModifierPickerItem(item);
       setModifierSelections({});
@@ -355,7 +364,9 @@ export const WalkInOrderModal: React.FC<Props> = ({
   onAddWithModifiers(item, payload);
 } else {
   setModifierError(
-    "Bu ekranda opsiyon seçimi kaydedilemiyor (parent onAddWithModifiers bağlı değil). LiveTablesPage, WalkInOrderModal'a onAddWithModifiers prop'u göndermeli."
+    t(
+      "Bu ekranda opsiyon seçimi kaydedilemiyor (parent onAddWithModifiers bağlı değil). LiveTablesPage, WalkInOrderModal'a onAddWithModifiers prop'u göndermeli."
+    )
   );
   return;
 }
@@ -371,10 +382,10 @@ export const WalkInOrderModal: React.FC<Props> = ({
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-[11px] tracking-[0.18em] uppercase text-slate-400 mb-1">
-              WALK-IN SİPARİŞ
+              {t("WALK-IN SİPARİŞ")}
             </div>
             <div className="text-[16px] font-semibold text-slate-900">
-              Yeni Sipariş — {tableName || "Seçili masa"}
+              {t("Yeni Sipariş — {table}", { table: tableLabel })}
             </div>
           </div>
           <button
@@ -382,7 +393,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
             onClick={onClose}
             className="px-3 py-1 text-[11px] rounded-full border border-slate-200 bg-white/90 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
           >
-            Kapat
+            {t("Kapat")}
           </button>
         </div>
         <div className="h-px w-full bg-gradient-to-r from-slate-200/40 via-slate-200/80 to-slate-200/40" />
@@ -390,14 +401,14 @@ export const WalkInOrderModal: React.FC<Props> = ({
         {/* Müşteri / Not */}
         <div className="">
           <div className="text-[11px] font-medium text-slate-600 mb-1">
-            Müşteri / Not
+            {t("Müşteri / Not")}
           </div>
           <input
             type="text"
             value={guestName}
             onChange={(e) => onChangeGuestName(e.target.value)}
             className="w-full rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-[13px] text-slate-900 shadow-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
-            placeholder="İsteğe bağlı; örn. 4 kişi, rezervasyonsuz masa"
+            placeholder={t("İsteğe bağlı; örn. 4 kişi, rezervasyonsuz masa")}
           />
         </div>
 
@@ -407,16 +418,16 @@ export const WalkInOrderModal: React.FC<Props> = ({
           <div className="col-span-3 min-h-0">
             <div className="flex items-center justify-between mb-1">
               <div className="text-[11px] font-medium text-slate-600">
-                Kategoriler
+                {t("Kategoriler")}
               </div>
               {categoriesLoading && (
                 <span className="text-[10px] text-slate-500">
-                  Yükleniyor…
+                  {t("Yükleniyor…")}
                 </span>
               )}
               {categoriesError && (
                 <span className="text-[10px] text-red-500">
-                  Alınamadı
+                  {t("Alınamadı")}
                 </span>
               )}
             </div>
@@ -433,7 +444,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                       : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50")
                   }
                 >
-                  Tümü
+                  {t("Tümü")}
                 </button>
 
                 {categories.map((cat) => (
@@ -461,19 +472,19 @@ export const WalkInOrderModal: React.FC<Props> = ({
           {/* Sağ: ürün listesi */}
           <div className="col-span-6 min-h-0 flex flex-col">
             <div className="text-[11px] font-medium text-slate-600 mb-1">
-              Ürünler
+              {t("Ürünler")}
               {menuLoading && (
-                <span className="ml-2 text-[10px] text-slate-500">Yükleniyor…</span>
+                <span className="ml-2 text-[10px] text-slate-500">{t("Yükleniyor…")}</span>
               )}
               {menuError && !menuLoading && (
-                <span className="ml-2 text-[10px] text-red-500">Getirilemedi</span>
+                <span className="ml-2 text-[10px] text-red-500">{t("Getirilemedi")}</span>
               )}
             </div>
 
             <div className="rounded-2xl border border-slate-200/80 bg-white/95 flex-1 min-h-0 overflow-y-auto shadow-sm">
               {!menuLoading && !menuError && visibleItems.length === 0 && (
                 <div className="px-4 py-3 text-[12px] text-slate-500">
-                  Bu kategori için henüz ürün yok.
+                  {t("Bu kategori için henüz ürün yok.")}
                 </div>
               )}
 
@@ -521,13 +532,13 @@ export const WalkInOrderModal: React.FC<Props> = ({
 
                           {hasModifiers ? (
                             <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700 border border-purple-200">
-                              Opsiyonlu
+                              {t("Opsiyonlu")}
                             </span>
                           ) : null}
 
                           {isUnavailable && (
                             <span className="ml-1 text-[10px] text-red-500">
-                              · Şu anda servis dışı
+                              · {t("Şu anda servis dışı")}
                             </span>
                           )}
                         </div>
@@ -563,9 +574,9 @@ export const WalkInOrderModal: React.FC<Props> = ({
           {/* Sağ: seçilenler (taslak) */}
           <div className="col-span-3 min-h-0 flex flex-col">
             <div className="flex items-center justify-between mb-1">
-              <div className="text-[11px] font-semibold text-slate-700">Seçilenler</div>
+              <div className="text-[11px] font-semibold text-slate-700">{t("Seçilenler")}</div>
               <div className="text-[10px] text-slate-500">
-                <span className="font-semibold text-slate-700">{selectedItemCount}</span> ürün ·{" "}
+                <span className="font-semibold text-slate-700">{selectedItemCount}</span> {t("ürün")} ·{" "}
                 <span className="font-semibold text-slate-700">{formatMoney(selectedTotal, effectiveCurrency)}</span>
               </div>
             </div>
@@ -573,9 +584,9 @@ export const WalkInOrderModal: React.FC<Props> = ({
             <div className="rounded-2xl border border-purple-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(245,243,255,0.90))] flex-1 min-h-0 overflow-y-auto shadow-[0_18px_46px_rgba(15,23,42,0.14)]">
               {Object.keys(draftItems || {}).length === 0 ? (
                 <div className="px-4 py-4 text-[12px] text-slate-500">
-                  <div className="font-medium text-slate-600">Henüz ürün eklenmedi.</div>
+                  <div className="font-medium text-slate-600">{t("Henüz ürün eklenmedi.")}</div>
                   <div className="mt-1 text-[11px] text-slate-500">
-                    Soldan ürüne tıklayarak veya “+” ile ekleyebilirsin.
+                    {t("Soldan ürüne tıklayarak veya “+” ile ekleyebilirsin.")}
                   </div>
                 </div>
               ) : (
@@ -602,10 +613,10 @@ export const WalkInOrderModal: React.FC<Props> = ({
 ) : null}
                               <div className="mt-1 text-[11px] text-slate-500 grid grid-cols-2 gap-x-2 gap-y-0.5">
                                 <span>
-                                  Birim: <span className="font-semibold text-slate-700">{formatMoney(Number(di.price || 0), effectiveCurrency)}</span>
+                                  {t("Birim")}: <span className="font-semibold text-slate-700">{formatMoney(Number(di.price || 0), effectiveCurrency)}</span>
                                 </span>
                                 <span>
-                                  Ara: <span className="font-semibold text-slate-700">{formatMoney(lineTotal, effectiveCurrency)}</span>
+                                  {t("Ara")}: <span className="font-semibold text-slate-700">{formatMoney(lineTotal, effectiveCurrency)}</span>
                                 </span>
                               </div>
                             </div>
@@ -620,7 +631,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                                   onChangeQty(full ?? fallback, -1);
                                 }}
                                 disabled={!canDec}
-                                aria-label="Azalt"
+                                aria-label={t("Azalt")}
                               >
                                 –
                               </button>
@@ -644,7 +655,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
 
                                   onChangeQty(itemToUse, 1);
                                 }}
-                                aria-label="Arttır"
+                                aria-label={t("Arttır")}
                               >
                                 +
                               </button>
@@ -660,8 +671,8 @@ export const WalkInOrderModal: React.FC<Props> = ({
                                   const fallback: MenuItem = { _id: di.itemId, title: di.title, price: Number(di.price || 0) };
                                   onChangeQty(full ?? fallback, -currentQty);
                                 }}
-                                aria-label="Kaldır"
-                                title="Kaldır"
+                                aria-label={t("Kaldır")}
+                                title={t("Kaldır")}
                               >
                                 ✕
                               </button>
@@ -676,11 +687,11 @@ export const WalkInOrderModal: React.FC<Props> = ({
                                 value={di.note ?? ""}
                                 onChange={(e) => onChangeItemNote(di.itemId, e.target.value)}
                                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
-                                placeholder="Not (opsiyonel)"
+                                placeholder={t("Not (opsiyonel)")}
                               />
                             </div>
                           ) : di.note ? (
-                            <div className="mt-2 text-[11px] text-slate-500">Not: {di.note}</div>
+                            <div className="mt-2 text-[11px] text-slate-500">{t("Not")}: {di.note}</div>
                           ) : null}
                         </div>
                       );
@@ -694,15 +705,15 @@ export const WalkInOrderModal: React.FC<Props> = ({
         {/* Footer / Özet */}
         <div className="mt-2 flex items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/75 px-4 py-3 shadow-sm">
           <div className="text-[11px] text-slate-500">
-            Seçili ürün:&nbsp;
+            {t("Seçili ürün")}:&nbsp;
             <span className="font-semibold text-slate-900">
-              {selectedItemCount} adet
+              {t("{count} adet", { count: selectedItemCount })}
             </span>
-            &nbsp; · Toplam:&nbsp;
+            &nbsp; · {t("Toplam")}:&nbsp;
             <span className="font-semibold text-slate-900">
               {formatMoney(selectedTotal, effectiveCurrency)}
             </span>
-            <span className="ml-2 text-[10px] text-slate-400">(düzenleme: sağ panel)</span>
+            <span className="ml-2 text-[10px] text-slate-400">({t("düzenleme: sağ panel")})</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -711,7 +722,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
               onClick={onClose}
               className="px-4 py-2 rounded-full border border-slate-200 bg-white text-[12px] font-medium text-slate-600 hover:bg-slate-50 transition"
             >
-              Vazgeç
+              {t("Vazgeç")}
             </button>
             <button
               type="button"
@@ -719,7 +730,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
               onClick={onSubmit}
               className="px-5 py-2 rounded-full bg-gradient-to-r from-purple-600 to-purple-500 text-[12px] font-semibold text-white shadow-lg shadow-purple-600/30 hover:shadow-purple-600/40 hover:translate-y-[-1px] transition disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
             >
-              {submitPending ? "Kaydediliyor…" : "Siparişi Kaydet"}
+              {submitPending ? t("Kaydediliyor…") : t("Siparişi Kaydet")}
             </button>
           </div>
         </div>
@@ -733,10 +744,10 @@ export const WalkInOrderModal: React.FC<Props> = ({
               <div className="px-5 py-4 bg-[radial-gradient(circle_at_top_left,rgba(88,57,255,0.12),rgba(255,255,255,0.96))]">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-[11px] tracking-[0.18em] uppercase text-slate-400 mb-1">OPSİYON SEÇ</div>
+                    <div className="text-[11px] tracking-[0.18em] uppercase text-slate-400 mb-1">{t("OPSİYON SEÇ")}</div>
                     <div className="text-[15px] font-semibold text-slate-900 leading-snug">{modifierPickerItem.title}</div>
                     <div className="mt-1 text-[12px] text-slate-500">
-                      Taban fiyat: <span className="font-semibold text-slate-700">{formatMoney(modifierPickerItem.price, effectiveCurrency)}</span>
+                      {t("Taban fiyat")}: <span className="font-semibold text-slate-700">{formatMoney(modifierPickerItem.price, effectiveCurrency)}</span>
                     </div>
                   </div>
 
@@ -745,7 +756,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                     onClick={closeModifierPicker}
                     className="px-3 py-1 text-[11px] rounded-full border border-slate-200 bg-white/90 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
                   >
-                    Kapat
+                    {t("Kapat")}
                   </button>
                 </div>
 
@@ -774,18 +785,18 @@ export const WalkInOrderModal: React.FC<Props> = ({
                             </div>
                             <div className="shrink-0 text-[11px] text-slate-500">
                               {min > 0 ? (
-                                <span className="font-semibold text-slate-700">En az {min}</span>
+                                <span className="font-semibold text-slate-700">{t("En az {count}", { count: min })}</span>
                               ) : (
-                                <span>Opsiyonel</span>
+                                <span>{t("Opsiyonel")}</span>
                               )}{" "}
                               <span className="text-slate-400">·</span>{" "}
-                              <span className="font-semibold text-slate-700">En fazla {Math.max(1, max)}</span>
+                              <span className="font-semibold text-slate-700">{t("En fazla {count}", { count: Math.max(1, max) })}</span>
                             </div>
                           </div>
 
                           <div className="mt-3 grid grid-cols-1 gap-2">
                             {opts.length === 0 ? (
-                              <div className="text-[12px] text-slate-500">Bu grupta seçenek yok.</div>
+                              <div className="text-[12px] text-slate-500">{t("Bu grupta seçenek yok.")}</div>
                             ) : (
                               opts.map((o) => {
                                 const oid = String(o._id);
@@ -807,7 +818,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                                   >
                                     <div className="min-w-0">
                                       <div className="text-[12.5px] font-semibold text-slate-900 break-words">{o.title}</div>
-                                      <div className="mt-0.5 text-[11px] text-slate-500">{checked ? "Seçili" : "Seç"}</div>
+                                      <div className="mt-0.5 text-[11px] text-slate-500">{checked ? t("Seçili") : t("Seç")}</div>
                                     </div>
 
                                     <div className="shrink-0 flex items-center gap-2">
@@ -816,7 +827,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                                           {delta > 0 ? "+" : ""}{formatMoney(delta, effectiveCurrency)}
                                         </div>
                                       ) : (
-                                        <div className="text-[12px] text-slate-400">+0</div>
+                                        <div className="text-[12px] text-slate-400">{t("+0")}</div>
                                       )}
                                       <div
                                         className={
@@ -835,7 +846,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                           </div>
 
                           <div className="mt-2 text-[11px] text-slate-500">
-                            Seçim: <span className="font-semibold text-slate-700">{selected.size}</span>
+                            {t("Seçim")}: <span className="font-semibold text-slate-700">{selected.size}</span>
                           </div>
                         </div>
                       );
@@ -843,7 +854,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                 </div>
 
                 <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 shadow-sm">
-                  <div className="text-[11px] text-slate-500">Seçimlerini onaylayınca ürün sepete eklenecek.</div>
+                  <div className="text-[11px] text-slate-500">{t("Seçimlerini onaylayınca ürün sepete eklenecek.")}</div>
 
                   <div className="flex items-center gap-2">
                     <button
@@ -851,7 +862,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                       onClick={closeModifierPicker}
                       className="px-4 py-2 rounded-full border border-slate-200 bg-white text-[12px] font-medium text-slate-600 hover:bg-slate-50 transition"
                     >
-                      Vazgeç
+                      {t("Vazgeç")}
                     </button>
                       <button
                         type="button"
@@ -859,7 +870,7 @@ export const WalkInOrderModal: React.FC<Props> = ({
                         disabled={getItemModifierGroups(modifierPickerItem).length === 0 || !!modifierError}
                         className="px-5 py-2 rounded-full bg-gradient-to-r from-purple-600 to-purple-500 text-[12px] font-semibold text-white shadow-lg shadow-purple-600/30 hover:shadow-purple-600/40 hover:translate-y-[-1px] transition disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        Seçimleri Onayla
+                        {t("Seçimleri Onayla")}
                       </button>
                   </div>
                 </div>

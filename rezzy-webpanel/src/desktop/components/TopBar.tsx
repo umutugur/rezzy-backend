@@ -29,7 +29,7 @@ function initialsFromName(name?: string | null) {
 }
 
 function roleLabelFromUser(user: MeUser | null, t: (key: string, options?: any) => string): string {
-  if (!user) return "-";
+  if (!user) return t("-");
   if (user.role === "admin") return t("Admin");
 
   const orgOwner = user.organizations?.find((o) => o.role === "org_owner");
@@ -45,7 +45,7 @@ function roleLabelFromUser(user: MeUser | null, t: (key: string, options?: any) 
   if (staff) return t("Personel");
 
   if (user.role === "restaurant") return t("Restaurant Kullanıcısı");
-  return user.role ? t(String(user.role)) : "-";
+  return user.role ? t(String(user.role)) : t("-");
 }
 
 function preserveModeDesktopLoginPath() {
@@ -94,7 +94,7 @@ export const TopBar: React.FC<TopBarProps> = ({ title, subtitle, summaryChips })
   };
 
   const userInitials = initialsFromName(user?.name);
-  const userName = user?.name ?? "—";
+  const userName = user?.name ?? t("—");
   const userRole = roleLabelFromUser(user, t);
 
   return (

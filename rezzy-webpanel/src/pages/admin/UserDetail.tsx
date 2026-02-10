@@ -11,6 +11,7 @@ import {
   adminGetUserRiskHistory
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
+import { useI18n, t as i18nT } from "../../i18n";
 
 const TYPE_LABEL: Record<string, string> = {
   NO_SHOW: "Gelmedi",
@@ -22,6 +23,7 @@ const TYPE_LABEL: Record<string, string> = {
 export default function AdminUserDetailPage() {
   const { uid = "" } = useParams();
   const qc = useQueryClient();
+  const { t } = useI18n();
 
   const uQ = useQuery({
     queryKey: ["admin-user", uid],
@@ -40,7 +42,7 @@ export default function AdminUserDetailPage() {
         bannedUntil: banUntil ? new Date(banUntil).toISOString() : undefined
       }),
     onSuccess: () => {
-      showToast("Kullanıcı banlandı", "success");
+      showToast(t("Kullanıcı banlandı"), "success");
       setBanReason("");
       setBanUntil("");
       qc.invalidateQueries({ queryKey: ["admin-user", uid] });
@@ -51,7 +53,7 @@ export default function AdminUserDetailPage() {
   const unbanMut = useMutation({
     mutationFn: () => adminUnbanUser(uid),
     onSuccess: () => {
-      showToast("Ban kaldırıldı", "success");
+      showToast(t("Ban kaldırıldı"), "success");
       qc.invalidateQueries({ queryKey: ["admin-user", uid] });
       qc.invalidateQueries({ queryKey: ["admin-user-risk", uid] });
     }
@@ -67,7 +69,7 @@ export default function AdminUserDetailPage() {
   const roleMut = useMutation({
     mutationFn: () => adminUpdateUserRole(uid, role as any),
     onSuccess: () => {
-      showToast("Rol güncellendi", "success");
+      showToast(t("Rol güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["admin-user", uid] });
     }
   });
@@ -91,7 +93,7 @@ export default function AdminUserDetailPage() {
   });
 
   const fmtDateTime = (v?: string) => {
-    if (!v) return "-";
+    if (!v) return i18nT("-");
     try {
       const d = new Date(v);
       return d.toLocaleString();
@@ -106,67 +108,67 @@ export default function AdminUserDetailPage() {
     <div className="flex gap-6">
       <Sidebar
         items={[
-          { to: "/admin", label: "Dashboard" },
-          { to: "/admin/banners", label: "Bannerlar" },
-          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
-          { to: "/admin/organizations", label: "Organizasyonlar" },
-          { to: "/admin/restaurants", label: "Restoranlar" },
-          { to: "/admin/users", label: "Kullanıcılar" },
-          { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" },
-          { to: "/admin/notifications", label: "Bildirim Gönder" },
+          { to: "/admin", label: t("Dashboard") },
+          { to: "/admin/banners", label: t("Bannerlar") },
+          { to: "/admin/commissions", label: t("Komisyonlar") }, // ✅ menüye eklendi
+          { to: "/admin/organizations", label: t("Organizasyonlar") },
+          { to: "/admin/restaurants", label: t("Restoranlar") },
+          { to: "/admin/users", label: t("Kullanıcılar") },
+          { to: "/admin/reservations", label: t("Rezervasyonlar") },
+          { to: "/admin/moderation", label: t("Moderasyon") },
+          { to: "/admin/notifications", label: t("Bildirim Gönder") },
         ]}
       />
       <div className="flex-1 space-y-6">
-        <h2 className="text-lg font-semibold">Kullanıcı Detayı</h2>
+        <h2 className="text-lg font-semibold">{t("Kullanıcı Detayı")}</h2>
 
-        <Card title="Bilgiler">
+        <Card title={t("Bilgiler")}>
           {uQ.isLoading ? (
-            "Yükleniyor…"
+            t("Yükleniyor…")
           ) : uQ.error ? (
-            <div className="text-red-600 text-sm">Kullanıcı bilgileri alınamadı.</div>
+            <div className="text-red-600 text-sm">{t("Kullanıcı bilgileri alınamadı.")}</div>
           ) : (
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <span className="text-gray-500 text-sm">Ad</span>
-                <div>{user?.name || "-"}</div>
+                <span className="text-gray-500 text-sm">{t("Ad")}</span>
+                <div>{user?.name || t("-")}</div>
               </div>
               <div>
-                <span className="text-gray-500 text-sm">E-posta</span>
-                <div>{user?.email || "-"}</div>
+                <span className="text-gray-500 text-sm">{t("E-posta")}</span>
+                <div>{user?.email || t("-")}</div>
               </div>
               <div>
-                <span className="text-gray-500 text-sm">Telefon</span>
-                <div>{user?.phone || "-"}</div>
+                <span className="text-gray-500 text-sm">{t("Telefon")}</span>
+                <div>{user?.phone || t("-")}</div>
               </div>
               <div>
-                <span className="text-gray-500 text-sm">Rol</span>
-                <div>{user?.role || "-"}</div>
+                <span className="text-gray-500 text-sm">{t("Rol")}</span>
+                <div>{user?.role || t("-")}</div>
               </div>
               <div>
-                <span className="text-gray-500 text-sm">Durum</span>
-                <div>{user?.banned ? "Banlı" : "Aktif"}</div>
+                <span className="text-gray-500 text-sm">{t("Durum")}</span>
+                <div>{user?.banned ? t("Banlı") : t("Aktif")}</div>
               </div>
             </div>
           )}
         </Card>
 
-        <Card title="İşlemler">
+        <Card title={t("İşlemler")}>
           <div className="flex flex-col gap-3">
             {/* Ban formu */}
             <div className="grid md:grid-cols-3 gap-3">
               <div className="md:col-span-2">
-                <label className="block text-sm text-gray-600 mb-1">Ban Sebebi *</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Ban Sebebi *")}</label>
                 <input
                   type="text"
                   className="w-full border rounded-lg px-3 py-2"
-                  placeholder="Örn: Son 3 rezervasyonda no-show"
+                  placeholder={t("Örn: Son 3 rezervasyonda no-show")}
                   value={banReason}
                   onChange={(e) => setBanReason(e.target.value)}
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Bitiş (opsiyonel)</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Bitiş (opsiyonel)")}</label>
                 <input
                   type="date"
                   className="w-full border rounded-lg px-3 py-2"
@@ -183,9 +185,9 @@ export default function AdminUserDetailPage() {
                 disabled={
                   banMut.isPending || uQ.isLoading || user?.banned || banReason.trim().length === 0
                 }
-                title={banReason.trim() ? "" : "Sebep gerekli"}
+                title={banReason.trim() ? "" : t("Sebep gerekli")}
               >
-                Banla
+                {t("Banla")}
               </button>
 
               <button
@@ -193,20 +195,20 @@ export default function AdminUserDetailPage() {
                 onClick={() => unbanMut.mutate()}
                 disabled={unbanMut.isPending || uQ.isLoading || !user?.banned}
               >
-                Banı Kaldır
+                {t("Banı Kaldır")}
               </button>
 
               <div className="ml-auto flex items-end gap-2">
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Rol</label>
+                  <label className="block text-sm text-gray-600 mb-1">{t("Rol")}</label>
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
                     className="border rounded-lg px-3 py-2"
                   >
-                    <option value="customer">customer</option>
-                    <option value="restaurant">restaurant</option>
-                    <option value="admin">admin</option>
+                    <option value="customer">{t("Müşteri")}</option>
+                    <option value="restaurant">{t("Restaurant")}</option>
+                    <option value="admin">{t("Admin")}</option>
                   </select>
                 </div>
                 <button
@@ -214,7 +216,7 @@ export default function AdminUserDetailPage() {
                   onClick={() => roleMut.mutate()}
                   disabled={roleMut.isPending || uQ.isLoading}
                 >
-                  Rolü Kaydet
+                  {t("Rolü Kaydet")}
                 </button>
               </div>
             </div>
@@ -222,34 +224,34 @@ export default function AdminUserDetailPage() {
         </Card>
 
         {/* RİSK ÖZETİ */}
-        <Card title="Risk Özeti">
+        <Card title={t("Risk Özeti")}>
           {riskQ.isLoading ? (
-            "Yükleniyor…"
+            t("Yükleniyor…")
           ) : riskQ.error ? (
-            <div className="text-red-600 text-sm">Risk verisi alınamadı.</div>
+            <div className="text-red-600 text-sm">{t("Risk verisi alınamadı.")}</div>
           ) : (
             <div className="grid md:grid-cols-3 gap-4">
               <div className="p-3 rounded-lg border">
-                <div className="text-gray-500 text-sm">Risk Skoru</div>
+                <div className="text-gray-500 text-sm">{t("Risk Skoru")}</div>
                 <div className="flex items-center gap-2">
                   <div className="text-2xl font-semibold">{riskScore}</div>
                   {riskScore >= 75 && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
-                      Yüksek risk
+                      {t("Yüksek risk")}
                     </span>
                   )}
                 </div>
               </div>
               <div className="p-3 rounded-lg border">
-                <div className="text-gray-500 text-sm">No-show Sayısı</div>
+                <div className="text-gray-500 text-sm">{t("No-show Sayısı")}</div>
                 <div className="text-2xl font-semibold">
                   {riskQ.data?.snapshot?.noShowCount ?? 0}
                 </div>
               </div>
               <div className="p-3 rounded-lg border">
-                <div className="text-gray-500 text-sm">Ban Durumu</div>
+                <div className="text-gray-500 text-sm">{t("Ban Durumu")}</div>
                 <div className="text-2xl font-semibold">
-                  {riskQ.data?.snapshot?.banned ? "Banlı" : "Aktif"}
+                  {riskQ.data?.snapshot?.banned ? t("Banlı") : t("Aktif")}
                 </div>
                 {riskQ.data?.snapshot?.bannedUntil && (
                   <div className="text-xs text-gray-500 mt-1">
@@ -260,27 +262,27 @@ export default function AdminUserDetailPage() {
 
               <div className="md:col-span-3 grid md:grid-cols-4 gap-4">
                 <div className="p-3 rounded-lg border">
-                  <div className="text-gray-500 text-sm">İyi Katılım Serisi</div>
+                  <div className="text-gray-500 text-sm">{t("İyi Katılım Serisi")}</div>
                   <div className="text-xl font-semibold">
                     {riskQ.data?.snapshot?.consecutiveGoodShows ?? 0}
                   </div>
                 </div>
                 <div className="p-3 rounded-lg border">
-                  <div className="text-gray-500 text-sm">Pencere (gün)</div>
+                  <div className="text-gray-500 text-sm">{t("Pencere (gün)")}</div>
                   <div className="text-xl font-semibold">
                     {riskQ.data?.snapshot?.windowDays ?? 180}
                   </div>
                 </div>
                 <div className="p-3 rounded-lg border">
-                  <div className="text-gray-500 text-sm">Ağırlık Çarpanı</div>
+                  <div className="text-gray-500 text-sm">{t("Ağırlık Çarpanı")}</div>
                   <div className="text-xl font-semibold">
                     {riskQ.data?.snapshot?.multiplier ?? 25}
                   </div>
                 </div>
                 <div className="p-3 rounded-lg border">
-                  <div className="text-gray-500 text-sm">Ban Nedeni</div>
+                  <div className="text-gray-500 text-sm">{t("Ban Nedeni")}</div>
                   <div className="text-sm">
-                    {riskQ.data?.snapshot?.banReason || "-"}
+                    {riskQ.data?.snapshot?.banReason || t("-")}
                   </div>
                 </div>
               </div>
@@ -289,11 +291,11 @@ export default function AdminUserDetailPage() {
         </Card>
 
         {/* RİSK OLAYLARI */}
-        <Card title="Risk Olayları">
+        <Card title={t("Risk Olayları")}>
           <div className="flex flex-wrap items-end gap-3 mb-3">
             <div className="ml-auto flex items-end gap-2">
               <div>
-                <label className="block text-xs text-gray-500">Başlangıç</label>
+                <label className="block text-xs text-gray-500">{t("Başlangıç")}</label>
                 <input
                   type="date"
                   className="border rounded px-2 py-1"
@@ -302,7 +304,7 @@ export default function AdminUserDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500">Bitiş</label>
+                <label className="block text-xs text-gray-500">{t("Bitiş")}</label>
                 <input
                   type="date"
                   className="border rounded px-2 py-1"
@@ -311,7 +313,7 @@ export default function AdminUserDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500">Limit</label>
+                <label className="block text-xs text-gray-500">{t("Limit")}</label>
                 <input
                   type="number"
                   min={1}
@@ -325,30 +327,30 @@ export default function AdminUserDetailPage() {
           </div>
 
           {riskQ.isLoading ? (
-            "Yükleniyor…"
+            t("Yükleniyor…")
           ) : !riskQ.data?.incidents?.length ? (
-            <div className="text-gray-500 text-sm">Kayıt bulunamadı.</div>
+            <div className="text-gray-500 text-sm">{t("Kayıt bulunamadı.")}</div>
           ) : (
             <div className="overflow-auto">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-500">
-                    <th className="py-2 pr-4">Tarih</th>
-                    <th className="py-2 pr-4">Tip</th>
-                    <th className="py-2 pr-4">Ağırlık</th>
-                    <th className="py-2 pr-4">Rezervasyon</th>
+                    <th className="py-2 pr-4">{t("Tarih")}</th>
+                    <th className="py-2 pr-4">{t("Tip")}</th>
+                    <th className="py-2 pr-4">{t("Ağırlık")}</th>
+                    <th className="py-2 pr-4">{t("Rezervasyon")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {riskQ.data.incidents.map((it, idx) => {
                     const tooltip =
                       it.type === "NO_SHOW"
-                        ? "No-show: +25"
+                        ? t("No-show: +25")
                         : it.type === "LATE_CANCEL"
-                        ? "Geç iptal: +12.5"
+                        ? t("Geç iptal: +12.5")
                         : it.type === "UNDER_ATTEND"
-                        ? "Eksik katılım: oran*25*0.25"
-                        : "İyi katılım: -2.5";
+                        ? t("Eksik katılım: oran*25*0.25")
+                        : t("İyi katılım: -2.5");
                     const cls =
                       it.type === "NO_SHOW"
                         ? "bg-red-100 text-red-700 border border-red-200"
@@ -366,7 +368,7 @@ export default function AdminUserDetailPage() {
                             className={`text-xs px-2 py-0.5 rounded-full ${cls}`}
                             title={tooltip}
                           >
-                            {TYPE_LABEL[it.type] ?? it.type}
+                            {t(TYPE_LABEL[it.type] ?? it.type)}
                           </span>
                         </td>
                         <td className="py-2 pr-4">{it.weight}</td>
@@ -375,13 +377,13 @@ export default function AdminUserDetailPage() {
                             <a
                               className="text-blue-600 hover:underline"
                               href={`/admin/reservations?reservationId=${it.reservationId}`}
-                              title="Rezervasyon listesinde aç"
+                              title={t("Rezervasyon listesinde aç")}
                             >
-                              Rezervasyonu aç{" "}
+                              {t("Rezervasyonu aç")}{" "}
                               <code className="text-xs ml-1">{it.reservationId}</code>
                             </a>
                           ) : (
-                            "-"
+                            t("-")
                           )}
                         </td>
                       </tr>

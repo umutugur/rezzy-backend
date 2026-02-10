@@ -15,7 +15,7 @@ export default function Sidebar({ items }: { items: Item[] }) {
     if (u?.role === "restaurant") {
       // Menü yönetimi sekmesini otomatik ekle
       if (!base.find((it) => it.to === "/panel/restaurant/menu")) {
-        base.push({ to: "/panel/restaurant/menu", label: "Menu Yönetimi" });
+        base.push({ to: "/panel/restaurant/menu", label: "Menü Yönetimi" });
       }
     }
     return base;

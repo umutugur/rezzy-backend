@@ -26,6 +26,7 @@ import { showToast } from "../../ui/Toast";
 import { TableDetailModal } from "../components/TableDetailModal";
 import { WalkInOrderModal } from "../components/WalkInOrderModal";
 import { asId } from "../../lib/id";
+import { useI18n, t as i18nT } from "../../i18n";
 
 // =============== Tipler ===============
 type MockTableLike = {
@@ -118,8 +119,8 @@ function mapStatusForTable(t: LiveTable): TableStatus {
 }
 
 function formatLocation(t: LiveTable): string {
-  if (typeof t.floor === "number") return `Kat ${t.floor}`;
-  return "Salon";
+  if (typeof t.floor === "number") return i18nT("Kat {count}", { count: t.floor });
+  return i18nT("Salon");
 }
 
 function minutesSince(iso: string | null): number | undefined {
@@ -133,9 +134,9 @@ function minutesSince(iso: string | null): number | undefined {
 }
 
 function formatTime(v?: string | null): string {
-  if (!v) return "-";
+  if (!v) return i18nT("-");
   const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return "-";
+  if (Number.isNaN(d.getTime())) return i18nT("-");
   return d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
 }
 
@@ -226,6 +227,7 @@ const LiveTablesInner: React.FC<LiveTablesInnerProps> = ({
   waiterCallCount,
   billRequestCount,
 }) => {
+  const { t } = useI18n();
   const { region } = useRestaurantDesktopCurrency();
 
   // Default currency derived from the resolved restaurant region in layout context
@@ -382,13 +384,13 @@ const LiveTablesInner: React.FC<LiveTablesInnerProps> = ({
       refetchDetail();
       const count = Number(data?.notifiedUsers || 0);
       if (count > 0) {
-        showToast(`Hazır bildirimi gönderildi (${count})`, "success");
+        showToast(t("Hazır bildirimi gönderildi ({count})", { count }), "success");
       } else {
-        showToast("Bildirim gönderilemedi (kayıtlı kullanıcı yok).", "info");
+        showToast(t("Bildirim gönderilemedi (kayıtlı kullanıcı yok)."), "info");
       }
     },
     onError: (e: any) => {
-      showToast(e?.response?.data?.message || e?.message || "Bildirim gönderilemedi.", "error");
+      showToast(e?.response?.data?.message || e?.message || t("Bildirim gönderilemedi."), "error");
     },
   });
 
@@ -740,10 +742,10 @@ function handleAddWithModifiers(
 
   const createWalkInMut = useMutation({
     mutationFn: async () => {
-      if (!rid || !selectedTableId) throw new Error("Masa veya restoran bilgisi eksik.");
+      if (!rid || !selectedTableId) throw new Error(t("Masa veya restoran bilgisi eksik."));
 
       const items = Object.values(draftItems).filter((it) => Number(it.qty || 0) > 0);
-      if (items.length === 0) throw new Error("En az bir ürün seçmelisiniz.");
+      if (items.length === 0) throw new Error(t("En az bir ürün seçmelisiniz."));
 
       // ✅ Shape items to API contract
       const payloadItems = items.map((it) => ({
@@ -768,7 +770,7 @@ function handleAddWithModifiers(
     onSuccess: () => {
       if (selectedTableId) selfWalkInRef.current[selectedTableId] = Date.now();
 
-      showToast("Yeni sipariş eklendi.", "success");
+      showToast(t("Yeni sipariş eklendi."), "success");
       setIsOrderModalOpen(false);
       setDraftItems({});
       setGuestName("");
@@ -776,7 +778,7 @@ function handleAddWithModifiers(
       refetchDetail();
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.message || err?.message || "Walk-in sipariş oluşturulamadı.";
+      const msg = err?.response?.data?.message || err?.message || t("Walk-in sipariş oluşturulamadı.");
       showToast(msg, "error");
     },
   });
@@ -810,7 +812,7 @@ function handleAddWithModifiers(
     if (nested) return String(nested);
 
     const id = String(it?.itemId ?? it?.menuItemId ?? it?.productId ?? "").trim();
-    return id ? `Ürün (${id})` : "Ürün";
+    return id ? t("Ürün ({id})", { id }) : t("Ürün");
   }
 
   function resolveOrderItemModifierText(it: any): string {
@@ -942,7 +944,7 @@ function handleAddWithModifiers(
       td?.table?.restaurantName ||
       td?.table?.restaurant?.name ||
       td?.table?.name ||
-      "Restoran";
+      t("Restoran");
 
     const cur: CurrencyCode =
       td?.session?.currency === "GBP"
@@ -985,24 +987,24 @@ function handleAddWithModifiers(
               `;
             })
             .join("")
-        : `<div class="small">Ürün yok.</div>`;
+        : `<div class="small">${t("Ürün yok.")}</div>`;
 
     const html = `
       <div class="center header-name">${restaurantName}</div>
-      <div class="center header-sub">SON SİPARİŞ ÖZETİ</div>
+      <div class="center header-sub">${t("SON SİPARİŞ ÖZETİ")}</div>
       <div class="line"></div>
-      <div class="row small"><span>Tarih</span><span>${dateStr}</span></div>
-      <div class="row small"><span>Masa</span><span>${td.table?.name ?? "-"}</span></div>
+      <div class="row small"><span>${t("Tarih")}</span><span>${dateStr}</span></div>
+      <div class="row small"><span>${t("Masa")}</span><span>${td.table?.name ?? t("-")}</span></div>
       <div class="line"></div>
-      <div class="row header-row"><span>Ürün</span><span>Tutar</span></div>
+      <div class="row header-row"><span>${t("Ürün")}</span><span>${t("Tutar")}</span></div>
       ${itemsHtml}
       <div class="line"></div>
-      <div class="row total"><span>Toplam</span><span>${formatMoney(Number(last.total || 0), cur)}</span></div>
+      <div class="row total"><span>${t("Toplam")}</span><span>${formatMoney(Number(last.total || 0), cur)}</span></div>
       <div class="line"></div>
-      <div class="center tiny">Bu fiş Rezvix masa yönetim sistemi ile oluşturulmuştur.</div>
+      <div class="center tiny">${t("Bu fiş Rezvix masa yönetim sistemi ile oluşturulmuştur.")}</div>
     `;
 
-    printContent("Son Sipariş", html);
+    printContent(t("Son Sipariş"), html);
   }
 
   function handlePrintFullBill(td: any) {
@@ -1012,7 +1014,7 @@ function handleAddWithModifiers(
       td?.table?.restaurantName ||
       td?.table?.restaurant?.name ||
       td?.table?.name ||
-      "Restoran";
+      t("Restoran");
 
     const cur: CurrencyCode =
       td?.session?.currency === "GBP"
@@ -1030,7 +1032,7 @@ function handleAddWithModifiers(
 
     const ordersHtml =
       orders.length === 0
-        ? `<div class="small">Henüz sipariş yok.</div>`
+        ? `<div class="small">${t("Henüz sipariş yok.")}</div>`
         : orders
             .map((o: any, index: number) => {
               const timeStr = new Date(o.createdAt).toLocaleTimeString("tr-TR", {
@@ -1066,14 +1068,14 @@ function handleAddWithModifiers(
                         `;
                       })
                       .join("")
-                  : `<div class="small">Ürün yok.</div>`;
+                  : `<div class="small">${t("Ürün yok.")}</div>`;
 
               return `
                 <div class="small">
                   <div class="line"></div>
-                  <div class="row"><span>Sipariş ${index + 1}</span><span>${timeStr}</span></div>
+                  <div class="row"><span>${t("Sipariş {count}", { count: index + 1 })}</span><span>${timeStr}</span></div>
                   ${itemsHtml}
-                  <div class="row total"><span>Ara Toplam</span><span>${formatMoney(Number(o.total || 0), cur)}</span></div>
+                  <div class="row total"><span>${t("Ara Toplam")}</span><span>${formatMoney(Number(o.total || 0), cur)}</span></div>
                 </div>
               `;
             })
@@ -1085,24 +1087,24 @@ function handleAddWithModifiers(
 
     const footer = `
       <div class="line"></div>
-      <div class="row small"><span>Kart</span><span>${formatMoney(card, cur)}</span></div>
-      <div class="row small"><span>Nakit / Mekanda</span><span>${formatMoney(payAtVenue, cur)}</span></div>
-      <div class="row total"><span>Genel Toplam</span><span>${formatMoney(grand, cur)}</span></div>
+      <div class="row small"><span>${t("Kart")}</span><span>${formatMoney(card, cur)}</span></div>
+      <div class="row small"><span>${t("Nakit / Mekanda")}</span><span>${formatMoney(payAtVenue, cur)}</span></div>
+      <div class="row total"><span>${t("Genel Toplam")}</span><span>${formatMoney(grand, cur)}</span></div>
       <div class="line"></div>
     `;
 
     const html = `
       <div class="center header-name">${restaurantName}</div>
-      <div class="center header-sub">HESAP DÖKÜMÜ</div>
+      <div class="center header-sub">${t("HESAP DÖKÜMÜ")}</div>
       <div class="line"></div>
-      <div class="row small"><span>Tarih</span><span>${nowStr}</span></div>
-      <div class="row small"><span>Masa</span><span>${td.table?.name ?? "-"}</span></div>
+      <div class="row small"><span>${t("Tarih")}</span><span>${nowStr}</span></div>
+      <div class="row small"><span>${t("Masa")}</span><span>${td.table?.name ?? t("-")}</span></div>
       ${ordersHtml}
       ${footer}
-      <div class="center tiny">Rezervasyon ve masa yönetimi Rezvix ile sağlanmaktadır.</div>
+      <div class="center tiny">${t("Rezervasyon ve masa yönetimi Rezvix ile sağlanmaktadır.")}</div>
     `;
 
-    printContent("Adisyon", html);
+    printContent(t("Adisyon"), html);
   }
 
   const selectedTable = selectedTableId
@@ -1126,24 +1128,24 @@ const selectedTotal = Object.values(draftItems).reduce(
           {isLoading && (
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">⏳</div>
-              <div className="rezvix-empty__title">Masalar getiriliyor…</div>
-              <div className="rezvix-empty__text">Canlı masa durumları birkaç saniye içinde yüklenecek.</div>
+              <div className="rezvix-empty__title">{t("Masalar getiriliyor…")}</div>
+              <div className="rezvix-empty__text">{t("Canlı masa durumları birkaç saniye içinde yüklenecek.")}</div>
             </div>
           )}
 
           {isError && !isLoading && (
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">⚠️</div>
-              <div className="rezvix-empty__title">Masalar yüklenemedi</div>
-              <div className="rezvix-empty__text">Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı kontrol edin.</div>
+              <div className="rezvix-empty__title">{t("Masalar yüklenemedi")}</div>
+              <div className="rezvix-empty__text">{t("Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı kontrol edin.")}</div>
             </div>
           )}
 
           {!isLoading && !isError && !hasData && (
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">🪑</div>
-              <div className="rezvix-empty__title">Tanımlı masa bulunamadı</div>
-              <div className="rezvix-empty__text">Masa planı oluşturulduğunda, canlı masa durumu burada görünecek.</div>
+              <div className="rezvix-empty__title">{t("Tanımlı masa bulunamadı")}</div>
+              <div className="rezvix-empty__text">{t("Masa planı oluşturulduğunda, canlı masa durumu burada görünecek.")}</div>
             </div>
           )}
 
@@ -1214,7 +1216,7 @@ const selectedTotal = Object.values(draftItems).reduce(
 
       <WalkInOrderModal
         open={isOrderModalOpen}
-        tableName={selectedTableName || "Seçili masa"}
+        tableName={selectedTableName || t("Seçili masa")}
         guestName={guestName}
         onChangeGuestName={setGuestName}
         categoriesLoading={resolvedMenuLoading}
@@ -1241,6 +1243,7 @@ const selectedTotal = Object.values(draftItems).reduce(
 };
 
 export const LiveTablesPage: React.FC = () => {
+  const { t } = useI18n();
   const user = authStore.getUser();
 
   const fallbackMembershipRestaurantId = user?.restaurantMemberships?.[0]?.id ?? null;
@@ -1277,18 +1280,18 @@ export const LiveTablesPage: React.FC = () => {
   return (
     <RestaurantDesktopLayout
       activeNav="tables"
-      title="Canlı Masalar"
-      subtitle="Lokal adisyonlar, Rezvix ve QR siparişleri tek ekranda."
+      title={t("Canlı Masalar")}
+      subtitle={t("Lokal adisyonlar, Rezvix ve QR siparişleri tek ekranda.")}
       summaryChips={[
-        { label: "Dolu masa", value: `${occupiedCount} adet`, tone: "success" },
+        { label: t("Dolu masa"), value: t("{count} adet", { count: occupiedCount }), tone: "success" },
         {
-          label: "Garson çağrısı",
-          value: `${waiterCallCount} masa`,
+          label: t("Garson çağrısı"),
+          value: t("{count} masa", { count: waiterCallCount }),
           tone: waiterCallCount > 0 ? "danger" : "neutral",
         },
         {
-          label: "Hesap isteyen",
-          value: `${billRequestCount} masa`,
+          label: t("Hesap isteyen"),
+          value: t("{count} masa", { count: billRequestCount }),
           tone: billRequestCount > 0 ? "warning" : "neutral",
         },
       ]}

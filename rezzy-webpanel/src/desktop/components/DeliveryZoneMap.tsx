@@ -1,5 +1,6 @@
 import React from "react";
 import { MapContainer, TileLayer, Polygon, CircleMarker, Popup, Pane } from "react-leaflet";
+import { t as i18nT } from "../../i18n";
 
 export type HexAxial = { q: number; r: number };
 
@@ -122,7 +123,7 @@ function makeDefaultGrid(ringCount: number): { coords: HexAxial[]; baseZones: De
 
   const baseZones: DeliveryHexZone[] = coords.map((ax, i) => ({
     id: axialId(ax),                 // ✅ artık index değil axial
-    name: `Bölge ${i + 1}`,
+    name: i18nT("Bölge {count}", { count: i + 1 }),
     isActive: false,
     minOrderAmount: 0,
     feeAmount: 0,
@@ -196,10 +197,10 @@ export default function DeliveryZoneMap({
               }}
             >
               <Popup pane="rezvixPopupPane" autoPan>
-                <div style={{ fontSize: 12 }}>
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>Restoran Konumu</div>
+                  <div style={{ fontSize: 12 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{i18nT("Restoran Konumu")}</div>
                   <div>
-                    Lat: {center.lat.toFixed(6)} / Lng: {center.lng.toFixed(6)}
+                    {i18nT("Lat")}: {center.lat.toFixed(6)} / {i18nT("Lng")}: {center.lng.toFixed(6)}
                   </div>
                 </div>
               </Popup>
@@ -223,7 +224,7 @@ export default function DeliveryZoneMap({
               fillOpacity: z.isActive ? (isSelected ? 0.28 : 0.18) : isSelected ? 0.14 : 0.08,
             } as any;
 
-            const title = typeof z.name === "string" && z.name.trim() ? z.name : `Bölge ${i + 1}`;
+            const title = typeof z.name === "string" && z.name.trim() ? z.name : i18nT("Bölge {count}", { count: i + 1 });
 
             return (
               <Polygon
@@ -240,13 +241,13 @@ export default function DeliveryZoneMap({
                   <div style={{ fontSize: 12, minWidth: 200 }}>
                     <div style={{ fontWeight: 700, marginBottom: 6 }}>{title}</div>
                     <div style={{ marginBottom: 6 }}>
-                      Durum: <b>{z.isActive ? "Açık" : "Kapalı"}</b>
+                      {i18nT("Durum")}: <b>{z.isActive ? i18nT("Açık") : i18nT("Kapalı")}</b>
                     </div>
                     <div style={{ marginBottom: 6 }}>
-                      Minimum sepet: <b>{Number(z.minOrderAmount || 0).toFixed(0)}</b>
+                      {i18nT("Minimum sepet")}: <b>{Number(z.minOrderAmount || 0).toFixed(0)}</b>
                     </div>
                     <div style={{ marginBottom: 8 }}>
-                      Teslimat ücreti: <b>{Number(z.feeAmount || 0).toFixed(0)}</b>
+                      {i18nT("Teslimat ücreti")}: <b>{Number(z.feeAmount || 0).toFixed(0)}</b>
                     </div>
 
                     <div style={{ display: "flex", gap: 8 }}>
@@ -262,7 +263,7 @@ export default function DeliveryZoneMap({
                           cursor: "pointer",
                         }}
                       >
-                        {z.isActive ? "Kapat" : "Aç"}
+                        {z.isActive ? i18nT("Kapat") : i18nT("Aç")}
                       </button>
                     </div>
                   </div>

@@ -9,6 +9,7 @@ import { authStore } from "../../store/auth";
 import { api, restaurantGetReportsOverview } from "../../api/client";
 import { deliveryListOrders, type DeliveryOrder } from "../../api/delivery";
 import { asId } from "../../lib/id";
+import { useI18n, t as i18nT } from "../../i18n";
 
 // ---- Tipler (Dashboard ile aynı rezervasyon modeli) ----
 type Row = {
@@ -40,30 +41,30 @@ function fmtDT(iso: string) {
 }
 
 const trStatus: Record<string, string> = {
-  pending: "Bekleyen",
-  confirmed: "Onaylı",
-  arrived: "Geldi",
-  no_show: "Gelmedi",
-  cancelled: "İptal",
+  pending: i18nT("Bekleyen"),
+  confirmed: i18nT("Onaylı"),
+  arrived: i18nT("Geldi"),
+  no_show: i18nT("Gelmedi"),
+  cancelled: i18nT("İptal"),
 };
 function fmtStatus(s: string) {
-  return trStatus[s] ?? s;
+  return trStatus[s] ?? i18nT(s);
 }
 
 const deliveryStatusTr: Record<string, string> = {
-  new: "Yeni",
-  accepted: "Kabul edildi",
-  on_the_way: "Yolda",
-  created: "Oluşturuldu",
-  preparing: "Hazırlanıyor",
-  ready: "Hazır",
-  assigned: "Kuryeye verildi",
-  picked_up: "Yolda",
-  delivered: "Teslim edildi",
-  cancelled: "İptal",
+  new: i18nT("Yeni"),
+  accepted: i18nT("Kabul edildi"),
+  on_the_way: i18nT("Yolda"),
+  created: i18nT("Oluşturuldu"),
+  preparing: i18nT("Hazırlanıyor"),
+  ready: i18nT("Hazır"),
+  assigned: i18nT("Kuryeye verildi"),
+  picked_up: i18nT("Yolda"),
+  delivered: i18nT("Teslim edildi"),
+  cancelled: i18nT("İptal"),
 };
 function fmtDeliveryStatus(s: string) {
-  return deliveryStatusTr[s] ?? s;
+  return deliveryStatusTr[s] ?? i18nT(s);
 }
 
 function fmtDayLabel(iso: string) {
@@ -260,11 +261,12 @@ async function fetchRecentInRange(rid: string, sel: string): Promise<Row[]> {
 // ---- Component ----
 
 export const ReportsPage: React.FC = () => {
+  const { t } = useI18n();
   return (
     <RestaurantDesktopLayout
       activeNav="reports"
-      title="Raporlar"
-      subtitle="Ciro, depozito ve kanal bazlı özetler."
+      title={t("Raporlar")}
+      subtitle={t("Ciro, depozito ve kanal bazlı özetler.")}
     >
       <ReportsInner />
     </RestaurantDesktopLayout>
@@ -272,6 +274,7 @@ export const ReportsPage: React.FC = () => {
 };
 
 const ReportsInner: React.FC = () => {
+  const { t } = useI18n();
   const user = authStore.getUser();
 
   // ✅ Currency + active restaurant context is resolved at layout level
@@ -330,9 +333,9 @@ const ReportsInner: React.FC = () => {
     return (
       <div className="rezvix-empty">
         <div className="rezvix-empty__icon">⚠️</div>
-        <div className="rezvix-empty__title">Restoran bulunamadı</div>
+        <div className="rezvix-empty__title">{t("Restoran bulunamadı")}</div>
         <div className="rezvix-empty__text">
-          Bu ekranı kullanmak için oturum açmış bir restoran hesabı gerekir.
+          {t("Bu ekranı kullanmak için oturum açmış bir restoran hesabı gerekir.")}
         </div>
       </div>
     );
@@ -367,7 +370,7 @@ const ReportsInner: React.FC = () => {
               view === "reservations" ? "#fff" : "var(--rezvix-text-main)",
           }}
         >
-          Rezervasyon Özeti
+          {t("Rezervasyon Özeti")}
         </button>
         <button
           onClick={() => setView("delivery")}
@@ -382,7 +385,7 @@ const ReportsInner: React.FC = () => {
             color: view === "delivery" ? "#fff" : "var(--rezvix-text-main)",
           }}
         >
-          Paket Servis
+          {t("Paket Servis")}
         </button>
         <button
           onClick={() => setView("advanced")}
@@ -397,7 +400,7 @@ const ReportsInner: React.FC = () => {
             color: view === "advanced" ? "#fff" : "var(--rezvix-text-main)",
           }}
         >
-          Gelişmiş Raporlar
+          {t("Gelişmiş Raporlar")}
         </button>
       </div>
 
@@ -421,10 +424,10 @@ const ReportsInner: React.FC = () => {
               fontSize: 12,
             }}
           >
-            <option value="today">Bugün</option>
-            <option value="7">Son 7 gün</option>
-            <option value="30">Son 30 gün</option>
-            <option value="90">Son 90 gün</option>
+            <option value="today">{t("Bugün")}</option>
+            <option value="7">{t("Son 7 gün")}</option>
+            <option value="30">{t("Son 30 gün")}</option>
+            <option value="90">{t("Son 90 gün")}</option>
           </select>
         </div>
       )}
@@ -449,11 +452,11 @@ const ReportsInner: React.FC = () => {
               fontSize: 12,
             }}
           >
-            <option value="today">Bugün</option>
-            <option value="yesterday">Dün</option>
-            <option value="week">Haftalık (son 7 gün)</option>
-            <option value="month">Aylık (son 30 gün)</option>
-            <option value="custom">2 tarih arası</option>
+            <option value="today">{t("Bugün")}</option>
+            <option value="yesterday">{t("Dün")}</option>
+            <option value="week">{t("Haftalık (son 7 gün)")}</option>
+            <option value="month">{t("Aylık (son 30 gün)")}</option>
+            <option value="custom">{t("2 tarih arası")}</option>
           </select>
           {deliverySel === "custom" && (
             <>
@@ -493,9 +496,9 @@ const ReportsInner: React.FC = () => {
           {summary.isLoading && (
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">⏳</div>
-              <div className="rezvix-empty__title">Raporlar getiriliyor…</div>
+              <div className="rezvix-empty__title">{t("Raporlar getiriliyor…")}</div>
               <div className="rezvix-empty__text">
-                Seçili tarih aralığındaki rezervasyonlar analiz ediliyor.
+                {t("Seçili tarih aralığındaki rezervasyonlar analiz ediliyor.")}
               </div>
             </div>
           )}
@@ -503,10 +506,9 @@ const ReportsInner: React.FC = () => {
           {summary.error && !summary.isLoading && (
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">⚠️</div>
-              <div className="rezvix-empty__title">Raporlar yüklenemedi</div>
+              <div className="rezvix-empty__title">{t("Raporlar yüklenemedi")}</div>
               <div className="rezvix-empty__text">
-                Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı
-                kontrol edin.
+                {t("Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı kontrol edin.")}
               </div>
             </div>
           )}
@@ -517,11 +519,10 @@ const ReportsInner: React.FC = () => {
               <div className="rezvix-empty">
                 <div className="rezvix-empty__icon">📊</div>
                 <div className="rezvix-empty__title">
-                  Seçili tarih aralığında rezervasyon yok
+                  {t("Seçili tarih aralığında rezervasyon yok")}
                 </div>
                 <div className="rezvix-empty__text">
-                  Üstten tarih aralığını değiştirerek farklı bir dönem
-                  görüntüleyebilirsiniz.
+                  {t("Üstten tarih aralığını değiştirerek farklı bir dönem görüntüleyebilirsiniz.")}
                 </div>
               </div>
             )}
@@ -547,10 +548,10 @@ const ReportsInner: React.FC = () => {
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">⏳</div>
               <div className="rezvix-empty__title">
-                Gelişmiş raporlar hazırlanıyor…
+                {t("Gelişmiş raporlar hazırlanıyor…")}
               </div>
               <div className="rezvix-empty__text">
-                Rezervasyon ve sipariş verileri derleniyor.
+                {t("Rezervasyon ve sipariş verileri derleniyor.")}
               </div>
             </div>
           )}
@@ -559,11 +560,10 @@ const ReportsInner: React.FC = () => {
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">⚠️</div>
               <div className="rezvix-empty__title">
-                Gelişmiş raporlar yüklenemedi
+                {t("Gelişmiş raporlar yüklenemedi")}
               </div>
               <div className="rezvix-empty__text">
-                Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı
-                kontrol edin.
+                {t("Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı kontrol edin.")}
               </div>
             </div>
           )}
@@ -577,11 +577,10 @@ const ReportsInner: React.FC = () => {
               <div className="rezvix-empty">
                 <div className="rezvix-empty__icon">📊</div>
                 <div className="rezvix-empty__title">
-                  Seçili aralıkta veri bulunamadı
+                  {t("Seçili aralıkta veri bulunamadı")}
                 </div>
                 <div className="rezvix-empty__text">
-                  Rezervasyon, masa siparişi ya da paket servis kaydı yok. Tarih
-                  aralığını genişletebilirsiniz.
+                  {t("Rezervasyon, masa siparişi ya da paket servis kaydı yok. Tarih aralığını genişletebilirsiniz.")}
                 </div>
               </div>
             )}
@@ -607,10 +606,10 @@ const ReportsInner: React.FC = () => {
             <div className="rezvix-empty">
               <div className="rezvix-empty__icon">⏳</div>
               <div className="rezvix-empty__title">
-                Paket servis raporları hazırlanıyor…
+                {t("Paket servis raporları hazırlanıyor…")}
               </div>
               <div className="rezvix-empty__text">
-                Seçili tarih aralığındaki siparişler listeleniyor.
+                {t("Seçili tarih aralığındaki siparişler listeleniyor.")}
               </div>
             </div>
           )}
@@ -674,6 +673,7 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
   recent,
   currencySymbol,
 }) => {
+  const { t } = useI18n();
   const totalReservations =
     counts.total ??
     ((counts.pending ?? 0) +
@@ -687,9 +687,9 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
       {/* Sol kolon: özet kartlar */}
       <div className="rezvix-board-column">
         <div className="rezvix-board-column__header">
-          <div className="rezvix-board-column__title">Özet</div>
+          <div className="rezvix-board-column__title">{t("Özet")}</div>
           <div className="rezvix-board-column__count">
-            {totalReservations || 0} rezervasyon
+            {t("{count} rezervasyon", { count: totalReservations || 0 })}
           </div>
         </div>
 
@@ -705,7 +705,7 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
                 <span className="rezvix-kitchen-ticket__title">
-                  Toplam Rezervasyon
+                  {t("Toplam Rezervasyon")}
                 </span>
               </div>
               <div
@@ -721,7 +721,7 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
 
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">Onaylı</span>
+                <span className="rezvix-kitchen-ticket__title">{t("Onaylı")}</span>
               </div>
               <div
                 style={{
@@ -737,7 +737,7 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
                 <span className="rezvix-kitchen-ticket__title">
-                  Gelen (Arrived)
+                  {t("Gelen (Arrived)")}
                 </span>
               </div>
               <div
@@ -753,7 +753,7 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
 
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">İptal</span>
+                <span className="rezvix-kitchen-ticket__title">{t("İptal")}</span>
               </div>
               <div
                 style={{
@@ -779,12 +779,12 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
                 <span className="rezvix-kitchen-ticket__title">
-                  {"Toplam Ciro (" + currencySymbol + ")"}
+                  {t("Toplam Ciro ({symbol})", { symbol: currencySymbol })}
                 </span>
               </div>
               <div className="rezvix-kitchen-ticket__meta">
-                Sadece <strong>Geldi (arrived)</strong> rezervasyonların{" "}
-                <code>totalPrice</code> tutarı.
+                {t("Sadece")} <strong>{t("Geldi (arrived)")}</strong> {t("rezervasyonların")}{" "}
+                <code>totalPrice</code> {t("tutarı")}.
               </div>
               <div
                 style={{
@@ -800,12 +800,12 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
                 <span className="rezvix-kitchen-ticket__title">
-                  {"Toplam Depozito (" + currencySymbol + ")"}
+                  {t("Toplam Depozito ({symbol})", { symbol: currencySymbol })}
                 </span>
               </div>
               <div className="rezvix-kitchen-ticket__meta">
-                <strong>Onaylı</strong> ve <strong>Gelmedi</strong>{" "}
-                rezervasyonların <code>depositAmount</code> toplamı.
+                <strong>{t("Onaylı")}</strong> {t("ve")} <strong>{t("Gelmedi")}</strong>{" "}
+                {t("rezervasyonların")} <code>depositAmount</code> {t("toplamı")}.
               </div>
               <div
                 style={{
@@ -824,19 +824,19 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
       {/* Sağ kolon: seçili aralıktaki son rezervasyonlar */}
       <div className="rezvix-board-column">
         <div className="rezvix-board-column__header">
-          <div className="rezvix-board-column__title">Son Rezervasyonlar</div>
+          <div className="rezvix-board-column__title">{t("Son Rezervasyonlar")}</div>
           <div className="rezvix-board-column__count">
-            {recent.data?.length ?? 0} kayıt
+            {t("{count} kayıt", { count: recent.data?.length ?? 0 })}
           </div>
         </div>
         <div className="rezvix-board-column__body">
-          {recent.isLoading && <div>Yükleniyor…</div>}
+          {recent.isLoading && <div>{t("Yükleniyor…")}</div>}
           {!recent.isLoading && (recent.data?.length ?? 0) === 0 && (
             <div className="rezvix-empty" style={{ minHeight: 120 }}>
               <div className="rezvix-empty__icon">📭</div>
-              <div className="rezvix-empty__title">Kayıt yok</div>
+              <div className="rezvix-empty__title">{t("Kayıt yok")}</div>
               <div className="rezvix-empty__text">
-                Seçili tarih aralığında gösterilecek rezervasyon bulunamadı.
+                {t("Seçili tarih aralığında gösterilecek rezervasyon bulunamadı.")}
               </div>
             </div>
           )}
@@ -863,10 +863,10 @@ const ReservationSummaryView: React.FC<ReservationSummaryViewProps> = ({
                       color: "var(--rezvix-text-soft)",
                     }}
                   >
-                    <th style={{ padding: "6px 10px" }}>Tarih</th>
-                    <th style={{ padding: "6px 10px" }}>Kullanıcı</th>
-                    <th style={{ padding: "6px 10px" }}>Kişi</th>
-                    <th style={{ padding: "6px 10px" }}>Durum</th>
+                    <th style={{ padding: "6px 10px" }}>{t("Tarih")}</th>
+                    <th style={{ padding: "6px 10px" }}>{t("Kullanıcı")}</th>
+                    <th style={{ padding: "6px 10px" }}>{t("Kişi")}</th>
+                    <th style={{ padding: "6px 10px" }}>{t("Durum")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -991,6 +991,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
   data,
   currencySymbol,
 }) => {
+  const { t } = useI18n();
   const { reservations, orders, range, tables, delivery } = data;
 
   const totalReservations = reservations.totalCount;
@@ -1162,38 +1163,38 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
                 <span className="rezvix-kitchen-ticket__title">
-                  Toplam Rezervasyon
+                  {t("Toplam Rezervasyon")}
                 </span>
               </div>
               <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {totalReservations}
               </div>
               <div className="rezvix-kitchen-ticket__meta">
-                Bekleyen + onaylı + gelen + iptal + no-show
+                {t("Bekleyen + onaylı + gelen + iptal + no-show")}
               </div>
             </div>
 
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">Gelme Oranı</span>
+                <span className="rezvix-kitchen-ticket__title">{t("Gelme Oranı")}</span>
               </div>
               <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {arriveRate.toFixed(1)}%
               </div>
               <div className="rezvix-kitchen-ticket__meta">
-                (Gelen / Gelen + Gelmedi)
+                {t("(Gelen / Gelen + Gelmedi)")}
               </div>
             </div>
 
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">No-show Oranı</span>
+                <span className="rezvix-kitchen-ticket__title">{t("No-show Oranı")}</span>
               </div>
               <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {noShowRate.toFixed(1)}%
               </div>
               <div className="rezvix-kitchen-ticket__meta">
-                (Gelmedi / Gelen + Gelmedi)
+                {t("(Gelmedi / Gelen + Gelmedi)")}
               </div>
             </div>
           </div>
@@ -1202,7 +1203,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
           {reservations.byDay.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                Günlük Rezervasyon & Depozito & Ciro
+                {t("Günlük Rezervasyon & Depozito & Ciro")}
               </div>
               <div
                 style={{
@@ -1222,7 +1223,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 >
                   <thead>
                     <tr style={{ textAlign: "left", color: "var(--rezvix-text-soft)" }}>
-                      <th style={{ padding: "6px 8px" }}>Tarih</th>
+                      <th style={{ padding: "6px 8px" }}>{t("Tarih")}</th>
                       <th style={{ padding: "6px 8px" }}>Rez.</th>
                       <th style={{ padding: "6px 8px" }}>{`Depozito (${currencySymbol})`}</th>
                       <th style={{ padding: "6px 8px" }}>{`Ciro (${currencySymbol})`}</th>
@@ -1247,7 +1248,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
           {topItems.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                En çok satan ürünler (Masa)
+                {t("En çok satan ürünler (Masa)")}
               </div>
               <div
                 style={{
@@ -1267,9 +1268,9 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 >
                   <thead>
                     <tr style={{ textAlign: "left", color: "var(--rezvix-text-soft)" }}>
-                      <th style={{ padding: "6px 8px" }}>Ürün</th>
-                      <th style={{ padding: "6px 8px" }}>Adet</th>
-                      <th style={{ padding: "6px 8px" }}>{`Ciro (${currencySymbol})`}</th>
+                      <th style={{ padding: "6px 8px" }}>{t("Ürün")}</th>
+                      <th style={{ padding: "6px 8px" }}>{t("Adet")}</th>
+                      <th style={{ padding: "6px 8px" }}>{t("Ciro ({symbol})", { symbol: currencySymbol })}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1291,8 +1292,8 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
       {/* SAĞ: Kanal bazlı masa siparişi performansı + adisyon + paket servis */}
       <div className="rezvix-board-column">
         <div className="rezvix-board-column__header">
-          <div className="rezvix-board-column__title">Masa & Menü</div>
-          <div className="rezvix-board-column__count">{totalOrders} sipariş</div>
+          <div className="rezvix-board-column__title">{t("Masa & Menü")}</div>
+          <div className="rezvix-board-column__count">{t("{count} sipariş", { count: totalOrders })}</div>
         </div>
 
         <div className="rezvix-board-column__body" style={{ gap: 12 }}>
@@ -1307,9 +1308,9 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 600 }}>Paket Servis</div>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>{t("Paket Servis")}</div>
                 <div style={{ fontSize: 11, color: "var(--rezvix-text-soft)" }}>
-                  {totalDelivery} sipariş
+                  {t("{count} sipariş", { count: totalDelivery })}
                 </div>
               </div>
 
@@ -1323,24 +1324,24 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
               >
                 <div className="rezvix-kitchen-ticket">
                   <div className="rezvix-kitchen-ticket__header">
-                    <span className="rezvix-kitchen-ticket__title">Brüt ciro</span>
+                    <span className="rezvix-kitchen-ticket__title">{t("Brüt ciro")}</span>
                   </div>
                   <div style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>
                     {fmtMoney(delivery.grossTotal || 0, currencySymbol)}
                   </div>
                   <div className="rezvix-kitchen-ticket__meta">
-                    Ürün + teslimat ücreti dahil
+                    {t("Ürün + teslimat ücreti dahil")}
                   </div>
                 </div>
                 <div className="rezvix-kitchen-ticket">
                   <div className="rezvix-kitchen-ticket__header">
-                    <span className="rezvix-kitchen-ticket__title">Net ciro</span>
+                    <span className="rezvix-kitchen-ticket__title">{t("Net ciro")}</span>
                   </div>
                   <div style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>
                     {fmtMoney(delivery.netTotal || 0, currencySymbol)}
                   </div>
                   <div className="rezvix-kitchen-ticket__meta">
-                    İade/iptal/indirim sonrası
+                    {t("İade/iptal/indirim sonrası")}
                   </div>
                 </div>
               </div>
@@ -1354,7 +1355,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                       color: "var(--rezvix-text-main)",
                     }}
                   >
-                    Durum kırılımı
+                    {t("Durum kırılımı")}
                   </div>
                   <div
                     style={{
@@ -1375,8 +1376,8 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                             background: "rgba(0,0,0,0.02)",
                           }}
                         >
-                          <div style={{ fontWeight: 600 }}>{k}</div>
-                          <div>{v} sipariş</div>
+                          <div style={{ fontWeight: 600 }}>{fmtDeliveryStatus(k)}</div>
+                          <div>{t("{count} sipariş", { count: v })}</div>
                         </div>
                       ))}
                   </div>
@@ -1386,7 +1387,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
               {delivery.byDay?.length > 0 && (
                 <div style={{ marginTop: 10 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                    Günlük paket servis (sipariş / brüt / net)
+                    {t("Günlük paket servis (sipariş / brüt / net)")}
                   </div>
                   <div
                     style={{
@@ -1400,10 +1401,10 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                       <thead>
                         <tr style={{ textAlign: "left", color: "var(--rezvix-text-soft)" }}>
-                          <th style={{ padding: "6px 8px" }}>Tarih</th>
-                          <th style={{ padding: "6px 8px" }}>Sipariş</th>
-                          <th style={{ padding: "6px 8px" }}>{`Brüt (${currencySymbol})`}</th>
-                          <th style={{ padding: "6px 8px" }}>{`Net (${currencySymbol})`}</th>
+                          <th style={{ padding: "6px 8px" }}>{t("Tarih")}</th>
+                          <th style={{ padding: "6px 8px" }}>{t("Sipariş")}</th>
+                          <th style={{ padding: "6px 8px" }}>{t("Brüt ({symbol})", { symbol: currencySymbol })}</th>
+                          <th style={{ padding: "6px 8px" }}>{t("Net ({symbol})", { symbol: currencySymbol })}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1424,7 +1425,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
               {deliveryTopItems.length > 0 && (
                 <div style={{ marginTop: 10 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                    En çok satan ürünler (Paket)
+                    {t("En çok satan ürünler (Paket)")}
                   </div>
                   <div
                     style={{
@@ -1438,9 +1439,9 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                       <thead>
                         <tr style={{ textAlign: "left", color: "var(--rezvix-text-soft)" }}>
-                          <th style={{ padding: "6px 8px" }}>Ürün</th>
-                          <th style={{ padding: "6px 8px" }}>Adet</th>
-                          <th style={{ padding: "6px 8px" }}>{`Ciro (${currencySymbol})`}</th>
+                          <th style={{ padding: "6px 8px" }}>{t("Ürün")}</th>
+                          <th style={{ padding: "6px 8px" }}>{t("Adet")}</th>
+                          <th style={{ padding: "6px 8px" }}>{t("Ciro ({symbol})", { symbol: currencySymbol })}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1469,7 +1470,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
             }}
           >
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-              Masa siparişi cirosu kanal dağılımı
+              {t("Masa siparişi cirosu kanal dağılımı")}
             </div>
             <div
               style={{
@@ -1523,7 +1524,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
               }}
             >
               <ChannelLegendItem
-                label="Walk-in"
+                label={t("Walk-in")}
                 color="rgba(46, 204, 113, 0.9)"
                 amount={walkinRev}
                 count={orders.countsBySource.WALK_IN || 0}
@@ -1531,7 +1532,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 currencySymbol={currencySymbol}
               />
               <ChannelLegendItem
-                label="QR Menü"
+                label={t("QR Menü")}
                 color="rgba(52, 152, 219, 0.9)"
                 amount={qrRev}
                 count={orders.countsBySource.QR || 0}
@@ -1539,7 +1540,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 currencySymbol={currencySymbol}
               />
               <ChannelLegendItem
-                label="Rezvix"
+                label={t("Rezvix")}
                 color="rgba(155, 89, 182, 0.9)"
                 amount={rezvixTableRev}
                 count={orders.countsBySource.REZVIX || 0}
@@ -1547,7 +1548,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 currencySymbol={currencySymbol}
               />
               <ChannelLegendItem
-                label="Diğer"
+                label={t("Diğer")}
                 color="rgba(149, 165, 166, 0.9)"
                 amount={otherRev}
                 count={orders.countsBySource.UNKNOWN || 0}
@@ -1567,39 +1568,39 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
           >
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">Toplam adisyon</span>
+                <span className="rezvix-kitchen-ticket__title">{t("Toplam adisyon")}</span>
               </div>
               <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {totalSessions}
               </div>
               <div className="rezvix-kitchen-ticket__meta">
-                Seçili aralıktaki açılan masa oturumları
+                {t("Seçili aralıktaki açılan masa oturumları")}
               </div>
             </div>
 
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
                 <span className="rezvix-kitchen-ticket__title">
-                  Ortalama oturma süresi
+                  {t("Ortalama oturma süresi")}
                 </span>
               </div>
               <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
-                {avgSessionDurationMinutes} dk
+                {t("{count} dk", { count: avgSessionDurationMinutes })}
               </div>
               <div className="rezvix-kitchen-ticket__meta">
-                Kapalı adisyonların ortalaması
+                {t("Kapalı adisyonların ortalaması")}
               </div>
             </div>
 
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">Masadan alınan ödeme</span>
+                <span className="rezvix-kitchen-ticket__title">{t("Masadan alınan ödeme")}</span>
               </div>
               <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {fmtMoney(payments.grandTotal || 0, currencySymbol)}
               </div>
               <div className="rezvix-kitchen-ticket__meta">
-                Kart + masada ödeme toplamı
+                {t("Kart + masada ödeme toplamı")}
               </div>
             </div>
           </div>
@@ -1608,7 +1609,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
           {orders.byDay.length > 0 && (
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                Günlük sipariş & ciro
+                {t("Günlük sipariş & ciro")}
               </div>
               <div
                 style={{
@@ -1622,9 +1623,9 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>
                     <tr style={{ textAlign: "left", color: "var(--rezvix-text-soft)" }}>
-                      <th style={{ padding: "6px 8px" }}>Tarih</th>
-                      <th style={{ padding: "6px 8px" }}>Sipariş</th>
-                      <th style={{ padding: "6px 8px" }}>{`Ciro (${currencySymbol})`}</th>
+                      <th style={{ padding: "6px 8px" }}>{t("Tarih")}</th>
+                      <th style={{ padding: "6px 8px" }}>{t("Sipariş")}</th>
+                      <th style={{ padding: "6px 8px" }}>{t("Ciro ({symbol})", { symbol: currencySymbol })}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1645,7 +1646,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
           {byHour.length > 0 && (
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                Saatlik sipariş & ciro
+                {t("Saatlik sipariş & ciro")}
               </div>
               <div
                 style={{
@@ -1704,7 +1705,7 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
           {topTables.length > 0 && (
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                En çok kullanılan masalar
+                {t("En çok kullanılan masalar")}
               </div>
               <div
                 style={{
@@ -1718,9 +1719,9 @@ const AdvancedReportsView: React.FC<AdvancedReportsViewProps> = ({
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>
                     <tr style={{ textAlign: "left", color: "var(--rezvix-text-soft)" }}>
-                      <th style={{ padding: "6px 8px" }}>Masa</th>
-                      <th style={{ padding: "6px 8px" }}>Adisyon</th>
-                      <th style={{ padding: "6px 8px" }}>{`Ciro (${currencySymbol})`}</th>
+                      <th style={{ padding: "6px 8px" }}>{t("Masa")}</th>
+                      <th style={{ padding: "6px 8px" }}>{t("Adisyon")}</th>
+                      <th style={{ padding: "6px 8px" }}>{t("Ciro ({symbol})", { symbol: currencySymbol })}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1751,6 +1752,7 @@ const DeliveryReportsView: React.FC<{
   currencySymbol: string;
   range: Range;
 }> = ({ orders, currencySymbol, range }) => {
+  const { t } = useI18n();
   const totalOrders = orders.length;
   const deliveredOrders = orders.filter((o) => String(o.status) === "delivered");
   const totalRevenue = deliveredOrders.reduce(
@@ -1836,25 +1838,25 @@ const DeliveryReportsView: React.FC<{
   const paymentSegments = [
     {
       key: "card",
-      label: "Online",
+      label: t("Online"),
       value: paymentBreakdown.card.revenue,
       color: "linear-gradient(180deg, #2D9CDB, #2F80ED)",
     },
     {
       key: "card_on_delivery",
-      label: "Kapida Kart",
+      label: t("Kapıda Kart"),
       value: paymentBreakdown.cardOnDelivery.revenue,
       color: "linear-gradient(180deg, #9B51E0, #7C3AED)",
     },
     {
       key: "cash",
-      label: "Kapida Nakit",
+      label: t("Kapıda Nakit"),
       value: paymentBreakdown.cash.revenue,
       color: "linear-gradient(180deg, #F2994A, #F97316)",
     },
     {
       key: "other",
-      label: "Diger",
+      label: t("Diğer"),
       value: paymentBreakdown.other.revenue,
       color: "linear-gradient(180deg, #9CA3AF, #6B7280)",
     },
@@ -1880,10 +1882,10 @@ const DeliveryReportsView: React.FC<{
       ? (o: any) => String(o?.paymentMethodLabel || "—")
       : (o: any) => {
           const m = String(o?.paymentMethod || "");
-          if (m === "card") return "Online Ödeme";
-          if (m === "cash") return "Kapıda Nakit";
-          if (m === "card_on_delivery") return "Kapıda Kart";
-          return "—";
+          if (m === "card") return i18nT("Online Ödeme");
+          if (m === "cash") return i18nT("Kapıda Nakit");
+          if (m === "card_on_delivery") return i18nT("Kapıda Kart");
+          return i18nT("—");
         };
 
   const calcLineTotal = (it: any) => {
@@ -1902,7 +1904,7 @@ const DeliveryReportsView: React.FC<{
       {/* Sol kolon: özet + chart */}
       <div className="rezvix-board-column">
         <div className="rezvix-board-column__header">
-          <div className="rezvix-board-column__title">Paket Servis Özeti</div>
+          <div className="rezvix-board-column__title">{t("Paket Servis Özeti")}</div>
           <div className="rezvix-board-column__count">
             {range.from} – {range.to}
           </div>
@@ -1929,13 +1931,13 @@ const DeliveryReportsView: React.FC<{
                 color: "var(--rezvix-text-soft)",
               }}
             >
-              Toplam Paket Servis Cirosu
+              {t("Toplam Paket Servis Cirosu")}
             </div>
             <div style={{ fontSize: 30, fontWeight: 700 }}>
               {fmtMoney(totalRevenue, currencySymbol)}
             </div>
             <div style={{ fontSize: 12, color: "var(--rezvix-text-soft)" }}>
-              {totalOrders} sipariş
+              {t("{count} sipariş", { count: totalOrders })}
             </div>
           </div>
 
@@ -1948,7 +1950,7 @@ const DeliveryReportsView: React.FC<{
           >
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">Teslim edildi</span>
+                <span className="rezvix-kitchen-ticket__title">{t("Teslim edildi")}</span>
               </div>
               <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {deliveredCount}
@@ -1956,7 +1958,7 @@ const DeliveryReportsView: React.FC<{
             </div>
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">Yolda</span>
+                <span className="rezvix-kitchen-ticket__title">{t("Yolda")}</span>
               </div>
               <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {onTheWayCount}
@@ -1964,7 +1966,7 @@ const DeliveryReportsView: React.FC<{
             </div>
             <div className="rezvix-kitchen-ticket">
               <div className="rezvix-kitchen-ticket__header">
-                <span className="rezvix-kitchen-ticket__title">İptal edildi</span>
+                <span className="rezvix-kitchen-ticket__title">{t("İptal edildi")}</span>
               </div>
               <div style={{ fontSize: 22, fontWeight: 600, marginTop: 6 }}>
                 {cancelledCount}
@@ -1981,7 +1983,7 @@ const DeliveryReportsView: React.FC<{
             }}
           >
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
-              Ödeme kırılımı (teslim edilenler)
+              {t("Ödeme kırılımı (teslim edilenler)")}
             </div>
             <div
               style={{
@@ -2046,47 +2048,47 @@ const DeliveryReportsView: React.FC<{
             >
               <div className="rezvix-kitchen-ticket">
                 <div className="rezvix-kitchen-ticket__header">
-                  <span className="rezvix-kitchen-ticket__title">Online Ödeme</span>
+                  <span className="rezvix-kitchen-ticket__title">{t("Online Ödeme")}</span>
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>
                   {fmtMoney(paymentBreakdown.card.revenue, currencySymbol)}
                 </div>
                 <div className="rezvix-kitchen-ticket__meta">
-                  {paymentBreakdown.card.count} sipariş
+                  {t("{count} sipariş", { count: paymentBreakdown.card.count })}
                 </div>
               </div>
               <div className="rezvix-kitchen-ticket">
                 <div className="rezvix-kitchen-ticket__header">
-                  <span className="rezvix-kitchen-ticket__title">Kapıda Kart</span>
+                  <span className="rezvix-kitchen-ticket__title">{t("Kapıda Kart")}</span>
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>
                   {fmtMoney(paymentBreakdown.cardOnDelivery.revenue, currencySymbol)}
                 </div>
                 <div className="rezvix-kitchen-ticket__meta">
-                  {paymentBreakdown.cardOnDelivery.count} sipariş
+                  {t("{count} sipariş", { count: paymentBreakdown.cardOnDelivery.count })}
                 </div>
               </div>
               <div className="rezvix-kitchen-ticket">
                 <div className="rezvix-kitchen-ticket__header">
-                  <span className="rezvix-kitchen-ticket__title">Kapıda Nakit</span>
+                  <span className="rezvix-kitchen-ticket__title">{t("Kapıda Nakit")}</span>
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>
                   {fmtMoney(paymentBreakdown.cash.revenue, currencySymbol)}
                 </div>
                 <div className="rezvix-kitchen-ticket__meta">
-                  {paymentBreakdown.cash.count} sipariş
+                  {t("{count} sipariş", { count: paymentBreakdown.cash.count })}
                 </div>
               </div>
               {paymentBreakdown.other.count > 0 && (
                 <div className="rezvix-kitchen-ticket">
                   <div className="rezvix-kitchen-ticket__header">
-                    <span className="rezvix-kitchen-ticket__title">Diğer</span>
+                    <span className="rezvix-kitchen-ticket__title">{t("Diğer")}</span>
                   </div>
                   <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>
                     {fmtMoney(paymentBreakdown.other.revenue, currencySymbol)}
                   </div>
                   <div className="rezvix-kitchen-ticket__meta">
-                    {paymentBreakdown.other.count} sipariş
+                    {t("{count} sipariş", { count: paymentBreakdown.other.count })}
                   </div>
                 </div>
               )}
@@ -2191,8 +2193,8 @@ const DeliveryReportsView: React.FC<{
       {/* Sağ kolon: sipariş listesi */}
       <div className="rezvix-board-column">
         <div className="rezvix-board-column__header">
-          <div className="rezvix-board-column__title">Sipariş Listesi</div>
-          <div className="rezvix-board-column__count">{totalOrders} kayıt</div>
+          <div className="rezvix-board-column__title">{t("Sipariş Listesi")}</div>
+          <div className="rezvix-board-column__count">{t("{count} kayıt", { count: totalOrders })}</div>
         </div>
         <div className="rezvix-board-column__body">
           <div
@@ -2323,7 +2325,7 @@ const DeliveryReportsView: React.FC<{
                       }}
                     >
                       <div style={{ fontSize: 12, color: "var(--rezvix-text-soft)" }}>
-                        <strong>Adres:</strong> {buildAddress(o as any) || "—"}
+                        <strong>{t("Adres")}:</strong> {buildAddress(o as any) || t("—")}
                       </div>
 
                       <div
@@ -2335,17 +2337,17 @@ const DeliveryReportsView: React.FC<{
                         }}
                       >
                         <div>
-                          <div style={{ color: "var(--rezvix-text-soft)" }}>Ödeme</div>
+                          <div style={{ color: "var(--rezvix-text-soft)" }}>{t("Ödeme")}</div>
                           <div style={{ fontWeight: 600 }}>{paymentLabel(o as any)}</div>
                         </div>
                         <div>
-                          <div style={{ color: "var(--rezvix-text-soft)" }}>Ara Toplam</div>
+                          <div style={{ color: "var(--rezvix-text-soft)" }}>{t("Ara Toplam")}</div>
                           <div style={{ fontWeight: 600 }}>
                             {fmtMoney((o as any).subtotal || 0, currencySymbol)}
                           </div>
                         </div>
                         <div>
-                          <div style={{ color: "var(--rezvix-text-soft)" }}>Teslimat</div>
+                          <div style={{ color: "var(--rezvix-text-soft)" }}>{t("Teslimat")}</div>
                           <div style={{ fontWeight: 600 }}>
                             {fmtMoney((o as any).deliveryFee || 0, currencySymbol)}
                           </div>
@@ -2354,7 +2356,7 @@ const DeliveryReportsView: React.FC<{
 
                       {String((o as any).customerNote || "").trim() && (
                         <div style={{ fontSize: 12 }}>
-                          <div style={{ color: "var(--rezvix-text-soft)" }}>Not</div>
+                          <div style={{ color: "var(--rezvix-text-soft)" }}>{t("Not")}</div>
                           <div style={{ fontWeight: 600 }}>{(o as any).customerNote}</div>
                         </div>
                       )}
@@ -2383,7 +2385,7 @@ const DeliveryReportsView: React.FC<{
                                 style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}
                               >
                                 <div>
-                                  {Math.max(1, Number(it?.qty || 1))}× {it?.title || it?.itemTitle || "Ürün"}
+                                  {Math.max(1, Number(it?.qty || 1))}× {it?.title || it?.itemTitle || t("Ürün")}
                                 </div>
                                 <div style={{ fontWeight: 600 }}>
                                   {fmtMoney(calcLineTotal(it), currencySymbol)}

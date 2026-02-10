@@ -6,6 +6,7 @@ import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
 import { authStore } from "../../store/auth";
 import { asId } from "../../lib/id";
+import { useI18n } from "../../i18n";
 
 type Row = {
   _id: string;
@@ -38,16 +39,13 @@ function rangeParams(sel: string): Range {
   }
 }
 
-const trStatus: Record<string, string> = {
+const statusLabels: Record<string, string> = {
   pending: "Bekleyen",
   confirmed: "Onaylı",
   arrived: "Geldi",
   no_show: "Gelmedi",
   cancelled: "İptal",
 };
-function fmtStatus(s: string) {
-  return trStatus[s] ?? s;
-}
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -164,6 +162,7 @@ async function fetchUpcoming(rid: string): Promise<Row[]> {
 export default function RestaurantDashboardPage() {
   const rid = asId(authStore.getUser()?.restaurantId) || "";
   const [sel, setSel] = React.useState<"month" | "30" | "90" | "all">("90");
+  const { t } = useI18n();
 
   const summary = useQuery({
     queryKey: ["restaurant-dashboard-summary", rid, sel],
@@ -187,77 +186,79 @@ export default function RestaurantDashboardPage() {
       (counts.cancelled ?? 0) +
       (counts.no_show ?? 0));
 
+  const fmtStatus = React.useCallback((s: string) => t(statusLabels[s] ?? s), [t]);
+
   return (
     <div className="flex gap-6">
      <Sidebar
   items={[
-    { to: "/restaurant", label: "Dashboard" },
-    { to: "/restaurant/reservations", label: "Rezervasyonlar" },
+    { to: "/restaurant", label: t("Dashboard") },
+    { to: "/restaurant/reservations", label: t("Rezervasyonlar") },
 
     // ✅ EKLEDİK — MENÜ YÖNETİMİ (kategori + item)
-    { to: "/restaurant/menu-manager", label: "Menü Yönetimi" },
+    { to: "/restaurant/menu-manager", label: t("Menü Yönetimi") },
 
     // varsa eski menüler sayfası
-    { to: "/restaurant/menus", label: "Basit Menüler" },
-    { to: "/restaurant/tables", label: "Canlı Masalar" },
+    { to: "/restaurant/menus", label: t("Basit Menüler") },
+    { to: "/restaurant/tables", label: t("Canlı Masalar") },
 
 
-    { to: "/restaurant/profile", label: "Profil & Ayarlar" },
+    { to: "/restaurant/profile", label: t("Profil & Ayarlar") },
   ]}
 />
 
       <div className="flex-1 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Restoran Özeti</h2>
+          <h2 className="text-lg font-semibold">{t("Restoran Özeti")}</h2>
           <select
             value={sel}
             onChange={(e) => setSel(e.target.value as any)}
             className="border rounded-lg px-3 py-2 text-sm"
           >
-            <option value="month">Bu ay</option>
-            <option value="30">Son 30 gün</option>
-            <option value="90">Son 90 gün</option>
-            <option value="all">Tümü</option>
+            <option value="month">{t("Bu ay")}</option>
+            <option value="30">{t("Son 30 gün")}</option>
+            <option value="90">{t("Son 90 gün")}</option>
+            <option value="all">{t("Tümü")}</option>
           </select>
         </div>
 
-        {!rid && <div className="text-sm text-red-600">restaurantId bulunamadı.</div>}
-        {summary.isLoading && <div>Yükleniyor…</div>}
-        {summary.error && <div className="text-red-600 text-sm">Veri alınamadı</div>}
+        {!rid && <div className="text-sm text-red-600">{t("RestaurantId bulunamadı.")}</div>}
+        {summary.isLoading && <div>{t("Yükleniyor…")}</div>}
+        {summary.error && <div className="text-red-600 text-sm">{t("Veri alınamadı")}</div>}
 
         {/* Sayaçlar */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card title="Toplam Rezervasyon">
+          <Card title={t("Toplam Rezervasyon")}>
             <div className="text-2xl font-semibold">{total || 0}</div>
           </Card>
-          <Card title="Onaylı">
+          <Card title={t("Onaylı")}>
             <div className="text-2xl font-semibold">{counts.confirmed ?? 0}</div>
           </Card>
-          <Card title="İptal">
+          <Card title={t("İptal")}>
             <div className="text-2xl font-semibold">{counts.cancelled ?? 0}</div>
           </Card>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card title="Bekleyen">
+          <Card title={t("Bekleyen")}>
             <div className="text-2xl font-semibold">{counts.pending ?? 0}</div>
           </Card>
-          <Card title="Gelen">
+          <Card title={t("Gelen")}>
             <div className="text-2xl font-semibold">{counts.arrived ?? 0}</div>
           </Card>
-          <Card title="Gelmedi">
+          <Card title={t("Gelmedi")}>
             <div className="text-2xl font-semibold">{counts.no_show ?? 0}</div>
           </Card>
         </div>
 
         {/* 💡 İstenen mantık: */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card title="Toplam Ciro (₺) — sadece 'Geldi'">
+          <Card title={t("Toplam Ciro (₺) — sadece 'Geldi'")}>
             <div className="text-2xl font-semibold">
               {Number(totals.grossArrived || 0).toLocaleString("tr-TR")}
             </div>
           </Card>
-          <Card title="Toplam Depozito (₺) — 'Onaylı' + 'Gelmedi'">
+          <Card title={t("Toplam Depozito (₺) — 'Onaylı' + 'Gelmedi'")}>
             <div className="text-2xl font-semibold">
               {Number(totals.depositConfirmedNoShow || 0).toLocaleString("tr-TR")}
             </div>
@@ -265,20 +266,20 @@ export default function RestaurantDashboardPage() {
         </div>
 
         {/* Yaklaşan Rezervasyonlar */}
-        <Card title="Yaklaşan Rezervasyonlar">
+        <Card title={t("Yaklaşan Rezervasyonlar")}>
           {upc.isLoading ? (
-            <div>Yükleniyor…</div>
+            <div>{t("Yükleniyor…")}</div>
           ) : (upc.data?.length ?? 0) === 0 ? (
-            <div className="text-sm text-gray-500">Kayıt yok</div>
+            <div className="text-sm text-gray-500">{t("Kayıt yok")}</div>
           ) : (
             <div className="overflow-auto rounded-xl border">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-500">
-                    <th className="py-2 px-4">Tarih</th>
-                    <th className="py-2 px-4">Kullanıcı</th>
-                    <th className="py-2 px-4">Kişi</th>
-                    <th className="py-2 px-4">Durum</th>
+                    <th className="py-2 px-4">{t("Tarih")}</th>
+                    <th className="py-2 px-4">{t("Kullanıcı")}</th>
+                    <th className="py-2 px-4">{t("Kişi")}</th>
+                    <th className="py-2 px-4">{t("Durum")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -286,7 +287,7 @@ export default function RestaurantDashboardPage() {
                     <tr key={r._id} className="border-t">
                       <td className="py-2 px-4">{fmtDT(r.dateTimeUTC)}</td>
                       <td className="py-2 px-4">
-                        {r.user?.name || "-"}{" "}
+                        {r.user?.name || t("-")}{" "}
                         <span className="text-gray-500">
                           {r.user?.email ? `(${r.user.email})` : ""}
                         </span>

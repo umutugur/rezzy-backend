@@ -6,6 +6,7 @@ import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
 import Modal from "../../components/Modal";
 import { showToast } from "../../ui/Toast";
+import { useI18n } from "../../i18n";
 
 // ---- Türler
 type Row = {
@@ -21,16 +22,13 @@ type Row = {
 type Resp = { items: Row[]; total: number; page: number; limit: number };
 
 // ---- Yardımcılar
-const trStatus: Record<string, string> = {
+const statusLabels: Record<string, string> = {
   pending: "Bekleyen",
   confirmed: "Onaylı",
   arrived: "Geldi",
   no_show: "Gelmedi",
   cancelled: "İptal",
 };
-function fmtStatus(s: string) {
-  return trStatus[s] ?? s;
-}
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -46,6 +44,7 @@ async function fetchReservations(
 export default function RestaurantReservationsPage() {
   const u = authStore.getUser();
   const rid = u?.restaurantId || "";
+  const { t } = useI18n();
 
   // ---- UI state
   const [tab, setTab] = React.useState<"pending" | "upcoming" | "past">("upcoming");
@@ -82,6 +81,7 @@ export default function RestaurantReservationsPage() {
   const [qrUrl, setQrUrl] = React.useState<string | null>(null);
   const [qrPayload, setQrPayload] = React.useState<string | null>(null);
   const [qrMeta, setQrMeta] = React.useState<{ rid?: string; mid?: string; ts?: string } | null>(null);
+  const fmtStatus = React.useCallback((s: string) => t(statusLabels[s] ?? s), [t]);
 
   // ---- Durum güncelle
   const statusMut = useMutation({
@@ -123,9 +123,9 @@ export default function RestaurantReservationsPage() {
         setQrOpen(true);
         return;
       }
-      showToast("QR bulunamadı", "error");
+      showToast(t("QR bulunamadı"), "error");
     } catch (err: any) {
-      showToast(err?.response?.data?.message || err?.message || "QR alınamadı", "error");
+      showToast(err?.response?.data?.message || err?.message || t("QR alınamadı"), "error");
     }
   };
 
@@ -140,9 +140,9 @@ export default function RestaurantReservationsPage() {
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
-      showToast("Kopyalandı", "success");
+      showToast(t("Kopyalandı"), "success");
     } catch {
-      showToast("Kopyalanamadı", "error");
+      showToast(t("Kopyalanamadı"), "error");
     }
   };
 
@@ -150,14 +150,14 @@ export default function RestaurantReservationsPage() {
     <div className="flex gap-6">
       <Sidebar
         items={[
-          { to: "/restaurant", label: "Dashboard" },
-          { to: "/restaurant/reservations", label: "Rezervasyonlar" },
-          { to: "/restaurant/profile", label: "Profil & Ayarlar" },
+          { to: "/restaurant", label: t("Dashboard") },
+          { to: "/restaurant/reservations", label: t("Rezervasyonlar") },
+          { to: "/restaurant/profile", label: t("Profil & Ayarlar") },
         ]}
       />
       <div className="flex-1 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Rezervasyonlar</h2>
+          <h2 className="text-lg font-semibold">{t("Rezervasyonlar")}</h2>
 
           {/* Sekmeler */}
           <div className="flex gap-2">
@@ -172,7 +172,7 @@ export default function RestaurantReservationsPage() {
                   : "bg-gray-100 hover:bg-gray-200"
               }`}
             >
-              Bekleyen
+              {t("Bekleyen")}
             </button>
             <button
               onClick={() => {
@@ -185,7 +185,7 @@ export default function RestaurantReservationsPage() {
                   : "bg-gray-100 hover:bg-gray-200"
               }`}
             >
-              Yaklaşan
+              {t("Yaklaşan")}
             </button>
             <button
               onClick={() => {
@@ -198,16 +198,16 @@ export default function RestaurantReservationsPage() {
                   : "bg-gray-100 hover:bg-gray-200"
               }`}
             >
-              Geçmiş
+              {t("Geçmiş")}
             </button>
           </div>
         </div>
 
         {/* Filtreler */}
-        <Card title="Filtreler">
+        <Card title={t("Filtreler")}>
           <div className="flex flex-wrap gap-3 items-end">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Durum</label>
+              <label className="block text-sm text-gray-600 mb-1">{t("Durum")}</label>
               <select
                 value={statusFilter}
                 onChange={(e) => {
@@ -216,16 +216,16 @@ export default function RestaurantReservationsPage() {
                 }}
                 className="border rounded-lg px-3 py-2"
               >
-                <option value="">Hepsi</option>
-                <option value="pending">Bekleyen</option>
-                <option value="confirmed">Onaylı</option>
-                <option value="arrived">Geldi</option>
-                <option value="no_show">Gelmedi</option>
-                <option value="cancelled">İptal</option>
+                <option value="">{t("Hepsi")}</option>
+                <option value="pending">{t("Bekleyen")}</option>
+                <option value="confirmed">{t("Onaylı")}</option>
+                <option value="arrived">{t("Geldi")}</option>
+                <option value="no_show">{t("Gelmedi")}</option>
+                <option value="cancelled">{t("İptal")}</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Sayfa</label>
+              <label className="block text-sm text-gray-600 mb-1">{t("Sayfa")}</label>
               <input
                 type="number"
                 min={1}
@@ -237,7 +237,7 @@ export default function RestaurantReservationsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Limit</label>
+              <label className="block text-sm text-gray-600 mb-1">{t("Limit")}</label>
               <input
                 type="number"
                 min={1}
@@ -253,27 +253,27 @@ export default function RestaurantReservationsPage() {
               className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
               disabled={isFetching}
             >
-              {isFetching ? "Getiriliyor…" : "Uygula"}
+              {isFetching ? t("Getiriliyor…") : t("Uygula")}
             </button>
           </div>
         </Card>
 
-        {isLoading && <div>Yükleniyor…</div>}
-        {error && <div className="text-red-600 text-sm">Liste çekilemedi</div>}
+        {isLoading && <div>{t("Yükleniyor…")}</div>}
+        {error && <div className="text-red-600 text-sm">{t("Liste çekilemedi")}</div>}
 
         {/* Tablo */}
         <div className="overflow-auto bg-white rounded-2xl shadow-soft">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-gray-500">
-                <th className="py-2 px-4">Tarih</th>
-                <th className="py-2 px-4">Kullanıcı</th>
-                <th className="py-2 px-4">Kişi</th>
-                <th className="py-2 px-4">Tutar (₺)</th>
-                <th className="py-2 px-4">Depozito (₺)</th>
-                <th className="py-2 px-4">Durum</th>
-                <th className="py-2 px-4">Aksiyon</th>
-                <th className="py-2 px-4">Dekont / QR</th>
+                <th className="py-2 px-4">{t("Tarih")}</th>
+                <th className="py-2 px-4">{t("Kullanıcı")}</th>
+                <th className="py-2 px-4">{t("Kişi")}</th>
+                <th className="py-2 px-4">{t("Tutar (₺)")}</th>
+                <th className="py-2 px-4">{t("Depozito (₺)")}</th>
+                <th className="py-2 px-4">{t("Durum")}</th>
+                <th className="py-2 px-4">{t("Aksiyon")}</th>
+                <th className="py-2 px-4">{t("Dekont / QR")}</th>
               </tr>
             </thead>
             <tbody>
@@ -308,7 +308,7 @@ export default function RestaurantReservationsPage() {
                             statusMut.mutate({ id: r._id, status: "confirmed" })
                           }
                         >
-                          Onayla
+                          {t("Onayla")}
                         </button>
                         <button
                           className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
@@ -317,7 +317,7 @@ export default function RestaurantReservationsPage() {
                             statusMut.mutate({ id: r._id, status: "cancelled" })
                           }
                         >
-                          İptal
+                          {t("İptal")}
                         </button>
                       </div>
                     </td>
@@ -331,7 +331,7 @@ export default function RestaurantReservationsPage() {
                             target="_blank"
                             rel="noreferrer"
                           >
-                            Dekont
+                            {t("Dekont")}
                           </a>
                         ) : (
                           <span className="text-gray-400">—</span>
@@ -341,7 +341,7 @@ export default function RestaurantReservationsPage() {
                             className="text-sm rounded-lg bg-gray-100 hover:bg-gray-200 px-2 py-1"
                             onClick={() => openQR(r._id)}
                           >
-                            QR
+                            {t("QR")}
                           </button>
                         )}
                       </div>
@@ -355,7 +355,7 @@ export default function RestaurantReservationsPage() {
                     className="py-3 px-4 text-gray-500"
                     colSpan={8}
                   >
-                    Kayıt yok
+                    {t("Kayıt yok")}
                   </td>
                 </tr>
               )}
@@ -371,23 +371,27 @@ export default function RestaurantReservationsPage() {
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
-              Önceki
+              {t("Önceki")}
             </button>
             <div className="text-sm text-gray-600">
-              Sayfa {page} / {totalPages} • Toplam {data.total}
+              {t("Sayfa {page} / {totalPages} • Toplam {total}", {
+                page,
+                totalPages,
+                total: data.total,
+              })}
             </div>
             <button
               className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
             >
-              Sonraki
+              {t("Sonraki")}
             </button>
           </div>
         )}
 
         {/* QR Modal */}
-        <Modal open={qrOpen} onClose={closeQR} title="Rezervasyon QR">
+        <Modal open={qrOpen} onClose={closeQR} title={t("Rezervasyon QR")}>
           {qrUrl ? (
             <div className="space-y-4">
               <img
@@ -399,12 +403,12 @@ export default function RestaurantReservationsPage() {
               {/* ✅ Ham payload metni */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-gray-800">QR Payload</h4>
+                  <h4 className="text-sm font-semibold text-gray-800">{t("QR Payload")}</h4>
                   <button
                     className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
                     onClick={() => copy(qrPayload)}
                   >
-                    Kopyala
+                    {t("Kopyala")}
                   </button>
                 </div>
                 <pre className="text-xs bg-gray-50 border rounded-lg p-2 overflow-x-auto">
@@ -416,22 +420,22 @@ export default function RestaurantReservationsPage() {
               {qrMeta && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-gray-700">
                   <div className="bg-gray-50 p-2 border rounded">
-                    <div className="font-semibold text-gray-600">RID</div>
+                    <div className="font-semibold text-gray-600">{t("RID")}</div>
                     <div className="truncate">{qrMeta.rid || "—"}</div>
                   </div>
                   <div className="bg-gray-50 p-2 border rounded">
-                    <div className="font-semibold text-gray-600">MID</div>
+                    <div className="font-semibold text-gray-600">{t("MID")}</div>
                     <div className="truncate">{qrMeta.mid || "—"}</div>
                   </div>
                   <div className="bg-gray-50 p-2 border rounded">
-                    <div className="font-semibold text-gray-600">TS (ISO)</div>
+                    <div className="font-semibold text-gray-600">{t("TS (ISO)")}</div>
                     <div className="truncate">{qrMeta.ts || "—"}</div>
                   </div>
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-sm text-gray-600">Yükleniyor…</div>
+            <div className="text-sm text-gray-600">{t("Yükleniyor…")}</div>
           )}
         </Modal>
       </div>

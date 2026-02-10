@@ -11,6 +11,7 @@ import {
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
 import { LANG_OPTIONS, DEFAULT_LANGUAGE } from "../../utils/languages";
+import { useI18n } from "../../i18n";
 
 type UserLite = { _id: string; name?: string; email?: string; role?: string };
 
@@ -22,6 +23,7 @@ async function fetchOrganizations(
 }
 
 export default function AdminOrganizationsPage() {
+  const { t } = useI18n();
   const [search, setSearch] = React.useState("");
   const [searchInput, setSearchInput] = React.useState("");
   const qc = useQueryClient();
@@ -59,7 +61,7 @@ export default function AdminOrganizationsPage() {
         ownerId: owner?._id as string,
       }),
     onSuccess: (org) => {
-      showToast("Organizasyon oluşturuldu", "success");
+      showToast(t("Organizasyon oluşturuldu"), "success");
       setName("");
       setRegion("");
       setTaxNumber("");
@@ -76,7 +78,7 @@ export default function AdminOrganizationsPage() {
       const msg =
         err?.response?.data?.message ||
         err?.message ||
-        "Organizasyon oluşturulamadı";
+        t("Organizasyon oluşturulamadı");
       showToast(msg, "error");
     },
   });
@@ -84,11 +86,11 @@ export default function AdminOrganizationsPage() {
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      showToast("İsim zorunlu", "error");
+      showToast(t("İsim zorunlu"), "error");
       return;
     }
     if (!owner?._id) {
-      showToast("Önce organizasyon sahibi kullanıcıyı seçin", "error");
+      showToast(t("Önce organizasyon sahibi kullanıcıyı seçin"), "error");
       return;
     }
     createMut.mutate();
@@ -100,26 +102,26 @@ export default function AdminOrganizationsPage() {
     <div className="flex gap-6">
       <Sidebar
          items={[
-          { to: "/admin", label: "Dashboard" },
-          { to: "/admin/banners", label: "Bannerlar" },
-          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
-          { to: "/admin/organizations", label: "Organizasyonlar" },
-          { to: "/admin/restaurants", label: "Restoranlar" },
-          { to: "/admin/users", label: "Kullanıcılar" },
-          { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" },
-          { to: "/admin/notifications", label: "Bildirim Gönder" },
+          { to: "/admin", label: t("Dashboard") },
+          { to: "/admin/banners", label: t("Bannerlar") },
+          { to: "/admin/commissions", label: t("Komisyonlar") }, // ✅ menüye eklendi
+          { to: "/admin/organizations", label: t("Organizasyonlar") },
+          { to: "/admin/restaurants", label: t("Restoranlar") },
+          { to: "/admin/users", label: t("Kullanıcılar") },
+          { to: "/admin/reservations", label: t("Rezervasyonlar") },
+          { to: "/admin/moderation", label: t("Moderasyon") },
+          { to: "/admin/notifications", label: t("Bildirim Gönder") },
         ]}
       />
 
       <div className="flex-1 space-y-6">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold">Organizasyonlar</h2>
+          <h2 className="text-lg font-semibold">{t("Organizasyonlar")}</h2>
 
           <div className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="İsim / vergi no / bölge ara…"
+              placeholder={t("İsim / vergi no / bölge ara…")}
               className="border rounded-lg px-3 py-2 text-sm"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
@@ -128,7 +130,7 @@ export default function AdminOrganizationsPage() {
               onClick={() => setSearch(searchInput.trim())}
               className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm"
             >
-              Ara
+              {t("Ara")}
             </button>
             {search && (
               <button
@@ -138,16 +140,16 @@ export default function AdminOrganizationsPage() {
                 }}
                 className="px-2 py-1 text-xs text-gray-500"
               >
-                Temizle
+                {t("Temizle")}
               </button>
             )}
           </div>
         </div>
 
-        {isLoading && <div>Yükleniyor…</div>}
+        {isLoading && <div>{t("Yükleniyor…")}</div>}
         {error && (
           <div className="text-red-600 text-sm">
-            Organizasyon listesi alınamadı
+            {t("Organizasyon listesi alınamadı")}
           </div>
         )}
 
@@ -156,11 +158,11 @@ export default function AdminOrganizationsPage() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-gray-500">
-                <th className="py-2 px-4">Ad</th>
-                <th className="py-2 px-4">Bölge</th>
-                <th className="py-2 px-4">Vergi No</th>
-                <th className="py-2 px-4">Restoran Sayısı</th>
-                <th className="py-2 px-4">Oluşturulma</th>
+                <th className="py-2 px-4">{t("Ad")}</th>
+                <th className="py-2 px-4">{t("Bölge")}</th>
+                <th className="py-2 px-4">{t("Vergi No")}</th>
+                <th className="py-2 px-4">{t("Restoran Sayısı")}</th>
+                <th className="py-2 px-4">{t("Oluşturulma")}</th>
               </tr>
             </thead>
             <tbody>
@@ -195,7 +197,7 @@ export default function AdminOrganizationsPage() {
               {(!list || list.length === 0) && (
                 <tr>
                   <td className="py-3 px-4 text-gray-500" colSpan={5}>
-                    Kayıt yok
+                    {t("Kayıt yok")}
                   </td>
                 </tr>
               )}
@@ -204,17 +206,17 @@ export default function AdminOrganizationsPage() {
         </div>
 
         {/* Yeni organization formu */}
-        <Card title="Yeni Organizasyon Ekle">
+        <Card title={t("Yeni Organizasyon Ekle")}>
           <div className="space-y-4">
             {/* Owner seçimi */}
             <div>
               <h3 className="text-sm font-medium mb-2">
-                Organizasyon Sahibi Seçimi
+                {t("Organizasyon Sahibi Seçimi")}
               </h3>
               <div className="grid md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">
-                    Kullanıcı Ara (isim / e-posta)
+                    {t("Kullanıcı Ara (isim / e-posta)")}
                   </label>
                   <input
                     type="text"
@@ -224,18 +226,18 @@ export default function AdminOrganizationsPage() {
                       setOwnerQuery(e.target.value);
                       setOwner(null);
                     }}
-                    placeholder="En az 2 karakter girin"
+                    placeholder={t("En az 2 karakter girin")}
                   />
                   {ownerQuery.trim().length >= 2 && (
                     <div className="mt-2 max-h-48 overflow-auto border rounded-lg">
                       {userSearchQ.isLoading && (
                         <div className="px-3 py-2 text-sm text-gray-500">
-                          Aranıyor…
+                          {t("Aranıyor…")}
                         </div>
                       )}
                       {userSearchQ.data?.length === 0 && !userSearchQ.isLoading && (
                         <div className="px-3 py-2 text-sm text-gray-500">
-                          Sonuç yok
+                          {t("Sonuç yok")}
                         </div>
                       )}
                       {(userSearchQ.data ?? []).map((u: UserLite) => (
@@ -257,7 +259,7 @@ export default function AdminOrganizationsPage() {
 
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">
-                    Seçilen Sahip
+                    {t("Seçilen Sahip")}
                   </label>
                   <div className="border rounded-lg px-3 py-2 min-h-[42px]">
                     {owner ? (
@@ -269,12 +271,12 @@ export default function AdminOrganizationsPage() {
                       </div>
                     ) : (
                       <span className="text-gray-500 text-sm">
-                        Henüz seçilmedi
+                        {t("Henüz seçilmedi")}
                       </span>
                     )}
                   </div>
                   <p className="mt-1 text-xs text-gray-500">
-                    Organizasyon oluştururken en az bir ana sahip kullanıcı seçilmelidir.
+                    {t("Organizasyon oluştururken en az bir ana sahip kullanıcı seçilmelidir.")}
                   </p>
                 </div>
               </div>
@@ -287,7 +289,7 @@ export default function AdminOrganizationsPage() {
             >
               <div className="md:col-span-1">
                 <label className="block text-xs text-gray-600 mb-1">
-                  İsim *
+                  {t("İsim *")}
                 </label>
                 <input
                   type="text"
@@ -299,7 +301,7 @@ export default function AdminOrganizationsPage() {
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">
-                  Bölge (ülke kodu, örn: TR, UK)
+                  {t("Bölge (ülke kodu, örn: TR, UK)")}
                 </label>
                 <input
                   type="text"
@@ -311,7 +313,7 @@ export default function AdminOrganizationsPage() {
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">
-                  Varsayılan Dil
+                  {t("Varsayılan Dil")}
                 </label>
                 <select
                   className="border rounded-lg px-3 py-2 w-full text-sm bg-white"
@@ -327,7 +329,7 @@ export default function AdminOrganizationsPage() {
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">
-                  Vergi No
+                  {t("Vergi No")}
                 </label>
                 <input
                   type="text"
@@ -343,8 +345,8 @@ export default function AdminOrganizationsPage() {
                   className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm disabled:opacity-60"
                 >
                   {createMut.isPending
-                    ? "Oluşturuluyor…"
-                    : "Organizasyon Oluştur"}
+                    ? t("Oluşturuluyor…")
+                    : t("Organizasyon Oluştur")}
                 </button>
               </div>
             </form>

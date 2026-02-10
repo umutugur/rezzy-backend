@@ -12,6 +12,7 @@ import {
   adminListBanners,
   adminUpdateBanner,
 } from "../../api/client";
+import { useI18n } from "../../i18n";
 
 type RestaurantLite = { _id: string; name: string; region?: string };
 
@@ -88,6 +89,7 @@ async function getCroppedImgFile(
 
 export default function AdminBannersPage() {
   const qc = useQueryClient();
+  const { t } = useI18n();
 
   const [placement, setPlacement] = React.useState("home_top");
   const [region, setRegion] = React.useState<string>(""); // empty => all
@@ -133,9 +135,9 @@ export default function AdminBannersPage() {
   const [croppedFile, setCroppedFile] = React.useState<File | null>(null);
   const createMut = useMutation({
     mutationFn: async () => {
-if (!imageFile) throw new Error("Banner görseli zorunlu");
+if (!imageFile) throw new Error(t("Banner görseli zorunlu"));
 const finalImage = croppedFile ?? imageFile;
-      if (!restaurantId) throw new Error("Restoran seçmelisin");
+      if (!restaurantId) throw new Error(t("Restoran seçmelisin"));
       return adminCreateBanner({
         placement,
         region: region ? region.toUpperCase() : null,
@@ -191,53 +193,53 @@ setCropOpen(false);
     <div className="flex gap-6">
       <Sidebar
         items={[
-          { to: "/admin", label: "Dashboard" },
-          { to: "/admin/banners", label: "Bannerlar" },
-          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
-          { to: "/admin/organizations", label: "Organizasyonlar" },
-          { to: "/admin/restaurants", label: "Restoranlar" },
-          { to: "/admin/users", label: "Kullanıcılar" },
-          { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" },
-          { to: "/admin/notifications", label: "Bildirim Gönder" },
+          { to: "/admin", label: t("Dashboard") },
+          { to: "/admin/banners", label: t("Bannerlar") },
+          { to: "/admin/commissions", label: t("Komisyonlar") }, // ✅ menüye eklendi
+          { to: "/admin/organizations", label: t("Organizasyonlar") },
+          { to: "/admin/restaurants", label: t("Restoranlar") },
+          { to: "/admin/users", label: t("Kullanıcılar") },
+          { to: "/admin/reservations", label: t("Rezervasyonlar") },
+          { to: "/admin/moderation", label: t("Moderasyon") },
+          { to: "/admin/notifications", label: t("Bildirim Gönder") },
         ]}
       />
 
       <div className="flex-1 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Banner Yönetimi</h2>
+          <h2 className="text-lg font-semibold">{t("Banner Yönetimi")}</h2>
         </div>
 
         <Card>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>
-              <div className="text-xs text-gray-500 mb-1">Placement</div>
+              <div className="text-xs text-gray-500 mb-1">{t("Placement")}</div>
               <input
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 value={placement}
                 onChange={(e) => setPlacement(e.target.value)}
-                placeholder="home_top"
+                placeholder={t("home_top")}
               />
             </div>
             <div>
-              <div className="text-xs text-gray-500 mb-1">Region (opsiyonel)</div>
+              <div className="text-xs text-gray-500 mb-1">{t("Region (opsiyonel)")}</div>
               <input
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
-                placeholder="TR / CY / boş=hepsi"
+                placeholder={t("TR / CY / boş=hepsi")}
               />
             </div>
             <div>
-              <div className="text-xs text-gray-500 mb-1">Aktif filtresi</div>
+              <div className="text-xs text-gray-500 mb-1">{t("Aktif filtresi")}</div>
               <select
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 value={active}
                 onChange={(e) => setActive(e.target.value)}
               >
-                <option value="true">Sadece aktif</option>
-                <option value="false">Sadece pasif</option>
-                <option value="all">Hepsi</option>
+                <option value="true">{t("Sadece aktif")}</option>
+                <option value="false">{t("Sadece pasif")}</option>
+                <option value="all">{t("Hepsi")}</option>
               </select>
             </div>
             <div className="flex items-end">
@@ -245,7 +247,7 @@ setCropOpen(false);
                 className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white text-sm hover:opacity-90"
                 onClick={() => qc.invalidateQueries({ queryKey: ["admin-banners"] })}
               >
-                Yenile
+                {t("Yenile")}
               </button>
             </div>
           </div>
@@ -253,22 +255,22 @@ setCropOpen(false);
 
         <Card>
           <div className="flex items-center justify-between mb-3">
-            <div className="font-medium">Yeni Banner Ekle</div>
+            <div className="font-medium">{t("Yeni Banner Ekle")}</div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <div className="text-xs text-gray-500 mb-1">Başlık</div>
+              <div className="text-xs text-gray-500 mb-1">{t("Başlık")}</div>
               <input
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="opsiyonel"
+                placeholder={t("opsiyonel")}
               />
             </div>
 
             <div>
-              <div className="text-xs text-gray-500 mb-1">Link (opsiyonel)</div>
+              <div className="text-xs text-gray-500 mb-1">{t("Link (opsiyonel)")}</div>
               <input
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 value={linkUrl}
@@ -278,7 +280,7 @@ setCropOpen(false);
             </div>
 
             <div>
-              <div className="text-xs text-gray-500 mb-1">Sıra (order)</div>
+              <div className="text-xs text-gray-500 mb-1">{t("Sıra (order)")}</div>
               <input
                 type="number"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -288,25 +290,25 @@ setCropOpen(false);
             </div>
 
             <div>
-              <div className="text-xs text-gray-500 mb-1">Hedef Tip</div>
+              <div className="text-xs text-gray-500 mb-1">{t("Hedef Tip")}</div>
               <select
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 value={targetType}
                 onChange={(e) => setTargetType(e.target.value as AdminBannerTargetType)}
               >
-                <option value="delivery">Delivery (paket servis)</option>
-                <option value="reservation">Reservation (rezervasyon)</option>
+                <option value="delivery">{t("Delivery (paket servis)")}</option>
+                <option value="reservation">{t("Reservation (rezervasyon)")}</option>
               </select>
             </div>
 
             <div className="md:col-span-2">
-              <div className="text-xs text-gray-500 mb-1">Restoran</div>
+              <div className="text-xs text-gray-500 mb-1">{t("Restoran")}</div>
               <select
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 value={restaurantId}
                 onChange={(e) => setRestaurantId(e.target.value)}
               >
-                <option value="">Restoran seç</option>
+                <option value="">{t("Restoran seç")}</option>
                 {(restaurants ?? []).map((r) => (
                   <option key={r._id} value={r._id}>
                     {r.name} {r.region ? `(${r.region})` : ""}
@@ -316,7 +318,7 @@ setCropOpen(false);
             </div>
 
             <div>
-              <div className="text-xs text-gray-500 mb-1">StartAt</div>
+              <div className="text-xs text-gray-500 mb-1">{t("StartAt")}</div>
               <input
                 type="datetime-local"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -326,7 +328,7 @@ setCropOpen(false);
             </div>
 
             <div>
-              <div className="text-xs text-gray-500 mb-1">EndAt</div>
+              <div className="text-xs text-gray-500 mb-1">{t("EndAt")}</div>
               <input
                 type="datetime-local"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -342,14 +344,14 @@ setCropOpen(false);
                   checked={isActiveCreate}
                   onChange={(e) => setIsActiveCreate(e.target.checked)}
                 />
-                Aktif
+                {t("Aktif")}
               </label>
             </div>
 
            <div className="md:col-span-3">
   <div className="flex items-center justify-between mb-1">
     <div className="text-xs text-gray-500">
-      Görsel <span className="text-gray-400">(önerilen: 1200×520 • oran ~2.3:1)</span>
+      {t("Görsel")} <span className="text-gray-400">{t("(önerilen: 1200×520 • oran ~2.3:1)")}</span>
     </div>
     {imageSrc ? (
       <button
@@ -357,7 +359,7 @@ setCropOpen(false);
         className="text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50"
         onClick={() => setCropOpen(true)}
       >
-        Kırp
+        {t("Kırp")}
       </button>
     ) : null}
   </div>
@@ -387,25 +389,25 @@ setCropOpen(false);
   {imageSrc ? (
     <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
       <div className="rounded-xl border border-gray-200 p-3 bg-gray-50">
-        <div className="text-xs text-gray-500 mb-2">Önizleme (home_top)</div>
+        <div className="text-xs text-gray-500 mb-2">{t("Önizleme (home_top)")}</div>
         <div className="w-full aspect-[2.3/1] overflow-hidden rounded-lg border bg-white">
           <img
             src={croppedFile ? URL.createObjectURL(croppedFile) : imageSrc}
-            alt="banner preview"
+            alt={t("banner preview")}
             className="w-full h-full object-cover"
           />
         </div>
         <div className="mt-2 text-[11px] text-gray-500">
-          {croppedFile ? "Kırpılmış görsel kullanılacak." : "Görsel kırpılmadı; mobilde cover ile kesilebilir."}
+          {croppedFile ? t("Kırpılmış görsel kullanılacak.") : t("Görsel kırpılmadı; mobilde cover ile kesilebilir.")}
         </div>
       </div>
 
       <div className="rounded-xl border border-gray-200 p-3">
-        <div className="text-xs text-gray-500 mb-2">İpucu</div>
+        <div className="text-xs text-gray-500 mb-2">{t("İpucu")}</div>
         <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1">
-          <li>Metin/logoları merkeze yakın tut.</li>
-          <li>Çok yüksek görsellerde üst-alt kesilir; mutlaka kırp.</li>
-          <li>Yükleme JPEG’e çevrilir (kalite 0.9).</li>
+          <li>{t("Metin/logoları merkeze yakın tut.")}</li>
+          <li>{t("Çok yüksek görsellerde üst-alt kesilir; mutlaka kırp.")}</li>
+          <li>{t("Yükleme JPEG’e çevrilir (kalite 0.9).")}</li>
         </ul>
       </div>
     </div>
@@ -418,7 +420,7 @@ setCropOpen(false);
                 disabled={createMut.isPending}
                 className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm disabled:opacity-60"
               >
-                {createMut.isPending ? "Ekleniyor..." : "Banner Ekle"}
+                {createMut.isPending ? t("Ekleniyor...") : t("Banner Ekle")}
               </button>
             </div>
           </div>
@@ -428,22 +430,22 @@ setCropOpen(false);
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-gray-500">
-                <th className="py-2 px-4">Görsel</th>
-                <th className="py-2 px-4">Başlık</th>
-                <th className="py-2 px-4">Target</th>
-                <th className="py-2 px-4">RestaurantId</th>
-                <th className="py-2 px-4">Placement</th>
-                <th className="py-2 px-4">Region</th>
-                <th className="py-2 px-4">Order</th>
-                <th className="py-2 px-4">Durum</th>
-                <th className="py-2 px-4">İşlem</th>
+                <th className="py-2 px-4">{t("Görsel")}</th>
+                <th className="py-2 px-4">{t("Başlık")}</th>
+                <th className="py-2 px-4">{t("Target")}</th>
+                <th className="py-2 px-4">{t("RestaurantId")}</th>
+                <th className="py-2 px-4">{t("Placement")}</th>
+                <th className="py-2 px-4">{t("Region")}</th>
+                <th className="py-2 px-4">{t("Order")}</th>
+                <th className="py-2 px-4">{t("Durum")}</th>
+                <th className="py-2 px-4">{t("İşlem")}</th>
               </tr>
             </thead>
             <tbody>
               {isLoading && (
                 <tr>
                   <td className="py-3 px-4 text-gray-500" colSpan={9}>
-                    Yükleniyor…
+                    {t("Yükleniyor…")}
                   </td>
                 </tr>
               )}
@@ -462,10 +464,10 @@ setCropOpen(false);
                     <div className="font-medium">{b.title ?? "-"}</div>
                     {b.linkUrl ? (
                       <a className="text-brand-700 underline" href={b.linkUrl} target="_blank">
-                        link
+                        {t("link")}
                       </a>
                     ) : (
-                      <div className="text-gray-400">link yok</div>
+                      <div className="text-gray-400">{t("link yok")}</div>
                     )}
                   </td>
 
@@ -480,8 +482,8 @@ setCropOpen(false);
                         })
                       }
                     >
-                      <option value="delivery">delivery</option>
-                      <option value="reservation">reservation</option>
+                      <option value="delivery">{t("delivery")}</option>
+                      <option value="reservation">{t("reservation")}</option>
                     </select>
                   </td>
 
@@ -536,7 +538,7 @@ setCropOpen(false);
                         })
                       }
                     >
-                      {b.isActive ? "Aktif" : "Pasif"}
+                      {b.isActive ? t("Aktif") : t("Pasif")}
                     </button>
                   </td>
 
@@ -544,10 +546,10 @@ setCropOpen(false);
                     <button
                       className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs hover:opacity-90"
                       onClick={() => {
-                        if (confirm("Banner silinsin mi?")) deleteMut.mutate(b._id);
+                        if (confirm(t("Banner silinsin mi?"))) deleteMut.mutate(b._id);
                       }}
                     >
-                      Sil
+                      {t("Sil")}
                     </button>
                   </td>
                 </tr>
@@ -556,7 +558,7 @@ setCropOpen(false);
               {!isLoading && banners.length === 0 && (
                 <tr>
                   <td className="py-3 px-4 text-gray-500" colSpan={9}>
-                    Kayıt yok
+                    {t("Kayıt yok")}
                   </td>
                 </tr>
               )}
@@ -565,22 +567,22 @@ setCropOpen(false);
         </div>
 
         <div className="text-xs text-gray-500">
-          Not: Banner tıklama aksiyonunu mobilde `targetType` üzerinden route edeceğiz.
+          {t("Not: Banner tıklama aksiyonunu mobilde `targetType` üzerinden route edeceğiz.")}
         </div>
         {cropOpen && imageSrc ? (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
     <div className="w-full max-w-3xl rounded-2xl bg-white shadow-xl overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div>
-          <div className="font-semibold">Banner Kırp</div>
-          <div className="text-xs text-gray-500">Çıktı: 1200×520 (oran ~2.3:1)</div>
+          <div className="font-semibold">{t("Banner Kırp")}</div>
+          <div className="text-xs text-gray-500">{t("Çıktı: 1200×520 (oran ~2.3:1)")}</div>
         </div>
         <button
           type="button"
           className="px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
           onClick={() => setCropOpen(false)}
         >
-          Kapat
+          {t("Kapat")}
         </button>
       </div>
 
@@ -599,7 +601,7 @@ setCropOpen(false);
       <div className="px-4 py-4 border-t">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="text-sm text-gray-700 font-medium">Zoom</div>
+            <div className="text-sm text-gray-700 font-medium">{t("Zoom")}</div>
             <input
               type="range"
               min={1}
@@ -623,7 +625,7 @@ setCropOpen(false);
                 setCroppedAreaPixels(null);
               }}
             >
-              Sıfırla
+              {t("Sıfırla")}
             </button>
 
             <button
@@ -642,11 +644,11 @@ setCropOpen(false);
                   setCropOpen(false);
                 } catch (e) {
                   console.error(e);
-                  alert("Kırpma sırasında hata oluştu");
+                  alert(t("Kırpma sırasında hata oluştu"));
                 }
               }}
             >
-              Kırpmayı Kaydet
+              {t("Kırpmayı Kaydet")}
             </button>
           </div>
         </div>

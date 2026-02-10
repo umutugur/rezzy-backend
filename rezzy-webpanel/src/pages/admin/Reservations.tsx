@@ -4,6 +4,7 @@ import { api } from "../../api/client";
 import Sidebar from "../../components/Sidebar";
 import { Card } from "../../components/Card";
 import { showToast } from "../../ui/Toast";
+import { t as i18nT, useI18n } from "../../i18n";
 
 type Row = {
   _id: string;
@@ -22,7 +23,7 @@ type Row = {
 };
 type Resp = { items: Row[]; total: number; page: number; limit: number };
 
-const trStatus: Record<string, string> = {
+const statusLabels: Record<string, string> = {
   pending: "Bekleyen",
   confirmed: "Onaylı",
   arrived: "Geldi",
@@ -56,7 +57,15 @@ async function fetchAdminReservations(p: {
 }
 
 function toCSV(rows: Row[]) {
-  const head = ["Tarih", "Restoran", "Kullanıcı", "E-posta", "Durum", "Kişi", "Tutar"];
+  const head = [
+    i18nT("Tarih"),
+    i18nT("Restoran"),
+    i18nT("Kullanıcı"),
+    i18nT("E-posta"),
+    i18nT("Durum"),
+    i18nT("Kişi"),
+    i18nT("Tutar")
+  ];
   const esc = (s: any) => `"${(s ?? "").toString().replaceAll('"', '""')}"`;
   const lines = rows.map((r) =>
     [
@@ -64,7 +73,7 @@ function toCSV(rows: Row[]) {
       getRestaurantLabel(r),
       getUserLabel(r),
       getUserEmail(r),
-      trStatus[r.status] || r.status,
+      i18nT(statusLabels[r.status] || r.status),
       r.partySize ?? "",
       (r.totalPrice ?? "").toString().replace(".", ",")
     ]
@@ -75,6 +84,7 @@ function toCSV(rows: Row[]) {
 }
 
 export default function AdminReservationsPage() {
+  const { t } = useI18n();
   const [status, setStatus] = React.useState("");
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
@@ -115,9 +125,9 @@ export default function AdminReservationsPage() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      showToast("CSV indirildi", "success");
+      showToast(t("CSV indirildi"), "success");
     } catch {
-      showToast("CSV oluşturulamadı", "error");
+      showToast(t("CSV oluşturulamadı"), "error");
     }
   };
 
@@ -125,73 +135,73 @@ export default function AdminReservationsPage() {
     <div className="flex gap-6">
       <Sidebar
         items={[
-          { to: "/admin", label: "Dashboard" },
-          { to: "/admin/banners", label: "Bannerlar" },
-          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
-          { to: "/admin/organizations", label: "Organizasyonlar" },
-          { to: "/admin/restaurants", label: "Restoranlar" },
-          { to: "/admin/users", label: "Kullanıcılar" },
-          { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" },
-          { to: "/admin/notifications", label: "Bildirim Gönder" },
+          { to: "/admin", label: t("Dashboard") },
+          { to: "/admin/banners", label: t("Bannerlar") },
+          { to: "/admin/commissions", label: t("Komisyonlar") }, // ✅ menüye eklendi
+          { to: "/admin/organizations", label: t("Organizasyonlar") },
+          { to: "/admin/restaurants", label: t("Restoranlar") },
+          { to: "/admin/users", label: t("Kullanıcılar") },
+          { to: "/admin/reservations", label: t("Rezervasyonlar") },
+          { to: "/admin/moderation", label: t("Moderasyon") },
+          { to: "/admin/notifications", label: t("Bildirim Gönder") },
         ]}
       />
       <div className="flex-1 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Tüm Rezervasyonlar</h2>
+          <h2 className="text-lg font-semibold">{t("Tüm Rezervasyonlar")}</h2>
           <button onClick={handleExport} className="rounded-lg bg-gray-900 hover:bg-black text-white px-4 py-2">
-            CSV Dışa Aktar
+            {t("CSV Dışa Aktar")}
           </button>
         </div>
 
-        <Card title="Filtreler">
+        <Card title={t("Filtreler")}>
           <div className="flex flex-wrap gap-3 items-end">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Durum</label>
+              <label className="block text-sm text-gray-600 mb-1">{t("Durum")}</label>
               <select value={status} onChange={(e) => setStatus(e.target.value)} className="border rounded-lg px-3 py-2">
-                <option value="">Hepsi</option>
-                <option value="pending">Bekleyen</option>
-                <option value="confirmed">Onaylı</option>
-                <option value="arrived">Geldi</option>
-                <option value="cancelled">İptal</option>
-                <option value="no_show">Gelmedi</option>
+                <option value="">{t("Hepsi")}</option>
+                <option value="pending">{t("Bekleyen")}</option>
+                <option value="confirmed">{t("Onaylı")}</option>
+                <option value="arrived">{t("Geldi")}</option>
+                <option value="cancelled">{t("İptal")}</option>
+                <option value="no_show">{t("Gelmedi")}</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Başlangıç</label>
+              <label className="block text-sm text-gray-600 mb-1">{t("Başlangıç")}</label>
               <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="border rounded-lg px-3 py-2" />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Bitiş</label>
+              <label className="block text-sm text-gray-600 mb-1">{t("Bitiş")}</label>
               <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="border rounded-lg px-3 py-2" />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Sayfa</label>
+              <label className="block text-sm text-gray-600 mb-1">{t("Sayfa")}</label>
               <input type="number" min={1} value={page} onChange={(e) => setPage(Number(e.target.value) || 1)} className="w-24 border rounded-lg px-3 py-2" />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Limit</label>
+              <label className="block text-sm text-gray-600 mb-1">{t("Limit")}</label>
               <input type="number" min={1} value={limit} onChange={(e) => setLimit(Number(e.target.value) || 20)} className="w-24 border rounded-lg px-3 py-2" />
             </div>
             <button onClick={() => refetch()} className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2" disabled={isFetching}>
-              {isFetching ? "Getiriliyor…" : "Uygula"}
+              {isFetching ? t("Getiriliyor…") : t("Uygula")}
             </button>
           </div>
         </Card>
 
-        {isLoading && <div>Yükleniyor…</div>}
-        {error && <div className="text-red-600 text-sm">Liste çekilemedi</div>}
+        {isLoading && <div>{t("Yükleniyor…")}</div>}
+        {error && <div className="text-red-600 text-sm">{t("Liste çekilemedi")}</div>}
 
         <div className="overflow-auto bg-white rounded-2xl shadow-soft">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-gray-500">
-                <th className="py-2 px-4">Tarih</th>
-                <th className="py-2 px-4">Restoran</th>
-                <th className="py-2 px-4">Kullanıcı</th>
-                <th className="py-2 px-4">Durum</th>
-                <th className="py-2 px-4">Kişi</th>
-                <th className="py-2 px-4">Tutar (₺)</th>
+                <th className="py-2 px-4">{t("Tarih")}</th>
+                <th className="py-2 px-4">{t("Restoran")}</th>
+                <th className="py-2 px-4">{t("Kullanıcı")}</th>
+                <th className="py-2 px-4">{t("Durum")}</th>
+                <th className="py-2 px-4">{t("Kişi")}</th>
+                <th className="py-2 px-4">{t("Tutar (₺)")}</th>
               </tr>
             </thead>
             <tbody>
@@ -202,13 +212,13 @@ export default function AdminReservationsPage() {
                   <td className="py-2 px-4">
                     {getUserLabel(r)} <span className="text-gray-500">({getUserEmail(r)})</span>
                   </td>
-                  <td className="py-2 px-4">{trStatus[r.status] || r.status}</td>
+                  <td className="py-2 px-4">{t(statusLabels[r.status] || r.status)}</td>
                   <td className="py-2 px-4">{r.partySize ?? "-"}</td>
                   <td className="py-2 px-4">{r.totalPrice?.toLocaleString("tr-TR") ?? "-"}</td>
                 </tr>
               ))}
               {(!data?.items || data.items.length === 0) && (
-                <tr><td className="py-3 px-4 text-gray-500" colSpan={6}>Kayıt yok</td></tr>
+                <tr><td className="py-3 px-4 text-gray-500" colSpan={6}>{t("Kayıt yok")}</td></tr>
               )}
             </tbody>
           </table>
@@ -216,9 +226,11 @@ export default function AdminReservationsPage() {
 
         {data && (
           <div className="flex items-center gap-2">
-            <button className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Önceki</button>
-            <div className="text-sm text-gray-600">Sayfa {page} / {totalPages} • Toplam {data.total}</div>
-            <button className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Sonraki</button>
+            <button className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>{t("Önceki")}</button>
+            <div className="text-sm text-gray-600">
+              {t("Sayfa {page} / {totalPages} • Toplam {total}", { page, totalPages, total: data.total })}
+            </div>
+            <button className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>{t("Sonraki")}</button>
           </div>
         )}
       </div>

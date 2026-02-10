@@ -5,6 +5,7 @@ import { restaurantCancelOrder } from "../../api/client";
 import type { LiveTable } from "../../api/client";
 import { authStore } from "../../store/auth";
 import { getCurrencySymbolForRegion } from "../../utils/currency";
+import { useI18n, t as i18nT } from "../../i18n";
 
 type TableDetail = {
   table?: LiveTable;
@@ -41,9 +42,9 @@ type Props = {
 };
 
 function formatTime(v?: string | null): string {
-  if (!v) return "-";
+  if (!v) return i18nT("-");
   const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return "-";
+  if (Number.isNaN(d.getTime())) return i18nT("-");
   return d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
 }
 
@@ -60,27 +61,27 @@ function minutesSince(iso?: string | null): number | undefined {
 function statusLabel(status: LiveTable["status"]): string {
   switch (status) {
     case "empty":
-      return "Boş";
+      return i18nT("Boş");
     case "occupied":
-      return "Dolu";
+      return i18nT("Dolu");
     case "order_active":
-      return "Sipariş Var";
+      return i18nT("Sipariş Var");
     case "waiter_call":
-      return "Garson Çağrısı";
+      return i18nT("Garson Çağrısı");
     case "bill_request":
-      return "Hesap İstendi";
+      return i18nT("Hesap İstendi");
     case "order_ready":
-      return "Sipariş Hazır";
+      return i18nT("Sipariş Hazır");
     default:
       return status;
   }
 }
 
 function channelLabel(ch?: string | null): string {
-  if (!ch) return "Lokal Adisyon";
-  if (ch === "QR") return "QR Menü";
-  if (ch === "REZVIX") return "Rezvix Rezervasyon";
-  if (ch === "WALK_IN") return "Walk-in Sipariş";
+  if (!ch) return i18nT("Lokal Adisyon");
+  if (ch === "QR") return i18nT("QR Menü");
+  if (ch === "REZVIX") return i18nT("Rezvix Rezervasyon");
+  if (ch === "WALK_IN") return i18nT("Walk-in Sipariş");
   return ch;
 }
 
@@ -119,10 +120,10 @@ function formatMoney(amount: any, symbol: string): string {
 
 
 function serviceRequestLabel(type: string): string {
-  if (type === "waiter") return "Garson çağrısı";
-  if (type === "bill") return "Hesap istendi";
-  if (type === "order_ready") return "Sipariş hazır";
-  return "Servis isteği";
+  if (type === "waiter") return i18nT("Garson çağrısı");
+  if (type === "bill") return i18nT("Hesap istendi");
+  if (type === "order_ready") return i18nT("Sipariş hazır");
+  return i18nT("Servis isteği");
 }
 
 
@@ -144,7 +145,7 @@ function resolveOrderItemTitle(it: any): string {
     const s = String(c ?? "").trim();
     if (s) return s;
   }
-  return "Ürün";
+  return i18nT("Ürün");
 }
 
 function extractModifierLines(it: any, currencySymbol: string): string[] {
@@ -289,6 +290,7 @@ export const TableDetailModal: React.FC<Props> = ({
   cancelOrderPendingId,
   hideCancelledOrders,
 }) => {
+  const { t } = useI18n();
   if (!open || !table) return null;
 
   const mins = minutesSince(table.lastOrderAt ?? null);
@@ -405,7 +407,7 @@ export const TableDetailModal: React.FC<Props> = ({
 
   const hasError = !!error;
   const errorMessage =
-    error instanceof Error ? error.message : "Masa detayı getirilemedi.";
+    error instanceof Error ? error.message : t("Masa detayı getirilemedi.");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(7,9,20,0.42)] backdrop-blur-md">
@@ -425,18 +427,18 @@ export const TableDetailModal: React.FC<Props> = ({
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="space-y-1">
             <div className="text-[11px] tracking-[0.18em] uppercase text-slate-400">
-              MASA DETAYI
+              {t("MASA DETAYI")}
             </div>
             <div className="text-[18px] font-semibold text-slate-900">
               {table.name}{" "}
               <span className="text-[12px] font-normal text-slate-500">
-                ({table.capacity || 2} kişilik)
+                ({t("{count} kişilik", { count: table.capacity || 2 })})
               </span>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] text-slate-700">
-                Kat {table.floor ?? 1}
+                {t("Kat {count}", { count: table.floor ?? 1 })}
               </span>
 
               <span
@@ -449,7 +451,7 @@ export const TableDetailModal: React.FC<Props> = ({
               </span>
 
               <span className="inline-flex items-center rounded-full bg-slate-900/90 text-amber-300 px-2.5 py-1 text-[11px] font-medium">
-                Durum:
+                {t("Durum")}:
                 <span className="ml-1 text-white">
                   {statusLabel(table.status)}
                 </span>
@@ -457,9 +459,9 @@ export const TableDetailModal: React.FC<Props> = ({
 
               {typeof mins === "number" && (
                 <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] text-slate-600">
-                  Son hareket:
+                  {t("Son hareket")}:
                   <span className="ml-1 font-medium text-slate-800">
-                    {mins === 0 ? "0 dk" : `${mins} dk`}
+                    {mins === 0 ? t("0 dk") : t("{count} dk", { count: mins })}
                   </span>
                 </span>
               )}
@@ -469,18 +471,18 @@ export const TableDetailModal: React.FC<Props> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-[11px] rounded-full border border-slate-200 bg-white/90 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
-          >
-            Kapat
-          </button>
-        </div>
+          className="px-3 py-1.5 text-[11px] rounded-full border border-slate-200 bg-white/90 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
+        >
+          {t("Kapat")}
+        </button>
+      </div>
 
         {/* ✅ 2 kolon yatay layout */}
         <div className="flex-1 min-h-0 grid grid-cols-12 gap-5">
           {/* Sol kolon (scroll) */}
           <div className="col-span-8 min-h-0 overflow-y-auto pr-1 space-y-3 text-[11px]">
             {isLoading && (
-              <div className="text-slate-500">Masa detayı yükleniyor…</div>
+              <div className="text-slate-500">{t("Masa detayı yükleniyor…")}</div>
             )}
 
             {hasError && !isLoading && (
@@ -494,7 +496,7 @@ export const TableDetailModal: React.FC<Props> = ({
                   <div className="rounded-2xl bg-gradient-to-r from-[#312e81] via-[#1f2937] to-[#111827] text-[11px] text-slate-100 px-4 py-3 flex flex-col gap-1 shadow-[0_16px_40px_rgba(15,23,42,0.65)] border border-indigo-500/40">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-indigo-100">
-                        Rezvix rezervasyonu
+                        {t("Rezvix rezervasyonu")}
                       </span>
                       <span className="text-[10px] text-indigo-200">
                         {formatTime(tableDetail.reservation.dateTimeUTC)}
@@ -502,25 +504,25 @@ export const TableDetailModal: React.FC<Props> = ({
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-200">
-                        Misafir:{" "}
+                        {t("Misafir")}:{" "}
                         <span className="font-semibold">
                           {tableDetail.reservation.displayName ||
                             tableDetail.reservation.guestName ||
-                            "İsimsiz misafir"}
+                            t("İsimsiz misafir")}
                         </span>
                       </span>
                       <span className="text-slate-200">
-                        {tableDetail.reservation.partySize || 2} kişi
+                        {t("{count} kişi", { count: tableDetail.reservation.partySize || 2 })}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-[10px] text-slate-300 mt-1">
                       <span>
-                        Depozito:{" "}
+                        {t("Depozito")}:{" "}
                         <span className="font-semibold">
                           {formatMoney(tableDetail.reservation.depositAmount || 0, currencySymbol)}
                         </span>
                       </span>
-                      <span>Durum: {tableDetail.reservation.status}</span>
+                      <span>{t("Durum")}: {tableDetail.reservation.status}</span>
                     </div>
                   </div>
                 )}
@@ -529,18 +531,18 @@ export const TableDetailModal: React.FC<Props> = ({
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <div className="text-[11px] font-semibold text-slate-700">
-                      Siparişler
+                      {t("Siparişler")}
                     </div>
                   {hasOrders && (
                     <div className="text-[10px] text-slate-400">
-                      {visibleOrders.length} kayıt
+                      {t("{count} kayıt", { count: visibleOrders.length })}
                     </div>
                   )}
                   </div>
 
                   {!hasOrders && (
                     <div className="text-[11px] text-slate-500">
-                      Henüz sipariş yok.
+                      {t("Henüz sipariş yok.")}
                     </div>
                   )}
 
@@ -569,7 +571,7 @@ export const TableDetailModal: React.FC<Props> = ({
                             {/* Cancelled marker */}
                             {(o?.isCancelled === true || String(o?.status ?? "").toLowerCase() === "cancelled" || String(o?.status ?? "").toLowerCase() === "canceled") ? (
                               <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] text-red-700 border border-red-200">
-                                İptal
+                                {t("İptal")}
                               </span>
                             ) : null}
                           </div>
@@ -590,16 +592,16 @@ export const TableDetailModal: React.FC<Props> = ({
                                 onClick={() => {
                                   const oid = String(o?._id ?? o?.id ?? "");
                                   if (!oid) return;
-                                  if (confirm("Bu siparişi iptal etmek istiyor musun?")) {
+                                  if (confirm(t("Bu siparişi iptal etmek istiyor musun?"))) {
                                     handleCancelOrder(oid);
                                   }
                                 }}
-                                title="Siparişi iptal et"
+                                title={t("Siparişi iptal et")}
                               >
                                 {effectiveCancelPendingId &&
                                 effectiveCancelPendingId === String(o?._id ?? o?.id ?? "")
-                                  ? "İptal ediliyor…"
-                                  : "İptal"}
+                                  ? t("İptal ediliyor…")
+                                  : t("İptal")}
                               </button>
                             ) : null}
                           </div>
@@ -622,7 +624,7 @@ export const TableDetailModal: React.FC<Props> = ({
                                 </div>
                                 {modLines.length > 0 && (
                                   <div className="mt-0.5 text-[10px] text-slate-500">
-                                    <span className="text-slate-400">Opsiyonlar:</span> {modLines.join(", ")}
+                                    <span className="text-slate-400">{t("Opsiyonlar")}:</span> {modLines.join(", ")}
                                   </div>
                                 )}
                               </div>
@@ -637,12 +639,12 @@ export const TableDetailModal: React.FC<Props> = ({
                 {/* Servis istekleri */}
                 <div className="space-y-1">
                   <div className="text-[11px] font-semibold text-slate-700">
-                    Garson / Servis İstekleri
+                    {t("Garson / Servis İstekleri")}
                   </div>
 
                   {!hasRequests && (
                     <div className="text-[11px] text-slate-500">
-                      Açık servis isteği yok.
+                      {t("Açık servis isteği yok.")}
                     </div>
                   )}
 
@@ -672,26 +674,26 @@ export const TableDetailModal: React.FC<Props> = ({
             {!isLoading && !hasError && tableDetail?.totals && (
               <div className="rounded-[18px] bg-slate-900 text-slate-50 px-4 py-3 shadow-[0_18px_40px_rgba(15,23,42,0.7)] border border-slate-800">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-[11px] font-semibold">Adisyon Özeti</div>
+                  <div className="text-[11px] font-semibold">{t("Adisyon Özeti")}</div>
                   <div className="text-[10px] text-slate-300">
-                    Açılış: {formatTime(tableDetail.session?.openedAt ?? null)}
+                    {t("Açılış")}: {formatTime(tableDetail.session?.openedAt ?? null)}
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-slate-300">Kart</span>
+                  <span className="text-slate-300">{t("Kart")}</span>
                   <span className="font-semibold">
                     {formatMoney(tableDetail.totals.cardTotal, currencySymbol)}
                   </span>
                 </div>
                 <div className="mt-1 flex items-center justify-between text-[11px]">
-                  <span className="text-slate-300">Nakit / Mekanda</span>
+                  <span className="text-slate-300">{t("Nakit / Mekanda")}</span>
                   <span className="font-semibold">
                     {formatMoney(tableDetail.totals.payAtVenueTotal, currencySymbol)}
                   </span>
                 </div>
                 <div className="mt-1 flex items-center justify-between text-[11px] border-t border-slate-700 pt-2">
                   <span className="font-semibold text-slate-100">
-                    Genel Toplam
+                    {t("Genel Toplam")}
                   </span>
                   <span className="font-semibold text-amber-300">
                     {formatMoney(tableDetail.totals.grandTotal, currencySymbol)}
@@ -708,7 +710,7 @@ export const TableDetailModal: React.FC<Props> = ({
                 disabled={!table}
                 className="w-full rounded-full bg-gradient-to-r from-purple-600 to-purple-500 px-4 py-2 text-[12px] font-semibold text-white shadow-[0_14px_30px_rgba(126,34,206,0.4)] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
-                Yeni Sipariş Ekle — {table.name}
+                {t("Yeni Sipariş Ekle — {table}", { table: table.name })}
               </button>
 
               <button
@@ -717,7 +719,7 @@ export const TableDetailModal: React.FC<Props> = ({
                 disabled={resolveServicePending || !hasRequests}
                 className="w-full rounded-full bg-sky-500 px-4 py-2 text-[12px] font-medium text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
-                {resolveServicePending ? "İşleniyor…" : "Çağrı / Hesap Çözüldü"}
+                {resolveServicePending ? t("İşleniyor…") : t("Çağrı / Hesap Çözüldü")}
               </button>
 
               {isSelfService && (
@@ -727,7 +729,7 @@ export const TableDetailModal: React.FC<Props> = ({
                   disabled={notifyOrderReadyPending || !canNotifyOrderReady}
                   className="w-full rounded-full bg-amber-500 px-4 py-2 text-[12px] font-medium text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
-                  {notifyOrderReadyPending ? "Bildirim Gönderiliyor…" : "Hazırlandı"}
+                  {notifyOrderReadyPending ? t("Bildirim Gönderiliyor…") : t("Hazırlandı")}
                 </button>
               )}
 
@@ -737,7 +739,7 @@ export const TableDetailModal: React.FC<Props> = ({
                 disabled={closeSessionPending || !hasSession}
                 className="w-full rounded-full bg-emerald-600 px-4 py-2 text-[12px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
-                {closeSessionPending ? "Adisyon Kapatılıyor…" : "Adisyonu Kapat"}
+                {closeSessionPending ? t("Adisyon Kapatılıyor…") : t("Adisyonu Kapat")}
               </button>
 
               <button
@@ -746,7 +748,7 @@ export const TableDetailModal: React.FC<Props> = ({
                 disabled={!hasOrders}
                 className="w-full rounded-full bg-slate-900 px-4 py-2 text-[12px] font-medium text-slate-50 hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
-                Son Siparişi Yazdır
+                {t("Son Siparişi Yazdır")}
               </button>
 
               <button
@@ -755,7 +757,7 @@ export const TableDetailModal: React.FC<Props> = ({
                 disabled={!tableDetail}
                 className="w-full rounded-full bg-[#7b2c2c] px-4 py-2 text-[12px] font-medium text-[#fff7f3] hover:bg-[#9b3636] disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
-                Hesap Yazdır
+                {t("Hesap Yazdır")}
               </button>
             </div>
           </div>

@@ -855,7 +855,7 @@ export default function RestaurantProfilePage() {
                       setHours((prev) => prev.map((x, i) => (i === idx ? { ...x, open: e.target.value } : x)))
                     }
                   />
-                  <span>—</span>
+                  <span>{t("—")}</span>
                   <input
                     type="time"
                     className="border rounded-lg px-3 py-2"

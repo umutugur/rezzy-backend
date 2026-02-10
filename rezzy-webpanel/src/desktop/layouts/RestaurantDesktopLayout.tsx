@@ -18,6 +18,7 @@ import { asId } from "../../lib/id";
 import { api, restaurantGetLiveTables } from "../../api/client";
 import { restaurantListDeliveryOrders, type DeliveryOrderRow } from "../../api/delivery";
 import { getCurrencySymbolForRegion } from "../../utils/currency";
+import { useI18n } from "../../i18n";
 
 export type RestaurantDesktopLayoutProps = PropsWithChildren<{
   activeNav: DesktopNavKey;
@@ -98,6 +99,7 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
   summaryChips,
   children,
 }) => {
+  const { t } = useI18n();
   const [theme, setTheme] = useState<DesktopThemeKey>(() =>
     getInitialDesktopTheme()
   );
@@ -371,8 +373,8 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
             >
               <div>
                 {updateReady
-                  ? "Yeni sürüm indirildi. Yeniden başlatınca güncellenecek."
-                  : "Yeni sürüm bulundu. Arka planda indiriliyor…"}
+                  ? t("Yeni sürüm indirildi. Yeniden başlatınca güncellenecek.")
+                  : t("Yeni sürüm bulundu. Arka planda indiriliyor…")}
               </div>
               {updateReady && (
                 <button
@@ -387,7 +389,7 @@ export const RestaurantDesktopLayout: React.FC<RestaurantDesktopLayoutProps> = (
                     fontWeight: 700,
                   }}
                 >
-                  Yeniden Başlat
+                  {t("Yeniden Başlat")}
                 </button>
               )}
             </div>

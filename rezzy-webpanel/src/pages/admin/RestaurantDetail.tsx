@@ -15,6 +15,7 @@ import {
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
 import { DEFAULT_LANGUAGE, LANG_OPTIONS } from "../../utils/languages";
+import { t as i18nT, useI18n } from "../../i18n";
 
 // ---- Tipler
 type RestaurantMember = {
@@ -90,13 +91,13 @@ function prettyRestaurantRole(role?: string) {
   if (!role) return "-";
   switch (role) {
     case "location_manager":
-      return "Şube Yöneticisi";
+      return i18nT("Şube Yöneticisi");
     case "staff":
-      return "Personel";
+      return i18nT("Personel");
     case "host":
-      return "Host";
+      return i18nT("Host");
     case "kitchen":
-      return "Mutfak";
+      return i18nT("Mutfak");
     default:
       return role;
   }
@@ -106,6 +107,7 @@ export default function AdminRestaurantDetailPage() {
   const params = useParams();
   const rid = params.rid ?? "";
   const qc = useQueryClient();
+  const { t } = useI18n();
 
   const [commission, setCommission] = React.useState<string>("");
   const [isActive, setIsActive] = React.useState<boolean>(true);
@@ -237,7 +239,7 @@ export default function AdminRestaurantDetailPage() {
       const msg =
         err?.response?.data?.message ||
         err?.message ||
-        "Kullanıcı aranamadı";
+        t("Kullanıcı aranamadı");
       showToast(msg, "error");
     } finally {
       setMemberSearchLoading(false);
@@ -256,7 +258,7 @@ export default function AdminRestaurantDetailPage() {
         role: memberRole,
       }),
     onSuccess: () => {
-      showToast("Restoran üyesi eklendi", "success");
+      showToast(t("Restoran üyesi eklendi"), "success");
       setSelectedMember(null);
       setMemberQuery("");
       setMemberRole("location_manager");
@@ -264,7 +266,7 @@ export default function AdminRestaurantDetailPage() {
     },
     onError: (err: any) => {
       const msg =
-        err?.response?.data?.message || err?.message || "Üye eklenemedi";
+        err?.response?.data?.message || err?.message || t("Üye eklenemedi");
       showToast(msg, "error");
     },
   });
@@ -272,25 +274,25 @@ export default function AdminRestaurantDetailPage() {
   const removeMemberMut = useMutation({
     mutationFn: (userId: string) => adminRemoveRestaurantMember(rid, userId),
     onSuccess: () => {
-      showToast("Restoran üyeliği kaldırıldı", "success");
+      showToast(t("Restoran üyeliği kaldırıldı"), "success");
       qc.invalidateQueries({ queryKey: ["admin-restaurant", rid] });
     },
     onError: (err: any) => {
       const msg =
         err?.response?.data?.message ||
         err?.message ||
-        "Üyelik kaldırılamadı";
+        t("Üyelik kaldırılamadı");
       showToast(msg, "error");
     },
   });
 
   const handleAddMember = () => {
     if (!selectedMember?._id) {
-      showToast("Önce kullanıcı seçin", "error");
+      showToast(t("Önce kullanıcı seçin"), "error");
       return;
     }
     if (!memberRole) {
-      showToast("Rol seçin", "error");
+      showToast(t("Rol seçin"), "error");
       return;
     }
     addMemberMut.mutate();
@@ -327,18 +329,18 @@ export default function AdminRestaurantDetailPage() {
   const activeMut = useMutation({
     mutationFn: (next: boolean) => adminUpdateRestaurant(rid, { isActive: next }),
     onSuccess: () => {
-      showToast("Restoran durumu güncellendi", "success");
+      showToast(t("Restoran durumu güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["admin-restaurant", rid] });
     },
     onError: () => {
-      showToast("Restoran durumu güncellenemedi", "error");
+      showToast(t("Restoran durumu güncellenemedi"), "error");
     },
   });
 
   const saveInfoMut = useMutation({
     mutationFn: async () => {
       const current = infoQ.data;
-      if (!current) throw new Error("Restoran bilgisi yüklenmedi");
+      if (!current) throw new Error(t("Restoran bilgisi yüklenmedi"));
 
       // Sadece değişen alanları gönder (backend: No valid fields to update)
       const patch: any = {};
@@ -430,19 +432,19 @@ export default function AdminRestaurantDetailPage() {
       }
 
       // Clean nulls to undefined? Backend expects numbers; we use null for clears so it hits `!= null` checks.
-      if (Object.keys(patch).length === 0) throw new Error("Değişiklik yok");
+      if (Object.keys(patch).length === 0) throw new Error(t("Değişiklik yok"));
 
       return await adminUpdateRestaurant(rid, patch);
     },
     onSuccess: () => {
-      showToast("Restoran bilgileri güncellendi", "success");
+      showToast(t("Restoran bilgileri güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["admin-restaurant", rid] });
     },
     onError: (err: any) => {
       const msg =
         err?.response?.data?.message ||
         err?.message ||
-        "Restoran bilgileri güncellenemedi";
+        t("Restoran bilgileri güncellenemedi");
       showToast(msg, "error");
     },
   });
@@ -452,18 +454,18 @@ export default function AdminRestaurantDetailPage() {
     mutationFn: () => {
       const raw = Number(commission);
       if (Number.isNaN(raw) || raw < 0) {
-        throw new Error("Geçerli bir komisyon oranı girin");
+        throw new Error(t("Geçerli bir komisyon oranı girin"));
       }
       const rate = raw / 100; // % değerini 0..1'e çevir
       return adminUpdateRestaurantCommission(rid, rate);
     },
     onSuccess: () => {
-      showToast("Komisyon güncellendi", "success");
+      showToast(t("Komisyon güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["admin-restaurant", rid] });
     },
     onError: (err: any) => {
       const msg =
-        err?.response?.data?.message || err?.message || "Komisyon güncellenemedi";
+        err?.response?.data?.message || err?.message || t("Komisyon güncellenemedi");
       showToast(msg, "error");
     },
   });
@@ -477,59 +479,59 @@ export default function AdminRestaurantDetailPage() {
     <div className="flex gap-6">
       <Sidebar
         items={[
-          { to: "/admin", label: "Dashboard" },
-          { to: "/admin/banners", label: "Bannerlar" },
-          { to: "/admin/commissions", label: "Komisyonlar" },
-          { to: "/admin/organizations", label: "Organizasyonlar" },
-          { to: "/admin/restaurants", label: "Restoranlar" },
-          { to: "/admin/users", label: "Kullanıcılar" },
-          { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" },
-          { to: "/admin/notifications", label: "Bildirim Gönder" },
+          { to: "/admin", label: t("Dashboard") },
+          { to: "/admin/banners", label: t("Bannerlar") },
+          { to: "/admin/commissions", label: t("Komisyonlar") },
+          { to: "/admin/organizations", label: t("Organizasyonlar") },
+          { to: "/admin/restaurants", label: t("Restoranlar") },
+          { to: "/admin/users", label: t("Kullanıcılar") },
+          { to: "/admin/reservations", label: t("Rezervasyonlar") },
+          { to: "/admin/moderation", label: t("Moderasyon") },
+          { to: "/admin/notifications", label: t("Bildirim Gönder") },
         ]}
       />
 
       <div className="flex-1 space-y-6">
         <h2 className="text-lg font-semibold">
-          {infoQ.data?.name || "Restoran Detayı"}
+          {infoQ.data?.name || t("Restoran Detayı")}
         </h2>
 
         {/* Bilgiler */}
-        <Card title="Bilgiler">
+        <Card title={t("Bilgiler")}>
           {infoQ.isLoading ? (
-            "Yükleniyor…"
+            t("Yükleniyor…")
           ) : (
             <div className="space-y-4">
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-gray-500 text-sm block">
-                    Restoran Adı
+                    {t("Restoran Adı")}
                   </label>
                   <input
                     type="text"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.name}
                     onChange={(e) => setInfoField("name", e.target.value)}
-                    placeholder="Restoran adı"
+                    placeholder={t("Restoran adı")}
                   />
                 </div>
 
                 <div>
-                  <label className="text-gray-500 text-sm block">Bölge</label>
+                  <label className="text-gray-500 text-sm block">{t("Bölge")}</label>
                   <input
                     type="text"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.region}
                     onChange={(e) => setInfoField("region", e.target.value)}
-                    placeholder="TR"
+                    placeholder={t("TR")}
                   />
                   <div className="text-xs text-gray-400 mt-1">
-                    Örn: TR / DE / US
+                    {t("Örn: TR / DE / US")}
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-gray-500 text-sm block">Dil</label>
+                  <label className="text-gray-500 text-sm block">{t("Dil")}</label>
                   <select
                     className="border rounded-lg px-3 py-2 w-full text-sm bg-white"
                     value={infoForm.preferredLanguage}
@@ -547,136 +549,136 @@ export default function AdminRestaurantDetailPage() {
 
                 {/* Business Type */}
                 <div>
-                  <label className="text-gray-500 text-sm block">Business Type</label>
+                  <label className="text-gray-500 text-sm block">{t("Business Type")}</label>
                   <input
                     type="text"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.businessType}
                     onChange={(e) => setInfoField("businessType", e.target.value)}
-                    placeholder="restaurant / cafe / bar ..."
+                    placeholder={t("restaurant / cafe / bar ...")}
                   />
                 </div>
 
                 {/* Category Set */}
                 <div>
-                  <label className="text-gray-500 text-sm block">Category Set</label>
+                  <label className="text-gray-500 text-sm block">{t("Category Set")}</label>
                   <input
                     type="text"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.categorySet}
                     onChange={(e) => setInfoField("categorySet", e.target.value)}
-                    placeholder="default"
+                    placeholder={t("default")}
                   />
                 </div>
 
                 <div>
-                  <label className="text-gray-500 text-sm block">Şehir</label>
+                  <label className="text-gray-500 text-sm block">{t("Şehir")}</label>
                   <input
                     type="text"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.city}
                     onChange={(e) => setInfoField("city", e.target.value)}
-                    placeholder="İstanbul"
+                    placeholder={t("İstanbul")}
                   />
                 </div>
 
                 <div>
-                  <label className="text-gray-500 text-sm block">Telefon</label>
+                  <label className="text-gray-500 text-sm block">{t("Telefon")}</label>
                   <input
                     type="text"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.phone}
                     onChange={(e) => setInfoField("phone", e.target.value)}
-                    placeholder="05xx..."
+                    placeholder={t("05xx...")}
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="text-gray-500 text-sm block">Adres</label>
+                  <label className="text-gray-500 text-sm block">{t("Adres")}</label>
                   <input
                     type="text"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.address}
                     onChange={(e) => setInfoField("address", e.target.value)}
-                    placeholder="Adres"
+                    placeholder={t("Adres")}
                   />
                 </div>
 
                 {/* Map Address */}
                 <div className="md:col-span-2">
-                  <label className="text-gray-500 text-sm block">Map Address</label>
+                  <label className="text-gray-500 text-sm block">{t("Map Address")}</label>
                   <input
                     type="text"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.mapAddress}
                     onChange={(e) => setInfoField("mapAddress", e.target.value)}
-                    placeholder="Harita adresi"
+                    placeholder={t("Harita adresi")}
                   />
                 </div>
 
                 {/* Place ID */}
                 <div>
-                  <label className="text-gray-500 text-sm block">Place ID</label>
+                  <label className="text-gray-500 text-sm block">{t("Place ID")}</label>
                   <input
                     type="text"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.placeId}
                     onChange={(e) => setInfoField("placeId", e.target.value)}
-                    placeholder="Google placeId"
+                    placeholder={t("Google placeId")}
                   />
                 </div>
 
                 {/* Google Maps URL */}
                 <div>
-                  <label className="text-gray-500 text-sm block">Google Maps URL</label>
+                  <label className="text-gray-500 text-sm block">{t("Google Maps URL")}</label>
                   <input
                     type="text"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.googleMapsUrl}
                     onChange={(e) => setInfoField("googleMapsUrl", e.target.value)}
-                    placeholder="https://maps.google.com/..."
+                    placeholder={t("https://maps.google.com/...")}
                   />
                 </div>
 
                 {/* Konum Lng */}
                 <div>
-                  <label className="text-gray-500 text-sm block">Konum (Lng)</label>
+                  <label className="text-gray-500 text-sm block">{t("Konum (Lng)")}</label>
                   <input
                     type="number"
                     step="any"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.locationLng}
                     onChange={(e) => setInfoField("locationLng", e.target.value)}
-                    placeholder="29.0"
+                    placeholder={t("29.0")}
                   />
                 </div>
 
                 {/* Konum Lat */}
                 <div>
-                  <label className="text-gray-500 text-sm block">Konum (Lat)</label>
+                  <label className="text-gray-500 text-sm block">{t("Konum (Lat)")}</label>
                   <input
                     type="number"
                     step="any"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.locationLat}
                     onChange={(e) => setInfoField("locationLat", e.target.value)}
-                    placeholder="41.0"
+                    placeholder={t("41.0")}
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="text-gray-500 text-sm block">E-posta</label>
+                  <label className="text-gray-500 text-sm block">{t("E-posta")}</label>
                   <input
                     type="email"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.email}
                     onChange={(e) => setInfoField("email", e.target.value)}
-                    placeholder="mail@ornek.com"
+                    placeholder={t("mail@ornek.com")}
                   />
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-500 text-sm">Aktif</span>
+                  <span className="text-gray-500 text-sm">{t("Aktif")}</span>
                   <input
                     type="checkbox"
                     checked={!!isActive}
@@ -691,7 +693,7 @@ export default function AdminRestaurantDetailPage() {
 
                 {/* Deposit Required */}
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-500 text-sm">Deposit Required</span>
+                  <span className="text-gray-500 text-sm">{t("Deposit Required")}</span>
                   <input
                     type="checkbox"
                     checked={!!infoForm.depositRequired}
@@ -702,7 +704,7 @@ export default function AdminRestaurantDetailPage() {
 
                 {/* Deposit Amount */}
                 <div>
-                  <label className="text-gray-500 text-sm block">Deposit Amount</label>
+                  <label className="text-gray-500 text-sm block">{t("Deposit Amount")}</label>
                   <input
                     type="number"
                     step="any"
@@ -710,46 +712,46 @@ export default function AdminRestaurantDetailPage() {
                     value={infoForm.depositAmount}
                     onChange={(e) => setInfoField("depositAmount", e.target.value)}
                     disabled={!infoForm.depositRequired}
-                    placeholder="0"
+                    placeholder={t("0")}
                   />
                 </div>
 
                 {/* Check-in Window Before */}
                 <div>
-                  <label className="text-gray-500 text-sm block">Check-in Window Before (min)</label>
+                  <label className="text-gray-500 text-sm block">{t("Check-in Window Before (min)")}</label>
                   <input
                     type="number"
                     step="1"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.checkinWindowBeforeMinutes}
                     onChange={(e) => setInfoField("checkinWindowBeforeMinutes", e.target.value)}
-                    placeholder="15"
+                    placeholder={t("15")}
                   />
                 </div>
 
                 {/* Check-in Window After */}
                 <div>
-                  <label className="text-gray-500 text-sm block">Check-in Window After (min)</label>
+                  <label className="text-gray-500 text-sm block">{t("Check-in Window After (min)")}</label>
                   <input
                     type="number"
                     step="1"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.checkinWindowAfterMinutes}
                     onChange={(e) => setInfoField("checkinWindowAfterMinutes", e.target.value)}
-                    placeholder="15"
+                    placeholder={t("15")}
                   />
                 </div>
 
                 {/* Underattendance Threshold */}
                 <div>
-                  <label className="text-gray-500 text-sm block">Underattendance Threshold (%)</label>
+                  <label className="text-gray-500 text-sm block">{t("Underattendance Threshold (%)")}</label>
                   <input
                     type="number"
                     step="any"
                     className="border rounded-lg px-3 py-2 w-full text-sm"
                     value={infoForm.underattendanceThresholdPercent}
                     onChange={(e) => setInfoField("underattendanceThresholdPercent", e.target.value)}
-                    placeholder="50"
+                    placeholder={t("50")}
                   />
                 </div>
               </div>
@@ -761,10 +763,10 @@ export default function AdminRestaurantDetailPage() {
                   disabled={saveInfoMut.isPending || infoQ.isLoading}
                   className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs disabled:opacity-60"
                 >
-                  {saveInfoMut.isPending ? "Kaydediliyor…" : "Bilgileri Kaydet"}
+                  {saveInfoMut.isPending ? t("Kaydediliyor…") : t("Bilgileri Kaydet")}
                 </button>
                 <div className="text-xs text-gray-400">
-                  Not: Boş bırakırsan alan temizlenir (name/region hariç). Konum güncellemek için lng+lat birlikte gir.
+                  {t("Not: Boş bırakırsan alan temizlenir (name/region hariç). Konum güncellemek için lng+lat birlikte gir.")}
                 </div>
               </div>
             </div>
@@ -772,23 +774,23 @@ export default function AdminRestaurantDetailPage() {
         </Card>
 
         {/* Restoran Üyeleri */}
-        <Card title="Restoran Üyeleri">
+        <Card title={t("Restoran Üyeleri")}>
           {/* Liste */}
           {members && members.length > 0 ? (
             <div className="overflow-auto mb-4">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-500">
-                    <th className="py-2 px-4">Ad</th>
-                    <th className="py-2 px-4">E-posta</th>
-                    <th className="py-2 px-4">Rol</th>
+                    <th className="py-2 px-4">{t("Ad")}</th>
+                    <th className="py-2 px-4">{t("E-posta")}</th>
+                    <th className="py-2 px-4">{t("Rol")}</th>
                     <th className="py-2 px-4"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {members.map((m) => (
                     <tr key={m.userId} className="border-t">
-                      <td className="py-2 px-4">{m.name || "İsimsiz"}</td>
+                      <td className="py-2 px-4">{m.name || t("İsimsiz")}</td>
                       <td className="py-2 px-4">{m.email || "-"}</td>
                       <td className="py-2 px-4">{prettyRestaurantRole(m.role)}</td>
                       <td className="py-2 px-4 text-right">
@@ -798,7 +800,7 @@ export default function AdminRestaurantDetailPage() {
                           disabled={removeMemberMut.isPending}
                           className="px-2 py-1 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-60"
                         >
-                          Kaldır
+                          {t("Kaldır")}
                         </button>
                       </td>
                     </tr>
@@ -808,7 +810,7 @@ export default function AdminRestaurantDetailPage() {
             </div>
           ) : (
             <div className="text-sm text-gray-500 mb-4">
-              Henüz bu restorana bağlı üye yok.
+              {t("Henüz bu restorana bağlı üye yok.")}
             </div>
           )}
 
@@ -816,7 +818,7 @@ export default function AdminRestaurantDetailPage() {
           <div className="grid md:grid-cols-3 gap-3 items-start">
             <div className="md:col-span-2 space-y-2">
               <label className="block text-xs text-gray-600">
-                Kullanıcı Ara (isim / e-posta)
+                {t("Kullanıcı Ara (isim / e-posta)")}
               </label>
               <div className="flex gap-2">
                 <input
@@ -835,7 +837,7 @@ export default function AdminRestaurantDetailPage() {
                   disabled={memberSearchLoading}
                   className="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs disabled:opacity-60"
                 >
-                  {memberSearchLoading ? "Aranıyor…" : "Ara"}
+                  {memberSearchLoading ? t("Aranıyor…") : t("Ara")}
                 </button>
               </div>
 
@@ -843,14 +845,14 @@ export default function AdminRestaurantDetailPage() {
                 <div className="mt-2 max-h-48 overflow-auto border rounded-lg bg-gray-50">
                   {memberSearchLoading && (
                     <div className="px-3 py-2 text-sm text-gray-500">
-                      Aranıyor…
+                      {t("Aranıyor…")}
                     </div>
                   )}
                   {!memberSearchLoading &&
                     memberResults.length === 0 &&
                     memberQuery.trim() && (
                       <div className="px-3 py-2 text-sm text-gray-500">
-                        Sonuç yok
+                        {t("Sonuç yok")}
                       </div>
                     )}
                   {memberResults.map((u) => (
@@ -863,7 +865,7 @@ export default function AdminRestaurantDetailPage() {
                       }`}
                     >
                       <span>
-                        {u.name || "İsimsiz"}{" "}
+                        {u.name || t("İsimsiz")}{" "}
                         <span className="text-gray-500">
                           ({u.email || "-"})
                         </span>
@@ -876,15 +878,16 @@ export default function AdminRestaurantDetailPage() {
 
               <div className="text-xs text-emerald-700 mt-1">
                 {selectedMember
-                  ? `Seçili kullanıcı: ${selectedMember.name || "İsimsiz"} (${
-                      selectedMember.email || "-"
-                    })`
-                  : "Henüz kullanıcı seçilmedi"}
+                  ? t("Seçili kullanıcı: {name} ({email})", {
+                      name: selectedMember.name || t("İsimsiz"),
+                      email: selectedMember.email || "-",
+                    })
+                  : t("Henüz kullanıcı seçilmedi")}
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs text-gray-600 mb-1">Rol</label>
+              <label className="block text-xs text-gray-600 mb-1">{t("Rol")}</label>
               <select
                 className="border rounded-lg px-3 py-2 w-full text-sm"
                 value={memberRole}
@@ -892,7 +895,7 @@ export default function AdminRestaurantDetailPage() {
               >
                 {RESTAURANT_ROLES.map((r) => (
                   <option key={r.value} value={r.value}>
-                    {r.label}
+                    {t(r.label)}
                   </option>
                 ))}
               </select>
@@ -903,17 +906,17 @@ export default function AdminRestaurantDetailPage() {
                 disabled={!selectedMember || !memberRole || addMemberMut.isPending}
                 className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs w-full disabled:opacity-60"
               >
-                {addMemberMut.isPending ? "Ekleniyor…" : "Üye Ekle"}
+                {addMemberMut.isPending ? t("Ekleniyor…") : t("Üye Ekle")}
               </button>
             </div>
           </div>
         </Card>
 
         {/* Komisyon */}
-        <Card title="Komisyon">
+        <Card title={t("Komisyon")}>
           <div className="flex items-end gap-3">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">% Oran</label>
+              <label className="block text-sm text-gray-600 mb-1">{t("% Oran")}</label>
               <input
                 type="number"
                 min={0}
@@ -928,32 +931,32 @@ export default function AdminRestaurantDetailPage() {
               className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 disabled:opacity-60"
               disabled={saveMut.isPending}
             >
-              Kaydet
+              {t("Kaydet")}
             </button>
           </div>
         </Card>
 
         {/* Rezervasyonlar */}
-        <Card title="Rezervasyonlar">
+        <Card title={t("Rezervasyonlar")}>
           <div className="flex flex-wrap gap-3 items-end mb-3">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Durum</label>
+              <label className="block text-sm text-gray-600 mb-1">{t("Durum")}</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
                 className="border rounded-lg px-3 py-2"
               >
-                <option value="">Hepsi</option>
-                <option value="pending">Bekleyen</option>
-                <option value="confirmed">Onaylı</option>
-                <option value="arrived">Gelen</option>
-                <option value="cancelled">İptal</option>
-                <option value="no_show">No-show</option>
+                <option value="">{t("Hepsi")}</option>
+                <option value="pending">{t("Bekleyen")}</option>
+                <option value="confirmed">{t("Onaylı")}</option>
+                <option value="arrived">{t("Gelen")}</option>
+                <option value="cancelled">{t("İptal")}</option>
+                <option value="no_show">{t("No-show")}</option>
               </select>
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">
-                Başlangıç
+                {t("Başlangıç")}
               </label>
               <input
                 type="date"
@@ -963,7 +966,7 @@ export default function AdminRestaurantDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Bitiş</label>
+              <label className="block text-sm text-gray-600 mb-1">{t("Bitiş")}</label>
               <input
                 type="date"
                 value={to}
@@ -972,7 +975,7 @@ export default function AdminRestaurantDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Sayfa</label>
+              <label className="block text-sm text-gray-600 mb-1">{t("Sayfa")}</label>
               <input
                 type="number"
                 min={1}
@@ -982,7 +985,7 @@ export default function AdminRestaurantDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Limit</label>
+              <label className="block text-sm text-gray-600 mb-1">{t("Limit")}</label>
               <input
                 type="number"
                 min={1}
@@ -997,11 +1000,11 @@ export default function AdminRestaurantDetailPage() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-500">
-                  <th className="py-2 px-4">Tarih</th>
-                  <th className="py-2 px-4">Kullanıcı</th>
-                  <th className="py-2 px-4">Durum</th>
-                  <th className="py-2 px-4">Kişi</th>
-                  <th className="py-2 px-4">Tutar (₺)</th>
+                  <th className="py-2 px-4">{t("Tarih")}</th>
+                  <th className="py-2 px-4">{t("Kullanıcı")}</th>
+                  <th className="py-2 px-4">{t("Durum")}</th>
+                  <th className="py-2 px-4">{t("Kişi")}</th>
+                  <th className="py-2 px-4">{t("Tutar (₺)")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1026,7 +1029,7 @@ export default function AdminRestaurantDetailPage() {
                 {(!rsvQ.data?.items || rsvQ.data.items.length === 0) && (
                   <tr>
                     <td className="py-3 px-4 text-gray-500" colSpan={5}>
-                      Kayıt yok
+                      {t("Kayıt yok")}
                     </td>
                   </tr>
                 )}
@@ -1041,17 +1044,17 @@ export default function AdminRestaurantDetailPage() {
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
-                Önceki
+                {t("Önceki")}
               </button>
               <div className="text-sm text-gray-600">
-                Sayfa {page} / {totalPages}
+                {t("Sayfa {page} / {totalPages}", { page, totalPages })}
               </div>
               <button
                 className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
               >
-                Sonraki
+                {t("Sonraki")}
               </button>
             </div>
           )}

@@ -1,5 +1,6 @@
 import React from "react";
 import { useRestaurantDesktopCurrency } from "../layouts/RestaurantDesktopLayout";
+import { t as i18nT } from "../../i18n";
 
 export type TableChannel = "WALK_IN" | "REZVIX" | "QR";
 export type TableStatus = "IDLE" | "OPEN" | "ORDER_READY" | "PAYING" | "NEED_HELP";
@@ -18,11 +19,11 @@ export type TableCardProps = {
 /* Label */
 function getStatusLabel(status: TableStatus): string {
   switch (status) {
-    case "IDLE": return "Boş";
-    case "OPEN": return "Dolu / Sipariş Var";
-    case "ORDER_READY": return "Sipariş Hazır";
-    case "PAYING": return "Hesap İstiyor";
-    case "NEED_HELP": return "Garson Çağırıyor";
+    case "IDLE": return i18nT("Boş");
+    case "OPEN": return i18nT("Dolu / Sipariş Var");
+    case "ORDER_READY": return i18nT("Sipariş Hazır");
+    case "PAYING": return i18nT("Hesap İstiyor");
+    case "NEED_HELP": return i18nT("Garson Çağırıyor");
     default: return status;
   }
 }
@@ -47,9 +48,9 @@ function getStatusClass(status: TableStatus): string {
 }
 
 function getChannelLabel(channel?: TableChannel): string {
-  if (channel === "WALK_IN") return "Lokal";
-  if (channel === "REZVIX") return "Rezvix";
-  if (channel === "QR") return "QR Menü";
+  if (channel === "WALK_IN") return i18nT("Lokal");
+  if (channel === "REZVIX") return i18nT("Rezvix");
+  if (channel === "QR") return i18nT("QR Menü");
   return "";
 }
 
@@ -79,8 +80,8 @@ export const TableCard: React.FC<TableCardProps> = ({
     if (status === "IDLE") rootClass += statusClass;
   }
 
-  const guestText = guestCount && guestCount > 0 ? `${guestCount} kişi` : "—";
-  const sinceText = sinceMinutes!=null ? (sinceMinutes===0?"Şimdi":`+${sinceMinutes} dk`) : "Beklemede";
+  const guestText = guestCount && guestCount > 0 ? i18nT("{count} kişi", { count: guestCount }) : i18nT("—");
+  const sinceText = sinceMinutes!=null ? (sinceMinutes===0 ? i18nT("Şimdi") : i18nT("+{count} dk", { count: sinceMinutes })) : i18nT("Beklemede");
 
   const { currencySymbol: cur } = useRestaurantDesktopCurrency();
 
@@ -93,12 +94,12 @@ export const TableCard: React.FC<TableCardProps> = ({
 
           {status==="NEED_HELP" && (
             <div style={{background:"#ff3b30",color:"#fff",borderRadius:999,padding:"2px 8px",fontSize:11,fontWeight:600,textTransform:"uppercase"}}>
-              ACİL
+              {i18nT("ACİL")}
             </div>
           )}
           {status==="ORDER_READY" && (
             <div style={{background:"#facc15",color:"#000",borderRadius:999,padding:"2px 8px",fontSize:11,fontWeight:700}}>
-              HAZIR
+              {i18nT("HAZIR")}
             </div>
           )}
         </div>
@@ -114,11 +115,11 @@ export const TableCard: React.FC<TableCardProps> = ({
 
       <div className="rezvix-table-card__footer">
         <div className="rezvix-table-card__total">
-          {total != null ? `${total.toLocaleString("tr-TR")}${cur}` : "—"}
+          {total != null ? `${total.toLocaleString("tr-TR")}${cur}` : i18nT("—")}
         </div>
         {channel && (
           <div className="rezvix-table-card__channel">
-            {channel==="REZVIX"?"⭐ Rezvix Rezervasyon":getChannelLabel(channel)}
+            {channel==="REZVIX" ? i18nT("⭐ Rezvix Rezervasyon") : getChannelLabel(channel)}
           </div>
         )}
       </div>

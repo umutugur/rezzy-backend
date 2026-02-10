@@ -12,26 +12,28 @@ import {
   adminDismissComplaint
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
+import { useI18n } from "../../i18n";
 
 export default function AdminModerationPage() {
   const [tab, setTab] = React.useState<"reviews" | "complaints">("reviews");
+  const { t } = useI18n();
   return (
     <div className="flex gap-6">
       <Sidebar
         items={[
-          { to: "/admin", label: "Dashboard" },
-          { to: "/admin/banners", label: "Bannerlar" },
-          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
-          { to: "/admin/organizations", label: "Organizasyonlar" },
-          { to: "/admin/restaurants", label: "Restoranlar" },
-          { to: "/admin/users", label: "Kullanıcılar" },
-          { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" },
-          { to: "/admin/notifications", label: "Bildirim Gönder" },
+          { to: "/admin", label: t("Dashboard") },
+          { to: "/admin/banners", label: t("Bannerlar") },
+          { to: "/admin/commissions", label: t("Komisyonlar") }, // ✅ menüye eklendi
+          { to: "/admin/organizations", label: t("Organizasyonlar") },
+          { to: "/admin/restaurants", label: t("Restoranlar") },
+          { to: "/admin/users", label: t("Kullanıcılar") },
+          { to: "/admin/reservations", label: t("Rezervasyonlar") },
+          { to: "/admin/moderation", label: t("Moderasyon") },
+          { to: "/admin/notifications", label: t("Bildirim Gönder") },
         ]}
       />
       <div className="flex-1 space-y-6">
-        <h2 className="text-lg font-semibold">Moderasyon</h2>
+        <h2 className="text-lg font-semibold">{t("Moderasyon")}</h2>
 
         <div className="flex gap-2">
           <button
@@ -40,7 +42,7 @@ export default function AdminModerationPage() {
             }`}
             onClick={() => setTab("reviews")}
           >
-            Yorumlar
+            {t("Yorumlar")}
           </button>
           <button
             className={`px-3 py-1.5 rounded-lg ${
@@ -48,7 +50,7 @@ export default function AdminModerationPage() {
             }`}
             onClick={() => setTab("complaints")}
           >
-            Şikayetler
+            {t("Şikayetler")}
           </button>
         </div>
 
@@ -59,6 +61,7 @@ export default function AdminModerationPage() {
 }
 
 function ReviewsTable() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["admin-reviews"],
@@ -68,21 +71,21 @@ function ReviewsTable() {
   const hideMut = useMutation({
     mutationFn: (id: string) => adminHideReview(id),
     onSuccess: () => {
-      showToast("Yorum gizlendi", "success");
+      showToast(t("Yorum gizlendi"), "success");
       qc.invalidateQueries({ queryKey: ["admin-reviews"] });
     }
   });
   const unhideMut = useMutation({
     mutationFn: (id: string) => adminUnhideReview(id),
     onSuccess: () => {
-      showToast("Yorum görünür yapıldı", "success");
+      showToast(t("Yorum görünür yapıldı"), "success");
       qc.invalidateQueries({ queryKey: ["admin-reviews"] });
     }
   });
   const delMut = useMutation({
     mutationFn: (id: string) => adminDeleteReview(id),
     onSuccess: () => {
-      showToast("Yorum silindi", "success");
+      showToast(t("Yorum silindi"), "success");
       qc.invalidateQueries({ queryKey: ["admin-reviews"] });
     }
   });
@@ -90,18 +93,18 @@ function ReviewsTable() {
   const rows = Array.isArray(q.data?.items) ? q.data.items : Array.isArray(q.data) ? q.data : [];
 
   return (
-    <Card title="Yorumlar">
+    <Card title={t("Yorumlar")}>
       <div className="overflow-auto">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="text-left text-gray-500">
-              <th className="py-2 px-4">Tarih</th>
-              <th className="py-2 px-4">Restoran</th>
-              <th className="py-2 px-4">Kullanıcı</th>
-              <th className="py-2 px-4">Puan</th>
-              <th className="py-2 px-4">Yorum</th>
-              <th className="py-2 px-4">Durum</th>
-              <th className="py-2 px-4">Aksiyon</th>
+              <th className="py-2 px-4">{t("Tarih")}</th>
+              <th className="py-2 px-4">{t("Restoran")}</th>
+              <th className="py-2 px-4">{t("Kullanıcı")}</th>
+              <th className="py-2 px-4">{t("Puan")}</th>
+              <th className="py-2 px-4">{t("Yorum")}</th>
+              <th className="py-2 px-4">{t("Durum")}</th>
+              <th className="py-2 px-4">{t("Aksiyon")}</th>
             </tr>
           </thead>
           <tbody>
@@ -112,18 +115,18 @@ function ReviewsTable() {
                 <td className="py-2 px-4">{r.user?.name || "-"} <span className="text-gray-500">({r.user?.email || "-"})</span></td>
                 <td className="py-2 px-4">{r.rating ?? "-"}</td>
                 <td className="py-2 px-4">{r.comment ?? "-"}</td>
-                <td className="py-2 px-4">{r.hidden ? "Gizli" : "Görünür"}</td>
+                <td className="py-2 px-4">{r.hidden ? t("Gizli") : t("Görünür")}</td>
                 <td className="py-2 px-4">
                   <div className="flex gap-2">
-                    <button className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => hideMut.mutate(r._id)} disabled={r.hidden}>Gizle</button>
-                    <button className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => unhideMut.mutate(r._id)} disabled={!r.hidden}>Göster</button>
-                    <button className="px-2 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700" onClick={() => delMut.mutate(r._id)}>Sil</button>
+                    <button className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => hideMut.mutate(r._id)} disabled={r.hidden}>{t("Gizle")}</button>
+                    <button className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => unhideMut.mutate(r._id)} disabled={!r.hidden}>{t("Göster")}</button>
+                    <button className="px-2 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700" onClick={() => delMut.mutate(r._id)}>{t("Sil")}</button>
                   </div>
                 </td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td className="py-3 px-4 text-gray-500" colSpan={7}>Kayıt yok</td></tr>
+              <tr><td className="py-3 px-4 text-gray-500" colSpan={7}>{t("Kayıt yok")}</td></tr>
             )}
           </tbody>
         </table>
@@ -133,6 +136,7 @@ function ReviewsTable() {
 }
 
 function ComplaintsTable() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["admin-complaints"],
@@ -142,14 +146,14 @@ function ComplaintsTable() {
   const resolveMut = useMutation({
     mutationFn: (id: string) => adminResolveComplaint(id),
     onSuccess: () => {
-      showToast("Şikayet çözümlendi", "success");
+      showToast(t("Şikayet çözümlendi"), "success");
       qc.invalidateQueries({ queryKey: ["admin-complaints"] });
     }
   });
   const dismissMut = useMutation({
     mutationFn: (id: string) => adminDismissComplaint(id),
     onSuccess: () => {
-      showToast("Şikayet reddedildi", "success");
+      showToast(t("Şikayet reddedildi"), "success");
       qc.invalidateQueries({ queryKey: ["admin-complaints"] });
     }
   });
@@ -157,17 +161,17 @@ function ComplaintsTable() {
   const rows = Array.isArray(q.data?.items) ? q.data.items : Array.isArray(q.data) ? q.data : [];
 
   return (
-    <Card title="Şikayetler">
+    <Card title={t("Şikayetler")}>
       <div className="overflow-auto">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="text-left text-gray-500">
-              <th className="py-2 px-4">Tarih</th>
-              <th className="py-2 px-4">Restoran</th>
-              <th className="py-2 px-4">Kullanıcı</th>
-              <th className="py-2 px-4">Konu</th>
-              <th className="py-2 px-4">Durum</th>
-              <th className="py-2 px-4">Aksiyon</th>
+              <th className="py-2 px-4">{t("Tarih")}</th>
+              <th className="py-2 px-4">{t("Restoran")}</th>
+              <th className="py-2 px-4">{t("Kullanıcı")}</th>
+              <th className="py-2 px-4">{t("Konu")}</th>
+              <th className="py-2 px-4">{t("Durum")}</th>
+              <th className="py-2 px-4">{t("Aksiyon")}</th>
             </tr>
           </thead>
           <tbody>
@@ -180,14 +184,14 @@ function ComplaintsTable() {
                 <td className="py-2 px-4">{c.status || "-"}</td>
                 <td className="py-2 px-4">
                   <div className="flex gap-2">
-                    <button className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => resolveMut.mutate(c._id)} disabled={c.status === "resolved"}>Çöz</button>
-                    <button className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => dismissMut.mutate(c._id)} disabled={c.status === "dismissed"}>Reddet</button>
+                    <button className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => resolveMut.mutate(c._id)} disabled={c.status === "resolved"}>{t("Çöz")}</button>
+                    <button className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => dismissMut.mutate(c._id)} disabled={c.status === "dismissed"}>{t("Reddet")}</button>
                   </div>
                 </td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td className="py-3 px-4 text-gray-500" colSpan={6}>Kayıt yok</td></tr>
+              <tr><td className="py-3 px-4 text-gray-500" colSpan={6}>{t("Kayıt yok")}</td></tr>
             )}
           </tbody>
         </table>

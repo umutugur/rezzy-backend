@@ -72,7 +72,7 @@ export const SideNav: React.FC<SideNavProps> = ({ active, onNavigate, alerts }) 
         </div>
 
         <div style={{ marginTop: 10 }}>
-          <div className="rezvix-sidenav__group-label">Rezvix</div>
+          <div className="rezvix-sidenav__group-label">{t("Rezvix")}</div>
           <button
             type="button"
             className={

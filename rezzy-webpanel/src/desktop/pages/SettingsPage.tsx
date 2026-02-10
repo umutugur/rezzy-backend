@@ -22,7 +22,7 @@ import { parseLatLngFromGoogleMaps } from "../../utils/geo";
 import { Card } from "../../components/Card";
 import DeliveryZoneMap from "../components/DeliveryZoneMap";
 import { DEFAULT_LANGUAGE, LANG_OPTIONS } from "../../utils/languages";
-import { useI18n, setLocale } from "../../i18n";
+import { useI18n, setLocale, t as i18nT } from "../../i18n";
 
 // === Tipler ===
 type OpeningHour = { day: number; open: string; close: string; isClosed?: boolean };
@@ -231,7 +231,7 @@ function makeBaseZones(grid: { radiusMeters: number; cellSizeMeters: number }) {
 
   return coords.map((ax, i) => ({
     id: axialId(ax),
-    name: `Bölge ${i + 1}`,
+    name: i18nT("Bölge {count}", { count: i + 1 }),
     isActive: false,
     minOrderAmount: 0,
     feeAmount: 0,
@@ -880,7 +880,7 @@ export const SettingsPage: React.FC = () => {
               : "bg-gray-100 hover:bg-gray-200")
           }
         >
-          {label}
+          {t(label)}
         </button>
       ))}
     </div>
@@ -929,27 +929,27 @@ const selectZone = React.useCallback(
   return (
     <RestaurantDesktopLayout
       activeNav="settings"
-      title="Ayarlar"
-      subtitle="Restoran profilinizi, rezervasyon politikalarınızı ve masaüstü temasını yönetin."
+      title={t("Ayarlar")}
+      subtitle={t("Restoran profilinizi, rezervasyon politikalarınızı ve masaüstü temasını yönetin.")}
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <h2 className="text-lg font-semibold">Profil & Ayarlar</h2>
+          <h2 className="text-lg font-semibold">{t("Profil & Ayarlar")}</h2>
           {TabBar}
         </div>
 
-        {isLoading && <div>Yükleniyor…</div>}
+        {isLoading && <div>{t("Yükleniyor…")}</div>}
         {error && (
-          <div className="text-red-600 text-sm">Bilgiler alınamadı</div>
+          <div className="text-red-600 text-sm">{t("Bilgiler alınamadı")}</div>
         )}
 
         {/* === GENEL === */}
         {tab === "general" && (
-          <Card title="Temel Bilgiler">
+          <Card title={t("Temel Bilgiler")}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Ad */}
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Ad</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Ad")}</label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
                   value={form.name || ""}
@@ -962,7 +962,7 @@ const selectZone = React.useCallback(
               {/* E-posta */}
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  E-posta
+                  {t("E-posta")}
                 </label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
@@ -976,7 +976,7 @@ const selectZone = React.useCallback(
               {/* Telefon */}
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  Telefon
+                  {t("Telefon")}
                 </label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
@@ -990,11 +990,11 @@ const selectZone = React.useCallback(
               {/* Bölge */}
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  Bölge (ülke kodu)
+                  {t("Bölge (ülke kodu)")}
                 </label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                  placeholder="TR, CY, UK..."
+                  placeholder={t("TR, CY, UK...")}
                   value={(form as any).region || ""}
                   onChange={(e) =>
                     setForm(
@@ -1007,11 +1007,11 @@ const selectZone = React.useCallback(
                   }
                 />
                 <p className="mt-1 text-xs text-gray-500">
-                  2-3 harfli ISO ülke kodu girin (örn. TR, CY, UK).
+                  {t("2-3 harfli ISO ülke kodu girin (örn. TR, CY, UK).")}
                 </p>
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Dil</label>
+                <label className="block text-sm text-gray-600 mb-1">{t("Dil")}</label>
                 <select
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 bg-white"
                   value={(form as any).preferredLanguage || DEFAULT_LANGUAGE}
@@ -1033,7 +1033,7 @@ const selectZone = React.useCallback(
               {/* Şehir */}
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  Şehir
+                  {t("Şehir")}
                 </label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
@@ -1047,7 +1047,7 @@ const selectZone = React.useCallback(
               {/* Adres */}
               <div className="md:col-span-2">
                 <label className="block text-sm text-gray-600 mb-1">
-                  Adres
+                  {t("Adres")}
                 </label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
@@ -1061,7 +1061,7 @@ const selectZone = React.useCallback(
               {/* Açıklama */}
               <div className="md:col-span-2">
                 <label className="block text-sm text-gray-600 mb-1">
-                  Açıklama
+                  {t("Açıklama")}
                 </label>
                 <textarea
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 h-40"
@@ -1075,11 +1075,11 @@ const selectZone = React.useCallback(
               {/* Ödeme bilgileri */}
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  IBAN
+                  {t("IBAN")}
                 </label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                  placeholder="TR.."
+                  placeholder={t("TR..")}
                   value={form.iban || ""}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, iban: e.target.value }))
@@ -1088,11 +1088,11 @@ const selectZone = React.useCallback(
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  IBAN Adı
+                  {t("IBAN Adı")}
                 </label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                  placeholder="Hesap Sahibi"
+                  placeholder={t("Hesap Sahibi")}
                   value={form.ibanName || ""}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, ibanName: e.target.value }))
@@ -1101,7 +1101,7 @@ const selectZone = React.useCallback(
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  Banka Adı
+                  {t("Banka Adı")}
                 </label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
@@ -1116,17 +1116,17 @@ const selectZone = React.useCallback(
             {/* --- Konum Bilgileri --- */}
             <div className="md:col-span-2 border-t pt-4 mt-6">
               <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                Konum Bilgileri
+                {t("Konum Bilgileri")}
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">
-                    Harita Adresi
+                    {t("Harita Adresi")}
                   </label>
                   <input
                     className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                    placeholder="Google Harita üzerindeki adres"
+                    placeholder={t("Google Harita üzerindeki adres")}
                     value={form.mapAddress || ""}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, mapAddress: e.target.value }))
@@ -1136,11 +1136,11 @@ const selectZone = React.useCallback(
 
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">
-                    Google Maps URL
+                    {t("Google Maps URL")}
                   </label>
                   <input
                     className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                    placeholder="https://maps.google.com/?q=..."
+                    placeholder={t("https://maps.google.com/?q=...")}
                     value={form.googleMapsUrl || ""}
                     onChange={(e) => {
                       const val = e.target.value;
@@ -1162,7 +1162,7 @@ const selectZone = React.useCallback(
 
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">
-                    Latitude (enlem)
+                    {t("Latitude (enlem)")}
                   </label>
                   <input
                     type="number"
@@ -1186,7 +1186,7 @@ const selectZone = React.useCallback(
 
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">
-                    Longitude (boylam)
+                    {t("Longitude (boylam)")}
                   </label>
                   <input
                     type="number"
@@ -1230,7 +1230,7 @@ const selectZone = React.useCallback(
                 disabled={saveGeneralMut.isPending}
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 disabled:opacity-60"
               >
-                {saveGeneralMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                {saveGeneralMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
               </button>
             </div>
           </Card>
@@ -1238,17 +1238,17 @@ const selectZone = React.useCallback(
 
         {/* === FOTOĞRAFLAR === */}
         {tab === "photos" && (
-          <Card title="Fotoğraflar">
+          <Card title={t("Fotoğraflar")}>
             <div className="mb-3 flex items-center gap-3">
               <input type="file" accept="image/*" onChange={onFile} />
               {uploadMut.isPending && (
-                <span className="text-sm text-gray-500">Yükleniyor…</span>
+                <span className="text-sm text-gray-500">{t("Yükleniyor…")}</span>
               )}
             </div>
 
             {/* === Logo Yükleme Alanı === */}
             <div className="mb-4 border p-3 rounded-lg bg-gray-50">
-              <div className="mb-2 font-medium">Restoran Logosu</div>
+              <div className="mb-2 font-medium">{t("Restoran Logosu")}</div>
               <input
                 type="file"
                 accept="image/*"
@@ -1258,7 +1258,7 @@ const selectZone = React.useCallback(
                   e.currentTarget.value = "";
                 }}
               />
-              {uploadLogoMut.isPending && <span className="text-sm text-gray-500 ml-2">Yükleniyor…</span>}
+              {uploadLogoMut.isPending && <span className="text-sm text-gray-500 ml-2">{t("Yükleniyor…")}</span>}
               {data?.logo && (
                 <div className="mt-3">
                   <img src={data.logo} alt="logo" className="h-20 object-contain border rounded-md p-2 bg-white" />
@@ -1282,12 +1282,12 @@ const selectZone = React.useCallback(
                     disabled={removePhotoMut.isPending}
                     className="absolute top-2 right-2 text-xs rounded-md bg-black/60 text-white px-2 py-1 opacity-0 group-hover:opacity-100 disabled:opacity-60"
                   >
-                    Sil
+                    {t("Sil")}
                   </button>
                 </div>
               ))}
               {(!data?.photos || data.photos.length === 0) && (
-                <div className="text-sm text-gray-500">Fotoğraf yok</div>
+                <div className="text-sm text-gray-500">{t("Fotoğraf yok")}</div>
               )}
             </div>
           </Card>
@@ -1295,7 +1295,7 @@ const selectZone = React.useCallback(
 
         {/* === MENÜLER === */}
         {tab === "menus" && (
-          <Card title="Menüler">
+          <Card title={t("Menüler")}>
             <div className="space-y-3">
               {menus.map((m, idx) => (
                 <div
@@ -1305,7 +1305,7 @@ const selectZone = React.useCallback(
                   {/* Ad */}
                   <input
                     className="border rounded-lg px-3 py-2"
-                    placeholder="Ad"
+                    placeholder={t("Ad")}
                     value={m.name}
                     onChange={(e) =>
                       setMenus((prev) =>
@@ -1321,7 +1321,7 @@ const selectZone = React.useCallback(
                     type="number"
                     min={0}
                     className="border rounded-lg px-3 py-2"
-                    placeholder="Fiyat"
+                    placeholder={t("Fiyat")}
                     value={String(m.price)}
                     onChange={(e) =>
                       setMenus((prev) =>
@@ -1341,7 +1341,7 @@ const selectZone = React.useCallback(
                   <div className="md:col-span-3">
                     <textarea
                       className="w-full border rounded-lg px-3 py-2 h-24"
-                      placeholder="Açıklama"
+                      placeholder={t("Açıklama")}
                       value={m.description || ""}
                       onChange={(e) =>
                         setMenus((prev) =>
@@ -1358,7 +1358,7 @@ const selectZone = React.useCallback(
                   {/* Aktif */}
                   <div className="flex items-center">
                     <label className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-600">Aktif</span>
+                      <span className="text-gray-600">{t("Aktif")}</span>
                       <input
                         type="checkbox"
                         checked={m.isActive ?? true}
@@ -1383,13 +1383,13 @@ const selectZone = React.useCallback(
                         setMenus((prev) => prev.filter((_, i) => i !== idx))
                       }
                     >
-                      Sil
+                      {t("Sil")}
                     </button>
                   </div>
                 </div>
               ))}
               {menus.length === 0 && (
-                <div className="text-sm text-gray-500">Kayıt yok</div>
+                <div className="text-sm text-gray-500">{t("Kayıt yok")}</div>
               )}
               <button
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
@@ -1400,7 +1400,7 @@ const selectZone = React.useCallback(
                   ])
                 }
               >
-                Yeni Menü
+                {t("Yeni Menü")}
               </button>
             </div>
 
@@ -1410,7 +1410,7 @@ const selectZone = React.useCallback(
                 disabled={saveMenusMut.isPending}
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
               >
-                {saveMenusMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                {saveMenusMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
               </button>
             </div>
           </Card>
@@ -1421,7 +1421,7 @@ const selectZone = React.useCallback(
           <Card
             title={
               <div className="flex items-center justify-between gap-3 flex-wrap">
-                <span>Masalar</span>
+                <span>{t("Masalar")}</span>
                 <button
                   type="button"
                   onClick={downloadAllPostersZip}
@@ -1429,8 +1429,8 @@ const selectZone = React.useCallback(
                   className="inline-flex items-center gap-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 text-sm disabled:opacity-60"
                 >
                   {isDownloadingAllPosters
-                    ? "Hazırlanıyor…"
-                    : "Tüm QR posterlerini indir (ZIP)"}
+                    ? t("Hazırlanıyor…")
+                    : t("Tüm QR posterlerini indir (ZIP)")}
                 </button>
               </div>
             }
@@ -1449,7 +1449,7 @@ const selectZone = React.useCallback(
                   >
                     <input
                       className="border rounded-lg px-3 py-2"
-                      placeholder="Ad"
+                      placeholder={t("Ad")}
                       value={t.name}
                       onChange={(e) =>
                         setTables((prev) =>
@@ -1463,7 +1463,7 @@ const selectZone = React.useCallback(
                       type="number"
                       min={1}
                       className="border rounded-lg px-3 py-2"
-                      placeholder="Kapasite"
+                      placeholder={t("Kapasite")}
                       value={String(t.capacity)}
                       onChange={(e) =>
                         setTables((prev) =>
@@ -1479,7 +1479,7 @@ const selectZone = React.useCallback(
                       }
                     />
                     <label className="flex items-center gap-2 text-sm">
-                      <span className="text-gray-600">Aktif</span>
+                      <span className="text-gray-600">{t("Aktif")}</span>
                       <input
                         type="checkbox"
                         checked={t.isActive ?? true}
@@ -1502,7 +1502,7 @@ const selectZone = React.useCallback(
                       disabled={isDownloadingThis}
                       className="rounded-lg bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-2 text-sm disabled:opacity-60"
                     >
-                      {isDownloadingThis ? "İndiriliyor…" : "QR poster (A5)"}
+                      {isDownloadingThis ? t("İndiriliyor…") : t("QR poster (A5)")}
                     </button>
 
                     <button
@@ -1511,13 +1511,13 @@ const selectZone = React.useCallback(
                         setTables((prev) => prev.filter((_, i) => i !== idx))
                       }
                     >
-                      Sil
+                      {t("Sil")}
                     </button>
                   </div>
                 );
               })}
               {tables.length === 0 && (
-                <div className="text-sm text-gray-500">Kayıt yok</div>
+                <div className="text-sm text-gray-500">{t("Kayıt yok")}</div>
               )}
               <button
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
@@ -1525,14 +1525,14 @@ const selectZone = React.useCallback(
                   setTables((prev) => [
                     ...prev,
                     {
-                      name: `Masa ${prev.length + 1}`,
+                      name: t("Masa {count}", { count: prev.length + 1 }),
                       capacity: 2,
                       isActive: true,
                     },
                   ])
                 }
               >
-                Yeni Masa
+                {t("Yeni Masa")}
               </button>
             </div>
 
@@ -1542,7 +1542,7 @@ const selectZone = React.useCallback(
                 disabled={saveTablesMut.isPending}
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
               >
-                {saveTablesMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                {saveTablesMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
               </button>
             </div>
           </Card>
@@ -1550,15 +1550,15 @@ const selectZone = React.useCallback(
 
         {/* === SAATLER === */}
         {tab === "hours" && (
-          <Card title="Çalışma Saatleri">
+          <Card title={t("Çalışma Saatleri")}>
             <div className="space-y-3">
               {hours.map((h, idx) => (
                 <div key={idx} className="flex items-center gap-3">
                   <div className="w-20 text-sm text-gray-600">
-                    {DAYS[h.day] ?? `Gün ${h.day}`}
+                    {DAYS[h.day] ? t(DAYS[h.day]) : t("Gün {count}", { count: h.day })}
                   </div>
                   <label className="flex items-center gap-2 text-sm">
-                    <span className="text-gray-600">Kapalı</span>
+                    <span className="text-gray-600">{t("Kapalı")}</span>
                     <input
                       type="checkbox"
                       checked={!!h.isClosed}
@@ -1586,7 +1586,7 @@ const selectZone = React.useCallback(
                       )
                     }
                   />
-                  <span>—</span>
+                  <span>{t("—")}</span>
                   <input
                     type="time"
                     className="border rounded-lg px-3 py-2"
@@ -1610,7 +1610,7 @@ const selectZone = React.useCallback(
                 disabled={saveHoursMut.isPending}
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
               >
-                {saveHoursMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                {saveHoursMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
               </button>
             </div>
           </Card>
@@ -1618,11 +1618,11 @@ const selectZone = React.useCallback(
 
         {/* === POLİTİKALAR === */}
         {tab === "policies" && (
-          <Card title="Rezervasyon Politikaları">
+          <Card title={t("Rezervasyon Politikaları")}>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  Minimum kişi
+                  {t("Minimum kişi")}
                 </label>
                 <input
                   type="number"
@@ -1643,7 +1643,7 @@ const selectZone = React.useCallback(
 
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  Maksimum kişi
+                  {t("Maksimum kişi")}
                 </label>
                 <input
                   type="number"
@@ -1664,7 +1664,7 @@ const selectZone = React.useCallback(
 
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  Slot süresi (dk)
+                  {t("Slot süresi (dk)")}
                 </label>
                 <input
                   type="number"
@@ -1687,7 +1687,7 @@ const selectZone = React.useCallback(
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  Check-in Penceresi (ÖNCE, dk)
+                  {t("Check-in Penceresi (ÖNCE, dk)")}
                 </label>
                 <input
                   type="number"
@@ -1705,14 +1705,13 @@ const selectZone = React.useCallback(
                   }
                 />
                 <div className="text-xs text-gray-500 mt-1">
-                  Rezervasyon saatinden <b>önce</b> kaç dakika içinde giriş
-                  kabul edilir.
+                  {t("Rezervasyon saatinden")} <b>{t("önce")}</b> {t("kaç dakika içinde giriş kabul edilir.")}
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
-                  Check-in Penceresi (SONRA, dk)
+                  {t("Check-in Penceresi (SONRA, dk)")}
                 </label>
                 <input
                   type="number"
@@ -1730,15 +1729,14 @@ const selectZone = React.useCallback(
                   }
                 />
                 <div className="text-xs text-gray-500 mt-1">
-                  Rezervasyon saatinden <b>sonra</b> kaç dakika içinde giriş
-                  kabul edilir.
+                  {t("Rezervasyon saatinden")} <b>{t("sonra")}</b> {t("kaç dakika içinde giriş kabul edilir.")}
                 </div>
               </div>
             </div>
 
             <div className="mt-4 flex items-center gap-4">
               <label className="flex items-center gap-2 text-sm">
-                <span className="text-gray-600">Depozito gerekli</span>
+                <span className="text-gray-600">{t("Depozito gerekli")}</span>
                 <input
                   type="checkbox"
                   checked={!!policies.depositRequired}
@@ -1754,7 +1752,7 @@ const selectZone = React.useCallback(
               {policies.depositRequired && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">
-                    Tutar ({currencySymbol})
+                    {t("Tutar ({symbol})", { symbol: currencySymbol })}
                   </span>
                   <input
                     type="number"
@@ -1777,10 +1775,10 @@ const selectZone = React.useCallback(
 
             {/* Kara günler */}
             <div className="mt-6">
-              <div className="mb-2 font-medium">Kara Günler (YYYY-MM-DD)</div>
+              <div className="mb-2 font-medium">{t("Kara Günler (YYYY-MM-DD)")}</div>
               <div className="flex flex-wrap gap-2 mb-3">
                 {policies.blackoutDates.length === 0 && (
-                  <div className="text-sm text-gray-500">Liste boş.</div>
+                  <div className="text-sm text-gray-500">{t("Liste boş.")}</div>
                 )}
                 {policies.blackoutDates.map((d, i) => (
                   <div
@@ -1808,7 +1806,7 @@ const selectZone = React.useCallback(
 
               <div className="flex items-center gap-2">
                 <input
-                  placeholder="2025-12-31"
+                  placeholder={t("2025-12-31")}
                   className="rounded-lg border border-gray-300 px-3 py-2"
                   value={newBlackout}
                   onChange={(e) => setNewBlackout(e.target.value)}
@@ -1826,7 +1824,7 @@ const selectZone = React.useCallback(
                     }
                   }}
                 >
-                  Ekle
+                  {t("Ekle")}
                 </button>
               </div>
             </div>
@@ -1837,7 +1835,7 @@ const selectZone = React.useCallback(
                 disabled={savePoliciesMut.isPending}
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2"
               >
-                {savePoliciesMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                {savePoliciesMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
               </button>
             </div>
           </Card>
@@ -1845,7 +1843,7 @@ const selectZone = React.useCallback(
 
         {/* === TESLİMAT BÖLGELERİ === */}
         {tab === "delivery" && (
-          <Card title="Teslimat Bölgeleri">
+          <Card title={t("Teslimat Bölgeleri")}>
             {/* Paket servis aktif */}
             <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
               <label className="flex items-center gap-2 text-sm">
@@ -1854,20 +1852,20 @@ const selectZone = React.useCallback(
                   checked={deliveryEnabled}
                   onChange={(e) => setDeliveryEnabled(e.target.checked)}
                 />
-                <span className="text-gray-700 font-medium">Paket servis aktif</span>
+                <span className="text-gray-700 font-medium">{t("Paket servis aktif")}</span>
               </label>
               {!deliveryEnabled && (
                 <span className="text-xs text-gray-500">
-                  Paket servis kapalıyken teslimat bölgeleri zorunlu değildir.
+                  {t("Paket servis kapalıyken teslimat bölgeleri zorunlu değildir.")}
                 </span>
               )}
             </div>
             {/* Grid Ayarları */}
             <div className="border rounded-lg p-3 mb-4 bg-gray-50">
-              <div className="font-medium mb-2">Grid Ayarları</div>
+              <div className="font-medium mb-2">{t("Grid Ayarları")}</div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Hücre Boyutu (metre)</label>
+                  <label className="block text-xs text-gray-500 mb-1">{t("Hücre Boyutu (metre)")}</label>
                   <input
                     type="number"
                     min={50}
@@ -1883,7 +1881,7 @@ const selectZone = React.useCallback(
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Grid Yarıçapı (metre)</label>
+                  <label className="block text-xs text-gray-500 mb-1">{t("Grid Yarıçapı (metre)")}</label>
                   <input
                     type="number"
                     min={200}
@@ -1905,14 +1903,14 @@ const selectZone = React.useCallback(
             <div className="mb-4">
               {!deliveryMapCenter ? (
                 <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
-                  Harita için önce restoran konumunu kaydedin (Genel sekmesinden Lat/Lng).
+                  {t("Harita için önce restoran konumunu kaydedin (Genel sekmesinden Lat/Lng).")}
                 </div>
               ) : (
                 <div className="rounded-lg border overflow-hidden">
                   <div className="px-3 py-2 bg-gray-50 border-b flex items-center justify-between gap-2 flex-wrap">
-                    <div className="text-sm font-medium">Teslimat Haritası</div>
+                    <div className="text-sm font-medium">{t("Teslimat Haritası")}</div>
                     <div className="text-xs text-gray-500">
-                      Hücre seçmek için tıklayın. Seçince altta “Bölge Düzenle” paneli açılır.
+                      {t("Hücre seçmek için tıklayın. Seçince altta “Bölge Düzenle” paneli açılır.")}
                     </div>
                   </div>
                   <div style={{ height: 420 }}>
@@ -1940,15 +1938,15 @@ const selectZone = React.useCallback(
             {/* Seçili zone editörü */}
             {selectedZoneId && (
               <div className="border rounded-lg p-3 mb-4 bg-gray-50">
-                <div className="font-medium mb-2">Bölge Düzenle</div>
+                <div className="font-medium mb-2">{t("Bölge Düzenle")}</div>
                 {(() => {
                   const idx = deliveryZones.findIndex(z => z.id === selectedZoneId);
-                  if (idx === -1) return <div className="text-gray-500 text-sm">Bölge bulunamadı.</div>;
+                  if (idx === -1) return <div className="text-gray-500 text-sm">{t("Bölge bulunamadı.")}</div>;
                   const z = deliveryZones[idx];
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Ad</label>
+                        <label className="block text-xs text-gray-500 mb-1">{t("Ad")}</label>
                         <input
                           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                           value={z.name ?? ""}
@@ -1964,7 +1962,7 @@ const selectZone = React.useCallback(
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Aktif</label>
+                        <label className="block text-xs text-gray-500 mb-1">{t("Aktif")}</label>
                         <input
                           type="checkbox"
                           checked={z.isActive}
@@ -1979,7 +1977,7 @@ const selectZone = React.useCallback(
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Min Sipariş</label>
+                        <label className="block text-xs text-gray-500 mb-1">{t("Min Sipariş")}</label>
                         <input
                           type="number"
                           min={0}
@@ -1996,7 +1994,7 @@ const selectZone = React.useCallback(
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Teslimat Ücreti</label>
+                        <label className="block text-xs text-gray-500 mb-1">{t("Teslimat Ücreti")}</label>
                         <input
                           type="number"
                           min={0}
@@ -2011,7 +2009,7 @@ const selectZone = React.useCallback(
                             });
                           }}
                         />
-                        <div className="mt-1 text-[11px] text-gray-500">Para birimi: {currencySymbol}</div>
+                        <div className="mt-1 text-[11px] text-gray-500">{t("Para birimi")}: {currencySymbol}</div>
                       </div>
                       <div className="md:col-span-4 flex items-center gap-3 mt-2">
                         <button
@@ -2023,14 +2021,14 @@ const selectZone = React.useCallback(
                             setSelectedZoneId(null);
                           }}
                         >
-                          Bölgeyi Sil
+                          {t("Bölgeyi Sil")}
                         </button>
                         <button
                           type="button"
                           className="rounded-lg bg-gray-100 hover:bg-gray-200 px-3 py-2 text-sm"
                           onClick={() => selectZone(null)}
                         >
-                          Düzenlemeyi Kapat
+                          {t("Düzenlemeyi Kapat")}
                         </button>
                       </div>
                     </div>
@@ -2046,7 +2044,7 @@ const selectZone = React.useCallback(
                 disabled={saveDeliveryZonesMut.isPending || !rid}
                 className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 disabled:opacity-60"
               >
-                {saveDeliveryZonesMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                {saveDeliveryZonesMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
               </button>
             </div>
           </Card>
@@ -2062,10 +2060,11 @@ const selectZone = React.useCallback(
 
         {/* === TEMA === */}
         {tab === "theme" && (
-          <Card title="Masaüstü Tema">
+          <Card title={t("Masaüstü Tema")}>
             <p className="text-sm text-gray-600 mb-4">
-              Restoran personelinin kullandığı masaüstü ekranın renk düzenini seçin.
-              Seçiminiz sadece bu bilgisayarda geçerli olacaktır.
+              {t("Restoran personelinin kullandığı masaüstü ekranın renk düzenini seçin.")}
+              {" "}
+              {t("Seçiminiz sadece bu bilgisayarda geçerli olacaktır.")}
             </p>
 
             <div
@@ -2105,7 +2104,7 @@ const selectZone = React.useCallback(
                         marginBottom: 4,
                       }}
                     >
-                      {opt.label}
+                      {t(opt.label)}
                     </div>
                     <div
                       style={{
@@ -2114,7 +2113,7 @@ const selectZone = React.useCallback(
                         marginBottom: 8,
                       }}
                     >
-                      {opt.description}
+                      {t(opt.description)}
                     </div>
                     <div
                       style={{
@@ -2124,7 +2123,7 @@ const selectZone = React.useCallback(
                           : "var(--rezvix-text-muted)",
                       }}
                     >
-                      {isActive ? "Seçili tema" : "Temayı uygula"}
+                      {isActive ? t("Seçili tema") : t("Temayı uygula")}
                     </div>
                   </button>
                 );

@@ -7,6 +7,7 @@ import { api, restaurantUpdateReservationStatus } from "../../api/client";
 import { authStore } from "../../store/auth";
 import { showToast } from "../../ui/Toast";
 import { asId } from "../../lib/id"; // ✅ EKLENDİ
+import { useI18n, t as i18nT } from "../../i18n";
 
 // ---- Türler (RestaurantReservationsPage ile aynı model) ----
 type Row = {
@@ -33,15 +34,15 @@ type Resp = { items: Row[]; total: number; page: number; limit: number };
 
 // ---- Yardımcılar ----
 const trStatus: Record<string, string> = {
-  pending: "Bekleyen",
-  confirmed: "Onaylı",
-  arrived: "Geldi",
-  no_show: "Gelmedi",
-  cancelled: "İptal",
+  pending: i18nT("Bekleyen"),
+  confirmed: i18nT("Onaylı"),
+  arrived: i18nT("Geldi"),
+  no_show: i18nT("Gelmedi"),
+  cancelled: i18nT("İptal"),
 };
 
 function fmtStatus(s: string) {
-  return trStatus[s] ?? s;
+  return trStatus[s] ?? i18nT(s);
 }
 
 function ymd(d: Date) {
@@ -71,11 +72,12 @@ async function fetchRezvixOrders(rid: string): Promise<Resp> {
 }
 
 export const RezvixOrdersPage: React.FC = () => {
+  const { t } = useI18n();
   return (
     <RestaurantDesktopLayout
       activeNav="rezvix"
-      title="Rezvix & QR Siparişleri"
-      subtitle="Rezvix rezervasyonlarından ve QR menüden gelen siparişleri buradan yönetin."
+      title={t("Rezvix & QR Siparişleri")}
+      subtitle={t("Rezvix rezervasyonlarından ve QR menüden gelen siparişleri buradan yönetin.")}
       summaryChips={[]}
     >
       <RezvixOrdersInner />
@@ -84,6 +86,7 @@ export const RezvixOrdersPage: React.FC = () => {
 };
 
 const RezvixOrdersInner: React.FC = () => {
+  const { t } = useI18n();
   const user = authStore.getUser();
 
   // ✅ Currency is resolved at layout level (restaurant.region preferred)
@@ -108,10 +111,10 @@ const RezvixOrdersInner: React.FC = () => {
       queryClient.invalidateQueries({
         queryKey: ["desktop-rezvix-orders", rid],
       });
-      showToast("Rezervasyon onaylandı.", "success");
+      showToast(t("Rezervasyon onaylandı."), "success");
     },
     onError: () => {
-      showToast("Rezervasyon onaylanamadı.", "error");
+      showToast(t("Rezervasyon onaylanamadı."), "error");
     },
   });
 
@@ -122,10 +125,10 @@ const RezvixOrdersInner: React.FC = () => {
       queryClient.invalidateQueries({
         queryKey: ["desktop-rezvix-orders", rid],
       });
-      showToast("Rezervasyon iptal edildi.", "success");
+      showToast(t("Rezervasyon iptal edildi."), "success");
     },
     onError: () => {
-      showToast("Rezervasyon iptal edilemedi.", "error");
+      showToast(t("Rezervasyon iptal edilemedi."), "error");
     },
   });
 
@@ -182,7 +185,7 @@ const RezvixOrdersInner: React.FC = () => {
       r.name ||
       r.user?.name ||
       r.user?.email ||
-      "İsimsiz misafir";
+      t("İsimsiz misafir");
 
     return (
       <article key={r._id} className="rezvix-kitchen-ticket">
@@ -194,7 +197,7 @@ const RezvixOrdersInner: React.FC = () => {
         <ul className="rezvix-kitchen-ticket__items">
           <li className="rezvix-kitchen-ticket__item">
             <span className="rezvix-kitchen-ticket__name">
-              {r.partySize} kişi
+              {t("{count} kişi", { count: r.partySize })}
             </span>
             <span className="rezvix-kitchen-ticket__qty">
               {fmtStatus(r.status)}
@@ -202,20 +205,20 @@ const RezvixOrdersInner: React.FC = () => {
           </li>
           <li className="rezvix-kitchen-ticket__item">
             <span className="rezvix-kitchen-ticket__name">
-              Beklenen harcama
+              {t("Beklenen harcama")}
             </span>
             <span className="rezvix-kitchen-ticket__qty">
               {r.totalPrice != null
                 ? `${r.totalPrice.toLocaleString("tr-TR")}${currencySymbol}`
-                : "—"}
+                : t("—")}
             </span>
           </li>
           <li className="rezvix-kitchen-ticket__item">
-            <span className="rezvix-kitchen-ticket__name">Depozito</span>
+            <span className="rezvix-kitchen-ticket__name">{t("Depozito")}</span>
             <span className="rezvix-kitchen-ticket__qty">
               {r.depositAmount != null
                 ? `${r.depositAmount.toLocaleString("tr-TR")}${currencySymbol}`
-                : "—"}
+                : t("—")}
             </span>
           </li>
         </ul>
@@ -248,7 +251,7 @@ const RezvixOrdersInner: React.FC = () => {
                   color: "var(--rezvix-text-muted)",
                 }}
               >
-                Dekontu Gör
+                {t("Dekontu Gör")}
               </button>
             )}
 
@@ -277,7 +280,7 @@ const RezvixOrdersInner: React.FC = () => {
                         : 1,
                   }}
                 >
-                  Reddet
+                  {t("Reddet")}
                 </button>
 
                 <button
@@ -304,7 +307,7 @@ const RezvixOrdersInner: React.FC = () => {
                         : 1,
                   }}
                 >
-                  Onayla
+                  {t("Onayla")}
                 </button>
               </>
             )}
@@ -328,9 +331,9 @@ const RezvixOrdersInner: React.FC = () => {
       {isLoading && (
         <div className="rezvix-empty">
           <div className="rezvix-empty__icon">⏳</div>
-          <div className="rezvix-empty__title">Siparişler getiriliyor…</div>
+          <div className="rezvix-empty__title">{t("Siparişler getiriliyor…")}</div>
           <div className="rezvix-empty__text">
-            Rezvix ve QR siparişleri birkaç saniye içinde yüklenecek.
+            {t("Rezvix ve QR siparişleri birkaç saniye içinde yüklenecek.")}
           </div>
         </div>
       )}
@@ -338,10 +341,9 @@ const RezvixOrdersInner: React.FC = () => {
       {isError && !isLoading && (
         <div className="rezvix-empty">
           <div className="rezvix-empty__icon">⚠️</div>
-          <div className="rezvix-empty__title">Siparişler yüklenemedi</div>
+          <div className="rezvix-empty__title">{t("Siparişler yüklenemedi")}</div>
           <div className="rezvix-empty__text">
-            Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı
-            kontrol edin.
+            {t("Lütfen sayfayı yenilemeyi deneyin. Sorun devam ederse bağlantınızı kontrol edin.")}
           </div>
         </div>
       )}
@@ -349,8 +351,8 @@ const RezvixOrdersInner: React.FC = () => {
       {!isLoading && !isError && !hasData && (
         <EmptyState
           icon="📲"
-          title="Henüz aktif Rezvix / QR siparişi yok"
-          text="Rezvix rezervasyonları ve QR menü siparişleri burada listelenecek."
+          title={t("Henüz aktif Rezvix / QR siparişi yok")}
+          text={t("Rezvix rezervasyonları ve QR menü siparişleri burada listelenecek.")}
         />
       )}
 
@@ -358,7 +360,7 @@ const RezvixOrdersInner: React.FC = () => {
         <div className="rezvix-board-layout">
           <div className="rezvix-board-column">
             <div className="rezvix-board-column__header">
-              <div className="rezvix-board-column__title">Bekleyen</div>
+              <div className="rezvix-board-column__title">{t("Bekleyen")}</div>
               <div className="rezvix-board-column__count">{pending.length}</div>
             </div>
             <div className="rezvix-board-column__body">
@@ -368,7 +370,7 @@ const RezvixOrdersInner: React.FC = () => {
 
           <div className="rezvix-board-column">
             <div className="rezvix-board-column__header">
-              <div className="rezvix-board-column__title">Aktif</div>
+              <div className="rezvix-board-column__title">{t("Aktif")}</div>
               <div className="rezvix-board-column__count">{active.length}</div>
             </div>
             <div className="rezvix-board-column__body">
@@ -378,7 +380,7 @@ const RezvixOrdersInner: React.FC = () => {
 
           <div className="rezvix-board-column">
             <div className="rezvix-board-column__header">
-              <div className="rezvix-board-column__title">Sorunlu</div>
+              <div className="rezvix-board-column__title">{t("Sorunlu")}</div>
               <div className="rezvix-board-column__count">{problematic.length}</div>
             </div>
             <div className="rezvix-board-column__body">

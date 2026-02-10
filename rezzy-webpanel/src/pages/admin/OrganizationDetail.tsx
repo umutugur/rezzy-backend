@@ -18,6 +18,7 @@ import {
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
 import { DEFAULT_LANGUAGE, LANG_OPTIONS } from "../../utils/languages";
+import { t as i18nT, useI18n } from "../../i18n";
 
 type OrgDetail = AdminOrganization & {
   // Backend'te farklı isimler kullanılabilir; hepsini zorlamıyoruz
@@ -49,13 +50,13 @@ function prettyOrgRole(role?: string) {
   if (!role) return "-";
   switch (role) {
     case "org_owner":
-      return "Owner";
+      return i18nT("Owner");
     case "org_admin":
-      return "Admin";
+      return i18nT("Admin");
     case "org_finance":
-      return "Finans";
+      return i18nT("Finans");
     case "org_staff":
-      return "Staff";
+      return i18nT("Staff");
     default:
       return role;
   }
@@ -64,6 +65,7 @@ function prettyOrgRole(role?: string) {
 export default function AdminOrganizationDetailPage() {
   const { oid = "" } = useParams<{ oid: string }>();
   const qc = useQueryClient();
+  const { t } = useI18n();
 
   const orgQ = useQuery<OrgDetail | null>({
     queryKey: ["admin-organization", oid],
@@ -86,12 +88,12 @@ export default function AdminOrganizationDetailPage() {
     mutationFn: () =>
       adminUpdateOrganization(oid, { defaultLanguage: orgLang }),
     onSuccess: () => {
-      showToast("Organizasyon dili güncellendi", "success");
+      showToast(t("Organizasyon dili güncellendi"), "success");
       qc.invalidateQueries({ queryKey: ["admin-organization", oid] });
     },
     onError: (err: any) => {
       const msg =
-        err?.response?.data?.message || err?.message || "Dil güncellenemedi";
+        err?.response?.data?.message || err?.message || t("Dil güncellenemedi");
       showToast(msg, "error");
     },
   });
@@ -135,7 +137,7 @@ export default function AdminOrganizationDetailPage() {
       const msg =
         err?.response?.data?.message ||
         err?.message ||
-        "Kullanıcı aranamadı";
+        t("Kullanıcı aranamadı");
       showToast(msg, "error");
     } finally {
       setMemberSearchLoading(false);
@@ -154,7 +156,7 @@ export default function AdminOrganizationDetailPage() {
         role: memberRole,
       }),
     onSuccess: () => {
-      showToast("Üye eklendi", "success");
+      showToast(t("Üye eklendi"), "success");
       setSelectedMember(null);
       setMemberQuery("");
       setMemberRole("org_admin");
@@ -164,7 +166,7 @@ export default function AdminOrganizationDetailPage() {
       const msg =
         err?.response?.data?.message ||
         err?.message ||
-        "Üye eklenemedi";
+        t("Üye eklenemedi");
       showToast(msg, "error");
     },
   });
@@ -173,14 +175,14 @@ export default function AdminOrganizationDetailPage() {
     mutationFn: (userId: string) =>
       adminRemoveOrganizationMember(oid, userId),
     onSuccess: () => {
-      showToast("Üyelik kaldırıldı", "success");
+      showToast(t("Üyelik kaldırıldı"), "success");
       qc.invalidateQueries({ queryKey: ["admin-organization", oid] });
     },
     onError: (err: any) => {
       const msg =
         err?.response?.data?.message ||
         err?.message ||
-        "Üyelik kaldırılamadı";
+        t("Üyelik kaldırılamadı");
       showToast(msg, "error");
     },
   });
@@ -188,11 +190,11 @@ export default function AdminOrganizationDetailPage() {
   const handleAddMember = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMember?._id) {
-      showToast("Önce kullanıcı seçin", "error");
+      showToast(t("Önce kullanıcı seçin"), "error");
       return;
     }
     if (!memberRole) {
-      showToast("Rol seçin", "error");
+      showToast(t("Rol seçin"), "error");
       return;
     }
     addMemberMut.mutate();
@@ -226,7 +228,7 @@ export default function AdminOrganizationDetailPage() {
       const msg =
         err?.response?.data?.message ||
         err?.message ||
-        "Kullanıcı aranamadı";
+        t("Kullanıcı aranamadı");
       showToast(msg, "error");
     } finally {
       setOwnerSearchLoading(false);
@@ -236,7 +238,7 @@ export default function AdminOrganizationDetailPage() {
   const selectOwner = (u: UserOption) => {
     setOwnerId(u._id);
     setOwnerLabel(
-      `${u.name || "İsimsiz"} (${u.email || "e-posta yok"})`
+      `${u.name || t("İsimsiz")} (${u.email || t("e-posta yok")})`
     );
     setOwnerResults([]);
   };
@@ -261,7 +263,7 @@ export default function AdminOrganizationDetailPage() {
         address: rAddress.trim() || undefined,
       }),
     onSuccess: () => {
-      showToast("Restoran oluşturuldu", "success");
+      showToast(t("Restoran oluşturuldu"), "success");
       setRName("");
       setRCity("");
       setRRegion("");
@@ -274,7 +276,7 @@ export default function AdminOrganizationDetailPage() {
       const msg =
         err?.response?.data?.message ||
         err?.message ||
-        "Restoran oluşturulamadı";
+        t("Restoran oluşturulamadı");
       showToast(msg, "error");
     },
   });
@@ -282,11 +284,11 @@ export default function AdminOrganizationDetailPage() {
   const handleCreateRestaurant = (e: React.FormEvent) => {
     e.preventDefault();
     if (!ownerId) {
-      showToast("Önce restoran sahibini seçin", "error");
+      showToast(t("Önce restoran sahibini seçin"), "error");
       return;
     }
     if (!rName.trim()) {
-      showToast("Restoran ismi zorunlu", "error");
+      showToast(t("Restoran ismi zorunlu"), "error");
       return;
     }
     createRestMut.mutate();
@@ -296,51 +298,51 @@ export default function AdminOrganizationDetailPage() {
     <div className="flex gap-6">
       <Sidebar
          items={[
-          { to: "/admin", label: "Dashboard" },
-          { to: "/admin/banners", label: "Bannerlar" },
-          { to: "/admin/commissions", label: "Komisyonlar" }, // ✅ menüye eklendi
-          { to: "/admin/organizations", label: "Organizasyonlar" },
-          { to: "/admin/restaurants", label: "Restoranlar" },
-          { to: "/admin/users", label: "Kullanıcılar" },
-          { to: "/admin/reservations", label: "Rezervasyonlar" },
-          { to: "/admin/moderation", label: "Moderasyon" },
-          { to: "/admin/notifications", label: "Bildirim Gönder" },
+          { to: "/admin", label: t("Dashboard") },
+          { to: "/admin/banners", label: t("Bannerlar") },
+          { to: "/admin/commissions", label: t("Komisyonlar") }, // ✅ menüye eklendi
+          { to: "/admin/organizations", label: t("Organizasyonlar") },
+          { to: "/admin/restaurants", label: t("Restoranlar") },
+          { to: "/admin/users", label: t("Kullanıcılar") },
+          { to: "/admin/reservations", label: t("Rezervasyonlar") },
+          { to: "/admin/moderation", label: t("Moderasyon") },
+          { to: "/admin/notifications", label: t("Bildirim Gönder") },
         ]}
       />
 
       <div className="flex-1 space-y-6">
         <h2 className="text-lg font-semibold">
-          {org?.name || "Organizasyon Detayı"}
+          {org?.name || t("Organizasyon Detayı")}
         </h2>
 
         {/* Genel bilgiler */}
-        <Card title="Bilgiler">
+        <Card title={t("Bilgiler")}>
           {orgQ.isLoading ? (
-            "Yükleniyor…"
+            t("Yükleniyor…")
           ) : !org ? (
             <div className="text-sm text-gray-500">
-              Kayıt bulunamadı.
+              {t("Kayıt bulunamadı.")}
             </div>
           ) : (
             <div className="space-y-4">
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <span className="text-gray-500 text-sm">Ad</span>
+                  <span className="text-gray-500 text-sm">{t("Ad")}</span>
                   <div>{org.name}</div>
                 </div>
                 <div>
-                  <span className="text-gray-500 text-sm">Bölge</span>
+                  <span className="text-gray-500 text-sm">{t("Bölge")}</span>
                   <div>{org.region || "-"}</div>
                 </div>
                 <div>
                   <span className="text-gray-500 text-sm">
-                    Vergi No
+                    {t("Vergi No")}
                   </span>
                   <div>{org.taxNumber || "-"}</div>
                 </div>
                 <div>
                   <span className="text-gray-500 text-sm">
-                    Oluşturulma
+                    {t("Oluşturulma")}
                   </span>
                   <div>
                     {org.createdAt
@@ -355,7 +357,7 @@ export default function AdminOrganizationDetailPage() {
               <div className="flex flex-wrap items-end gap-3">
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">
-                    Varsayılan Dil
+                    {t("Varsayılan Dil")}
                   </label>
                   <select
                     className="border rounded-lg px-3 py-2 text-sm bg-white"
@@ -378,7 +380,7 @@ export default function AdminOrganizationDetailPage() {
                     orgLang === (org.defaultLanguage || DEFAULT_LANGUAGE)
                   }
                 >
-                  {updateOrgLangMut.isPending ? "Kaydediliyor…" : "Kaydet"}
+                  {updateOrgLangMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
                 </button>
               </div>
             </div>
@@ -386,16 +388,16 @@ export default function AdminOrganizationDetailPage() {
         </Card>
 
         {/* Organizasyon Üyeleri */}
-        <Card title="Organizasyon Üyeleri">
+        <Card title={t("Organizasyon Üyeleri")}>
           {/* Liste */}
           {members && members.length > 0 ? (
             <div className="overflow-auto mb-4">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-500">
-                    <th className="py-2 px-4">Ad</th>
-                    <th className="py-2 px-4">E-posta</th>
-                    <th className="py-2 px-4">Rol</th>
+                    <th className="py-2 px-4">{t("Ad")}</th>
+                    <th className="py-2 px-4">{t("E-posta")}</th>
+                    <th className="py-2 px-4">{t("Rol")}</th>
                     <th className="py-2 px-4"></th>
                   </tr>
                 </thead>
@@ -404,7 +406,7 @@ export default function AdminOrganizationDetailPage() {
                     const userId =
                       m.userId || m.user?._id || m._id || "";
                     const name =
-                      m.name || m.user?.name || "İsimsiz";
+                      m.name || m.user?.name || t("İsimsiz");
                     const email =
                       m.email || m.user?.email || "-";
                     const role =
@@ -427,7 +429,7 @@ export default function AdminOrganizationDetailPage() {
                             disabled={removeMemberMut.isPending}
                             className="px-2 py-1 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-60"
                           >
-                            Kaldır
+                            {t("Kaldır")}
                           </button>
                         </td>
                       </tr>
@@ -438,7 +440,7 @@ export default function AdminOrganizationDetailPage() {
             </div>
           ) : (
             <div className="text-sm text-gray-500 mb-4">
-              Henüz bu organizasyona bağlı üye yok.
+              {t("Henüz bu organizasyona bağlı üye yok.")}
             </div>
           )}
 
@@ -449,7 +451,7 @@ export default function AdminOrganizationDetailPage() {
           >
             <div className="md:col-span-2 space-y-1">
               <label className="block text-xs text-gray-600">
-                Kullanıcı Ara (isim / e-posta)
+                {t("Kullanıcı Ara (isim / e-posta)")}
               </label>
               <input
                 type="text"
@@ -470,14 +472,14 @@ export default function AdminOrganizationDetailPage() {
                 <div className="mt-2 max-h-48 overflow-auto border rounded-lg bg-gray-50">
                   {memberSearchLoading && (
                     <div className="px-3 py-2 text-sm text-gray-500">
-                      Aranıyor…
+                      {t("Aranıyor…")}
                     </div>
                   )}
                   {!memberSearchLoading &&
                     memberResults.length === 0 &&
                     memberQuery.trim() && (
                       <div className="px-3 py-2 text-sm text-gray-500">
-                        Sonuç yok
+                        {t("Sonuç yok")}
                       </div>
                     )}
                   {memberResults.map((u) => (
@@ -492,7 +494,7 @@ export default function AdminOrganizationDetailPage() {
                       }`}
                     >
                       <span>
-                        {u.name || "İsimsiz"}{" "}
+                        {u.name || t("İsimsiz")}{" "}
                         <span className="text-gray-500">
                           ({u.email || "-"})
                         </span>
@@ -506,16 +508,17 @@ export default function AdminOrganizationDetailPage() {
               )}
               <div className="text-xs text-emerald-700 mt-1">
                 {selectedMember
-                  ? `Seçili kullanıcı: ${
-                      selectedMember.name || "İsimsiz"
-                    } (${selectedMember.email || "-"})`
-                  : "Henüz kullanıcı seçilmedi"}
+                  ? t("Seçili kullanıcı: {name} ({email})", {
+                      name: selectedMember.name || t("İsimsiz"),
+                      email: selectedMember.email || "-",
+                    })
+                  : t("Henüz kullanıcı seçilmedi")}
               </div>
             </div>
 
             <div className="space-y-2">
               <label className="block text-xs text-gray-600 mb-1">
-                Rol
+                {t("Rol")}
               </label>
               <select
                 className="border rounded-lg px-3 py-2 w-full text-sm"
@@ -524,7 +527,7 @@ export default function AdminOrganizationDetailPage() {
               >
                 {ORG_ROLES.map((r) => (
                   <option key={r.value} value={r.value}>
-                    {r.label}
+                    {t(r.label)}
                   </option>
                 ))}
               </select>
@@ -540,24 +543,24 @@ export default function AdminOrganizationDetailPage() {
                 className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs w-full disabled:opacity-60"
               >
                 {addMemberMut.isPending
-                  ? "Ekleniyor…"
-                  : "Üye Ekle"}
+                  ? t("Ekleniyor…")
+                  : t("Üye Ekle")}
               </button>
             </div>
           </form>
         </Card>
 
         {/* Organizasyona bağlı restoranlar */}
-        <Card title="Bu Organizasyona Bağlı Restoranlar">
+        <Card title={t("Bu Organizasyona Bağlı Restoranlar")}>
           {restaurants && restaurants.length > 0 ? (
             <div className="overflow-auto">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-500">
-                    <th className="py-2 px-4">Ad</th>
-                    <th className="py-2 px-4">Şehir</th>
-                    <th className="py-2 px-4">Bölge</th>
-                    <th className="py-2 px-4">Durum</th>
+                    <th className="py-2 px-4">{t("Ad")}</th>
+                    <th className="py-2 px-4">{t("Şehir")}</th>
+                    <th className="py-2 px-4">{t("Bölge")}</th>
+                    <th className="py-2 px-4">{t("Durum")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -580,11 +583,11 @@ export default function AdminOrganizationDetailPage() {
                       <td className="py-2 px-4">
                         {r.isActive ? (
                           <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700">
-                            Aktif
+                            {t("Aktif")}
                           </span>
                         ) : (
                           <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-rose-50 text-rose-700">
-                            Pasif
+                            {t("Pasif")}
                           </span>
                         )}
                       </td>
@@ -595,13 +598,13 @@ export default function AdminOrganizationDetailPage() {
             </div>
           ) : (
             <div className="text-sm text-gray-500">
-              Henüz bu organizasyona bağlı restoran yok.
+              {t("Henüz bu organizasyona bağlı restoran yok.")}
             </div>
           )}
         </Card>
 
         {/* Bu organizasyona yeni restoran ekle */}
-        <Card title="Bu Organizasyona Yeni Restoran (Şube) Ekle">
+        <Card title={t("Bu Organizasyona Yeni Restoran (Şube) Ekle")}>
           {/* Owner search */}
           <form
             onSubmit={handleSearchOwner}
@@ -610,7 +613,7 @@ export default function AdminOrganizationDetailPage() {
             <div className="grid md:grid-cols-3 gap-3 items-end">
               <div className="md:col-span-2">
                 <label className="block text-xs text-gray-600 mb-1">
-                  Restoran Sahibi Ara (isim / e-posta)
+                  {t("Restoran Sahibi Ara (isim / e-posta)")}
                 </label>
                 <input
                   type="text"
@@ -625,7 +628,7 @@ export default function AdminOrganizationDetailPage() {
                   disabled={ownerSearchLoading}
                   className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm w-full disabled:opacity-60"
                 >
-                  {ownerSearchLoading ? "Aranıyor…" : "Kullanıcı Ara"}
+                  {ownerSearchLoading ? t("Aranıyor…") : t("Kullanıcı Ara")}
                 </button>
               </div>
             </div>
@@ -640,7 +643,7 @@ export default function AdminOrganizationDetailPage() {
                     className="w-full flex justify-between items-center px-2 py-1 rounded-lg hover:bg-white text-left"
                   >
                     <span>
-                      {u.name || "İsimsiz"}{" "}
+                      {u.name || t("İsimsiz")}{" "}
                       <span className="text-gray-500">
                         ({u.email || "-"})
                       </span>
@@ -655,7 +658,7 @@ export default function AdminOrganizationDetailPage() {
 
             {ownerLabel && (
               <div className="text-xs text-emerald-700 mt-1">
-                Seçili sahip: {ownerLabel}
+                {t("Seçili sahip: {label}", { label: ownerLabel })}
               </div>
             )}
           </form>
@@ -667,7 +670,7 @@ export default function AdminOrganizationDetailPage() {
           >
             <div className="md:col-span-1">
               <label className="block text-xs text-gray-600 mb-1">
-                Restoran Adı *
+                {t("Restoran Adı *")}
               </label>
               <input
                 type="text"
@@ -679,7 +682,7 @@ export default function AdminOrganizationDetailPage() {
             </div>
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                Şehir
+                {t("Şehir")}
               </label>
               <input
                 type="text"
@@ -690,7 +693,7 @@ export default function AdminOrganizationDetailPage() {
             </div>
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                Bölge (ülke kodu, örn: TR, UK)
+                {t("Bölge (ülke kodu, örn: TR, UK)")}
               </label>
               <input
                 type="text"
@@ -705,7 +708,7 @@ export default function AdminOrganizationDetailPage() {
 
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                Telefon
+                {t("Telefon")}
               </label>
               <input
                 type="text"
@@ -716,7 +719,7 @@ export default function AdminOrganizationDetailPage() {
             </div>
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                E-posta
+                {t("E-posta")}
               </label>
               <input
                 type="email"
@@ -727,7 +730,7 @@ export default function AdminOrganizationDetailPage() {
             </div>
             <div>
               <label className="block text-xs text-gray-600 mb-1">
-                Adres
+                {t("Adres")}
               </label>
               <input
                 type="text"
@@ -744,8 +747,8 @@ export default function AdminOrganizationDetailPage() {
                 className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm disabled:opacity-60"
               >
                 {createRestMut.isPending
-                  ? "Restoran oluşturuluyor…"
-                  : "Bu Organizasyona Restoran Ekle"}
+                  ? t("Restoran oluşturuluyor…")
+                  : t("Bu Organizasyona Restoran Ekle")}
               </button>
             </div>
           </form>

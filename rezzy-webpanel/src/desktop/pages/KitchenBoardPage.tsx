@@ -7,6 +7,7 @@ import { authStore } from "../../store/auth";
 import { asId } from "../../lib/id";
 import { api } from "../../api/client";
 import { showToast } from "../../ui/Toast";
+import { useI18n } from "../../i18n";
 
 type KitchenTicketStatus = "NEW" | "IN_PROGRESS" | "READY" | "SERVED";
 
@@ -75,6 +76,7 @@ function isTodayFromAnyTimestamp(ticket: BackendKitchenTicket, now: Date): boole
 }
 
 export const KitchenBoardPage: React.FC = () => {
+  const { t } = useI18n();
   const user = authStore.getUser();
 
   // ✅ Önce legacy restaurantId, yoksa membership'ten ilk restoran
@@ -155,7 +157,7 @@ export const KitchenBoardPage: React.FC = () => {
     },
     onError: (e: any) => {
       showToast(
-        e?.response?.data?.message || e?.message || "Mutfak durumu güncellenemedi",
+        e?.response?.data?.message || e?.message || t("Mutfak durumu güncellenemedi"),
         "error"
       );
     },
@@ -187,29 +189,29 @@ export const KitchenBoardPage: React.FC = () => {
   return (
     <RestaurantDesktopLayout
       activeNav="kitchen"
-      title="Mutfak Ekranı"
-      subtitle="Yeni siparişler, hazırlananlar ve servise hazır tabaklar."
+      title={t("Mutfak Ekranı")}
+      subtitle={t("Yeni siparişler, hazırlananlar ve servise hazır tabaklar.")}
       summaryChips={[
         {
-          label: "Bugünkü fiş",
-          value: isLoading ? "Yükleniyor…" : `${todayTicketCount} adet`,
+          label: t("Bugünkü fiş"),
+          value: isLoading ? t("Yükleniyor…") : t("{count} adet", { count: todayTicketCount }),
           tone: "success",
         },
         {
-          label: "Hazırlanan",
-          value: isLoading ? "-" : `${inProgress.length} adet`,
+          label: t("Hazırlanan"),
+          value: isLoading ? t("-") : t("{count} adet", { count: inProgress.length }),
           tone: "warning",
         },
         {
-          label: "Servise hazır",
-          value: isLoading ? "-" : `${ready.length} adet`,
+          label: t("Servise hazır"),
+          value: isLoading ? t("-") : t("{count} adet", { count: ready.length }),
           tone: "neutral",
         },
       ]}
     >
       {error && (
         <div className="rezvix-error-banner">
-          Mutfak fişleri alınamadı. Sayfayı yenilemeyi deneyin.
+          {t("Mutfak fişleri alınamadı. Sayfayı yenilemeyi deneyin.")}
         </div>
       )}
 
@@ -217,16 +219,16 @@ export const KitchenBoardPage: React.FC = () => {
         {/* Yeni */}
         <div className="rezvix-board-column">
           <div className="rezvix-board-column__header">
-            <div className="rezvix-board-column__title">Yeni</div>
+            <div className="rezvix-board-column__title">{t("Yeni")}</div>
             <div className="rezvix-board-column__count">
               {newOrders.length}
             </div>
           </div>
           <div className="rezvix-board-column__body">
             {isLoading ? (
-              <div className="rezvix-empty">Yükleniyor…</div>
+              <div className="rezvix-empty">{t("Yükleniyor…")}</div>
             ) : newOrders.length === 0 ? (
-              <div className="rezvix-empty">Yeni sipariş yok</div>
+              <div className="rezvix-empty">{t("Yeni sipariş yok")}</div>
             ) : (
               newOrders.map((t) => (
                 <div key={t.id} className="rezvix-kitchen-card-wrapper">
@@ -246,14 +248,14 @@ export const KitchenBoardPage: React.FC = () => {
         {/* Hazırlanıyor */}
         <div className="rezvix-board-column">
           <div className="rezvix-board-column__header">
-            <div className="rezvix-board-column__title">Hazırlanıyor</div>
+            <div className="rezvix-board-column__title">{t("Hazırlanıyor")}</div>
             <div className="rezvix-board-column__count">
               {inProgress.length}
             </div>
           </div>
           <div className="rezvix-board-column__body">
             {inProgress.length === 0 ? (
-              <div className="rezvix-empty">Hazırlanan sipariş yok</div>
+              <div className="rezvix-empty">{t("Hazırlanan sipariş yok")}</div>
             ) : (
               inProgress.map((t) => (
                 <div key={t.id} className="rezvix-kitchen-card-wrapper">
@@ -273,14 +275,14 @@ export const KitchenBoardPage: React.FC = () => {
         {/* Hazır */}
         <div className="rezvix-board-column">
           <div className="rezvix-board-column__header">
-            <div className="rezvix-board-column__title">Hazır</div>
+            <div className="rezvix-board-column__title">{t("Hazır")}</div>
             <div className="rezvix-board-column__count">
               {ready.length}
             </div>
           </div>
           <div className="rezvix-board-column__body">
             {ready.length === 0 ? (
-              <div className="rezvix-empty">Servise hazır sipariş yok</div>
+              <div className="rezvix-empty">{t("Servise hazır sipariş yok")}</div>
             ) : (
               ready.map((t) => (
                 <div key={t.id} className="rezvix-kitchen-card-wrapper">
@@ -300,7 +302,7 @@ export const KitchenBoardPage: React.FC = () => {
         {/* Teslim edildi */}
         <div className="rezvix-board-column">
           <div className="rezvix-board-column__header">
-            <div className="rezvix-board-column__title">Teslim edildi</div>
+            <div className="rezvix-board-column__title">{t("Teslim edildi")}</div>
             <div className="rezvix-board-column__count">
               {servedToday.length}
             </div>
@@ -310,10 +312,10 @@ export const KitchenBoardPage: React.FC = () => {
               <div className="rezvix-empty">
                 <div className="rezvix-empty__icon">🍽️</div>
                 <div className="rezvix-empty__title">
-                  Teslim edilen sipariş yok
+                  {t("Teslim edilen sipariş yok")}
                 </div>
                 <div className="rezvix-empty__text">
-                  Hazır tabaklar servis edildikçe burada listelenecek.
+                  {t("Hazır tabaklar servis edildikçe burada listelenecek.")}
                 </div>
               </div>
             ) : (
