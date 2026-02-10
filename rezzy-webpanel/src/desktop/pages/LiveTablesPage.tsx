@@ -249,6 +249,7 @@ const LiveTablesInner: React.FC<LiveTablesInnerProps> = ({
 
   // Seçili masa
   const [selectedTableId, setSelectedTableId] = React.useState<string | null>(null);
+  const [selectedTableSnapshot, setSelectedTableSnapshot] = React.useState<LiveTable | null>(null);
 
   // Walk-in modal state
   const [isOrderModalOpen, setIsOrderModalOpen] = React.useState(false);
@@ -1108,9 +1109,11 @@ function handleAddWithModifiers(
   }
 
   const selectedTable = selectedTableId
-    ? tables.find(
+    ? selectedTableSnapshot ||
+      tables.find(
         (t) => String(t.id) === selectedTableId || t.name === selectedTableId
-      ) || (tableDetail as any)?.table
+      ) ||
+      (tableDetail as any)?.table
     : undefined;
 
   const selectedTableName =
@@ -1160,6 +1163,11 @@ const selectedTotal = Object.values(draftItems).reduce(
                   onClick={() => {
                     const tableKey = t.id ? String(t.id) : t.name;
                     if (!tableKey) return;
+                    const liveTable =
+                      tables.find(
+                        (tbl) => String(tbl.id) === tableKey || tbl.name === tableKey
+                      ) || null;
+                    setSelectedTableSnapshot(liveTable);
                     setSelectedTableId(tableKey);
                     setIsDetailModalOpen(true);
                   }}
@@ -1189,6 +1197,7 @@ const selectedTotal = Object.values(draftItems).reduce(
         onClose={() => {
           setIsDetailModalOpen(false);
           setSelectedTableId(null);
+          setSelectedTableSnapshot(null);
         }}
         onOpenWalkInModal={() => {
           if (!selectedTableId) return;

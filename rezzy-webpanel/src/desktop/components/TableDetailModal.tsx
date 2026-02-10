@@ -291,9 +291,26 @@ export const TableDetailModal: React.FC<Props> = ({
   hideCancelledOrders,
 }) => {
   const { t } = useI18n();
-  if (!open || !table) return null;
+  if (!open) return null;
+  const activeTable = table ?? (tableDetail as any)?.table;
+  if (!activeTable) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(7,9,20,0.42)] backdrop-blur-md">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_20px_50px_rgba(15,23,42,0.25)] px-6 py-5">
+          <div className="text-sm text-slate-600">{t("Masa bulunamadı")}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-4 px-3 py-1.5 text-xs rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+          >
+            {t("Kapat")}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-  const mins = minutesSince(table.lastOrderAt ?? null);
+  const mins = minutesSince(activeTable.lastOrderAt ?? null);
   const user = authStore.getUser();
 
   const qc = useQueryClient();
@@ -382,7 +399,7 @@ export const TableDetailModal: React.FC<Props> = ({
 
   const hasOrders = visibleOrders.length > 0;
   const hasRequests = (tableDetail?.serviceRequests?.length ?? 0) > 0;
-  const isSelfService = table.channel === "QR";
+  const isSelfService = activeTable.channel === "QR";
   const canNotifyOrderReady = isSelfService && hasSession && hasOrders;
 
   const canCancelOrder = React.useCallback((o: any) => {
@@ -430,30 +447,30 @@ export const TableDetailModal: React.FC<Props> = ({
               {t("MASA DETAYI")}
             </div>
             <div className="text-[18px] font-semibold text-slate-900">
-              {table.name}{" "}
+              {activeTable.name}{" "}
               <span className="text-[12px] font-normal text-slate-500">
-                ({t("{count} kişilik", { count: table.capacity || 2 })})
+                ({t("{count} kişilik", { count: activeTable.capacity || 2 })})
               </span>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] text-slate-700">
-                {t("Kat {count}", { count: table.floor ?? 1 })}
+                {t("Kat {count}", { count: activeTable.floor ?? 1 })}
               </span>
 
               <span
                 className={
                   "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium " +
-                  channelClass(table.channel as string | undefined)
+                  channelClass(activeTable.channel as string | undefined)
                 }
               >
-                {channelLabel(table.channel as string | undefined)}
+                {channelLabel(activeTable.channel as string | undefined)}
               </span>
 
               <span className="inline-flex items-center rounded-full bg-slate-900/90 text-amber-300 px-2.5 py-1 text-[11px] font-medium">
                 {t("Durum")}:
                 <span className="ml-1 text-white">
-                  {statusLabel(table.status)}
+                  {statusLabel(activeTable.status)}
                 </span>
               </span>
 
@@ -492,7 +509,7 @@ export const TableDetailModal: React.FC<Props> = ({
             {!isLoading && !hasError && tableDetail && (
               <>
                 {/* Rezervasyon şeridi (REZVIX için) */}
-                {table.channel === "REZVIX" && tableDetail?.reservation && (
+                {activeTable.channel === "REZVIX" && tableDetail?.reservation && (
                   <div className="rounded-2xl bg-gradient-to-r from-[#312e81] via-[#1f2937] to-[#111827] text-[11px] text-slate-100 px-4 py-3 flex flex-col gap-1 shadow-[0_16px_40px_rgba(15,23,42,0.65)] border border-indigo-500/40">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-indigo-100">
@@ -707,10 +724,10 @@ export const TableDetailModal: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={onOpenWalkInModal}
-                disabled={!table}
+                disabled={!activeTable}
                 className="w-full rounded-full bg-gradient-to-r from-purple-600 to-purple-500 px-4 py-2 text-[12px] font-semibold text-white shadow-[0_14px_30px_rgba(126,34,206,0.4)] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
-                {t("Yeni Sipariş Ekle — {table}", { table: table.name })}
+                {t("Yeni Sipariş Ekle — {table}", { table: activeTable.name })}
               </button>
 
               <button
