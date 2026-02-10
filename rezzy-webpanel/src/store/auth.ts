@@ -44,6 +44,7 @@ export type MeUser = {
 };
 
 const TOKEN_KEY = "rezvix_token";
+const REFRESH_TOKEN_KEY = "rezvix_refresh_token";
 const USER_KEY = "rezvix_user";
 
 function extractObjectId(input: any): string | null {
@@ -226,6 +227,17 @@ export const authStore = {
     localStorage.removeItem(TOKEN_KEY);
     window.dispatchEvent(new Event("auth:changed"));
   },
+  getRefreshToken(): string | null {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  },
+  setRefreshToken(t: string) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, t);
+    window.dispatchEvent(new Event("auth:changed"));
+  },
+  clearRefreshToken() {
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    window.dispatchEvent(new Event("auth:changed"));
+  },
 
   getUser(): MeUser | null {
     const raw = localStorage.getItem(USER_KEY);
@@ -255,6 +267,7 @@ export const authStore = {
 
   logout() {
     this.clearToken();
+    this.clearRefreshToken();
     this.clearUser();
   },
 };

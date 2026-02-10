@@ -338,6 +338,8 @@ function LoginPage() {
     try {
       const resp = await loginWithEmail({ email, password });
       authStore.setToken(resp.token);
+      if (resp.refreshToken) authStore.setRefreshToken(resp.refreshToken);
+      else authStore.clearRefreshToken();
       if (resp.user) authStore.setUser(resp.user);
       else authStore.setUser(await fetchMe());
       const u = authStore.getUser();

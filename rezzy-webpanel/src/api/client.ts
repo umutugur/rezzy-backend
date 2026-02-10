@@ -27,6 +27,27 @@ export const api = axios.create({
   withCredentials: false,
 });
 
+const rawApi = axios.create({
+  baseURL,
+  withCredentials: false,
+});
+
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = authStore.getRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const { data } = await rawApi.post("/auth/refresh", { refreshToken });
+    if (data?.token) authStore.setToken(data.token);
+    if (data?.refreshToken) authStore.setRefreshToken(data.refreshToken);
+    return data?.token || null;
+  } catch {
+    authStore.logout();
+    return null;
+  }
+}
+
 // ---- Request interceptor: Auth + GET cache-buster
 api.interceptors.request.use((config) => {
   const t = authStore.getToken();
@@ -62,19 +83,38 @@ api.interceptors.response.use(
     }
     return res;
   },
-  (err) => {
+  async (err) => {
+    const original = (err?.config || {}) as any;
     const status = err?.response?.status;
-    const url = String(err?.config?.url || "");
-    const method = String(err?.config?.method || "get").toLowerCase();
+    const url = String(original?.url || "");
+    const method = String(original?.method || "get").toLowerCase();
 
     // ✅ 1) Bu istek "toast basma" diye işaretlenmişse sessiz geç
-    const noToast = !!(err?.config as any)?.__noToast;
+    const noToast = !!original.__noToast;
 
     // ✅ 2) delivery-settings GET 404 -> bazı env'lerde endpoint yok, normal kabul
     const isDeliverySettingsGet404 =
       status === 404 && method === "get" && url.includes("/delivery-settings");
 
     if (status === 401) {
+      const isRefreshCall = url.includes("/auth/refresh");
+      const noRefresh = !!original.__noAuthRefresh;
+
+      if (!isRefreshCall && !noRefresh && !original._retry) {
+        if (!refreshPromise) {
+          refreshPromise = refreshAccessToken().finally(() => {
+            refreshPromise = null;
+          });
+        }
+        const newToken = await refreshPromise;
+        if (newToken) {
+          original._retry = true;
+          original.headers = original.headers || {};
+          (original.headers as any).Authorization = `Bearer ${newToken}`;
+          return api(original);
+        }
+      }
+
       authStore.logout();
     }
 
@@ -98,7 +138,9 @@ export async function loginWithEmail(input: {
   phone?: string;
   password: string;
 }) {
-  const { data } = await api.post("/auth/login", input);
+  const { data } = await api.post("/auth/login", input, {
+    __noAuthRefresh: true,
+  } as any);
 return data as { token: string; refreshToken: string | null; user: any };
 }
 
