@@ -1303,55 +1303,62 @@ const selectZone = React.useCallback(
         {tab === "photos" && (
           <Card title={t("Fotoğraflar")}>
             <div className="space-y-6">
-              <div className="rounded-xl border bg-white p-4">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold">{t("Restoran Fotoğrafları")}</div>
-                    <div className="text-xs text-gray-500">{t("Banner önizleme ve odak ayarı yapabilirsiniz.")}</div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">{t("Restoran Fotoğrafları")}</div>
+                      <div className="text-xs text-gray-500">
+                        {t("Banner önizleme ve odak ayarı yapabilirsiniz.")}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input type="file" accept="image/*" onChange={onFile} />
+                      {uploadMut.isPending && (
+                        <span className="text-sm text-gray-500">{t("Yükleniyor…")}</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <input type="file" accept="image/*" onChange={onFile} />
-                    {uploadMut.isPending && (
-                      <span className="text-sm text-gray-500">{t("Yükleniyor…")}</span>
-                    )}
+                </div>
+
+                {/* === Logo Yükleme Alanı === */}
+                <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">{t("Restoran Logosu")}</div>
+                      <div className="text-xs text-gray-500">{t("Logo Önizleme")}</div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) uploadLogoMut.mutate(f);
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                      {uploadLogoMut.isPending && (
+                        <span className="text-sm text-gray-500">{t("Yükleniyor…")}</span>
+                      )}
+                    </div>
                   </div>
+                  {logoUrl && (
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="rounded-xl border bg-white p-2">
+                        <img
+                          src={logoUrl}
+                          alt="logo"
+                          className="h-20 w-20 object-contain"
+                        />
+                      </div>
+                      <div className="text-xs text-gray-500">{t("Logo Önizleme")}</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* === Logo Yükleme Alanı === */}
-              <div className="rounded-xl border bg-gray-50 p-4">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold">{t("Restoran Logosu")}</div>
-                    <div className="text-xs text-gray-500">{t("Logo Önizleme")}</div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) uploadLogoMut.mutate(f);
-                        e.currentTarget.value = "";
-                      }}
-                    />
-                    {uploadLogoMut.isPending && (
-                      <span className="text-sm text-gray-500">{t("Yükleniyor…")}</span>
-                    )}
-                  </div>
-                </div>
-                {logoUrl && (
-                  <div className="mt-3">
-                    <img
-                      src={logoUrl}
-                      alt="logo"
-                      className="h-20 object-contain border rounded-md p-2 bg-white"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
                 {(data?.photos ?? []).map((url) => {
                   const focus = getPhotoFocus(url);
                   const focusX = focus.focusX ?? 0.5;
@@ -1359,30 +1366,28 @@ const selectZone = React.useCallback(
                   const objPos = `${Math.round(focusX * 100)}% ${Math.round(focusY * 100)}%`;
 
                   return (
-                    <div key={url} className="rounded-xl border bg-white p-3">
-                      <div className="relative group rounded-lg overflow-hidden border">
-                        <img
-                          src={url}
-                          alt="photo"
-                          className="w-full h-40 object-cover"
-                        />
-                        <button
-                          onClick={() => removePhotoMut.mutate(url)}
-                          disabled={removePhotoMut.isPending}
-                          className="absolute top-2 right-2 text-xs rounded-md bg-black/60 text-white px-2 py-1 opacity-0 group-hover:opacity-100 disabled:opacity-60"
-                        >
-                          {t("Sil")}
-                        </button>
-                      </div>
+                    <div key={url} className="rounded-2xl border bg-white p-4 shadow-sm">
+                      <div className="flex flex-col lg:flex-row gap-4">
+                        <div className="w-full lg:w-44 shrink-0">
+                          <div className="relative rounded-xl overflow-hidden border bg-gray-50">
+                            <img src={url} alt="photo" className="w-full h-32 object-cover" />
+                          </div>
+                          <button
+                            onClick={() => removePhotoMut.mutate(url)}
+                            disabled={removePhotoMut.isPending}
+                            className="mt-3 w-full px-3 py-1.5 text-xs rounded-md border border-gray-200 bg-white hover:bg-gray-100 disabled:opacity-60"
+                          >
+                            {t("Sil")}
+                          </button>
+                        </div>
 
-                      <details className="mt-3 rounded-lg border bg-gray-50 p-3">
-                        <summary className="cursor-pointer text-xs text-gray-600">
-                          {t("Banner Odak Ayarı")}
-                        </summary>
-                        <div className="mt-3 space-y-3">
-                          <div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-gray-600">
+                            {t("Banner Odak Ayarı")}
+                          </div>
+                          <div className="mt-2">
                             <div className="text-[11px] text-gray-500">{t("Banner Önizleme")}</div>
-                            <div className="mt-2 aspect-[16/9] w-full overflow-hidden rounded-md border bg-white">
+                            <div className="mt-2 aspect-[16/9] w-full overflow-hidden rounded-xl border bg-gray-50">
                               <img
                                 src={url}
                                 alt="banner-preview"
@@ -1392,39 +1397,41 @@ const selectZone = React.useCallback(
                             </div>
                           </div>
 
-                          <div className="space-y-2">
+                          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                             <label className="text-xs text-gray-600">
-                              {t("Yatay Odak")}: {Math.round(focusX * 100)}%
+                              {t("Yatay Odak")} · {Math.round(focusX * 100)}%
+                              <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                value={Math.round(focusX * 100)}
+                                onChange={(e) =>
+                                  updatePhotoFocus(url, {
+                                    focusX: clamp(Number(e.target.value) / 100, 0, 1),
+                                  })
+                                }
+                                className="mt-2 w-full accent-brand-600"
+                              />
                             </label>
-                            <input
-                              type="range"
-                              min={0}
-                              max={100}
-                              value={Math.round(focusX * 100)}
-                              onChange={(e) =>
-                                updatePhotoFocus(url, {
-                                  focusX: clamp(Number(e.target.value) / 100, 0, 1),
-                                })
-                              }
-                            />
 
                             <label className="text-xs text-gray-600">
-                              {t("Dikey Odak")}: {Math.round(focusY * 100)}%
+                              {t("Dikey Odak")} · {Math.round(focusY * 100)}%
+                              <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                value={Math.round(focusY * 100)}
+                                onChange={(e) =>
+                                  updatePhotoFocus(url, {
+                                    focusY: clamp(Number(e.target.value) / 100, 0, 1),
+                                  })
+                                }
+                                className="mt-2 w-full accent-brand-600"
+                              />
                             </label>
-                            <input
-                              type="range"
-                              min={0}
-                              max={100}
-                              value={Math.round(focusY * 100)}
-                              onChange={(e) =>
-                                updatePhotoFocus(url, {
-                                  focusY: clamp(Number(e.target.value) / 100, 0, 1),
-                                })
-                              }
-                            />
                           </div>
 
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="mt-4 flex items-center justify-end gap-2">
                             <button
                               type="button"
                               className="px-3 py-1.5 text-xs rounded border border-gray-200 bg-white hover:bg-gray-100"
@@ -1448,7 +1455,7 @@ const selectZone = React.useCallback(
                             </button>
                           </div>
                         </div>
-                      </details>
+                      </div>
                     </div>
                   );
                 })}
