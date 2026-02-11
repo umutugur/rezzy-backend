@@ -808,9 +808,59 @@ export const removePhoto = async (req, res, next) => {
     if (!canManageRestaurant(req.user, id)) {
       throw { status: 403, message: "Forbidden" };
     }
-    const updated = await Restaurant.findByIdAndUpdate(id, { $pull: { photos: url } }, { new: true });
+    const updated = await Restaurant.findByIdAndUpdate(
+      id,
+      { $pull: { photos: url, photoMeta: { url } } },
+      { new: true }
+    );
     if (!updated) throw { status: 404, message: "Restaurant not found" };
     res.json(updated);
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const updatePhotoMeta = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { url, focusX, focusY } = req.body || {};
+    const urlNorm = String(url || "").trim();
+
+    if (!urlNorm) {
+      return res.status(400).json({ message: "url is required" });
+    }
+    if (!canManageRestaurant(req.user, id)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const fxRaw = Number(focusX);
+    const fyRaw = Number(focusY);
+    const clamp = (v) => Math.max(0, Math.min(1, v));
+    const fx = Number.isFinite(fxRaw) ? clamp(fxRaw) : 0.5;
+    const fy = Number.isFinite(fyRaw) ? clamp(fyRaw) : 0.5;
+
+    const doc = await Restaurant.findById(id);
+    if (!doc) return res.status(404).json({ message: "Restaurant not found" });
+
+    const hasPhoto =
+      Array.isArray(doc.photos) &&
+      doc.photos.some((p) => String(p || "").trim() === urlNorm);
+    if (!hasPhoto) {
+      return res.status(400).json({ message: "Photo not found" });
+    }
+
+    const list = Array.isArray(doc.photoMeta) ? doc.photoMeta.slice() : [];
+    const idx = list.findIndex((m) => String(m?.url || "").trim() === urlNorm);
+    if (idx >= 0) {
+      list[idx] = { ...(list[idx] || {}), url: urlNorm, focusX: fx, focusY: fy };
+    } else {
+      list.push({ url: urlNorm, focusX: fx, focusY: fy });
+    }
+
+    doc.photoMeta = list;
+    await doc.save();
+
+    return res.json({ ok: true, photoMeta: doc.photoMeta || [] });
   } catch (e) {
     next(e);
   }

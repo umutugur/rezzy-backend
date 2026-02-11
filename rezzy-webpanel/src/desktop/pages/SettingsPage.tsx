@@ -15,6 +15,7 @@ import {
   restaurantUpdateProfile,
   restaurantAddPhoto,
   restaurantRemovePhoto,
+  restaurantUpdatePhotoMeta,
   api,
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
@@ -55,6 +56,8 @@ type DeliveryZoneState = {
   feeAmount: number;
 };
 
+type PhotoFocus = { focusX: number; focusY: number };
+
 type Restaurant = {
   _id: string;
   name: string;
@@ -66,7 +69,8 @@ type Restaurant = {
   address?: string;
   description?: string;
   photos?: string[];
-  logo?: string;
+  photoMeta?: Array<{ url: string; focusX?: number; focusY?: number }>;
+  logoUrl?: string;
 
   iban?: string;
   ibanName?: string;
@@ -291,6 +295,8 @@ export const SettingsPage: React.FC = () => {
   const [hours, setHours] = React.useState<OpeningHour[]>(DEFAULT_OPENING_HOURS);
   const [policies, setPolicies] = React.useState<Policies>(DEFAULT_POLICIES);
   const [newBlackout, setNewBlackout] = React.useState("");
+  const [photoFocusMap, setPhotoFocusMap] = React.useState<Record<string, PhotoFocus>>({});
+  const [logoPreviewUrl, setLogoPreviewUrl] = React.useState<string | null>(null);
   const [deliveryEnabled, setDeliveryEnabled] = React.useState<boolean>(false);
   const [deliveryZones, setDeliveryZones] = React.useState<DeliveryZoneState[]>([]);
   const [gridSettings, setGridSettings] = React.useState<DeliveryGridSettings>({
@@ -408,6 +414,25 @@ export const SettingsPage: React.FC = () => {
           ? data.checkinWindowAfterMinutes
           : DEFAULT_POLICIES.checkinWindowAfterMinutes,
     });
+
+    setLogoPreviewUrl(data.logoUrl ?? null);
+
+    const metaList = Array.isArray(data.photoMeta) ? data.photoMeta : [];
+    const metaMap = new Map(
+      metaList
+        .filter((m) => m && typeof m.url === "string")
+        .map((m) => [String(m.url), m])
+    );
+    const nextFocus: Record<string, PhotoFocus> = {};
+    (data.photos ?? []).forEach((url) => {
+      const key = String(url || "");
+      if (!key) return;
+      const meta = metaMap.get(key);
+      const fx = clamp(Number(meta?.focusX ?? 0.5), 0, 1);
+      const fy = clamp(Number(meta?.focusY ?? 0.5), 0, 1);
+      nextFocus[key] = { focusX: fx, focusY: fy };
+    });
+    setPhotoFocusMap(nextFocus);
 
     const nextLang = data.preferredLanguage ?? DEFAULT_LANGUAGE;
     setLocale(nextLang);
@@ -752,13 +777,32 @@ export const SettingsPage: React.FC = () => {
       ),
   });
 
-  const uploadLogoMut = useMutation({
-    mutationFn: (file: File) => api.postForm(`/restaurants/${rid}/logo`, { file }),
-    onSuccess: ()=>{
-      showToast(t("Logo yüklendi"),"success");
-      qc.invalidateQueries({queryKey:["restaurant-detail",rid]});
+  const updatePhotoMetaMut = useMutation({
+    mutationFn: (payload: { url: string; focusX: number; focusY: number }) =>
+      restaurantUpdatePhotoMeta(rid, payload),
+    onSuccess: () => {
+      showToast(t("Odak kaydedildi"), "success");
+      qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
     },
-    onError:(e:any)=> showToast(e?.response?.data?.message||t("Logo yüklenemedi"),"error")
+    onError: (e: any) =>
+      showToast(
+        e?.response?.data?.message || e?.message || t("Odak kaydedilemedi"),
+        "error"
+      ),
+  });
+
+  const uploadLogoMut = useMutation({
+    mutationFn: async (file: File) => {
+      const { data } = await api.postForm(`/restaurants/${rid}/logo`, { file });
+      return data;
+    },
+    onSuccess: (resp: any) => {
+      showToast(t("Logo yüklendi"), "success");
+      if (resp?.logoUrl) setLogoPreviewUrl(String(resp.logoUrl));
+      qc.invalidateQueries({ queryKey: ["restaurant-detail", rid] });
+    },
+    onError: (e: any) =>
+      showToast(e?.response?.data?.message || t("Logo yüklenemedi"), "error"),
   });
 
   const saveMenusMut = useMutation({
@@ -884,6 +928,25 @@ export const SettingsPage: React.FC = () => {
         </button>
       ))}
     </div>
+  );
+
+  const logoUrl = logoPreviewUrl || data?.logoUrl || null;
+  const getPhotoFocus = React.useCallback(
+    (url: string): PhotoFocus => {
+      const cur = photoFocusMap[url];
+      return cur ?? { focusX: 0.5, focusY: 0.5 };
+    },
+    [photoFocusMap]
+  );
+
+  const updatePhotoFocus = React.useCallback(
+    (url: string, patch: Partial<PhotoFocus>) => {
+      setPhotoFocusMap((prev) => {
+        const current = prev[url] ?? { focusX: 0.5, focusY: 0.5 };
+        return { ...prev, [url]: { ...current, ...patch } };
+      });
+    },
+    []
   );
 
 
@@ -1239,56 +1302,160 @@ const selectZone = React.useCallback(
         {/* === FOTOĞRAFLAR === */}
         {tab === "photos" && (
           <Card title={t("Fotoğraflar")}>
-            <div className="mb-3 flex items-center gap-3">
-              <input type="file" accept="image/*" onChange={onFile} />
-              {uploadMut.isPending && (
-                <span className="text-sm text-gray-500">{t("Yükleniyor…")}</span>
-              )}
-            </div>
-
-            {/* === Logo Yükleme Alanı === */}
-            <div className="mb-4 border p-3 rounded-lg bg-gray-50">
-              <div className="mb-2 font-medium">{t("Restoran Logosu")}</div>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) uploadLogoMut.mutate(f);
-                  e.currentTarget.value = "";
-                }}
-              />
-              {uploadLogoMut.isPending && <span className="text-sm text-gray-500 ml-2">{t("Yükleniyor…")}</span>}
-              {data?.logo && (
-                <div className="mt-3">
-                  <img src={data.logo} alt="logo" className="h-20 object-contain border rounded-md p-2 bg-white" />
+            <div className="space-y-6">
+              <div className="rounded-xl border bg-white p-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">{t("Restoran Fotoğrafları")}</div>
+                    <div className="text-xs text-gray-500">{t("Banner önizleme ve odak ayarı yapabilirsiniz.")}</div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input type="file" accept="image/*" onChange={onFile} />
+                    {uploadMut.isPending && (
+                      <span className="text-sm text-gray-500">{t("Yükleniyor…")}</span>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {(data?.photos ?? []).map((url) => (
-                <div
-                  key={url}
-                  className="relative group rounded-xl overflow-hidden border"
-                >
-                  <img
-                    src={url}
-                    alt="photo"
-                    className="w-full h-40 object-cover"
-                  />
-                  <button
-                    onClick={() => removePhotoMut.mutate(url)}
-                    disabled={removePhotoMut.isPending}
-                    className="absolute top-2 right-2 text-xs rounded-md bg-black/60 text-white px-2 py-1 opacity-0 group-hover:opacity-100 disabled:opacity-60"
-                  >
-                    {t("Sil")}
-                  </button>
+              {/* === Logo Yükleme Alanı === */}
+              <div className="rounded-xl border bg-gray-50 p-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">{t("Restoran Logosu")}</div>
+                    <div className="text-xs text-gray-500">{t("Logo Önizleme")}</div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadLogoMut.mutate(f);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                    {uploadLogoMut.isPending && (
+                      <span className="text-sm text-gray-500">{t("Yükleniyor…")}</span>
+                    )}
+                  </div>
                 </div>
-              ))}
-              {(!data?.photos || data.photos.length === 0) && (
-                <div className="text-sm text-gray-500">{t("Fotoğraf yok")}</div>
-              )}
+                {logoUrl && (
+                  <div className="mt-3">
+                    <img
+                      src={logoUrl}
+                      alt="logo"
+                      className="h-20 object-contain border rounded-md p-2 bg-white"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {(data?.photos ?? []).map((url) => {
+                  const focus = getPhotoFocus(url);
+                  const focusX = focus.focusX ?? 0.5;
+                  const focusY = focus.focusY ?? 0.5;
+                  const objPos = `${Math.round(focusX * 100)}% ${Math.round(focusY * 100)}%`;
+
+                  return (
+                    <div key={url} className="rounded-xl border bg-white p-3">
+                      <div className="relative group rounded-lg overflow-hidden border">
+                        <img
+                          src={url}
+                          alt="photo"
+                          className="w-full h-40 object-cover"
+                        />
+                        <button
+                          onClick={() => removePhotoMut.mutate(url)}
+                          disabled={removePhotoMut.isPending}
+                          className="absolute top-2 right-2 text-xs rounded-md bg-black/60 text-white px-2 py-1 opacity-0 group-hover:opacity-100 disabled:opacity-60"
+                        >
+                          {t("Sil")}
+                        </button>
+                      </div>
+
+                      <details className="mt-3 rounded-lg border bg-gray-50 p-3">
+                        <summary className="cursor-pointer text-xs text-gray-600">
+                          {t("Banner Odak Ayarı")}
+                        </summary>
+                        <div className="mt-3 space-y-3">
+                          <div>
+                            <div className="text-[11px] text-gray-500">{t("Banner Önizleme")}</div>
+                            <div className="mt-2 aspect-[16/9] w-full overflow-hidden rounded-md border bg-white">
+                              <img
+                                src={url}
+                                alt="banner-preview"
+                                className="h-full w-full object-cover"
+                                style={{ objectPosition: objPos }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-xs text-gray-600">
+                              {t("Yatay Odak")}: {Math.round(focusX * 100)}%
+                            </label>
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              value={Math.round(focusX * 100)}
+                              onChange={(e) =>
+                                updatePhotoFocus(url, {
+                                  focusX: clamp(Number(e.target.value) / 100, 0, 1),
+                                })
+                              }
+                            />
+
+                            <label className="text-xs text-gray-600">
+                              {t("Dikey Odak")}: {Math.round(focusY * 100)}%
+                            </label>
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              value={Math.round(focusY * 100)}
+                              onChange={(e) =>
+                                updatePhotoFocus(url, {
+                                  focusY: clamp(Number(e.target.value) / 100, 0, 1),
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              className="px-3 py-1.5 text-xs rounded border border-gray-200 bg-white hover:bg-gray-100"
+                              onClick={() => updatePhotoFocus(url, { focusX: 0.5, focusY: 0.5 })}
+                            >
+                              {t("Ortala")}
+                            </button>
+                            <button
+                              type="button"
+                              className="px-3 py-1.5 text-xs rounded bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
+                              disabled={updatePhotoMetaMut.isPending}
+                              onClick={() =>
+                                updatePhotoMetaMut.mutate({
+                                  url,
+                                  focusX,
+                                  focusY,
+                                })
+                              }
+                            >
+                              {updatePhotoMetaMut.isPending ? t("Kaydediliyor…") : t("Odak Kaydet")}
+                            </button>
+                          </div>
+                        </div>
+                      </details>
+                    </div>
+                  );
+                })}
+                {(!data?.photos || data.photos.length === 0) && (
+                  <div className="text-sm text-gray-500">{t("Fotoğraf yok")}</div>
+                )}
+              </div>
             </div>
           </Card>
         )}

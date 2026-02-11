@@ -873,6 +873,11 @@ export async function restaurantRemovePhoto(rid: string, url: string) {
   return data;
 }
 
+export async function restaurantUpdatePhotoMeta(rid: string, input: { url: string; focusX: number; focusY: number }) {
+  const { data } = await api.patch(`/restaurants/${rid}/photos/meta`, input);
+  return data as { ok: boolean; photoMeta?: Array<{ url: string; focusX?: number; focusY?: number }> };
+}
+
 // Rezervasyon durumu
 export async function restaurantUpdateReservationStatus(
   resId: string,

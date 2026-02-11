@@ -18,6 +18,7 @@ import {
   updateMenusSchema,
   addPhotoSchema,
   removePhotoSchema,
+  updatePhotoMetaSchema,
   fetchReservationsByRestaurantSchema,
   updateReservationStatusSchema,
   getReservationQRSchema,
@@ -40,6 +41,7 @@ import {
   updateMenus,
   addPhoto,
   removePhoto,
+  updatePhotoMeta,
   fetchReservationsByRestaurant,
   updateReservationStatus,
   getReservationQR,
@@ -156,6 +158,15 @@ r.post(
   imageUpload.single("file"),
   validate(addPhotoSchema),
   addPhoto
+);
+
+// Fotoğraf banner odak ayarı
+r.patch(
+  "/:id/photos/meta",
+  auth(),
+  allowLocationManagerOrAdmin("id"),
+  validate(updatePhotoMetaSchema),
+  updatePhotoMeta
 );
 
 // Logo ekle/güncelle

@@ -63,6 +63,14 @@ const RestaurantSchema = new mongoose.Schema(
     priceRange: String,
     rating: Number,
     photos: [String],
+    // ✅ Fotoğraf odak/önizleme ayarı (panel banner crop için)
+    photoMeta: [
+      {
+        url: String,
+        focusX: { type: Number, default: 0.5 }, // 0..1
+        focusY: { type: Number, default: 0.5 }, // 0..1
+      },
+    ],
     description: String,
     address: String,
     phone: String,

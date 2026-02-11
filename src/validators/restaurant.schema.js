@@ -466,6 +466,18 @@ export const removePhotoSchema = Joi.object({
   }),
 });
 
+export const updatePhotoMetaSchema = Joi.object({
+  query: anyObject,
+  params: Joi.object({
+    id: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object({
+    url: Joi.string().uri().required(),
+    focusX: Joi.number().min(0).max(1).required(),
+    focusY: Joi.number().min(0).max(1).required(),
+  }),
+});
+
 /* ---------- RESERVATIONS LIST (PANEL) ---------- */
 export const fetchReservationsByRestaurantSchema = Joi.object({
   body: anyObject,
