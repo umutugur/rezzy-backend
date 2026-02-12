@@ -17,7 +17,18 @@ const HF_BASE_URL =
  */
 // src/ai/llmClient.js
 
-function buildSystemPrompt(lang, intent) {
+function formatHistory(history) {
+  if (!Array.isArray(history) || history.length === 0) return "";
+  const lines = history
+    .map((m) => `- ${m.role}: ${String(m.text || "").replace(/\s+/g, " ").trim()}`)
+    .filter(Boolean)
+    .slice(-8);
+  if (!lines.length) return "";
+  return `\n=== CONVERSATION HISTORY (most recent) ===\n${lines.join("\n")}\n`;
+}
+
+function buildSystemPrompt(lang, intent, history) {
+  const historyBlock = formatHistory(history);
   return `
 You are "Rezvix Assistant", a strict, task-focused multilingual assistant for the Rezvix restaurant reservation app.
 
@@ -97,7 +108,7 @@ You MUST respond ONLY with valid minified JSON in this exact shape:
 - No extra top-level fields besides "reply" and "suggestions".
 - "suggestions" can be [] or 1–3 items.
 - "reply" must be in language ${lang}.
-`.trim();
+${historyBlock}`.trim();
 }
 /**
  * Gelen LLM text çıktısını JSON'a çevirmeye çalış.
@@ -141,7 +152,7 @@ function safeParseLlmJson(rawText) {
 /**
  * Gemini çağrısı (TR/EN için)
  */
-async function generateWithGemini({ message, lang, intent }) {
+async function generateWithGemini({ message, lang, intent, history }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.warn("[assistant][gemini] GEMINI_API_KEY tanımlı değil.");
@@ -150,7 +161,7 @@ async function generateWithGemini({ message, lang, intent }) {
 
   const url = `${GEMINI_BASE_URL}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
-  const systemPrompt = buildSystemPrompt(lang, intent);
+  const systemPrompt = buildSystemPrompt(lang, intent, history);
 
   const body = {
     contents: [
@@ -183,7 +194,7 @@ async function generateWithGemini({ message, lang, intent }) {
 /**
  * HuggingFace Inference API (RU / EL için)
  */
-async function generateWithHuggingFace({ message, lang, intent }) {
+async function generateWithHuggingFace({ message, lang, intent, history }) {
   const token = process.env.HF_API_KEY;
   if (!token) {
     console.warn("[assistant][hf] HF_API_KEY tanımlı değil.");
@@ -192,7 +203,7 @@ async function generateWithHuggingFace({ message, lang, intent }) {
 
   const url = `${HF_BASE_URL}/${encodeURIComponent(HF_MODEL)}`;
 
-  const systemPrompt = buildSystemPrompt(lang, intent);
+  const systemPrompt = buildSystemPrompt(lang, intent, history);
 
   const prompt = `${systemPrompt}\n\nUser message:\n${message}\n\nJSON:`;
 
@@ -246,14 +257,14 @@ async function generateWithHuggingFace({ message, lang, intent }) {
  * - ru / el → HuggingFace
  * - Error olursa: null döner, controller fallback'e geçer
  */
-export async function generateAssistantReply({ message, lang, intent }) {
+export async function generateAssistantReply({ message, lang, intent, history }) {
   const L = (lang || FALLBACK_LANG).toLowerCase();
 
   if (L === "tr" || L === "en") {
-    const r = await generateWithGemini({ message, lang: L, intent });
+    const r = await generateWithGemini({ message, lang: L, intent, history });
     if (r) return r;
   } else if (L === "ru" || L === "el") {
-    const r = await generateWithHuggingFace({ message, lang: L, intent });
+    const r = await generateWithHuggingFace({ message, lang: L, intent, history });
     if (r) return r;
   }
 

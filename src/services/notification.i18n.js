@@ -113,6 +113,34 @@ const NOTIFICATION_TEMPLATES = {
       el: "Η κράτηση για {dateTime} ακυρώθηκε από τον πελάτη.",
     },
   },
+  reservation_updated: {
+    title: {
+      tr: "Rezervasyon güncellendi",
+      en: "Reservation updated",
+      ru: "Бронирование обновлено",
+      el: "Η κράτηση ενημερώθηκε",
+    },
+    body: {
+      tr: "Yeni tarih/saat: {dateTime}. Detayları uygulamada görebilirsin.",
+      en: "New date/time: {dateTime}. You can see details in the app.",
+      ru: "Новая дата/время: {dateTime}. Детали в приложении.",
+      el: "Νέα ημερομηνία/ώρα: {dateTime}. Δες τις λεπτομέρειες στην εφαρμογή.",
+    },
+  },
+  reservation_updated_restaurant: {
+    title: {
+      tr: "Rezervasyon güncellendi",
+      en: "Reservation updated",
+      ru: "Бронирование обновлено",
+      el: "Η κράτηση ενημερώθηκε",
+    },
+    body: {
+      tr: "{dateTime} • {partySize} kişilik rezervasyon güncellendi.",
+      en: "{dateTime} • Reservation for {partySize} guests was updated.",
+      ru: "{dateTime} • Бронь на {partySize} гостей обновлена.",
+      el: "{dateTime} • Η κράτηση για {partySize} άτομα ενημερώθηκε.",
+    },
+  },
   checkin: {
     title: {
       tr: "Check-in tamam ✅",

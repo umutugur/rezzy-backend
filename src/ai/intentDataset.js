@@ -304,6 +304,71 @@ export const INTENT_DATASET = {
       ]
     },
 
+    delivery_help: {
+      tr: [
+        "paket servis",
+        "paket servis sorunu",
+        "siparişim gelmedi",
+        "siparişim gecikti",
+        "paket servis desteği",
+        "sipariş durumum",
+        "paket siparişlerimi göster"
+      ],
+      en: [
+        "delivery help",
+        "delivery issue",
+        "my delivery is late",
+        "my order didn't arrive",
+        "show my delivery orders",
+        "delivery order status"
+      ],
+      ru: [
+        "доставка помощь",
+        "проблема с доставкой",
+        "мой заказ не пришел",
+        "заказ задерживается",
+        "показать мои доставки"
+      ],
+      el: [
+        "βοήθεια με delivery",
+        "πρόβλημα με delivery",
+        "η παραγγελία δεν ήρθε",
+        "καθυστέρηση παραγγελίας",
+        "δείξε τις παραγγελίες delivery"
+      ]
+    },
+
+    delivery_issue: {
+      tr: [
+        "siparişim yanlış geldi",
+        "paket servisle ilgili şikayetim var",
+        "siparişim eksik geldi",
+        "kurye gelmedi",
+        "teslimat sorunu"
+      ],
+      en: [
+        "my delivery order is wrong",
+        "I have a complaint about delivery",
+        "missing items in my delivery",
+        "courier did not arrive",
+        "delivery problem"
+      ],
+      ru: [
+        "заказ пришел неправильно",
+        "жалоба на доставку",
+        "нехватает блюд в заказе",
+        "курьер не пришел",
+        "проблема с доставкой"
+      ],
+      el: [
+        "η παραγγελία ήταν λάθος",
+        "παράπονο για delivery",
+        "λείπουν προϊόντα",
+        "ο διανομέας δεν ήρθε",
+        "πρόβλημα παράδοσης"
+      ]
+    },
+
     complaint: {
       tr: [
         "şikayetim var",
