@@ -97,6 +97,19 @@ function parseTimeFromMessage(message) {
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
 
+function parseTimeRangeFromMessage(message) {
+  const text = String(message || "").replace(/\s+/g, " ").trim();
+  const m = text.match(
+    /\b([01]?\d|2[0-3]):([0-5]\d)\s*[–—-]\s*([01]?\d|2[0-3]):([0-5]\d)\b/
+  );
+  if (!m) return null;
+  const h1 = String(Number(m[1])).padStart(2, "0");
+  const m1 = String(Number(m[2])).padStart(2, "0");
+  const h2 = String(Number(m[3])).padStart(2, "0");
+  const m2 = String(Number(m[4])).padStart(2, "0");
+  return `${h1}:${m1}-${h2}:${m2}`;
+}
+
 function parseDateFromMessage(message, lang) {
   const text = normalizeText(message);
   const now = dayjs();
@@ -153,6 +166,139 @@ function parseDateFromMessage(message, lang) {
   }
 
   return null;
+}
+
+function parseDateWithLabel(message, lang) {
+  const text = normalizeText(message);
+  const now = dayjs();
+  const keywords = {
+    tr: [
+      { key: "bugün", offset: 0, label: "Bugün" },
+      { key: "yarın", offset: 1, label: "Yarın" },
+      { key: "öbür gün", offset: 2, label: "Öbür gün" },
+      { key: "bu akşam", offset: 0, label: "Bu akşam" },
+    ],
+    en: [
+      { key: "today", offset: 0, label: "Today" },
+      { key: "tonight", offset: 0, label: "Tonight" },
+      { key: "tomorrow", offset: 1, label: "Tomorrow" },
+      { key: "day after tomorrow", offset: 2, label: "Day after tomorrow" },
+    ],
+    ru: [
+      { key: "сегодня", offset: 0, label: "Сегодня" },
+      { key: "завтра", offset: 1, label: "Завтра" },
+      { key: "послезавтра", offset: 2, label: "Послезавтра" },
+    ],
+    el: [
+      { key: "σήμερα", offset: 0, label: "Σήμερα" },
+      { key: "αύριο", offset: 1, label: "Αύριο" },
+      { key: "μεθαύριο", offset: 2, label: "Μεθαύριο" },
+    ],
+  };
+
+  const list = keywords[lang] || [];
+  for (const k of list) {
+    if (text.includes(k.key)) {
+      const d = now.add(k.offset, "day").startOf("day").toDate();
+      return { date: d, label: k.label };
+    }
+  }
+
+  const iso = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (iso) {
+    const d = dayjs(`${iso[1]}-${iso[2]}-${iso[3]}`);
+    if (d.isValid()) {
+      const label = d.format("DD.MM.YYYY");
+      return { date: d.startOf("day").toDate(), label };
+    }
+  }
+
+  const dm = text.match(/\b(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?\b/);
+  if (dm) {
+    const day = Number(dm[1]);
+    const month = Number(dm[2]);
+    let year = Number(dm[3]) || now.year();
+    if (year < 100) year = 2000 + year;
+    let d = dayjs(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+    if (d.isValid() && d.isBefore(now.startOf("day"))) {
+      d = d.add(1, "year");
+    }
+    if (d.isValid()) {
+      const label = d.format("DD.MM.YYYY");
+      return { date: d.startOf("day").toDate(), label };
+    }
+  }
+
+  return null;
+}
+
+function parseBudgetFromMessage(message, lang) {
+  const text = normalizeText(message);
+  if (text.includes("₺₺₺")) return "₺₺₺";
+  if (text.includes("₺₺")) return "₺₺";
+  if (text.includes("₺")) return "₺";
+
+  const map = {
+    tr: {
+      low: ["ucuz", "uygun", "ekonomik", "hesaplı"],
+      mid: ["orta", "normal", "standart"],
+      high: ["pahalı", "lüks", "yüksek"],
+    },
+    en: {
+      low: ["cheap", "budget", "affordable"],
+      mid: ["mid", "average", "moderate"],
+      high: ["expensive", "luxury", "high end"],
+    },
+    ru: {
+      low: ["дешев", "бюджет"],
+      mid: ["средн", "обычн"],
+      high: ["дорог", "люкс"],
+    },
+    el: {
+      low: ["φθην", "οικονομ"],
+      mid: ["μεσα", "κανον"],
+      high: ["ακριβ", "πολυτελ"],
+    },
+  };
+
+  const cfg = map[lang] || map.tr;
+  if (cfg.low.some((k) => text.includes(k))) return "₺";
+  if (cfg.mid.some((k) => text.includes(k))) return "₺₺";
+  if (cfg.high.some((k) => text.includes(k))) return "₺₺₺";
+  return null;
+}
+
+function parseStyleFromMessage(message, lang) {
+  const text = normalizeText(message);
+  const styles = [
+    { key: "meyhane", label: "meyhane" },
+    { key: "taverna", label: "taverna" },
+    { key: "balık", label: "balık" },
+    { key: "seafood", label: "seafood" },
+    { key: "sushi", label: "sushi" },
+    { key: "pizza", label: "pizza" },
+    { key: "steak", label: "steak" },
+    { key: "canlı müzik", label: "canlı müzik" },
+    { key: "live music", label: "live music" },
+  ];
+  const found = styles.find((s) => text.includes(s.key));
+  return found ? found.label : null;
+}
+
+function parseCityFromMessage(message) {
+  const text = normalizeText(message);
+  const cities = [
+    { match: /lefkoşa|nicosia/, value: "Lefkoşa" },
+    { match: /girne|kyrenia/, value: "Girne" },
+    { match: /gazimağusa|gazimagusa|famagusta|magusa/, value: "Gazimağusa" },
+    { match: /güzelyurt|guzelyurt|morphou/, value: "Güzelyurt" },
+    { match: /iskele|isk[eé]le|trikomo/, value: "İskele" },
+    { match: /lefke/, value: "Lefke" },
+    { match: /istanbul/, value: "İstanbul" },
+    { match: /ankara/, value: "Ankara" },
+  ];
+  const found = cities.find((c) => c.match.test(text));
+  return found ? found.value : null;
 }
 
 function combineDateAndTime(dateObj, timeStr) {
@@ -338,6 +484,42 @@ const ACTION_TEXT = {
     en: "I couldn't create the reservation.",
     ru: "Не удалось создать бронь.",
     el: "Δεν μπόρεσα να δημιουργήσω την κράτηση.",
+  },
+  searchSummary: {
+    tr: "Şöyle anladım: {summary}.",
+    en: "Here’s what I understood: {summary}.",
+    ru: "Я понял так: {summary}.",
+    el: "Κατάλαβα το εξής: {summary}.",
+  },
+  searchAskCity: {
+    tr: "Hangi şehirde olsun?",
+    en: "Which city should it be in?",
+    ru: "В каком городе?",
+    el: "Σε ποια πόλη;",
+  },
+  searchAskPeople: {
+    tr: "Kaç kişi için?",
+    en: "For how many people?",
+    ru: "На сколько человек?",
+    el: "Για πόσα άτομα;",
+  },
+  searchAskDate: {
+    tr: "Hangi gün?",
+    en: "Which day?",
+    ru: "На какой день?",
+    el: "Ποια μέρα;",
+  },
+  searchAskTime: {
+    tr: "Hangi saat aralığında?",
+    en: "What time range?",
+    ru: "В какой промежуток времени?",
+    el: "Σε ποιο χρονικό διάστημα;",
+  },
+  searchReady: {
+    tr: "Uygun mekanları göstereyim.",
+    en: "I'll show matching places.",
+    ru: "Покажу подходящие места.",
+    el: "Θα δείξω τα κατάλληλα μέρη.",
   },
 };
 
@@ -733,6 +915,159 @@ function pickItemByIndex(message, items) {
   const idx = Number(text);
   if (!Number.isFinite(idx) || idx < 1 || idx > items.length) return null;
   return items[idx - 1];
+}
+
+function buildSearchSuggestions(lang, missing) {
+  const sug = [];
+  if (missing.includes("city")) {
+    const cities =
+      lang === "en"
+        ? ["Nicosia", "Kyrenia", "Famagusta"]
+        : lang === "ru"
+        ? ["Никосия", "Кирения", "Фамагуста"]
+        : lang === "el"
+        ? ["Λευκωσία", "Κερύνεια", "Αμμόχωστος"]
+        : ["Lefkoşa", "Girne", "Gazimağusa"];
+    cities.forEach((c) => sug.push({ label: c, message: c }));
+  }
+  if (missing.includes("people")) {
+    const items =
+      lang === "ru"
+        ? ["2 человека", "4 человека", "6 человек"]
+        : lang === "el"
+        ? ["2 άτομα", "4 άτομα", "6 άτομα"]
+        : lang === "en"
+        ? ["2 people", "4 people", "6 people"]
+        : ["2 kişi", "4 kişi", "6 kişi"];
+    items.forEach((c) => sug.push({ label: c, message: c }));
+  }
+  if (missing.includes("date")) {
+    const items =
+      lang === "en"
+        ? ["Today", "Tomorrow", "This weekend"]
+        : lang === "ru"
+        ? ["Сегодня", "Завтра", "В выходные"]
+        : lang === "el"
+        ? ["Σήμερα", "Αύριο", "Το ΣΚ"]
+        : ["Bugün", "Yarın", "Hafta sonu"];
+    items.forEach((c) => sug.push({ label: c, message: c }));
+  }
+  if (missing.includes("time")) {
+    const items = ["19:00", "20:00", "21:00–23:00"];
+    items.forEach((c) => sug.push({ label: c, message: c }));
+  }
+  return sug.slice(0, 3);
+}
+
+function buildSearchCommand(search) {
+  const parts = [];
+  if (search.city) parts.push(`city=${search.city}`);
+  if (search.people) parts.push(`people=${search.people}`);
+  if (search.dateQuery) parts.push(`date=${search.dateQuery}`);
+  if (search.timeRange) parts.push(`timerange=${search.timeRange}`);
+  if (search.budget) parts.push(`budget=${search.budget}`);
+  if (search.style) parts.push(`style=${search.style}`);
+  if (!parts.length) return null;
+  return `@search ${parts.join(";")}`;
+}
+
+function buildSearchReply(lang, search) {
+  const missing = [];
+  if (!search.city) missing.push("city");
+  if (!search.people) missing.push("people");
+  if (!search.date) missing.push("date");
+  if (!search.timeRange) missing.push("time");
+
+  const summaryParts = [];
+  if (search.city) summaryParts.push(search.city);
+  if (search.people) {
+    const label =
+      lang === "ru"
+        ? `${search.people} чел.`
+        : lang === "el"
+        ? `${search.people} άτομα`
+        : lang === "en"
+        ? `${search.people} people`
+        : `${search.people} kişi`;
+    summaryParts.push(label);
+  }
+  if (search.dateLabel) summaryParts.push(search.dateLabel);
+  if (search.timeLabel) summaryParts.push(search.timeLabel);
+
+  const summary = summaryParts.join(" • ");
+  const replyParts = [];
+  if (summary) replyParts.push(t(lang, "searchSummary", { summary }));
+
+  if (missing.length) {
+    const ask = missing[0];
+    if (ask === "city") replyParts.push(t(lang, "searchAskCity"));
+    else if (ask === "people") replyParts.push(t(lang, "searchAskPeople"));
+    else if (ask === "date") replyParts.push(t(lang, "searchAskDate"));
+    else if (ask === "time") replyParts.push(t(lang, "searchAskTime"));
+    return {
+      reply: replyParts.join(" "),
+      suggestions: buildSearchSuggestions(lang, missing),
+      done: false,
+    };
+  }
+
+  replyParts.push(t(lang, "searchReady"));
+  const cmd = buildSearchCommand(search);
+  const suggestions = cmd
+    ? [
+        {
+          label:
+            lang === "ru"
+              ? "Показать места"
+              : lang === "el"
+              ? "Δείξε μέρη"
+              : lang === "en"
+              ? "Show places"
+              : "Mekanları göster",
+          message: cmd,
+        },
+      ]
+    : [];
+  return { reply: replyParts.join(" "), suggestions, done: true };
+}
+
+function updateSearchMemory(prev, message, lang) {
+  const next = { ...(prev || {}) };
+
+  const city = parseCityFromMessage(message);
+  if (city) next.city = city;
+
+  const people = detectPeopleCount(message);
+  if (people) next.people = people;
+
+  const dateInfo = parseDateWithLabel(message, lang);
+  if (dateInfo?.date) {
+    next.date = dateInfo.date;
+    next.dateLabel = dateInfo.label;
+    next.dateQuery = dateInfo.label || dayjs(dateInfo.date).format("YYYY-MM-DD");
+  }
+
+  const range = parseTimeRangeFromMessage(message);
+  if (range) {
+    next.timeRange = range;
+    next.timeLabel = range.replace("-", "–");
+  } else {
+    const time = parseTimeFromMessage(message);
+    if (time) {
+      next.timeRange = time;
+      next.timeLabel = time;
+    }
+  }
+
+  const budget = parseBudgetFromMessage(message, lang);
+  if (budget) next.budget = budget;
+
+  const style = parseStyleFromMessage(message, lang);
+  if (style) next.style = style;
+
+  next.active = true;
+  next.updatedAt = new Date();
+  return next;
 }
 
 function matchReservationFromMessage(message, list, lang, pendingOptions) {
@@ -1691,6 +2026,30 @@ export async function handleAssistantMessage(req, res) {
           return finalize({ reply: t(lang, "reservationCreateFail"), memoryPatch: { pending: null } });
         }
       }
+    }
+
+    const searchActive = memory.search?.active === true;
+    const searchRelevant =
+      searchActive ||
+      intentResult.intent === "find_restaurant" ||
+      intentResult.intent === "filter_restaurant";
+
+    if (searchRelevant) {
+      const nextSearch = updateSearchMemory(memory.search, message, lang);
+      const result = buildSearchReply(lang, nextSearch);
+      return finalize({
+        reply: result.reply,
+        suggestions: result.suggestions,
+        memoryPatch: {
+          search: {
+            ...nextSearch,
+            active: result.done ? false : true,
+          },
+        },
+        intent: intentResult.intent,
+        confidence: intentResult.confidence,
+        matchedExample: intentResult.matchedExample,
+      });
     }
 
     // 2) Önce LLM'den cevap almaya çalış
