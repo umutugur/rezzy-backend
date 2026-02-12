@@ -301,6 +301,24 @@ function parseCityFromMessage(message) {
   return found ? found.value : null;
 }
 
+function isNegativeReply(message, lang) {
+  const text = normalizeText(message);
+  if (!text) return false;
+  const negatives = {
+    tr: ["yok", "hayır", "hayir", "istemiyorum", "gerek yok", "olmasın", "değil", "degil"],
+    en: ["no", "nope", "none", "not", "don't", "dont"],
+    ru: ["нет", "не", "не нужно"],
+    el: ["όχι", "oxi", "den thelo", "δεν θέλω"],
+  };
+  const list = negatives[lang] || negatives.tr;
+  return list.some((k) => text.includes(k));
+}
+
+function isReservationRelatedText(message) {
+  const text = normalizeText(message);
+  return /rezervasyon|reservation|booking|book|masa|table/.test(text);
+}
+
 function combineDateAndTime(dateObj, timeStr) {
   if (!dateObj || !timeStr) return null;
   const [hh, mm] = String(timeStr).split(":").map((n) => parseInt(n, 10));
@@ -1389,6 +1407,8 @@ export async function handleAssistantMessage(req, res) {
 
     const history = getThreadHistory(thread, 8);
 
+    let pendingCleared = false;
+
     const finalize = async ({
       reply,
       suggestions = [],
@@ -1400,7 +1420,9 @@ export async function handleAssistantMessage(req, res) {
       memoryPatch,
     }) => {
       if (thread) {
-        if (memoryPatch) memory = { ...memory, ...memoryPatch };
+        const patch = { ...(memoryPatch || {}) };
+        if (pendingCleared && patch.pending === undefined) patch.pending = null;
+        if (Object.keys(patch).length) memory = { ...memory, ...patch };
         thread.memory = memory;
         appendThreadMessage(thread, "assistant", reply);
         await thread.save();
@@ -1419,6 +1441,13 @@ export async function handleAssistantMessage(req, res) {
     };
 
     const command = parseCommand(message);
+
+    if (memory.pending?.type?.startsWith("delivery_")) {
+      if (isNegativeReply(message, lang) || isReservationRelatedText(message)) {
+        memory.pending = null;
+        pendingCleared = true;
+      }
+    }
 
     if (command) {
       const { cmd, params } = command;
