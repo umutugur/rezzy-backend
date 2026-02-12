@@ -319,6 +319,69 @@ function isReservationRelatedText(message) {
   return /rezervasyon|reservation|booking|book|masa|table/.test(text);
 }
 
+function looksLikeDeliveryText(message, lang) {
+  const text = normalizeText(message);
+  if (!text) return false;
+  const keywords = {
+    tr: ["paket", "sipariş", "siparis", "kurye", "teslimat", "delivery"],
+    en: ["delivery", "order", "courier"],
+    ru: ["доставка", "заказ", "курьер"],
+    el: ["παράδοση", "delivery", "παραγγελία"],
+  };
+  const list = keywords[lang] || keywords.tr;
+  return list.some((k) => text.includes(k));
+}
+
+function looksLikeSearchText(message, lang) {
+  if (parseCityFromMessage(message)) return true;
+  if (parseStyleFromMessage(message, lang)) return true;
+  const text = normalizeText(message);
+  if (!text) return false;
+  const keywords = {
+    tr: ["listele", "liste", "göster", "goster", "bul", "ara", "yakın", "yakinda", "yakınlarda", "yakındaki"],
+    en: ["list", "show", "find", "search", "nearby", "near"],
+    ru: ["список", "покажи", "найди", "поиск", "рядом"],
+    el: ["λίστα", "δείξε", "βρες", "αναζήτηση", "κοντά"],
+  };
+  const list = keywords[lang] || keywords.tr;
+  return list.some((k) => text.includes(k));
+}
+
+function overrideIntentWithHeuristics(message, lang, intentResult) {
+  const text = normalizeText(message);
+  if (!text || !intentResult) return intentResult;
+
+  const tokenCount = text.split(/\s+/).filter(Boolean).length;
+  const searchLike = looksLikeSearchText(message, lang);
+  const deliveryLike = looksLikeDeliveryText(message, lang);
+
+  if (
+    (intentResult.intent === "delivery_help" || intentResult.intent === "delivery_issue") &&
+    !deliveryLike
+  ) {
+    if (searchLike) {
+      return {
+        ...intentResult,
+        intent: "find_restaurant",
+        confidence: Math.max(intentResult.confidence || 0, 0.6),
+      };
+    }
+    if (tokenCount <= 1) {
+      return { ...intentResult, intent: "fallback", confidence: Math.min(intentResult.confidence || 0, 0.3) };
+    }
+  }
+
+  if ((intentResult.intent === "fallback" || (intentResult.confidence || 0) < 0.5) && searchLike) {
+    return {
+      ...intentResult,
+      intent: "find_restaurant",
+      confidence: Math.max(intentResult.confidence || 0, 0.55),
+    };
+  }
+
+  return intentResult;
+}
+
 function isNewReservationText(message, lang) {
   const text = normalizeText(message);
   if (!text) return false;
@@ -1454,7 +1517,8 @@ export async function handleAssistantMessage(req, res) {
     }
 
     const history = getThreadHistory(thread, 8);
-    const intentResult = await classifyIntent(message, lang);
+    let intentResult = await classifyIntent(message, lang);
+    intentResult = overrideIntentWithHeuristics(message, lang, intentResult);
 
     let pendingCleared = false;
 
@@ -1830,15 +1894,45 @@ export async function handleAssistantMessage(req, res) {
     if (memory.pending?.type === "create_details") {
       let { restaurantId, dateObj, timeStr, people } = memory.pending;
       const msg = String(message || "").trim();
+      const dateFromMsg = parseDateFromMessage(msg, lang);
+      const timeFromMsg = parseTimeFromMessage(msg);
+      const peopleFromMsg = detectPeopleCount(msg);
+
+      if (dateFromMsg) dateObj = dateObj || dateFromMsg;
+      if (timeFromMsg) timeStr = timeStr || timeFromMsg;
+      if (peopleFromMsg) people = people || peopleFromMsg;
 
       if (!restaurantId) {
-        const dateFromMsg = parseDateFromMessage(msg, lang);
-        const timeFromMsg = parseTimeFromMessage(msg);
-        const peopleFromMsg = detectPeopleCount(msg);
+        const searchHint =
+          memory.search?.active === true ||
+          looksLikeSearchText(msg, lang) ||
+          intentResult.intent === "find_restaurant" ||
+          intentResult.intent === "filter_restaurant";
+
+        if (searchHint) {
+          const nextSearch = updateSearchMemory(memory.search, msg, lang);
+          const result = buildSearchReply(lang, nextSearch);
+          return finalize({
+            reply: result.reply,
+            suggestions: result.suggestions,
+            memoryPatch: {
+              search: { ...nextSearch, active: result.done ? false : true },
+              pending: {
+                type: "create_details",
+                restaurantId: null,
+                dateObj,
+                timeStr,
+                people,
+                at: new Date(),
+              },
+            },
+            intent: "find_restaurant",
+            confidence: intentResult.confidence,
+            matchedExample: intentResult.matchedExample,
+          });
+        }
+
         if (dateFromMsg || timeFromMsg || peopleFromMsg) {
-          dateObj = dateObj || dateFromMsg;
-          timeStr = timeStr || timeFromMsg;
-          people = people || peopleFromMsg;
           return finalize({
             reply: t(lang, "reservationCreateNeedRestaurant"),
             memoryPatch: { pending: { type: "create_details", dateObj, timeStr, people, at: new Date() } },
@@ -1858,10 +1952,6 @@ export async function handleAssistantMessage(req, res) {
         }
         restaurantId = matches[0]._id;
       }
-
-      dateObj = dateObj || parseDateFromMessage(msg, lang);
-      timeStr = timeStr || parseTimeFromMessage(msg);
-      people = people || detectPeopleCount(msg);
 
       if (!dateObj || !timeStr) {
         return finalize({
@@ -2033,6 +2123,29 @@ export async function handleAssistantMessage(req, res) {
         if (idMatch) restaurantId = idMatch[0];
 
         if (!restaurantId) {
+          const searchHint = looksLikeSearchText(message, lang);
+          if (searchHint) {
+            const nextSearch = updateSearchMemory(memory.search, message, lang);
+            const result = buildSearchReply(lang, nextSearch);
+            return finalize({
+              reply: result.reply,
+              suggestions: result.suggestions,
+              memoryPatch: {
+                search: { ...nextSearch, active: result.done ? false : true },
+                pending: {
+                  type: "create_details",
+                  dateObj,
+                  timeStr,
+                  people,
+                  at: new Date(),
+                },
+              },
+              intent: "find_restaurant",
+              confidence: intentResult.confidence,
+              matchedExample: intentResult.matchedExample,
+            });
+          }
+
           const query = extractRestaurantQuery(message, lang);
           if (query) {
             const matches = await searchRestaurantsByName(query);
