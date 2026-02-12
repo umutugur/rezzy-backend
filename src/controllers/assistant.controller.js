@@ -319,6 +319,54 @@ function isReservationRelatedText(message) {
   return /rezervasyon|reservation|booking|book|masa|table/.test(text);
 }
 
+function isNewReservationText(message, lang) {
+  const text = normalizeText(message);
+  if (!text) return false;
+  const patterns = {
+    tr: ["yeni rezervasyon", "rezervasyon yapmak", "rezervasyon istiyorum"],
+    en: ["new reservation", "make a reservation", "book a table"],
+    ru: ["новую бронь", "сделать бронь", "забронировать"],
+    el: ["νέα κράτηση", "θέλω κράτηση", "κλείσε τραπέζι"],
+  };
+  const list = patterns[lang] || patterns.tr;
+  return list.some((p) => text.includes(p));
+}
+
+function isSelectionAnswer(message, lang) {
+  const text = String(message || "").trim();
+  if (/^\d{1,2}$/.test(text)) return true;
+  if (/\b[0-9a-f]{24}\b/i.test(text)) return true;
+  if (parseDateFromMessage(text, lang)) return true;
+  if (parseTimeFromMessage(text)) return true;
+  if (parseTimeRangeFromMessage(text)) return true;
+  if (detectPeopleCount(text)) return true;
+  return false;
+}
+
+function shouldClearPending({ pendingType, message, lang, intentResult }) {
+  if (!pendingType) return false;
+  if (isSelectionAnswer(message, lang)) return false;
+  if (isNegativeReply(message, lang)) return true;
+  if (isNewReservationText(message, lang)) return true;
+
+  const overrideIntents = new Set([
+    "make_reservation",
+    "find_restaurant",
+    "filter_restaurant",
+    "reservation_help",
+    "delivery_help",
+    "delivery_issue",
+  ]);
+
+  if (overrideIntents.has(intentResult?.intent)) return true;
+
+  if (pendingType.startsWith("delivery_") && isReservationRelatedText(message)) return true;
+  if (pendingType.startsWith("modify_") && intentResult?.intent === "cancel_reservation") return true;
+  if (pendingType.startsWith("cancel_") && intentResult?.intent === "modify_reservation") return true;
+
+  return false;
+}
+
 function combineDateAndTime(dateObj, timeStr) {
   if (!dateObj || !timeStr) return null;
   const [hh, mm] = String(timeStr).split(":").map((n) => parseInt(n, 10));
@@ -1406,6 +1454,7 @@ export async function handleAssistantMessage(req, res) {
     }
 
     const history = getThreadHistory(thread, 8);
+    const intentResult = await classifyIntent(message, lang);
 
     let pendingCleared = false;
 
@@ -1442,11 +1491,16 @@ export async function handleAssistantMessage(req, res) {
 
     const command = parseCommand(message);
 
-    if (memory.pending?.type?.startsWith("delivery_")) {
-      if (isNegativeReply(message, lang) || isReservationRelatedText(message)) {
-        memory.pending = null;
-        pendingCleared = true;
-      }
+    if (
+      shouldClearPending({
+        pendingType: memory.pending?.type || null,
+        message,
+        lang,
+        intentResult,
+      })
+    ) {
+      memory.pending = null;
+      pendingCleared = true;
     }
 
     if (command) {
@@ -1840,8 +1894,6 @@ export async function handleAssistantMessage(req, res) {
         return finalize({ reply: t(lang, "reservationCreateFail"), memoryPatch: { pending: null } });
       }
     }
-
-    const intentResult = await classifyIntent(message, lang);
 
     if (ACTION_INTENTS.has(intentResult.intent)) {
       if (!userId) {
