@@ -2,6 +2,8 @@
 import mongoose from "mongoose";
 import ModifierGroup from "../models/ModifierGroup.js";
 import MenuItem from "../models/MenuItem.js";
+import OrgMenuItem from "../models/OrgMenuItem.js";
+import BranchMenuOverride from "../models/BranchMenuOverride.js";
 
 /**
  * Client payload beklenen format:
@@ -95,9 +97,10 @@ function normalizeIncomingItems(items) {
   });
 }
 
-async function fetchMenuItemsByIds({ restaurantId, itemIds }) {
-  // NOT: Şu an sipariş itemId'si MenuItem _id bekliyor.
-  // OrgMenuItem id geliyorsa bu fonksiyon genişletilmeli.
+async function fetchMenuItemsByIds({ restaurant, itemIds }) {
+  const restaurantId = restaurant?._id;
+  const orgId = restaurant?.organizationId;
+
   const docs = await MenuItem.find({
     _id: { $in: itemIds },
     restaurantId: String(restaurantId),
@@ -107,7 +110,45 @@ async function fetchMenuItemsByIds({ restaurantId, itemIds }) {
     .select("_id title price modifierGroupIds")
     .lean();
 
-  return docs;
+  const foundIds = new Set(docs.map((d) => String(d._id)));
+  const remainingIds = (itemIds || []).filter((id) => !foundIds.has(String(id)));
+
+  if (!remainingIds.length || !orgId) return docs;
+
+  const orgItems = await OrgMenuItem.find({
+    _id: { $in: remainingIds },
+    organizationId: orgId,
+    isActive: true,
+  })
+    .select("_id title defaultPrice modifierGroupIds")
+    .lean();
+
+  if (!orgItems.length) return docs;
+
+  const overrides = await BranchMenuOverride.find({
+    restaurantId: restaurantId,
+    targetType: "item",
+    targetId: { $in: orgItems.map((o) => o._id) },
+  }).lean();
+
+  const overrideMap = new Map(overrides.map((o) => [String(o.targetId), o]));
+
+  const resolvedOrgItems = orgItems
+    .map((it) => {
+      const ov = overrideMap.get(String(it._id));
+      if (ov?.hidden === true) return null;
+      if (ov?.isAvailable === false) return null;
+      const price = ov?.price != null ? ov.price : it.defaultPrice;
+      return {
+        _id: it._id,
+        title: it.title,
+        price: Number(price ?? 0),
+        modifierGroupIds: Array.isArray(it.modifierGroupIds) ? it.modifierGroupIds : [],
+      };
+    })
+    .filter(Boolean);
+
+  return docs.concat(resolvedOrgItems);
 }
 
 async function fetchModifierGroupsForRestaurant({ restaurantId, groupIds, includeInactive = false }) {
@@ -249,7 +290,7 @@ export async function buildItemsWithModifiersOrThrow({ restaurant, items }) {
   const normalized = normalizeIncomingItems(items);
 
   const itemIds = normalized.map((x) => x.itemId);
-  const menuItems = await fetchMenuItemsByIds({ restaurantId: restaurant._id, itemIds });
+  const menuItems = await fetchMenuItemsByIds({ restaurant, itemIds });
 
   const miMap = new Map(menuItems.map((m) => [String(m._id), m]));
 
