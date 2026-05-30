@@ -4,6 +4,7 @@ import MarketStore from "../models/MarketStore.js";
 import MarketProduct from "../models/MarketProduct.js";
 import MarketOrder from "../models/MarketOrder.js";
 import UserAddress from "../models/UserAddress.js";
+import CoreCategory from "../models/CoreCategory.js";
 import { notifyUser } from "../services/notification.service.js";
 
 /** Yardımcı: string'i güvenli ObjectId'ye dönüştür */
@@ -400,6 +401,27 @@ export const cancelOrder = async (req, res, next) => {
     }
 
     res.json({ ok: true, order });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * GET /api/market/categories
+ * businessTypes içinde "market" geçen aktif CoreCategory'leri döner.
+ * Herkese açık (auth gerekmez).
+ */
+export const listMarketCategories = async (req, res, next) => {
+  try {
+    const categories = await CoreCategory.find({
+      businessTypes: "market",
+      isActive: true,
+    })
+      .select("key i18n order")
+      .sort({ order: 1, key: 1 })
+      .lean();
+
+    res.json({ items: categories, total: categories.length });
   } catch (e) {
     next(e);
   }

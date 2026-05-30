@@ -129,6 +129,91 @@ export const updateOrderStatus = async (req, res, next) => {
 };
 
 // ---------------------------------------------------------------------------
+// STORE YÖNETİMİ
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/market/panel/store
+ * Market sahibinin kendi store bilgisi
+ */
+export const getMyStore = async (req, res, next) => {
+  try {
+    const store = await findOwnerStore(req.user?.id);
+    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    res.json(store);
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * PATCH /api/market/panel/store
+ * Market sahibi kendi store'unu günceller.
+ * Güncellenebilir alanlar: name, description, address, city, workingHours,
+ *   deliveryZoneKm, minOrderAmount, deliveryFee, freeDeliveryThreshold, photos
+ * Değiştirilemeyen alanlar: owner, isActive, location, category, totalOrders, rating
+ */
+export const updateMyStore = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    const oid = toObjectId(userId);
+    if (!oid) return next({ status: 401, message: "Unauthorized" });
+
+    // lean() kullanmadan gerçek document çek (save için)
+    const store = await MarketStore.findOne({ owner: oid });
+    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+
+    const ALLOWED = [
+      "name",
+      "description",
+      "address",
+      "city",
+      "workingHours",
+      "deliveryZoneKm",
+      "minOrderAmount",
+      "deliveryFee",
+      "freeDeliveryThreshold",
+      "photos",
+    ];
+
+    for (const key of ALLOWED) {
+      if (req.body[key] !== undefined) {
+        // Sayısal alanlar için validasyon
+        if (["deliveryZoneKm", "minOrderAmount", "deliveryFee"].includes(key)) {
+          const num = Number(req.body[key]);
+          if (isNaN(num) || num < 0) {
+            return next({ status: 400, message: `${key} geçerli bir sayı olmalı` });
+          }
+          store[key] = num;
+        } else if (key === "freeDeliveryThreshold") {
+          if (req.body[key] === null) {
+            store[key] = null;
+          } else {
+            const num = Number(req.body[key]);
+            if (isNaN(num) || num < 0) {
+              return next({ status: 400, message: "freeDeliveryThreshold geçerli bir sayı veya null olmalı" });
+            }
+            store[key] = num;
+          }
+        } else if (key === "photos") {
+          if (!Array.isArray(req.body[key])) {
+            return next({ status: 400, message: "photos bir dizi olmalı" });
+          }
+          store[key] = req.body[key];
+        } else {
+          store[key] = req.body[key];
+        }
+      }
+    }
+
+    await store.save();
+    res.json(store.toObject());
+  } catch (e) {
+    next(e);
+  }
+};
+
+// ---------------------------------------------------------------------------
 // ÜRÜN YÖNETİMİ
 // ---------------------------------------------------------------------------
 

@@ -9,6 +9,7 @@ import {
   listMyOrders,
   getOrderDetail,
   cancelOrder,
+  listMarketCategories,
 } from "../controllers/market.controller.js";
 
 const r = Router();
@@ -16,6 +17,9 @@ const r = Router();
 // ---------------------------------------------------------------------------
 // Müşteri API — public (market listeleme) + korumalı (sipariş)
 // ---------------------------------------------------------------------------
+
+// Market ürün kategorileri (businessTypes: "market") — herkese açık
+r.get("/market/categories", listMarketCategories);
 
 // Yakındaki marketleri listele (opsiyonel auth — herkese açık)
 r.get("/market/stores", listNearbyStores);
