@@ -63,6 +63,12 @@ const MarketOrderSchema = new mongoose.Schema(
       index: true,
     },
 
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "card", "online"],
+      default: "cash",
+    },
+
     subtotal: { type: Number, required: true, min: 0 },
     deliveryFee: { type: Number, default: 0, min: 0 },
     discount: { type: Number, default: 0, min: 0 },

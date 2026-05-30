@@ -161,7 +161,7 @@ export const listStoreProducts = async (req, res, next) => {
 
 /**
  * POST /api/market/orders
- * Body: { storeId, items:[{productId, qty}], type, deliveryAddressId, note }
+ * Body: { storeId, items:[{productId, qty}], type, deliveryAddressId, note, paymentMethod }
  */
 export const createOrder = async (req, res, next) => {
   try {
@@ -171,6 +171,7 @@ export const createOrder = async (req, res, next) => {
       type = "delivery",
       deliveryAddressId,
       note = "",
+      paymentMethod = "cash",
     } = req.body || {};
 
     const userId = req.user?.id;
@@ -273,6 +274,7 @@ export const createOrder = async (req, res, next) => {
       discount: 0,
       total,
       note,
+      paymentMethod: ["cash", "card", "online"].includes(paymentMethod) ? paymentMethod : "cash",
     });
 
     // Toplam sipariş sayısını artır (best-effort)
