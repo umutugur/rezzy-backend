@@ -46,7 +46,7 @@ const TaxiRideSchema = new mongoose.Schema(
     // Ödeme
     paymentMethod: {
       type: String,
-      enum: ["card", "cash"],
+      enum: ["cash", "card", "online"],
       default: "cash",
     },
     paymentStatus: {
@@ -54,6 +54,7 @@ const TaxiRideSchema = new mongoose.Schema(
       enum: ["pending", "paid", "refunded"],
       default: "pending",
     },
+    stripePaymentIntentId: { type: String, default: null },
 
     // Zaman damgaları
     requestedAt: { type: Date, default: Date.now },

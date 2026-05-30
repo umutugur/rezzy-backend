@@ -8,6 +8,7 @@ import OrderSession from "../models/OrderSession.js";
 import DeliveryPaymentAttempt from "../models/DeliveryPaymentAttempt.js";
 import DeliveryOrder from "../models/DeliveryOrder.js";
 import MarketOrder from "../models/MarketOrder.js";
+import TaxiRide from "../models/TaxiRide.js";
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -36,6 +37,21 @@ export const stripeWebhook = async (req, res) => {
         const pi = event.data.object;
         const metadata = pi.metadata || {};
         const kind = String(metadata.kind || "");
+
+        // ─── Taksi yolculuğu ödemesi ─────────────────────────────────────
+        if (kind === "taxi_ride") {
+          const rideId = metadata.rideId;
+          if (rideId && mongoose.Types.ObjectId.isValid(rideId)) {
+            await TaxiRide.findByIdAndUpdate(rideId, {
+              $set: {
+                paymentStatus: "paid",
+                stripePaymentIntentId: pi.id,
+              },
+            });
+            console.log("[StripeWebhook] taxi_ride paid:", rideId);
+          }
+          break;
+        }
 
         // ─── Market sipariş ödemesi ───────────────────────────────────────
         if (kind === "market_order") {

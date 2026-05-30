@@ -1,9 +1,14 @@
 // src/controllers/taxi.controller.js
+import Stripe from "stripe";
 import TaxiRide from "../models/TaxiRide.js";
 import TaxiDriver from "../models/TaxiDriver.js";
 import { calculateFare } from "../services/taxiPricing.service.js";
 import { getRouteInfo, searchPlaces, geocodeAddress } from "../services/places.service.js";
 import { emitNewRideRequest, emitRideStatusChange } from "../sockets/taxi.socket.js";
+
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
+  : null;
 
 // io referansını uygulama başladığında inject ederiz
 let _io = null;
@@ -74,6 +79,8 @@ export async function createRide(req, res, next) {
     const { distanceKm, durationMin } = await getRouteInfo(origin, destination);
     const fare = calculateFare(vehicleType, distanceKm);
 
+    const safePaymentMethod = ["cash", "card", "online"].includes(paymentMethod) ? paymentMethod : "cash";
+
     const ride = await TaxiRide.create({
       passenger: passengerId,
       pickup: {
@@ -88,7 +95,7 @@ export async function createRide(req, res, next) {
       distanceKm,
       durationMin,
       fare,
-      paymentMethod,
+      paymentMethod: safePaymentMethod,
       status: "searching",
     });
 
@@ -123,7 +130,47 @@ export async function createRide(req, res, next) {
       await emitNewRideRequest(_io, ride, nearbyDriverIds);
     }
 
-    return res.status(201).json({ ride, nearbyDriverCount: nearbyDriverIds.length });
+    // ─── Online ödeme: Stripe PaymentIntent (yolculuk başlamadan önce tahsil) ─
+    if (safePaymentMethod === "online") {
+      if (!stripe) {
+        await TaxiRide.findByIdAndDelete(ride._id);
+        return res.status(500).json({ message: "Stripe konfigüre değil. Online ödeme yapılamıyor." });
+      }
+
+      try {
+        const pi = await stripe.paymentIntents.create({
+          amount: Math.round(fare * 100),
+          currency: "try",
+          automatic_payment_methods: { enabled: true },
+          metadata: {
+            kind: "taxi_ride",
+            rideId: String(ride._id),
+            passengerId: String(passengerId),
+            vehicleType,
+          },
+        });
+
+        ride.stripePaymentIntentId = pi.id;
+        await ride.save();
+
+        return res.status(201).json({
+          ride,
+          nearbyDriverCount: nearbyDriverIds.length,
+          payment: {
+            paymentIntentId: pi.id,
+            clientSecret: pi.client_secret,
+            amount: fare,
+            currency: "TRY",
+          },
+        });
+      } catch (stripeErr) {
+        console.error("[taxi.createRide] Stripe error", stripeErr);
+        await TaxiRide.findByIdAndDelete(ride._id).catch(() => {});
+        return res.status(500).json({ message: "Ödeme sistemi başlatılamadı. Lütfen tekrar deneyin." });
+      }
+    }
+
+    return res.status(201).json({ ride, nearbyDriverCount: nearbyDriverIds.length, payment: null });
   } catch (err) {
     next(err);
   }
