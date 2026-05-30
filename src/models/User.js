@@ -52,7 +52,7 @@ const UserSchema = new mongoose.Schema({
   email:  { type: String, unique: true, sparse: true },
   phone:  { type: String, unique: true, sparse: true },
   password: { type: String, select: false }, // sosyal girişte boş olabilir
-  role:   { type: String, enum: ["customer", "restaurant", "admin"], default: "customer" },
+  role:   { type: String, enum: ["customer", "restaurant", "admin", "market_owner"], default: "customer" },
 
   // ✅ Legacy restaurant link (tek restoranlı yapı) – şimdilik korunuyor
   restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: "Restaurant", default: null },
