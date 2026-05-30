@@ -176,6 +176,27 @@ export async function createRide(req, res, next) {
   }
 }
 
+// ─── GET /api/taxi/rides/active ──────────────────────────────────────────────
+// Kullanıcının aktif (searching / matched / inProgress) yolculuğunu döndürür.
+// Yoksa 404.
+export async function getActiveRide(req, res, next) {
+  try {
+    const passengerId = req.user.id;
+    const ride = await TaxiRide.findOne({
+      passenger: passengerId,
+      status: { $in: ["searching", "matched", "inProgress"] },
+    })
+      .sort({ requestedAt: -1 })
+      .populate("passenger", "name phone")
+      .populate({ path: "driver", populate: { path: "user", select: "name phone" } });
+
+    if (!ride) return res.status(404).json({ message: "Aktif yolculuk yok" });
+    return res.json(ride);
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ─── GET /api/taxi/rides/:id ─────────────────────────────────────────────────
 export async function getRide(req, res, next) {
   try {

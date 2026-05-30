@@ -4,6 +4,7 @@ import { auth } from "../middlewares/auth.js";
 import {
   estimateFare,
   createRide,
+  getActiveRide,
   getRide,
   getMyRides,
   cancelRide,
@@ -28,7 +29,10 @@ router.post("/taxi/rides", auth(), createRide);
 // Yolcunun geçmiş yolculukları
 router.get("/taxi/my-rides", auth(), getMyRides);
 
-// Aktif yolculuk detayı (id'li rota my-rides'tan sonra olmalı — çakışma önlemi)
+// Aktif yolculuk (searching/matched/inProgress) — /:id rotasından ÖNCE olmalı
+router.get("/taxi/rides/active", auth(), getActiveRide);
+
+// Yolculuk detayı (id ile)
 router.get("/taxi/rides/:id", auth(), getRide);
 
 // Yolculuğu iptal et (yolcu)
