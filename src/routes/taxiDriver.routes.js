@@ -1,0 +1,69 @@
+// src/routes/taxiDriver.routes.js
+import { Router } from "express";
+import { auth } from "../middlewares/auth.js";
+import {
+  registerDriver,
+  toggleStatus,
+  updateLocation,
+  respondToRide,
+  completeRide,
+  getEarnings,
+  getDriverProfile,
+} from "../controllers/taxiDriver.controller.js";
+
+const router = Router();
+
+// Sürücü kaydı
+router.post("/taxi/driver/register", auth(), registerDriver);
+
+// Sürücü profilim
+router.get("/taxi/driver/me", auth(), getDriverProfile);
+
+// Online/offline toggle
+router.patch("/taxi/driver/status", auth(), toggleStatus);
+
+// Konum güncelleme
+router.patch("/taxi/driver/location", auth(), updateLocation);
+
+// Yolculuk kabul / red
+router.patch("/taxi/rides/:id/respond", auth(), respondToRide);
+
+// Yolculuk başlat (inProgress)
+router.patch("/taxi/rides/:id/start", auth(), async (req, res, next) => {
+  try {
+    const { default: TaxiDriver } = await import("../models/TaxiDriver.js");
+    const { default: TaxiRide } = await import("../models/TaxiRide.js");
+    const { emitRideStatusChange } = await import("../sockets/taxi.socket.js");
+
+    const driver = await TaxiDriver.findOne({ user: req.user.id });
+    if (!driver) return res.status(404).json({ message: "Sürücü profili bulunamadı" });
+
+    const ride = await TaxiRide.findById(req.params.id);
+    if (!ride) return res.status(404).json({ message: "Yolculuk bulunamadı" });
+    if (ride.driver?.toString() !== driver._id.toString()) {
+      return res.status(403).json({ message: "Bu yolculuk size ait değil" });
+    }
+    if (ride.status !== "matched") {
+      return res.status(409).json({ message: "Yolculuk henüz eşleşme aşamasında değil" });
+    }
+
+    ride.status = "inProgress";
+    ride.startedAt = new Date();
+    await ride.save();
+
+    const io = req.app.get("io");
+    if (io) await emitRideStatusChange(io, ride);
+
+    return res.json({ message: "Yolculuk başlatıldı", ride });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Yolculuğu tamamla
+router.patch("/taxi/rides/:id/complete", auth(), completeRide);
+
+// Kazanç özeti
+router.get("/taxi/driver/earnings", auth(), getEarnings);
+
+export default router;

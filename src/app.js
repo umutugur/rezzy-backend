@@ -34,6 +34,14 @@ import adminBannersRoutes from "./routes/admin.banners.routes.js";
 // ✅ NEW: Delivery panel routes (desktop delivery orders)
 import deliveryPanelRoutes from "./routes/deliveryOrders.panel.routes.js";
 
+// Market modülü
+import marketRoutes from "./routes/market.routes.js";
+import marketPanelRoutes from "./routes/marketPanel.routes.js";
+
+// Taksi modülü
+import taxiRoutes from "./routes/taxi.routes.js";
+import taxiDriverRoutes from "./routes/taxiDriver.routes.js";
+
 dotenv.config();
 const app = express();
 
@@ -117,6 +125,14 @@ app.use("/api/delivery", deliveryRoutes);
 //Banner
 app.use("/api", bannersRoutes);
 app.use("/api/admin", adminBannersRoutes);
+
+// Market modülü
+app.use("/api", marketRoutes);
+app.use("/api", marketPanelRoutes);
+
+// Taksi modülü
+app.use("/api", taxiRoutes);
+app.use("/api", taxiDriverRoutes);
 
 // 404 & error aynı kalsın
 app.use((req, res) => res.status(404).json({ message: "Not found" }));

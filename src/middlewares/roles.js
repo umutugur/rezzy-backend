@@ -3,8 +3,14 @@ import mongoose from "mongoose";
 import Reservation from "../models/Reservation.js"; // ✅ reservationId → restaurantId resolve için
 
 /**
+ * Tanımlı global roller:
+ *   admin, customer, restaurant, org_owner, location_manager, staff,
+ *   market_owner
+ */
+
+/**
  * Basit global role kontrolü.
- * Örn: allow("admin"), allow("admin", "restaurant")
+ * Örn: allow("admin"), allow("admin", "restaurant"), allow("market_owner", "admin")
  */
 export function allow(...roles) {
   return (req, res, next) => {
