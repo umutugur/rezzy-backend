@@ -1,11 +1,16 @@
 // src/controllers/market.controller.js
 import mongoose from "mongoose";
+import Stripe from "stripe";
 import MarketStore from "../models/MarketStore.js";
 import MarketProduct from "../models/MarketProduct.js";
 import MarketOrder from "../models/MarketOrder.js";
 import UserAddress from "../models/UserAddress.js";
 import CoreCategory from "../models/CoreCategory.js";
 import { notifyUser } from "../services/notification.service.js";
+
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
+  : null;
 
 /** Yardımcı: string'i güvenli ObjectId'ye dönüştür */
 const toObjectId = (id) => {
@@ -263,6 +268,8 @@ export const createOrder = async (req, res, next) => {
 
     const total = +(subtotal + deliveryFee).toFixed(2);
 
+    const safePaymentMethod = ["cash", "card", "online"].includes(paymentMethod) ? paymentMethod : "cash";
+
     const order = await MarketOrder.create({
       customer: toObjectId(userId),
       store: toObjectId(storeId),
@@ -274,15 +281,56 @@ export const createOrder = async (req, res, next) => {
       discount: 0,
       total,
       note,
-      paymentMethod: ["cash", "card", "online"].includes(paymentMethod) ? paymentMethod : "cash",
+      paymentMethod: safePaymentMethod,
+      paymentStatus: safePaymentMethod === "online" ? "pending" : "pending",
     });
 
     // Toplam sipariş sayısını artır (best-effort)
-    MarketStore.findByIdAndUpdate(storeId, { $inc: { totalOrders: 1 } }).catch(
-      () => {}
-    );
+    MarketStore.findByIdAndUpdate(storeId, { $inc: { totalOrders: 1 } }).catch(() => {});
 
-    res.status(201).json(order);
+    // ─── Online ödeme: Stripe PaymentIntent oluştur ──────────────────────────
+    if (safePaymentMethod === "online") {
+      if (!stripe) {
+        // Stripe konfigüre değilse siparişi iptal et
+        await MarketOrder.findByIdAndDelete(order._id);
+        return next({ status: 500, message: "Stripe konfigüre değil. Online ödeme yapılamıyor." });
+      }
+
+      try {
+        const pi = await stripe.paymentIntents.create({
+          amount: Math.round(total * 100), // kuruş/cent cinsinden
+          currency: "try",
+          automatic_payment_methods: { enabled: true },
+          metadata: {
+            kind: "market_order",
+            orderId: String(order._id),
+            storeId: String(storeId),
+            userId: String(userId),
+          },
+        });
+
+        order.stripePaymentIntentId = pi.id;
+        await order.save();
+
+        return res.status(201).json({
+          order,
+          payment: {
+            paymentIntentId: pi.id,
+            clientSecret: pi.client_secret,
+            amount: total,
+            currency: "TRY",
+          },
+        });
+      } catch (stripeErr) {
+        console.error("[market.createOrder] Stripe error", stripeErr);
+        // Stripe hatası durumunda siparişi iptal et
+        await MarketOrder.findByIdAndDelete(order._id).catch(() => {});
+        return next({ status: 500, message: "Ödeme sistemi başlatılamadı. Lütfen tekrar deneyin." });
+      }
+    }
+
+    // ─── Nakit / Kart (kapıda) ───────────────────────────────────────────────
+    res.status(201).json({ order, payment: null });
   } catch (e) {
     next(e);
   }

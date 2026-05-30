@@ -76,6 +76,9 @@ const MarketOrderSchema = new mongoose.Schema(
 
     note: { type: String, default: "" },
 
+    // Stripe
+    stripePaymentIntentId: { type: String, default: null },
+
     estimatedReadyAt: { type: Date, default: null },
     deliveredAt: { type: Date, default: null },
   },

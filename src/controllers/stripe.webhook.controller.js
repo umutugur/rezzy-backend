@@ -7,6 +7,7 @@ import OrderSession from "../models/OrderSession.js";
 
 import DeliveryPaymentAttempt from "../models/DeliveryPaymentAttempt.js";
 import DeliveryOrder from "../models/DeliveryOrder.js";
+import MarketOrder from "../models/MarketOrder.js";
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -35,6 +36,22 @@ export const stripeWebhook = async (req, res) => {
         const pi = event.data.object;
         const metadata = pi.metadata || {};
         const kind = String(metadata.kind || "");
+
+        // ─── Market sipariş ödemesi ───────────────────────────────────────
+        if (kind === "market_order") {
+          const marketOrderId = metadata.orderId;
+          if (marketOrderId && mongoose.Types.ObjectId.isValid(marketOrderId)) {
+            await MarketOrder.findByIdAndUpdate(marketOrderId, {
+              $set: {
+                paymentStatus: "paid",
+                stripePaymentIntentId: pi.id,
+                status: "confirmed", // Ödeme alındı → otomatik onayla
+              },
+            });
+            console.log("[StripeWebhook] market_order paid:", marketOrderId);
+          }
+          break;
+        }
 
         if (kind === "delivery_attempt") {
           const piId = pi.id;
