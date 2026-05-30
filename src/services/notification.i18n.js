@@ -183,6 +183,90 @@ const NOTIFICATION_TEMPLATES = {
       el: "Λήφθηκε: {requestTypeLabel}.",
     },
   },
+  market_order_confirmed: {
+    title: {
+      tr: "Siparişin onaylandı ✅",
+      en: "Your order is confirmed ✅",
+      ru: "Ваш заказ подтверждён ✅",
+      el: "Η παραγγελία σου εγκρίθηκε ✅",
+    },
+    body: {
+      tr: "{storeName} siparişini hazırlamaya başladı.",
+      en: "{storeName} has started preparing your order.",
+      ru: "{storeName} приступил к подготовке вашего заказа.",
+      el: "Το {storeName} άρχισε να ετοιμάζει την παραγγελία σου.",
+    },
+  },
+  market_order_preparing: {
+    title: {
+      tr: "Siparişin hazırlanıyor 🛒",
+      en: "Your order is being prepared 🛒",
+      ru: "Ваш заказ готовится 🛒",
+      el: "Η παραγγελία σου ετοιμάζεται 🛒",
+    },
+    body: {
+      tr: "{storeName} siparişini hazırlıyor. Az kaldı!",
+      en: "{storeName} is preparing your order. Almost there!",
+      ru: "{storeName} готовит ваш заказ. Почти готово!",
+      el: "Το {storeName} ετοιμάζει την παραγγελία σου. Σχεδόν έτοιμο!",
+    },
+  },
+  market_order_ready: {
+    title: {
+      tr: "Siparişin hazır 📦",
+      en: "Your order is ready 📦",
+      ru: "Ваш заказ готов 📦",
+      el: "Η παραγγελία σου είναι έτοιμη 📦",
+    },
+    body: {
+      tr: "{storeName} siparişin teslime hazır.",
+      en: "Your order at {storeName} is ready for pickup/delivery.",
+      ru: "Ваш заказ в {storeName} готов к выдаче.",
+      el: "Η παραγγελία σου στο {storeName} είναι έτοιμη.",
+    },
+  },
+  market_order_delivered: {
+    title: {
+      tr: "Siparişin teslim edildi 🎉",
+      en: "Your order has been delivered 🎉",
+      ru: "Ваш заказ доставлен 🎉",
+      el: "Η παραγγελία σου παραδόθηκε 🎉",
+    },
+    body: {
+      tr: "{storeName} siparişin başarıyla teslim edildi. Afiyet olsun!",
+      en: "Your order from {storeName} was delivered successfully. Enjoy!",
+      ru: "Заказ из {storeName} успешно доставлен. Приятного аппетита!",
+      el: "Η παραγγελία σου από το {storeName} παραδόθηκε επιτυχώς. Καλή όρεξη!",
+    },
+  },
+  market_order_cancelled_by_store: {
+    title: {
+      tr: "Sipariş iptal edildi",
+      en: "Order cancelled",
+      ru: "Заказ отменён",
+      el: "Η παραγγελία ακυρώθηκε",
+    },
+    body: {
+      tr: "{storeName} siparişini iptal etti.",
+      en: "{storeName} cancelled your order.",
+      ru: "{storeName} отменил ваш заказ.",
+      el: "Το {storeName} ακύρωσε την παραγγελία σου.",
+    },
+  },
+  market_order_cancelled_by_customer: {
+    title: {
+      tr: "Sipariş iptal edildi",
+      en: "Order cancelled",
+      ru: "Заказ отменён",
+      el: "Η παραγγελία ακυρώθηκε",
+    },
+    body: {
+      tr: "Müşteri siparişi iptal etti.",
+      en: "The customer cancelled the order.",
+      ru: "Клиент отменил заказ.",
+      el: "Ο πελάτης ακύρωσε την παραγγελία.",
+    },
+  },
 };
 
 const REQUEST_TYPE_LABELS = {
