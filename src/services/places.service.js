@@ -1,50 +1,74 @@
 // src/services/places.service.js
-import { Client, Status, TravelMode } from "@googlemaps/google-maps-services-js";
+// Tamamen ücretsiz — Google Maps yerine Nominatim (OpenStreetMap) + Haversine kullanır.
+// API key gerektirmez.
+//
+// Nominatim kullanım politikası:
+//   • Max 1 istek/saniye (debounce frontend'de uygulanıyor)
+//   • User-Agent zorunlu
+//   • Ticari kullanıma uygun — atıf yeterli
 
-const mapsClient = new Client({});
+const NOMINATIM_BASE = "https://nominatim.openstreetmap.org";
+const USER_AGENT = "Rezvix-App/1.0 (contact@rezvix.com)";
 
-const API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+/** Nominatim'e HTTP GET at, JSON döndür */
+async function nominatimFetch(path) {
+  const res = await fetch(`${NOMINATIM_BASE}${path}`, {
+    headers: {
+      "User-Agent": USER_AGENT,
+      "Accept-Language": "tr,en;q=0.9",
+    },
+  });
+  if (!res.ok) throw new Error(`Nominatim ${res.status}: ${res.statusText}`);
+  return res.json();
+}
+
+// ─── Haversine mesafe (düz hat km) ───────────────────────────────────────────
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// ─── Dışa aktarılan fonksiyonlar ─────────────────────────────────────────────
 
 /**
- * Metin sorgusu ile adres/yer önerileri döner.
- * @param {string} query - Arama metni
- * @param {{ lat: number, lng: number } | null} location - Konuma göre bias (opsiyonel)
- * @returns {Promise<Array>} Önerilen yer listesi
+ * Metin araması → adres önerileri listesi.
+ * Nominatim /search endpoint'ini kullanır.
  */
 export async function searchPlaces(query, location = null) {
-  if (!API_KEY) {
-    console.warn("[places] GOOGLE_MAPS_API_KEY eksik — boş liste döndürülüyor");
-    return [];
-  }
+  if (!query || query.trim().length < 2) return [];
 
   try {
-    const params = {
-      query,
-      language: "tr",
-      key: API_KEY,
-    };
+    const params = new URLSearchParams({
+      q: query.trim(),
+      format: "json",
+      limit: "6",
+      addressdetails: "0",
+    });
 
+    // Eğer mevcut konum varsa o bölgeye bias ekle (ama dışarısını da ara)
     if (location?.lat && location?.lng) {
-      params.location = { lat: Number(location.lat), lng: Number(location.lng) };
-      params.radius = 20000; // 20 km bias
+      const d = 0.45; // ~50 km viewbox
+      params.set(
+        "viewbox",
+        `${location.lng - d},${location.lat + d},${location.lng + d},${location.lat - d}`
+      );
+      params.set("bounded", "0");
     }
 
-    const response = await mapsClient.textSearch({ params, timeout: 5000 });
+    const data = await nominatimFetch(`/search?${params}`);
 
-    if (response.data.status !== Status.OK && response.data.status !== "ZERO_RESULTS") {
-      console.error("[places] textSearch hata:", response.data.status);
-      return [];
-    }
-
-    return response.data.results.map((place) => ({
-      placeId: place.place_id,
-      name: place.name,
-      address: place.formatted_address,
-      location: {
-        lat: place.geometry?.location?.lat ?? null,
-        lng: place.geometry?.location?.lng ?? null,
-      },
-      types: place.types ?? [],
+    return data.map((r) => ({
+      placeId: String(r.place_id),
+      address: r.display_name,
+      lat: parseFloat(r.lat),
+      lng: parseFloat(r.lon),
     }));
   } catch (err) {
     console.error("[places] searchPlaces hata:", err.message);
@@ -53,40 +77,23 @@ export async function searchPlaces(query, location = null) {
 }
 
 /**
- * İki koordinat arasındaki mesafe ve süreyi Google Directions API ile alır.
- * @param {{ lat: number, lng: number }} origin
- * @param {{ lat: number, lng: number }} destination
- * @returns {Promise<{ distanceKm: number, durationMin: number }>}
+ * İki koordinat arasındaki tahmini yol mesafesi ve süresi.
+ * Haversine düz-hat mesafesi × 1.35 (yol katsayısı) ile tahmin edilir.
+ * Ortalama şehir içi hız: 30 km/h
  */
 export async function getRouteInfo(origin, destination) {
-  if (!API_KEY) {
-    console.warn("[places] GOOGLE_MAPS_API_KEY eksik — varsayılan değerler döndürülüyor");
-    return { distanceKm: 0, durationMin: 0 };
-  }
-
   try {
-    const response = await mapsClient.directions({
-      params: {
-        origin: `${origin.lat},${origin.lng}`,
-        destination: `${destination.lat},${destination.lng}`,
-        mode: TravelMode.driving,
-        language: "tr",
-        key: API_KEY,
-      },
-      timeout: 5000,
-    });
-
-    if (response.data.status !== Status.OK) {
-      console.error("[places] directions hata:", response.data.status);
-      return { distanceKm: 0, durationMin: 0 };
-    }
-
-    const leg = response.data.routes?.[0]?.legs?.[0];
-    if (!leg) return { distanceKm: 0, durationMin: 0 };
-
-    const distanceKm = Math.round((leg.distance.value / 1000) * 100) / 100;
-    const durationMin = Math.ceil(leg.duration.value / 60);
-
+    const straightKm = haversineKm(
+      origin.lat,
+      origin.lng,
+      destination.lat,
+      destination.lng
+    );
+    // Yol katsayısı: şehir içi 1.35, uzun mesafe için biraz daha az
+    const roadFactor = straightKm < 5 ? 1.4 : straightKm < 20 ? 1.35 : 1.25;
+    const distanceKm = Math.round(straightKm * roadFactor * 100) / 100;
+    const avgSpeedKmh = 28; // şehir içi ortalama
+    const durationMin = Math.max(3, Math.ceil((distanceKm / avgSpeedKmh) * 60));
     return { distanceKm, durationMin };
   } catch (err) {
     console.error("[places] getRouteInfo hata:", err.message);
@@ -95,83 +102,51 @@ export async function getRouteInfo(origin, destination) {
 }
 
 /**
- * Metin adresini koordinata çevirir (Geocoding API).
- * @param {string} address - Çözümlenecek adres metni
- * @returns {Promise<{ lat: number, lng: number, formattedAddress: string } | null>}
+ * Adres metnini koordinata çevirir.
+ * Nominatim /search endpoint'ini kullanır.
  */
 export async function geocodeAddress(address) {
-  if (!API_KEY) {
-    console.warn("[places] GOOGLE_MAPS_API_KEY eksik — geocode yapılamıyor");
-    return null;
-  }
+  const results = await searchPlaces(address);
+  if (!results.length) return null;
+  const r = results[0];
+  return {
+    lat: r.lat,
+    lng: r.lng,
+    formattedAddress: r.address,
+    placeId: r.placeId,
+  };
+}
 
+/**
+ * Koordinattan adres bilgisi al (reverse geocode).
+ * Nominatim /reverse endpoint'ini kullanır.
+ */
+export async function reverseGeocode(lat, lng) {
   try {
-    const response = await mapsClient.geocode({
-      params: {
-        address,
-        language: "tr",
-        key: API_KEY,
-      },
-      timeout: 5000,
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lon: String(lng),
+      format: "json",
+      zoom: "16",
     });
-
-    if (response.data.status !== Status.OK) {
-      console.error("[places] geocode hata:", response.data.status);
-      return null;
-    }
-
-    const result = response.data.results?.[0];
-    if (!result) return null;
-
+    const data = await nominatimFetch(`/reverse?${params}`);
     return {
-      lat: result.geometry.location.lat,
-      lng: result.geometry.location.lng,
-      formattedAddress: result.formatted_address,
-      placeId: result.place_id,
+      address: data.display_name ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+      lat,
+      lng,
     };
   } catch (err) {
-    console.error("[places] geocodeAddress hata:", err.message);
-    return null;
+    console.error("[places] reverseGeocode hata:", err.message);
+    return { address: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng };
   }
 }
 
 /**
- * Belirli koordinat etrafındaki yakın yerleri listeler.
- * @param {{ lat: number, lng: number }} location
- * @param {number} radiusMeters
- * @param {string} type - Google Places type (e.g. 'restaurant')
- * @returns {Promise<Array>}
+ * Yakındaki yerler — Nominatim Overpass ile basit uygulama.
+ * (Bu fonksiyon isteğe bağlı; kullanılmıyorsa boş liste döner.)
  */
 export async function getNearbyPlaces(location, radiusMeters = 1500, type = "establishment") {
-  if (!API_KEY) return [];
-
-  try {
-    const response = await mapsClient.placesNearby({
-      params: {
-        location: { lat: Number(location.lat), lng: Number(location.lng) },
-        radius: radiusMeters,
-        type,
-        language: "tr",
-        key: API_KEY,
-      },
-      timeout: 5000,
-    });
-
-    if (response.data.status !== Status.OK && response.data.status !== "ZERO_RESULTS") {
-      return [];
-    }
-
-    return response.data.results.map((place) => ({
-      placeId: place.place_id,
-      name: place.name,
-      address: place.vicinity,
-      location: {
-        lat: place.geometry?.location?.lat ?? null,
-        lng: place.geometry?.location?.lng ?? null,
-      },
-    }));
-  } catch (err) {
-    console.error("[places] getNearbyPlaces hata:", err.message);
-    return [];
-  }
+  // Nominatim'in "nearby" özelliği sınırlı — şimdilik boş döndür
+  // Gerekirse Overpass API entegre edilebilir (tamamen ücretsiz)
+  return [];
 }
