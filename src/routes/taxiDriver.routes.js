@@ -7,6 +7,7 @@ import {
   updateLocation,
   respondToRide,
   completeRide,
+  getDriverRides,
   getEarnings,
   getDriverProfile,
 } from "../controllers/taxiDriver.controller.js";
@@ -62,6 +63,9 @@ router.patch("/taxi/rides/:id/start", auth(), async (req, res, next) => {
 
 // Yolculuğu tamamla
 router.patch("/taxi/rides/:id/complete", auth(), completeRide);
+
+// Sürücünün geçmiş yolculukları
+router.get("/taxi/driver/rides", auth(), getDriverRides);
 
 // Kazanç özeti
 router.get("/taxi/driver/earnings", auth(), getEarnings);

@@ -230,6 +230,37 @@ export async function getEarnings(req, res, next) {
   }
 }
 
+// ─── GET /api/taxi/driver/rides ─────────────────────────────────────────────
+export async function getDriverRides(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const driver = await TaxiDriver.findOne({ user: userId });
+    if (!driver) return res.status(404).json({ message: "Sürücü profili bulunamadı" });
+
+    const { cursor, limit = 20 } = req.query;
+    const pageLimit = Math.min(Number(limit), 50);
+
+    const filter = {
+      driver: driver._id,
+      status: { $in: ["completed", "cancelled"] },
+    };
+    if (cursor) filter._id = { $lt: cursor };
+
+    const rides = await TaxiRide.find(filter)
+      .populate("passenger", "name")
+      .sort({ _id: -1 })
+      .limit(pageLimit + 1);
+
+    const hasMore = rides.length > pageLimit;
+    const items = hasMore ? rides.slice(0, pageLimit) : rides;
+    const nextCursor = hasMore ? items[items.length - 1]._id.toString() : null;
+
+    return res.json({ rides: items, nextCursor });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ─── GET /api/taxi/driver/me ─────────────────────────────────────────────────
 export async function getDriverProfile(req, res, next) {
   try {
