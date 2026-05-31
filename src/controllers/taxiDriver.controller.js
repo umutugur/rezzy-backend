@@ -222,7 +222,8 @@ export async function getEarnings(req, res, next) {
       weekEarnings,
       totalRides: driver.totalRides,
       totalEarnings: driver.totalEarnings,
-      rating: driver.rating,
+      averageRating: driver.rating,
+      ratingCount: driver.ratingCount ?? 0,
     });
   } catch (err) {
     next(err);
