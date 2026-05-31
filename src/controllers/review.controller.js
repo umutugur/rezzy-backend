@@ -171,30 +171,24 @@ export async function submitReview(req, res, next) {
       });
     }
 
-    const existing = await Review.findOne({
-      entityType,
-      entityId: toObjectId(entityId),
-      userId: toObjectId(userId),
-    });
-
-    let review;
-    if (existing) {
-      existing.rating = rating;
-      existing.comment = String(comment).trim();
-      existing.verifiedPurchase = true;
-      review = await existing.save();
-    } else {
-      review = await Review.create({
+    // Yorum oluştur veya güncelle (upsert — race condition safe)
+    const review = await Review.findOneAndUpdate(
+      {
         entityType,
         entityId: toObjectId(entityId),
         userId: toObjectId(userId),
-        rating,
-        comment: String(comment).trim(),
-        verifiedPurchase: true,
-        orderId: eligibility.orderId,
-        orderModel: eligibility.orderModel,
-      });
-    }
+      },
+      {
+        $set: {
+          rating,
+          comment: String(comment).trim(),
+          verifiedPurchase: true,
+          orderId: eligibility.orderId,
+          orderModel: eligibility.orderModel,
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
     updateEntityRating(entityType, entityId).catch((e) =>
       console.error("[review] updateEntityRating error", e)
