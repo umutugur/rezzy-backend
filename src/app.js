@@ -41,6 +41,7 @@ import marketPanelRoutes from "./routes/marketPanel.routes.js";
 // Taksi modülü
 import taxiRoutes from "./routes/taxi.routes.js";
 import taxiDriverRoutes from "./routes/taxiDriver.routes.js";
+import reviewRoutes from "./routes/review.routes.js";
 
 dotenv.config();
 const app = express();
@@ -133,6 +134,9 @@ app.use("/api", marketPanelRoutes);
 // Taksi modülü
 app.use("/api", taxiRoutes);
 app.use("/api", taxiDriverRoutes);
+
+// Reviews modülü
+app.use("/api", reviewRoutes);
 
 // 404 & error aynı kalsın
 app.use((req, res) => res.status(404).json({ message: "Not found" }));

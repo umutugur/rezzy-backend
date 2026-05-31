@@ -1941,10 +1941,15 @@ export const listReservationsAdmin = async (req, res, next) => {
 /* ------------ Reviews ------------ */
 export const listReviews = async (req, res, next) => {
   try {
-    const { restaurantId, userId, status } = req.query;
+    const { entityType, entityId, restaurantId, userId, status } = req.query;
     const { limit, cursor } = pageParams(req.query);
     const q = {};
-    if (restaurantId) q.restaurantId = toObjectId(restaurantId);
+    if (entityType) q.entityType = entityType;
+    if (entityId) q.entityId = toObjectId(entityId);
+    if (restaurantId) {
+      q.entityType = "restaurant";
+      q.entityId = toObjectId(restaurantId);
+    }
     if (userId) q.userId = toObjectId(userId);
     if (status) q.status = status;
     if (cursor) q._id = { $lt: cursor };
