@@ -55,7 +55,10 @@ import { ReportsPage } from "./desktop/pages/ReportsPage";
 import { SettingsPage } from "./desktop/pages/SettingsPage";
 import { DesktopMenuManagerPage } from "./desktop/pages/DesktopMenuManagerPage";
 import { DeliveryOrdersPage } from "./desktop/pages/DeliveryOrdersPage";
- 
+import { MarketOrdersPage } from "./desktop/pages/MarketOrdersPage";
+import { MarketProductsPage } from "./desktop/pages/MarketProductsPage";
+import { MarketSettingsPage } from "./desktop/pages/MarketSettingsPage";
+
 // ---- Helpers ----
 
 // 🔑 Artık sadece “restaurant rolü var mı?” değil,
@@ -685,6 +688,11 @@ export default function App() {
 
       </Route>
 
+      {/* Market Desktop routes */}
+      <Route path="/market-desktop/orders" element={<MarketOrdersPage />} />
+      <Route path="/market-desktop/products" element={<MarketProductsPage />} />
+      <Route path="/market-desktop/settings" element={<MarketSettingsPage />} />
+
       {/* Kök rota */}
       <Route path="/" element={<RootRedirect />} />
 
@@ -702,6 +710,10 @@ function RootRedirect() {
 
   if (u.role === "admin") {
     return <Navigate to="/admin" replace />;
+  }
+
+  if (u.role === "market_owner") {
+    return <Navigate to="/market-desktop/orders" replace />;
   }
 
   // 🔥 Org kullanıcıları için ayrı giriş noktası

@@ -1,6 +1,6 @@
 // src/store/auth.ts
 
-export type Role = "customer" | "restaurant" | "admin" | "guest";
+export type Role = "customer" | "restaurant" | "admin" | "guest" | "market_owner";
 
 export type OrgMembershipRole = "org_owner" | "org_admin" | "org_finance";
 export type RestaurantMembershipRole = "location_manager" | "staff";
