@@ -381,3 +381,31 @@ export const deleteProduct = async (req, res, next) => {
     next(e);
   }
 };
+
+/**
+ * GET /api/market/panel/org/stores
+ * Aynı organizasyona ait tüm aktif market şubelerini listeler.
+ * market_owner kendi org'una ait store'ları görür.
+ */
+export const listOrgStores = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    const store = await findOwnerStore(userId);
+    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+
+    if (!store.organization) {
+      return res.json({ stores: [] });
+    }
+
+    const stores = await MarketStore.find({
+      organization: store.organization,
+      isActive: true,
+    })
+      .select("_id name address city rating")
+      .lean();
+
+    return res.json({ stores });
+  } catch (e) {
+    next(e);
+  }
+};

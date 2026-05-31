@@ -65,6 +65,13 @@ const MarketStoreSchema = new mongoose.Schema(
       index: true,
     },
 
+    organization: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Organization",
+      default: null,
+      index: true,
+    },
+
     isActive: { type: Boolean, default: true, index: true },
     rating: { type: Number, default: 0, min: 0, max: 5 },
     ratingCount: { type: Number, default: 0 },
@@ -81,6 +88,10 @@ MarketStoreSchema.index(
 MarketStoreSchema.index(
   { owner: 1, isActive: 1 },
   { name: "market_store_owner_active" }
+);
+MarketStoreSchema.index(
+  { organization: 1, isActive: 1 },
+  { name: "market_store_org_active" }
 );
 
 export default mongoose.model("MarketStore", MarketStoreSchema);

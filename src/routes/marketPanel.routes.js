@@ -11,6 +11,7 @@ import {
   deleteProduct,
   getMyStore,
   updateMyStore,
+  listOrgStores,
 } from "../controllers/marketPanel.controller.js";
 
 const r = Router();
@@ -82,5 +83,8 @@ r.delete(
   allow("market_owner", "admin"),
   deleteProduct
 );
+
+// Aynı organizasyona ait şubeler
+r.get("/market/panel/org/stores", auth(), listOrgStores);
 
 export default r;
