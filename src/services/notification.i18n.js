@@ -267,6 +267,20 @@ const NOTIFICATION_TEMPLATES = {
       el: "Ο πελάτης ακύρωσε την παραγγελία.",
     },
   },
+  market_new_order: {
+    title: {
+      tr: "Yeni sipariş! 🛒",
+      en: "New order! 🛒",
+      ru: "Новый заказ! 🛒",
+      el: "Νέα παραγγελία! 🛒",
+    },
+    body: {
+      tr: "{total} TL tutarında yeni sipariş geldi.",
+      en: "New order received for {total} TL.",
+      ru: "Получен новый заказ на {total} TL.",
+      el: "Νέα παραγγελία {total} TL.",
+    },
+  },
 };
 
 const REQUEST_TYPE_LABELS = {

@@ -312,6 +312,18 @@ export const createOrder = async (req, res, next) => {
         order.stripePaymentIntentId = pi.id;
         await order.save();
 
+        // Market sahibine yeni sipariş bildirimi (best-effort)
+        notifyUser(String(store.owner), {
+          type: "market_new_order",
+          key: `market_new_order_${order._id}`,
+          i18n: {
+            key: "market_new_order",
+            vars: { total: total.toFixed(0) },
+          },
+          data: { screen: "MarketOrderDetail", orderId: String(order._id) },
+          sound: "default",
+        }).catch(() => {});
+
         return res.status(201).json({
           order,
           payment: {
@@ -330,6 +342,18 @@ export const createOrder = async (req, res, next) => {
     }
 
     // ─── Nakit / Kart (kapıda) ───────────────────────────────────────────────
+    // Market sahibine yeni sipariş bildirimi gönder (best-effort)
+    notifyUser(String(store.owner), {
+      type: "market_new_order",
+      key: `market_new_order_${order._id}`,
+      i18n: {
+        key: "market_new_order",
+        vars: { total: total.toFixed(0) },
+      },
+      data: { screen: "MarketOrderDetail", orderId: String(order._id) },
+      sound: "default",
+    }).catch(() => {});
+
     res.status(201).json({ order, payment: null });
   } catch (e) {
     next(e);
