@@ -40,6 +40,7 @@ const TaxiDriverSchema = new mongoose.Schema(
 
     // Puanlama ve istatistikler
     rating: { type: Number, default: 5.0, min: 1.0, max: 5.0 },
+    ratingCount: { type: Number, default: 0 },
     totalRides: { type: Number, default: 0 },
     todayEarnings: { type: Number, default: 0 },
     totalEarnings: { type: Number, default: 0 },

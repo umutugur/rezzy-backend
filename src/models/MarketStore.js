@@ -67,6 +67,7 @@ const MarketStoreSchema = new mongoose.Schema(
 
     isActive: { type: Boolean, default: true, index: true },
     rating: { type: Number, default: 0, min: 0, max: 5 },
+    ratingCount: { type: Number, default: 0 },
     totalOrders: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
