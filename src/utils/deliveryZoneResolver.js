@@ -1,5 +1,6 @@
 // src/utils/deliveryZoneResolver.js
 import Restaurant from "../models/Restaurant.js";
+import MarketStore from "../models/MarketStore.js";
 
 function normalizePoint(coords) {
   if (!Array.isArray(coords) || coords.length !== 2) return null;
@@ -170,5 +171,95 @@ const computedHexId =
       minOrderAmount: Math.max(0, Number(minOrderAmount || 0)),
       feeAmount: Math.max(0, Number(feeAmount || 0)),
     },
+  };
+}
+
+/**
+ * MarketStore + customerLocation → teslimat bölgesi sonucu
+ *
+ * - deliveryZones varsa hex-grid ile bölge bulur
+ * - yoksa flat pricing'e düşer (useFlatPricing: true)
+ *
+ * @param {string} storeId
+ * @param {[number, number]} customerLocation — [lng, lat] GeoJSON sırası
+ * @returns {{ ok, feeAmount, minOrderAmount, freeDeliveryThreshold, reason?, useFlatPricing? }}
+ */
+export async function resolveZoneForMarketStore({ storeId, customerLocation }) {
+  if (!storeId) {
+    throw { status: 400, code: "STORE_ID_REQUIRED", message: "storeId zorunlu." };
+  }
+
+  const coords = normalizePoint(customerLocation);
+  if (!coords) {
+    throw { status: 400, code: "CUSTOMER_LOCATION_INVALID", message: "customerLocation [lng, lat] olmalı." };
+  }
+
+  const store = await MarketStore.findById(storeId)
+    .select("isActive location gridSettings deliveryZones deliveryFee minOrderAmount freeDeliveryThreshold")
+    .lean();
+
+  if (!store) {
+    throw { status: 404, code: "STORE_NOT_FOUND", message: "Market bulunamadı." };
+  }
+  if (!store.isActive) {
+    throw { status: 400, code: "STORE_INACTIVE", message: "Bu market şu an sipariş alamıyor." };
+  }
+
+  // Zone tanımlanmamışsa flat pricing'e dön (geriye uyumluluk)
+  const zones = Array.isArray(store.deliveryZones) ? store.deliveryZones : [];
+  if (zones.length === 0) {
+    return {
+      ok: true,
+      useFlatPricing: true,
+      feeAmount: Number(store.deliveryFee ?? 0),
+      minOrderAmount: Number(store.minOrderAmount ?? 0),
+      freeDeliveryThreshold: store.freeDeliveryThreshold ?? null,
+    };
+  }
+
+  // Hex id hesapla
+  const storeCoords = Array.isArray(store.location?.coordinates)
+    ? store.location.coordinates
+    : null;
+
+  const hexId = computeHexIdPointy({
+    gridSettings: store.gridSettings || {},
+    customerLocation: coords,
+    restaurantLocation: storeCoords,
+  });
+
+  if (!hexId) {
+    return {
+      ok: false,
+      reason: "OUT_OF_ZONE",
+      hexId: null,
+      defaults: {
+        minOrderAmount: Number(store.minOrderAmount ?? 0),
+        feeAmount: Number(store.deliveryFee ?? 0),
+      },
+    };
+  }
+
+  const zone = zones.find((z) => String(z?.id || "").trim() === hexId) ?? null;
+
+  if (!zone || zone.isActive === false) {
+    return {
+      ok: false,
+      reason: zone ? "ZONE_INACTIVE" : "ZONE_NOT_FOUND",
+      hexId,
+      defaults: {
+        minOrderAmount: Number(store.minOrderAmount ?? 0),
+        feeAmount: Number(store.deliveryFee ?? 0),
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    useFlatPricing: false,
+    hexId,
+    feeAmount:             Math.max(0, Number(zone.feeAmount ?? 0)),
+    minOrderAmount:        Math.max(0, Number(zone.minOrderAmount ?? 0)),
+    freeDeliveryThreshold: zone.freeDeliveryThreshold ?? null,
   };
 }
