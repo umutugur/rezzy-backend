@@ -174,6 +174,8 @@ export const updateMyStore = async (req, res, next) => {
       "deliveryFee",
       "freeDeliveryThreshold",
       "photos",
+      "gridSettings",
+      "deliveryZones",
     ];
 
     for (const key of ALLOWED) {
@@ -200,6 +202,33 @@ export const updateMyStore = async (req, res, next) => {
             return next({ status: 400, message: "photos bir dizi olmalı" });
           }
           store[key] = req.body[key];
+        } else if (key === "gridSettings") {
+          const gs = req.body[key];
+          if (gs && typeof gs === "object") {
+            if (gs.cellSizeMeters !== undefined) {
+              const n = Number(gs.cellSizeMeters);
+              if (!isNaN(n) && n >= 50) store.gridSettings.cellSizeMeters = n;
+            }
+            if (gs.radiusMeters !== undefined) {
+              const n = Number(gs.radiusMeters);
+              if (!isNaN(n) && n >= 200) store.gridSettings.radiusMeters = n;
+            }
+            if (gs.orientation === "flat" || gs.orientation === "pointy") {
+              store.gridSettings.orientation = gs.orientation;
+            }
+          }
+        } else if (key === "deliveryZones") {
+          if (!Array.isArray(req.body[key])) {
+            return next({ status: 400, message: "deliveryZones bir dizi olmalı" });
+          }
+          store.deliveryZones = req.body[key].map((z) => ({
+            id: String(z.id),
+            name: z.name ?? undefined,
+            isActive: z.isActive !== false,
+            minOrderAmount: Math.max(0, Number(z.minOrderAmount ?? 0)),
+            feeAmount: Math.max(0, Number(z.feeAmount ?? 0)),
+            freeDeliveryThreshold: z.freeDeliveryThreshold != null ? Number(z.freeDeliveryThreshold) : null,
+          }));
         } else {
           store[key] = req.body[key];
         }

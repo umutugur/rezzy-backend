@@ -7,6 +7,7 @@ import MarketOrder from "../models/MarketOrder.js";
 import UserAddress from "../models/UserAddress.js";
 import CoreCategory from "../models/CoreCategory.js";
 import { notifyUser } from "../services/notification.service.js";
+import { resolveZoneForMarketStore } from "../utils/deliveryZoneResolver.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
@@ -252,17 +253,57 @@ export const createOrder = async (req, res, next) => {
 
     subtotal = +subtotal.toFixed(2);
 
-    const deliveryFee =
-      type === "delivery"
-        ? store.freeDeliveryThreshold != null && subtotal >= store.freeDeliveryThreshold
-          ? 0
-          : store.deliveryFee ?? 0
-        : 0;
+    // Teslimat ücreti: hex-zone varsa zone fiyatı, yoksa flat pricing
+    let deliveryFee = 0;
+    let effectiveMinOrder = store.minOrderAmount ?? 0;
+    let effectiveFreeThreshold = store.freeDeliveryThreshold ?? null;
 
-    if (type === "delivery" && store.minOrderAmount > 0 && subtotal < store.minOrderAmount) {
+    if (type === "delivery") {
+      // Adresin koordinatlarını al
+      const addrDoc = await UserAddress.findById(deliveryAddressId).lean();
+      const addrCoords = Array.isArray(addrDoc?.location?.coordinates)
+        ? addrDoc.location.coordinates
+        : null;
+
+      if (addrCoords) {
+        try {
+          const zoneResult = await resolveZoneForMarketStore({
+            storeId,
+            customerLocation: addrCoords,
+          });
+          if (!zoneResult.ok) {
+            return next({
+              status: 400,
+              message: zoneResult.reason === "ZONE_INACTIVE"
+                ? "Bu adres teslimat bölgesi henüz aktif değil."
+                : "Bu adres teslimat bölgesi dışında.",
+            });
+          }
+          effectiveMinOrder = zoneResult.minOrderAmount;
+          effectiveFreeThreshold = zoneResult.freeDeliveryThreshold;
+          deliveryFee = effectiveFreeThreshold != null && subtotal >= effectiveFreeThreshold
+            ? 0
+            : zoneResult.feeAmount;
+        } catch (zoneErr) {
+          // Zone resolver hata fırlatırsa (store inactive vs.) onu ilet
+          if (zoneErr?.status) return next(zoneErr);
+          // Koordinat veya grid hatası → flat pricing'e dön
+          deliveryFee = effectiveFreeThreshold != null && subtotal >= effectiveFreeThreshold
+            ? 0
+            : store.deliveryFee ?? 0;
+        }
+      } else {
+        // Adresin koordinatı yoksa flat pricing
+        deliveryFee = effectiveFreeThreshold != null && subtotal >= effectiveFreeThreshold
+          ? 0
+          : store.deliveryFee ?? 0;
+      }
+    }
+
+    if (type === "delivery" && effectiveMinOrder > 0 && subtotal < effectiveMinOrder) {
       return next({
         status: 400,
-        message: `Minimum sipariş tutarı ${store.minOrderAmount} TL`,
+        message: `Minimum sipariş tutarı ${effectiveMinOrder} TL`,
       });
     }
 
