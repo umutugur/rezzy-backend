@@ -89,3 +89,40 @@ export async function marketUpdateProduct(
 export async function marketDeleteProduct(id: string): Promise<void> {
   await api.delete(`/market/panel/products/${id}`);
 }
+
+export interface MarketStoreSettings {
+  _id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  isActive: boolean;
+  address?: string;
+  city?: string;
+  location?: { type: string; coordinates: [number, number] };
+  workingHours?: { open: string; close: string; days: number[] };
+  deliveryFee?: number;
+  minOrderAmount?: number;
+  freeDeliveryThreshold?: number | null;
+  deliveryZoneKm?: number;
+  gridSettings?: { cellSizeMeters: number; radiusMeters: number; orientation: "flat" | "pointy" };
+  deliveryZones?: Array<{
+    id: string;
+    name?: string;
+    isActive: boolean;
+    minOrderAmount: number;
+    feeAmount: number;
+    freeDeliveryThreshold?: number | null;
+  }>;
+}
+
+export async function marketGetMyStore(): Promise<MarketStoreSettings> {
+  const { data } = await api.get("/market/panel/store");
+  return data;
+}
+
+export async function marketUpdateMyStore(
+  payload: Partial<MarketStoreSettings>,
+): Promise<MarketStoreSettings> {
+  const { data } = await api.patch("/market/panel/store", payload);
+  return data;
+}
