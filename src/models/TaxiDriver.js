@@ -48,6 +48,7 @@ const TaxiDriverSchema = new mongoose.Schema(
     // Belge / onay durumu
     isApproved: { type: Boolean, default: false },
     licenseNumber: { type: String, trim: true },
+    rejectionReason: { type: String, default: null },
 
     // Aktif yolculuk referansı
     activeRide: {
