@@ -58,6 +58,23 @@ const MarketStoreSchema = new mongoose.Schema(
     deliveryFee: { type: Number, default: 0, min: 0 },
     freeDeliveryThreshold: { type: Number, default: null },
 
+    // Hex-grid teslimat bölgeleri (Getir benzeri)
+    gridSettings: {
+      cellSizeMeters: { type: Number, default: 450, min: 50 },
+      radiusMeters:   { type: Number, default: 3000, min: 200 },
+      orientation:    { type: String, enum: ["flat", "pointy"], default: "flat" },
+    },
+    deliveryZones: [
+      {
+        id:                   { type: String, required: true },  // "ax:q,r"
+        name:                 { type: String },
+        isActive:             { type: Boolean, default: false },
+        minOrderAmount:       { type: Number,  default: 0, min: 0 },
+        feeAmount:            { type: Number,  default: 0, min: 0 },
+        freeDeliveryThreshold:{ type: Number,  default: null },
+      },
+    ],
+
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
