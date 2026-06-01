@@ -1,4 +1,5 @@
 // src/sockets/taxi.socket.js
+import jwt from "jsonwebtoken";
 import TaxiDriver from "../models/TaxiDriver.js";
 import TaxiRide from "../models/TaxiRide.js";
 
@@ -7,14 +8,27 @@ import TaxiRide from "../models/TaxiRide.js";
  * @param {import('socket.io').Server} io
  */
 export function registerTaxiSockets(io) {
+  // JWT doğrulama middleware
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error("UNAUTHORIZED"));
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      socket.userId = String(decoded.id || decoded._id || "");
+      socket.role = String(decoded.role || "");
+      next();
+    } catch {
+      next(new Error("UNAUTHORIZED"));
+    }
+  });
+
   io.on("connection", (socket) => {
-    const { userId, role } = socket.handshake.auth ?? {};
-    console.log(`[taxi.socket] bağlandı | socketId=${socket.id} userId=${userId} role=${role}`);
+    console.log(`[taxi.socket] bağlandı | socketId=${socket.id} userId=${socket.userId} role=${socket.role}`);
 
     // ─── Sürücü: online ol ──────────────────────────────────────────────────
-    socket.on("driver:online", async ({ driverId } = {}) => {
+    socket.on("driver:online", async (_payload = {}) => {
       try {
-        const driver = await TaxiDriver.findById(driverId);
+        const driver = await TaxiDriver.findOne({ user: socket.userId });
         if (!driver) return;
 
         driver.isOnline = true;
@@ -23,18 +37,18 @@ export function registerTaxiSockets(io) {
         await driver.save();
 
         // Sürücüyü kendi room'una ekle
-        socket.join(`driver:${driverId}`);
-        socket.emit("driver:online:ack", { driverId, isOnline: true });
-        console.log(`[taxi.socket] driver:online driverId=${driverId}`);
+        socket.join(`driver:${driver._id}`);
+        socket.emit("driver:online:ack", { driverId: driver._id, isOnline: true });
+        console.log(`[taxi.socket] driver:online driverId=${driver._id}`);
       } catch (err) {
         console.error("[taxi.socket] driver:online hata:", err.message);
       }
     });
 
     // ─── Sürücü: offline ol ─────────────────────────────────────────────────
-    socket.on("driver:offline", async ({ driverId } = {}) => {
+    socket.on("driver:offline", async (_payload = {}) => {
       try {
-        const driver = await TaxiDriver.findById(driverId);
+        const driver = await TaxiDriver.findOne({ user: socket.userId });
         if (!driver) return;
 
         driver.isOnline = false;
@@ -42,19 +56,19 @@ export function registerTaxiSockets(io) {
         driver.socketId = null;
         await driver.save();
 
-        socket.leave(`driver:${driverId}`);
-        socket.emit("driver:offline:ack", { driverId, isOnline: false });
-        console.log(`[taxi.socket] driver:offline driverId=${driverId}`);
+        socket.leave(`driver:${driver._id}`);
+        socket.emit("driver:offline:ack", { driverId: driver._id, isOnline: false });
+        console.log(`[taxi.socket] driver:offline driverId=${driver._id}`);
       } catch (err) {
         console.error("[taxi.socket] driver:offline hata:", err.message);
       }
     });
 
     // ─── Sürücü: konum güncelle ─────────────────────────────────────────────
-    socket.on("driver:location", async ({ driverId, lat, lng } = {}) => {
+    socket.on("driver:location", async ({ lat, lng } = {}) => {
       try {
-        const driver = await TaxiDriver.findByIdAndUpdate(
-          driverId,
+        const driver = await TaxiDriver.findOneAndUpdate(
+          { user: socket.userId },
           {
             location: { type: "Point", coordinates: [Number(lng), Number(lat)] },
           },
@@ -66,7 +80,7 @@ export function registerTaxiSockets(io) {
         // Aktif yolculuğu varsa yolcuya konum bildir
         if (driver.activeRide) {
           io.to(`ride:${driver.activeRide}`).emit("driver:location:update", {
-            driverId,
+            driverId: driver._id,
             lat: Number(lat),
             lng: Number(lng),
             timestamp: Date.now(),
