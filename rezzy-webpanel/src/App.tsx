@@ -31,6 +31,9 @@ import AdminRestaurantCreatePage from "./pages/admin/RestaurantCreate";
 import AdminOrganizationsPage from "./pages/admin/Organizations";
 import AdminOrganizationDetailPage from "./pages/admin/OrganizationDetail";
 import AdminBannersPage from "./pages/admin/Banners";
+import AdminMarketOrdersPage from "./pages/admin/AdminMarketOrders";
+import AdminTaxiRidesPage from "./pages/admin/AdminTaxiRides";
+import AdminTaxiDriversPage from "./pages/admin/AdminTaxiDrivers";
 
 import RestaurantDashboardPage from "./pages/restaurant/Dashboard";
 import RestaurantReservationsPage from "./pages/restaurant/Reservations";
@@ -541,6 +544,30 @@ export default function App() {
           element={
             <Shell>
               <AdminModerationPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/market/orders"
+          element={
+            <Shell>
+              <AdminMarketOrdersPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/taxi/rides"
+          element={
+            <Shell>
+              <AdminTaxiRidesPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/taxi/drivers"
+          element={
+            <Shell>
+              <AdminTaxiDriversPage />
             </Shell>
           }
         />

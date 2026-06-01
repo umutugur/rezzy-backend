@@ -77,13 +77,16 @@ export default function AdminDashboardPage() {
         items={[
           { to: "/admin", label: t("Dashboard") },
           { to: "/admin/banners", label: t("Bannerlar") },
-          { to: "/admin/commissions", label: t("Komisyonlar") }, // ✅ menüye eklendi
+          { to: "/admin/commissions", label: t("Komisyonlar") },
           { to: "/admin/organizations", label: t("Organizasyonlar") },
           { to: "/admin/restaurants", label: t("Restoranlar") },
           { to: "/admin/users", label: t("Kullanıcılar") },
           { to: "/admin/reservations", label: t("Rezervasyonlar") },
           { to: "/admin/moderation", label: t("Moderasyon") },
           { to: "/admin/notifications", label: t("Bildirim Gönder") },
+          { to: "/admin/taxi/drivers", label: "🚕 " + t("Sürücü Başvuruları") },
+          { to: "/admin/taxi/rides", label: "🗺️ " + t("Taksi Yolculukları") },
+          { to: "/admin/market/orders", label: "🛒 " + t("Market Siparişleri") },
         ]}
       />
 
