@@ -83,10 +83,14 @@ async function run() {
     info("Adım 1 — Sağlık kontrolü");
     // ──────────────────────────────────────────────────────────────────────────
     try {
-      const { data } = await api.get("/health").catch(() => api.get("/"));
+      // /auth/me 401 döner ama backend cevap verir — erişilebilirlik yeterli
+      await api.get("/auth/me").catch((e) => {
+        if (e.response?.status === 401 || e.response?.data?.message) return; // OK
+        throw e;
+      });
       pass(`Backend erişilebilir (${API_URL})`);
     } catch (e) {
-      fail("Backend erişilemiyor — lütfen 'npm run start:dev' çalıştırın", e.message);
+      fail("Backend erişilemiyor — lütfen 'npm run dev' çalıştırın", e.message);
       process.exit(1);
     }
 
@@ -164,6 +168,20 @@ async function run() {
         setTimeout(() => rej(new Error("Passenger socket timeout")), 8000);
       }),
     ]);
+
+    // ──────────────────────────────────────────────────────────────────────────
+    info("Adım 4b — Sürücü Konumu Güncelle (pickup yakını)");
+    // ──────────────────────────────────────────────────────────────────────────
+    try {
+      await api.patch(
+        "/taxi/driver/location",
+        { lat: PICKUP.coordinates[1], lng: PICKUP.coordinates[0] },
+        { headers: { Authorization: `Bearer ${driverToken}` } }
+      );
+      pass(`Sürücü konumu Taksim'e ayarlandı (${PICKUP.coordinates[1]}, ${PICKUP.coordinates[0]})`);
+    } catch (e) {
+      fail("Sürücü konumu güncellenemedi", e.response?.data?.message);
+    }
 
     // ──────────────────────────────────────────────────────────────────────────
     info("Adım 5 — Sürücü Online (driver:online event)");
