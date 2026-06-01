@@ -10,6 +10,11 @@ import {
   getDriverRides,
   getEarnings,
   getDriverProfile,
+  adminListDrivers,
+  adminApproveDriver,
+  adminRejectDriver,
+  adminListTaxiRides,
+  adminListMarketOrders,
 } from "../controllers/taxiDriver.controller.js";
 
 const router = Router();
@@ -69,5 +74,16 @@ router.get("/taxi/driver/rides", auth(), getDriverRides);
 
 // Kazanç özeti
 router.get("/taxi/driver/earnings", auth(), getEarnings);
+
+// Admin: sürücü başvuruları
+router.get("/admin/taxi/drivers", auth(), adminListDrivers);
+router.patch("/admin/taxi/drivers/:id/approve", auth(), adminApproveDriver);
+router.patch("/admin/taxi/drivers/:id/reject", auth(), adminRejectDriver);
+
+// Admin: taksi yolculukları listesi
+router.get("/admin/taxi/rides", auth(), adminListTaxiRides);
+
+// Admin: market siparişleri listesi
+router.get("/admin/market/orders", auth(), adminListMarketOrders);
 
 export default router;

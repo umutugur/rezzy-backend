@@ -261,6 +261,118 @@ export async function getDriverRides(req, res, next) {
   }
 }
 
+// ─── GET /api/admin/taxi/drivers ─────────────────────────────────────────────
+export async function adminListDrivers(req, res, next) {
+  try {
+    const { isApproved, page = 1, limit = 20 } = req.query;
+    const filter = {};
+    if (isApproved !== undefined) filter.isApproved = isApproved === "true";
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [drivers, total] = await Promise.all([
+      TaxiDriver.find(filter)
+        .populate("user", "name email phone")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      TaxiDriver.countDocuments(filter),
+    ]);
+
+    return res.json({ drivers, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── PATCH /api/admin/taxi/drivers/:id/approve ───────────────────────────────
+export async function adminApproveDriver(req, res, next) {
+  try {
+    const { id } = req.params;
+    const driver = await TaxiDriver.findByIdAndUpdate(
+      id,
+      { isApproved: true },
+      { new: true }
+    ).populate("user", "name email");
+
+    if (!driver) return res.status(404).json({ message: "Sürücü bulunamadı" });
+
+    return res.json({ message: "Sürücü onaylandı", driver });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── PATCH /api/admin/taxi/drivers/:id/reject ────────────────────────────────
+export async function adminRejectDriver(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const driver = await TaxiDriver.findByIdAndUpdate(
+      id,
+      { isApproved: false, rejectionReason: reason ?? "Admin tarafından reddedildi" },
+      { new: true }
+    ).populate("user", "name email");
+
+    if (!driver) return res.status(404).json({ message: "Sürücü bulunamadı" });
+
+    return res.json({ message: "Sürücü reddedildi", driver });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── GET /api/admin/taxi/rides ───────────────────────────────────────────────
+export async function adminListTaxiRides(req, res, next) {
+  try {
+    const { status, page = 1, limit = 20 } = req.query;
+    const filter = {};
+    if (status) filter.status = status;
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [rides, total] = await Promise.all([
+      TaxiRide.find(filter)
+        .populate("passenger", "name phone")
+        .populate({ path: "driver", populate: { path: "user", select: "name phone" } })
+        .sort({ requestedAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      TaxiRide.countDocuments(filter),
+    ]);
+
+    return res.json({ rides, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── GET /api/admin/market/orders ────────────────────────────────────────────
+export async function adminListMarketOrders(req, res, next) {
+  try {
+    const MarketOrder = (await import("../models/MarketOrder.js")).default;
+    const { status, page = 1, limit = 20 } = req.query;
+    const filter = {};
+    if (status) filter.status = status;
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [orders, total] = await Promise.all([
+      MarketOrder.find(filter)
+        .populate("customer", "name phone")
+        .populate("store", "name")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      MarketOrder.countDocuments(filter),
+    ]);
+
+    return res.json({ orders, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ─── GET /api/taxi/driver/me ─────────────────────────────────────────────────
 export async function getDriverProfile(req, res, next) {
   try {
