@@ -26,18 +26,30 @@ function haversineMeters([lng1, lat1], [lng2, lat2]) {
 export const listDeliveryRestaurants = async (req, res, next) => {
   try {
     assertAuth(req);
-
     const userId = req.user.id;
-    const { addressId } = req.query;
+    const { addressId, lat, lng } = req.query;
 
-    if (!addressId) throw { status: 400, message: "addressId is required" };
+    let userCoords;
+    let addrMeta = null;
 
-    const addr = await UserAddress.findOne({ _id: addressId, userId, isActive: true }).lean();
-    if (!addr) throw { status: 404, message: "Address not found" };
-
-    const userCoords = addr?.location?.coordinates;
-    if (!Array.isArray(userCoords) || userCoords.length !== 2) {
-      throw { status: 400, message: "Address location is invalid" };
+    if (addressId) {
+      const addr = await UserAddress.findOne({ _id: addressId, userId, isActive: true }).lean();
+      if (!addr) throw { status: 404, message: "Address not found" };
+      userCoords = addr?.location?.coordinates;
+      if (!Array.isArray(userCoords) || userCoords.length !== 2) {
+        throw { status: 400, message: "Address location is invalid" };
+      }
+      addrMeta = { id: String(addr._id), title: addr.title, coordinates: userCoords };
+    } else if (lat && lng) {
+      const latNum = parseFloat(lat);
+      const lngNum = parseFloat(lng);
+      if (isNaN(latNum) || isNaN(lngNum)) {
+        throw { status: 400, message: "lat/lng geçersiz" };
+      }
+      userCoords = [lngNum, latNum]; // GeoJSON: [lng, lat]
+      addrMeta = { id: null, title: "Mevcut Konum", coordinates: userCoords };
+    } else {
+      throw { status: 400, message: "addressId veya lat/lng gerekli" };
     }
 
     const maxRadius = Number(process.env.DELIVERY_MAX_RADIUS_METERS || DEFAULT_MAX_RADIUS_M);
@@ -101,10 +113,7 @@ items.push({
 
     items.sort((a, b) => (a._distanceMeters ?? 0) - (b._distanceMeters ?? 0));
 
-    return res.json({
-      address: { id: String(addr._id), title: addr.title, coordinates: userCoords },
-      items,
-    });
+    return res.json({ items, address: addrMeta });
   } catch (e) {
     return next(e);
   }
