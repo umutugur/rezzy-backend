@@ -315,3 +315,44 @@ export async function geocodeAddressHandler(req, res, next) {
     next(err);
   }
 }
+
+// ─── PATCH /api/taxi/rides/:id/rate ──────────────────────────────────────────
+export async function rateRide(req, res, next) {
+  try {
+    const passengerId = req.user.id;
+    const { id } = req.params;
+    const { passengerRating } = req.body;
+
+    if (!passengerRating || passengerRating < 1 || passengerRating > 5) {
+      return res.status(400).json({ message: "Geçersiz puan. 1-5 arasında olmalı." });
+    }
+
+    const ride = await TaxiRide.findOne({ _id: id, passenger: passengerId });
+    if (!ride) return res.status(404).json({ message: "Yolculuk bulunamadı." });
+    if (ride.status !== "completed") {
+      return res.status(400).json({ message: "Yalnızca tamamlanan yolculuklar puanlanabilir." });
+    }
+    if (ride.passengerRating !== null && ride.passengerRating !== undefined) {
+      return res.status(409).json({ message: "Bu yolculuk zaten puanlandı." });
+    }
+
+    ride.passengerRating = passengerRating;
+    await ride.save();
+
+    // Driver average rating güncelle
+    if (ride.driver) {
+      const driver = await TaxiDriver.findById(ride.driver);
+      if (driver) {
+        const newCount = (driver.ratingCount || 0) + 1;
+        const newRating = ((driver.rating || 5) * (driver.ratingCount || 0) + passengerRating) / newCount;
+        driver.rating = Math.round(newRating * 10) / 10;
+        driver.ratingCount = newCount;
+        await driver.save();
+      }
+    }
+
+    return res.json({ message: "Puanlama kaydedildi.", passengerRating });
+  } catch (err) {
+    next(err);
+  }
+}

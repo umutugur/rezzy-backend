@@ -10,6 +10,7 @@ import {
   cancelRide,
   searchPlacesHandler,
   geocodeAddressHandler,
+  rateRide,
 } from "../controllers/taxi.controller.js";
 
 const router = Router();
@@ -37,5 +38,8 @@ router.get("/taxi/rides/:id", auth(), getRide);
 
 // Yolculuğu iptal et (yolcu)
 router.patch("/taxi/rides/:id/cancel", auth(), cancelRide);
+
+// Yolculuğu puanla (yolcu)
+router.patch("/taxi/rides/:id/rate", auth(), rateRide);
 
 export default router;
