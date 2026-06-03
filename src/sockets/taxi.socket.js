@@ -2,6 +2,9 @@
 import jwt from "jsonwebtoken";
 import TaxiDriver from "../models/TaxiDriver.js";
 import TaxiRide from "../models/TaxiRide.js";
+import { haversineMeters } from "../utils/haversine.js";
+import { sendExpoPush } from "../utils/expoPush.js";
+import User from "../models/User.js";
 
 /**
  * Socket.io'yu io nesnesine bağlar ve taksi event'larını kaydeder.
@@ -85,6 +88,62 @@ export function registerTaxiSockets(io) {
             lng: Number(lng),
             timestamp: Date.now(),
           });
+
+          // ── Yaklaşma bildirimleri (sadece matched durumunda) ──────────────────
+          try {
+            const ride = await TaxiRide.findOne({
+              _id: driver.activeRide,
+              status: "matched",
+            }).lean();
+
+            if (ride) {
+              const [pickupLng, pickupLat] = ride.pickup.coordinates;
+              const distM = haversineMeters(Number(lat), Number(lng), pickupLat, pickupLng);
+
+              const needsUpdate =
+                (distM < 500 && !ride.notified500m) ||
+                (distM < 200 && !ride.notified200m);
+
+              if (needsUpdate) {
+                const updateFields = {};
+                let pushTitle = "";
+                let pushBody = "";
+
+                if (distM < 200 && !ride.notified200m) {
+                  updateFields.notified200m = true;
+                  updateFields.notified500m = true;
+                  pushTitle = "Sürücünüz neredeyse burada! 📍";
+                  pushBody = "Hazır olun, az kaldı";
+                } else if (distM < 500 && !ride.notified500m) {
+                  updateFields.notified500m = true;
+                  pushTitle = "Sürücünüz yaklaşıyor 🚖";
+                  pushBody = "Birazdan kapınızda olacak";
+                }
+
+                await TaxiRide.updateOne({ _id: ride._id }, { $set: updateFields });
+
+                const passenger = await User.findById(ride.passenger)
+                  .select("pushTokens notificationPrefs")
+                  .lean();
+
+                if (passenger?.notificationPrefs?.push !== false) {
+                  const tokens = (passenger?.pushTokens ?? [])
+                    .filter((t) => t?.isActive && t?.token)
+                    .map((t) => t.token);
+
+                  if (tokens.length > 0) {
+                    sendExpoPush(tokens, {
+                      title: pushTitle,
+                      body: pushBody,
+                      data: { type: "ride:approaching", rideId: String(ride._id) },
+                    }).catch(() => {});
+                  }
+                }
+              }
+            }
+          } catch (approachErr) {
+            console.error("[taxi.socket] approaching check hata:", approachErr.message);
+          }
         }
       } catch (err) {
         console.error("[taxi.socket] driver:location hata:", err.message);
