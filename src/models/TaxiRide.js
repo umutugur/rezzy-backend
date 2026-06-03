@@ -73,6 +73,10 @@ const TaxiRideSchema = new mongoose.Schema(
     // Puanlama (yolculuk sonrası)
     passengerRating: { type: Number, min: 1, max: 5, default: null },
     driverRating: { type: Number, min: 1, max: 5, default: null },
+
+    // Bildirim durumu
+    notified500m: { type: Boolean, default: false },
+    notified200m: { type: Boolean, default: false },
   },
   {
     timestamps: true,
