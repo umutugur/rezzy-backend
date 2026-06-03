@@ -5,6 +5,7 @@ import TaxiDriver from "../models/TaxiDriver.js";
 import { calculateFare } from "../services/taxiPricing.service.js";
 import { getRouteInfo, searchPlaces, geocodeAddress } from "../services/places.service.js";
 import { emitNewRideRequest, emitRideStatusChange } from "../sockets/taxi.socket.js";
+import { sendExpoPush } from "../utils/expoPush.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
@@ -121,13 +122,38 @@ export async function createRide(req, res, next) {
           $maxDistance: 5000, // 5 km
         },
       },
-    }).limit(10);
+    })
+      .populate("user", "pushTokens notificationPrefs")
+      .limit(10);
 
     const nearbyDriverIds = nearbyDrivers.map((d) => d._id.toString());
 
     // Socket event: yakın sürücülere bildir
     if (_io && nearbyDriverIds.length > 0) {
       await emitNewRideRequest(_io, ride, nearbyDriverIds);
+    }
+
+    // Push notification: yakın sürücülere bildir (uygulama arka planda olsa bile)
+    const driverPushTokens = nearbyDrivers.flatMap((d) => {
+      if (d.user?.notificationPrefs?.push === false) return [];
+      return (d.user?.pushTokens ?? [])
+        .filter((t) => t?.isActive && t?.token)
+        .map((t) => t.token);
+    });
+
+    if (driverPushTokens.length > 0) {
+      sendExpoPush(driverPushTokens, {
+        title: "Yeni Taksi Çağrısı 🚖",
+        body: `${pickup.address} → ${fare} ₺`,
+        data: {
+          type: "ride:new_request",
+          rideId: String(ride._id),
+          pickup: ride.pickup,
+          dropoff: ride.dropoff,
+          fare: ride.fare,
+          vehicleType: ride.vehicleType,
+        },
+      }).catch((err) => console.error("[createRide] push error:", err.message));
     }
 
     // ─── Online ödeme: Stripe PaymentIntent (yolculuk başlamadan önce tahsil) ─
