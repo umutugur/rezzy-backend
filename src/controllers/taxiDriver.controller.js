@@ -153,6 +153,11 @@ export async function respondToRide(req, res, next) {
 
     if (_io) await emitRideStatusChange(_io, ride);
 
+    // Sürücü eşleşti — yolcu haritasından kaldır
+    if (_io) {
+      _io.to("passengers:map").emit("driver:went_offline", { driverId: driver._id });
+    }
+
     return res.json({ message: "Yolculuk kabul edildi", ride });
   } catch (err) {
     next(err);
