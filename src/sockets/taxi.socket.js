@@ -52,22 +52,20 @@ export function registerTaxiSockets(io) {
           pet: "pet",
         };
 
-        const searchingRides = await TaxiRide.find({
+        // $near yerine Haversine filtresi — TaxiRide.pickup GeoJSON Point değil
+        const [driverLng, driverLat] = driver.location?.coordinates ?? [0, 0];
+        const candidateRides = await TaxiRide.find({
           status: "searching",
           vehicleType: vehicleTypeReverseMap[driver.type] ?? "ride",
-          "pickup.coordinates": {
-            $near: {
-              $geometry: {
-                type: "Point",
-                coordinates: driver.location?.coordinates ?? [0, 0],
-              },
-              $maxDistance: 5000,
-            },
-          },
         })
           .sort({ requestedAt: -1 })
-          .limit(3)
+          .limit(20)
           .lean();
+
+        const searchingRides = candidateRides.filter((ride) => {
+          const [pLng, pLat] = ride.pickup?.coordinates ?? [0, 0];
+          return haversineMeters(driverLat, driverLng, pLat, pLng) <= 5000;
+        }).slice(0, 3);
 
         for (const ride of searchingRides) {
           socket.emit("ride:new_request", {
