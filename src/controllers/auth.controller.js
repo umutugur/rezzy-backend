@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import { OAuth2Client } from "google-auth-library";
 import appleSignin from "apple-signin-auth";
 import { normalizeLang } from "../utils/i18n.js";
+import TaxiDriver from "../models/TaxiDriver.js";
 // ❌ ensureRestaurantForOwner kaldırıldı – tüm restoran sahipliği artık admin + membership akışlarıyla yönetiliyor
 
 const GOOGLE_AUDIENCES = [
@@ -522,7 +523,8 @@ export const me = async (req, res, next) => {
 
     if (!u) return res.status(401).json({ message: "Unauthorized" });
 
-    return res.json(toClientUser(u));
+    const taxiDriver = await TaxiDriver.findOne({ user: u._id }).lean();
+    return res.json({ ...toClientUser(u), isDriver: !!taxiDriver });
   } catch (e) {
     next(e);
   }
