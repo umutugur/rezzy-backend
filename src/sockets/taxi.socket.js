@@ -103,6 +103,7 @@ export function registerTaxiSockets(io) {
 
         socket.leave(`driver:${driver._id}`);
         socket.emit("driver:offline:ack", { driverId: driver._id, isOnline: false });
+        io.to("passengers:map").emit("driver:went_offline", { driverId: driver._id });
         console.log(`[taxi.socket] driver:offline driverId=${driver._id}`);
       } catch (err) {
         console.error("[taxi.socket] driver:offline hata:", err.message);
@@ -187,6 +188,16 @@ export function registerTaxiSockets(io) {
             console.error("[taxi.socket] approaching check hata:", approachErr.message);
           }
         }
+
+        // Aktif yolculuğu olmayan online sürücü → yolcu haritasına broadcast
+        if (!driver.activeRide) {
+          io.to("passengers:map").emit("driver:location:update", {
+            driverId: driver._id,
+            lat: Number(lat),
+            lng: Number(lng),
+            timestamp: Date.now(),
+          });
+        }
       } catch (err) {
         console.error("[taxi.socket] driver:location hata:", err.message);
       }
@@ -205,6 +216,32 @@ export function registerTaxiSockets(io) {
       socket.leave(`ride:${rideId}`);
     });
 
+    // ─── Yolcu: harita odasına katıl ───────────────────────────────────────
+    socket.on("passenger:join_map", async () => {
+      socket.join("passengers:map");
+      try {
+        const onlineDrivers = await TaxiDriver.find({
+          isOnline: true,
+          isAvailable: true,
+        })
+          .select("_id location")
+          .lean();
+
+        for (const driver of onlineDrivers) {
+          const [lng, lat] = driver.location?.coordinates ?? [0, 0];
+          if (lat === 0 && lng === 0) continue;
+          socket.emit("driver:location:update", {
+            driverId: driver._id,
+            lat,
+            lng,
+            timestamp: Date.now(),
+          });
+        }
+      } catch (err) {
+        console.error("[taxi.socket] passenger:join_map hata:", err.message);
+      }
+    });
+
     // ─── Sürücü: bağlantı kesildiğinde ─────────────────────────────────────
     socket.on("disconnect", async (reason) => {
       console.log(`[taxi.socket] disconnect socket=${socket.id} reason=${reason}`);
@@ -219,6 +256,7 @@ export function registerTaxiSockets(io) {
         );
         if (driver) {
           console.log(`[taxi.socket] socket koptu (online kalıyor): driverId=${driver._id}`);
+          io.to("passengers:map").emit("driver:went_offline", { driverId: driver._id });
         }
       } catch (err) {
         console.error("[taxi.socket] disconnect cleanup hata:", err.message);
