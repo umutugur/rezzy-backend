@@ -129,8 +129,17 @@ export async function respondToRide(req, res, next) {
     }
 
     // Kabul et
+    // isOnline değil = gerçekten çevrimdışı
+    if (!driver.isOnline) {
+      return res.status(409).json({ message: "Sürücü çevrimdışı" });
+    }
+    // Başka aktif yolculuğu var mı
+    if (driver.activeRide) {
+      return res.status(409).json({ message: "Sürücünün aktif bir yolculuğu var" });
+    }
+    // isOnline true ama isAvailable false = socket geçici koptu, resetle
     if (!driver.isAvailable) {
-      return res.status(409).json({ message: "Sürücü şu anda müsait değil" });
+      driver.isAvailable = true;
     }
 
     ride.driver = driver._id;
