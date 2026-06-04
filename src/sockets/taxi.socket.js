@@ -43,6 +43,48 @@ export function registerTaxiSockets(io) {
         socket.join(`driver:${driver._id}`);
         socket.emit("driver:online:ack", { driverId: driver._id, isOnline: true });
         console.log(`[taxi.socket] driver:online driverId=${driver._id}`);
+
+        // Yakında bekleyen yolculuk var mı? (120s penceresi içinde online olan sürücüye gönder)
+        const vehicleTypeReverseMap = {
+          sedan: "ride",
+          van: "xl",
+          luxury: "lux",
+          pet: "pet",
+        };
+
+        const searchingRides = await TaxiRide.find({
+          status: "searching",
+          vehicleType: vehicleTypeReverseMap[driver.type] ?? "ride",
+          "pickup.coordinates": {
+            $near: {
+              $geometry: {
+                type: "Point",
+                coordinates: driver.location?.coordinates ?? [0, 0],
+              },
+              $maxDistance: 5000,
+            },
+          },
+        })
+          .sort({ requestedAt: -1 })
+          .limit(3)
+          .lean();
+
+        for (const ride of searchingRides) {
+          socket.emit("ride:new_request", {
+            rideId: ride._id,
+            pickup: ride.pickup,
+            dropoff: ride.dropoff,
+            vehicleType: ride.vehicleType,
+            fare: ride.fare,
+            distanceKm: ride.distanceKm,
+            durationMin: ride.durationMin,
+            requestedAt: ride.requestedAt,
+          });
+        }
+
+        if (searchingRides.length > 0) {
+          console.log(`[taxi.socket] driver:online — ${searchingRides.length} adet bekleyen yolculuk gönderildi`);
+        }
       } catch (err) {
         console.error("[taxi.socket] driver:online hata:", err.message);
       }
