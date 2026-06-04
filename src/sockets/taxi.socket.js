@@ -210,13 +210,15 @@ export function registerTaxiSockets(io) {
       console.log(`[taxi.socket] disconnect socket=${socket.id} reason=${reason}`);
       try {
         // socketId'ye göre sürücüyü bul ve offline yap
-        const driver = await TaxiDriver.findOne({ socketId: socket.id });
+        // socketId temizle + isAvailable=false ama isOnline'a dokunma
+        // (isOnline sadece sürücü butonu ile değişir, socket kopması offline yapmaz)
+        const driver = await TaxiDriver.findOneAndUpdate(
+          { socketId: socket.id },
+          { socketId: null, isAvailable: false },
+          { new: false }
+        );
         if (driver) {
-          driver.isOnline = false;
-          driver.isAvailable = false;
-          driver.socketId = null;
-          await driver.save();
-          console.log(`[taxi.socket] sürücü offline: driverId=${driver._id}`);
+          console.log(`[taxi.socket] socket koptu (online kalıyor): driverId=${driver._id}`);
         }
       } catch (err) {
         console.error("[taxi.socket] disconnect cleanup hata:", err.message);
