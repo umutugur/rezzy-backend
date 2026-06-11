@@ -1355,6 +1355,20 @@ export async function adminPreviewCommissions(month?: string) {
       ownerName?: string | null;
       ownerEmail?: string | null;
     }>;
+    modules?: {
+      delivery?: {
+        total: number;
+        rows: Array<{ restaurantId: string; restaurantName: string; orderCount: number; commissionAmount: number }>;
+      };
+      market?: {
+        total: number;
+        rows: Array<{ storeId: string; storeName: string; orderCount: number; commissionAmount: number }>;
+      };
+      taxi?: {
+        total: number;
+        rows: Array<{ region: string; rideCount: number; commissionAmount: number }>;
+      };
+    };
   };
 }
 
