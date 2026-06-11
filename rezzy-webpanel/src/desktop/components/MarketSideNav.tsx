@@ -1,5 +1,6 @@
 import React from "react";
 import { useI18n } from "../../i18n";
+import { authStore } from "../../store/auth";
 
 export type MarketNavKey = "orders" | "products" | "settings";
 
@@ -79,6 +80,18 @@ export const MarketSideNav: React.FC<Props> = ({ active, onNavigate, alerts }) =
         <div className="rezvix-sidenav__footer-sub">
           {t("Sipariş ve ürünleri yönetin.")}
         </div>
+        <button
+          type="button"
+          className="rezvix-topbar__logout"
+          style={{ marginTop: 12, width: "100%" }}
+          onClick={() => {
+            authStore.logout();
+            window.location.hash = "#/login";
+          }}
+          title={t("Çıkış")}
+        >
+          {t("Çıkış")}
+        </button>
       </div>
     </aside>
   );

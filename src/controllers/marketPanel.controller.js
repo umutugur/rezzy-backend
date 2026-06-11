@@ -149,9 +149,9 @@ export const getMyStore = async (req, res, next) => {
 /**
  * PATCH /api/market/panel/store
  * Market sahibi kendi store'unu günceller.
- * Güncellenebilir alanlar: name, description, address, city, workingHours,
+ * Güncellenebilir alanlar: name, description, address, city, location, workingHours,
  *   deliveryZoneKm, minOrderAmount, deliveryFee, freeDeliveryThreshold, photos
- * Değiştirilemeyen alanlar: owner, isActive, location, category, totalOrders, rating
+ * Değiştirilemeyen alanlar: owner, isActive, category, totalOrders, rating
  */
 export const updateMyStore = async (req, res, next) => {
   try {
@@ -176,6 +176,7 @@ export const updateMyStore = async (req, res, next) => {
       "photos",
       "gridSettings",
       "deliveryZones",
+      "location",
     ];
 
     for (const key of ALLOWED) {
@@ -229,6 +230,18 @@ export const updateMyStore = async (req, res, next) => {
             feeAmount: Math.max(0, Number(z.feeAmount ?? 0)),
             freeDeliveryThreshold: z.freeDeliveryThreshold != null ? Number(z.freeDeliveryThreshold) : null,
           }));
+        } else if (key === "location") {
+          const loc = req.body[key];
+          const lng = Number(loc?.coordinates?.[0]);
+          const lat = Number(loc?.coordinates?.[1]);
+          if (
+            loc?.type !== "Point" ||
+            !Number.isFinite(lng) || !Number.isFinite(lat) ||
+            lng < -180 || lng > 180 || lat < -90 || lat > 90
+          ) {
+            return next({ status: 400, message: "location geçerli bir GeoJSON Point olmalı" });
+          }
+          store.location = { type: "Point", coordinates: [lng, lat] };
         } else {
           store[key] = req.body[key];
         }

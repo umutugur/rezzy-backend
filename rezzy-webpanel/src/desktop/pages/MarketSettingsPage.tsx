@@ -3,6 +3,7 @@ import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MarketDesktopLayout } from "../layouts/MarketDesktopLayout";
 import DeliveryZoneMap, { type DeliveryHexZone } from "../components/DeliveryZoneMap";
+import { MapContainer, TileLayer, CircleMarker, useMapEvents } from "react-leaflet";
 import {
   marketGetMyStore,
   marketUpdateMyStore,
@@ -22,6 +23,44 @@ type GridSettings = {
 type ZoneState = DeliveryHexZone & {
   freeDeliveryThreshold?: number | null;
 };
+
+// ─── Store location picker (click map to set exact business position) ────────
+
+function LocationClickHandler({ onPick }: { onPick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onPick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
+function StoreLocationPicker({
+  value,
+  onChange,
+}: {
+  value: { lat: number; lng: number } | null;
+  onChange: (v: { lat: number; lng: number }) => void;
+}) {
+  const center = value ?? { lat: 35.1856, lng: 33.3823 }; // Lefkoşa fallback
+  return (
+    <MapContainer
+      center={[center.lat, center.lng]}
+      zoom={value ? 15 : 11}
+      style={{ height: 260, width: "100%", borderRadius: 12 }}
+    >
+      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      <LocationClickHandler onPick={(lat, lng) => onChange({ lat, lng })} />
+      {value && (
+        <CircleMarker
+          center={[value.lat, value.lng]}
+          radius={10}
+          pathOptions={{ color: "#4f46e5", fillColor: "#4f46e5", fillOpacity: 0.85 }}
+        />
+      )}
+    </MapContainer>
+  );
+}
 
 // ─── Hex math helpers (same as SettingsPage) ─────────────────────────────────
 
@@ -121,6 +160,9 @@ export function MarketSettingsPage() {
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [isActive, setIsActive] = React.useState(true);
+  const [address, setAddress] = React.useState("");
+  const [city, setCity] = React.useState("");
+  const [storeLocation, setStoreLocation] = React.useState<{ lat: number; lng: number } | null>(null);
   const [workingHours, setWorkingHours] = React.useState({
     open: "09:00",
     close: "22:00",
@@ -145,6 +187,14 @@ export function MarketSettingsPage() {
     setName(store.name ?? "");
     setDescription(store.description ?? "");
     setIsActive(store.isActive !== false);
+    setAddress(store.address ?? "");
+    setCity(store.city ?? "");
+    {
+      const coords = store.location?.coordinates;
+      if (coords && coords.length >= 2 && (coords[0] !== 0 || coords[1] !== 0)) {
+        setStoreLocation({ lat: coords[1], lng: coords[0] });
+      }
+    }
     if (store.workingHours) {
       setWorkingHours({
         open: store.workingHours.open ?? "09:00",
@@ -190,7 +240,18 @@ export function MarketSettingsPage() {
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const { mutate: saveInfo, isPending: savingInfo } = useMutation({
-    mutationFn: () => marketUpdateMyStore({ name, description, isActive, workingHours }),
+    mutationFn: () =>
+      marketUpdateMyStore({
+        name,
+        description,
+        isActive,
+        workingHours,
+        address,
+        city,
+        ...(storeLocation
+          ? { location: { type: "Point", coordinates: [storeLocation.lng, storeLocation.lat] as [number, number] } }
+          : {}),
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["market-my-store"] });
       showToast(t("Kaydedildi"), "success");
@@ -300,6 +361,41 @@ export function MarketSettingsPage() {
               style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
               placeholder="Kısa mağaza tanıtımı…"
             />
+          </div>
+
+          {/* İşletme adresi + tam konum */}
+          <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+            <div style={{ flex: 2 }}>
+              <label style={labelStyle}>{t("Adres")}</label>
+              <input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                style={inputStyle}
+                placeholder={t("Sokak, mahalle, bina no…")}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>{t("Şehir")}</label>
+              <input
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                style={inputStyle}
+                placeholder={t("Şehir")}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>{t("İşletme Konumu")}</label>
+            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>
+              {t("Haritaya tıklayarak işletmenizin tam konumunu işaretleyin.")}
+            </div>
+            <StoreLocationPicker value={storeLocation} onChange={setStoreLocation} />
+            {storeLocation && (
+              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}>
+                {storeLocation.lat.toFixed(6)}, {storeLocation.lng.toFixed(6)}
+              </div>
+            )}
           </div>
 
           {/* Çalışma saatleri */}
