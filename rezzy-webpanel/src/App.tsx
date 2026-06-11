@@ -331,6 +331,7 @@ function LoginPage() {
     const isRestaurantUser = hasRestaurantPanelAccess(u);
 
     if (u.role === "admin") return "/admin";
+    if (u.role === "market_owner") return "/market-desktop/orders";
     if (isOrgUser) return "/org";
     if (isRestaurantUser) return "/restaurant";
 
