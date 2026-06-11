@@ -5,6 +5,7 @@ import TaxiRide from "../models/TaxiRide.js";
 import { haversineMeters } from "../utils/haversine.js";
 import { sendExpoPush } from "../utils/expoPush.js";
 import User from "../models/User.js";
+import { getDispatchRadiusM } from "../services/taxiPricing.service.js";
 
 /**
  * Socket.io'yu io nesnesine bağlar ve taksi event'larını kaydeder.
@@ -54,6 +55,12 @@ export function registerTaxiSockets(io) {
 
         // $near yerine Haversine filtresi — TaxiRide.pickup GeoJSON Point değil
         const [driverLng, driverLat] = driver.location?.coordinates ?? [0, 0];
+
+        // Region-aware dispatch radius
+        const driverUserDoc = await User.findById(driver.user).select("region").lean();
+        const driverRegion = driverUserDoc?.region ?? null;
+        const dispatchRadiusM = await getDispatchRadiusM(driverRegion);
+
         const candidateRides = await TaxiRide.find({
           status: "searching",
           vehicleType: vehicleTypeReverseMap[driver.type] ?? "ride",
@@ -64,7 +71,7 @@ export function registerTaxiSockets(io) {
 
         const searchingRides = candidateRides.filter((ride) => {
           const [pLng, pLat] = ride.pickup?.coordinates ?? [0, 0];
-          return haversineMeters(driverLat, driverLng, pLat, pLng) <= 5000;
+          return haversineMeters(driverLat, driverLng, pLat, pLng) <= dispatchRadiusM;
         }).slice(0, 3);
 
         for (const ride of searchingRides) {

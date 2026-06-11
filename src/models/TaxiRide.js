@@ -31,6 +31,9 @@ const TaxiRideSchema = new mongoose.Schema(
       default: "ride",
     },
 
+    // Bölge (fiyatlandırma ve komisyon raporlama için)
+    region: { type: String, default: null },
+
     // Rota bilgileri
     distanceKm: { type: Number, default: 0 },
     durationMin: { type: Number, default: 0 },

@@ -2,7 +2,8 @@
 import Stripe from "stripe";
 import TaxiRide from "../models/TaxiRide.js";
 import TaxiDriver from "../models/TaxiDriver.js";
-import { calculateFare } from "../services/taxiPricing.service.js";
+import { calculateFare, estimateFareForRegion, getDispatchRadiusM } from "../services/taxiPricing.service.js";
+import User from "../models/User.js";
 import { getRouteInfo, searchPlaces, geocodeAddress } from "../services/places.service.js";
 import { emitNewRideRequest, emitRideStatusChange } from "../sockets/taxi.socket.js";
 import { sendExpoPush } from "../utils/expoPush.js";
@@ -41,7 +42,11 @@ export async function estimateFare(req, res, next) {
     };
 
     const { distanceKm, durationMin } = await getRouteInfo(origin, destination);
-    const fare = calculateFare(vehicleType, distanceKm);
+
+    // Region-aware fare (falls back to hardcoded tariffs when no DB config exists)
+    const passengerUser = await User.findById(req.user.id).select("region").lean();
+    const region = passengerUser?.region ?? null;
+    const fare = await estimateFareForRegion(region, vehicleType, distanceKm);
 
     return res.json({ fare, distanceKm, durationMin, vehicleType });
   } catch (err) {
@@ -78,7 +83,11 @@ export async function createRide(req, res, next) {
     };
 
     const { distanceKm, durationMin } = await getRouteInfo(origin, destination);
-    const fare = calculateFare(vehicleType, distanceKm);
+
+    // Region-aware fare (falls back to hardcoded tariffs when no DB config exists)
+    const passengerUser = await User.findById(passengerId).select("region").lean();
+    const region = passengerUser?.region ?? null;
+    const fare = await estimateFareForRegion(region, vehicleType, distanceKm);
 
     const safePaymentMethod = ["cash", "card", "online"].includes(paymentMethod) ? paymentMethod : "cash";
 
@@ -96,11 +105,14 @@ export async function createRide(req, res, next) {
       distanceKm,
       durationMin,
       fare,
+      region,
       paymentMethod: safePaymentMethod,
       status: "searching",
     });
 
-    // Pickup'a yakın online ve müsait sürücüleri bul (5 km)
+    // Pickup'a yakın online ve müsait sürücüleri bul
+    const dispatchRadiusM = await getDispatchRadiusM(region);
+
     const vehicleTypeMap = {
       ride: "sedan",
       xl: "van",
@@ -119,7 +131,7 @@ export async function createRide(req, res, next) {
             type: "Point",
             coordinates: pickup.coordinates ?? [0, 0],
           },
-          $maxDistance: 5000, // 5 km
+          $maxDistance: dispatchRadiusM,
         },
       },
     })

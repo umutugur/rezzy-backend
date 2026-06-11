@@ -1,6 +1,8 @@
 // src/controllers/taxiDriver.controller.js
 import TaxiDriver from "../models/TaxiDriver.js";
 import TaxiRide from "../models/TaxiRide.js";
+import TaxiRegionConfig from "../models/TaxiRegionConfig.js";
+import { clearTaxiConfigCache } from "../services/taxiPricing.service.js";
 import { emitRideStatusChange } from "../sockets/taxi.socket.js";
 import dayjs from "dayjs";
 
@@ -383,6 +385,41 @@ export async function adminListMarketOrders(req, res, next) {
     ]);
 
     return res.json({ orders, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── GET /api/admin/taxi/config ──────────────────────────────────────────────
+export async function adminListTaxiConfigs(req, res, next) {
+  try {
+    if (req.user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    const configs = await TaxiRegionConfig.find().sort({ region: 1 }).lean();
+    res.json({ configs });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── PUT /api/admin/taxi/config/:region ──────────────────────────────────────
+export async function adminUpsertTaxiConfig(req, res, next) {
+  try {
+    if (req.user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    const region = String(req.params.region || "").toUpperCase();
+    if (!region) return res.status(400).json({ message: "region required" });
+    const { dispatchRadiusKm, commissionRate, tariffs, isActive } = req.body || {};
+    const update = {};
+    if (dispatchRadiusKm != null) update.dispatchRadiusKm = Number(dispatchRadiusKm);
+    if (commissionRate != null) update.commissionRate = Number(commissionRate);
+    if (tariffs != null) update.tariffs = tariffs;
+    if (isActive != null) update.isActive = !!isActive;
+    const config = await TaxiRegionConfig.findOneAndUpdate(
+      { region },
+      { $set: update, $setOnInsert: { region } },
+      { new: true, upsert: true, runValidators: true }
+    );
+    clearTaxiConfigCache();
+    res.json({ config });
   } catch (err) {
     next(err);
   }
