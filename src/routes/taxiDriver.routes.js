@@ -15,6 +15,7 @@ import {
   adminRejectDriver,
   adminListTaxiRides,
   adminListMarketOrders,
+  adminListDeliveryOrders,
   adminListTaxiConfigs,
   adminUpsertTaxiConfig,
 } from "../controllers/taxiDriver.controller.js";
@@ -87,6 +88,9 @@ router.get("/admin/taxi/rides", auth(), adminListTaxiRides);
 
 // Admin: market siparişleri listesi
 router.get("/admin/market/orders", auth(), adminListMarketOrders);
+
+// Admin: teslimat siparişleri listesi
+router.get("/admin/delivery/orders", auth(), adminListDeliveryOrders);
 
 // Admin: bölge fiyat/yarıçap/komisyon konfigürasyonu
 router.get("/admin/taxi/config", auth(), adminListTaxiConfigs);

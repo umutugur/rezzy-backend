@@ -390,6 +390,32 @@ export async function adminListMarketOrders(req, res, next) {
   }
 }
 
+// ─── GET /api/admin/delivery/orders ─────────────────────────────────────────
+export async function adminListDeliveryOrders(req, res, next) {
+  try {
+    const DeliveryOrder = (await import("../models/DeliveryOrder.js")).default;
+    const { status, page = 1, limit = 20 } = req.query;
+    const filter = {};
+    if (status) filter.status = status;
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [orders, total] = await Promise.all([
+      DeliveryOrder.find(filter)
+        .populate("restaurantId", "name")
+        .populate("userId", "name email")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      DeliveryOrder.countDocuments(filter),
+    ]);
+
+    return res.json({ orders, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ─── GET /api/admin/taxi/config ──────────────────────────────────────────────
 export async function adminListTaxiConfigs(req, res, next) {
   try {

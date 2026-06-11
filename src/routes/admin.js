@@ -11,6 +11,7 @@ import {
   kpiGlobal,
   kpiByRestaurant,
   kpiByUser,
+  kpiModules,
   listOrganizations,
   getOrganizationDetail,
   createOrganization,
@@ -81,6 +82,7 @@ const r = Router();
 r.get("/kpi/global", auth(), allow("admin"), kpiGlobal);
 r.get("/kpi/restaurants/:rid", auth(), allow("admin"), kpiByRestaurant);
 r.get("/kpi/users/:uid", auth(), allow("admin"), kpiByUser);
+r.get("/kpi/modules", auth(), allow("admin"), kpiModules);
 
 // ---- Organizations ----
 r.get("/organizations", auth(), allow("admin"), listOrganizations);

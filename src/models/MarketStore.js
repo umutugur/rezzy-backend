@@ -89,6 +89,8 @@ const MarketStoreSchema = new mongoose.Schema(
       index: true,
     },
 
+    commissionRate: { type: Number, min: 0, max: 1, default: 0.05 },
+
     isActive: { type: Boolean, default: true, index: true },
     rating: { type: Number, default: 0, min: 0, max: 5 },
     ratingCount: { type: Number, default: 0 },

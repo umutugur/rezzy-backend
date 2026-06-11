@@ -6,6 +6,11 @@ import Review from "../models/Review.js";
 import Complaint from "../models/Complaint.js";
 import Organization from "../models/Organization.js";
 import BranchRequest from "../models/BranchRequest.js";
+import DeliveryOrder from "../models/DeliveryOrder.js";
+import MarketOrder from "../models/MarketOrder.js";
+import TaxiRide from "../models/TaxiRide.js";
+import MarketStore from "../models/MarketStore.js";
+import { getCommissionRate } from "../services/taxiPricing.service.js";
 // EN ÜSTE EKLE (diğer importların yanına)
 import { Parser } from "json2csv";
 import { normalizeLang } from "../utils/i18n.js";
@@ -391,6 +396,75 @@ export const kpiByUser = async (req, res, next) => {
       },
       totals,
       series,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/* ------------ KPI modules (delivery / market / taxi) ------------ */
+async function moduleStats(Model, dateField, revenueStatuses, revenueField, match) {
+  const rows = await Model.aggregate([
+    { $match: match },
+    {
+      $facet: {
+        byStatus: [{ $group: { _id: "$status", count: { $sum: 1 } } }],
+        totals: [
+          { $match: { status: { $in: revenueStatuses } } },
+          { $group: { _id: null, revenue: { $sum: `$${revenueField}` } } },
+        ],
+        series: [
+          {
+            $group: {
+              _id: { $dateToString: { format: "%Y-%m-%d", date: `$${dateField}` } },
+              count: { $sum: 1 },
+              revenue: {
+                $sum: { $cond: [{ $in: ["$status", revenueStatuses] }, `$${revenueField}`, 0] },
+              },
+            },
+          },
+          { $sort: { _id: 1 } },
+        ],
+      },
+    },
+  ]);
+  const f = rows[0] ?? {};
+  const byStatus = Object.fromEntries((f.byStatus ?? []).map((r) => [r._id, r.count]));
+  const count = (f.byStatus ?? []).reduce((a, r) => a + r.count, 0);
+  return {
+    count,
+    revenue: f.totals?.[0]?.revenue ?? 0,
+    byStatus,
+    series: (f.series ?? []).map((r) => ({ date: r._id, count: r.count, revenue: r.revenue })),
+  };
+}
+
+export const kpiModules = async (req, res, next) => {
+  try {
+    const { start, end, dt } = parseDateRange(req.query);
+    const groupBy = req.query.groupBy || "day";
+
+    const buildMatch = (dateField) => {
+      const m = {};
+      if (start || end) m[dateField] = dt;
+      return m;
+    };
+
+    const [delivery, market, taxi] = await Promise.all([
+      moduleStats(DeliveryOrder, "createdAt", ["delivered"], "total", buildMatch("createdAt")),
+      moduleStats(MarketOrder, "createdAt", ["delivered"], "total", buildMatch("createdAt")),
+      moduleStats(TaxiRide, "requestedAt", ["completed"], "fare", buildMatch("requestedAt")),
+    ]);
+
+    res.json({
+      range: {
+        start: req.query.start || null,
+        end: req.query.end || null,
+        groupBy,
+      },
+      delivery,
+      market,
+      taxi,
     });
   } catch (e) {
     next(e);

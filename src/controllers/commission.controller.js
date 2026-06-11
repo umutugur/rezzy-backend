@@ -4,6 +4,11 @@ import Reservation from "../models/Reservation.js";
 import Restaurant from "../models/Restaurant.js";
 import User from "../models/User.js";
 import ExcelJS from "exceljs";
+import DeliveryOrder from "../models/DeliveryOrder.js";
+import MarketOrder from "../models/MarketOrder.js";
+import MarketStore from "../models/MarketStore.js";
+import TaxiRide from "../models/TaxiRide.js";
+import { getCommissionRate } from "../services/taxiPricing.service.js";
 
 /** Ay stringini (YYYY-MM) Date aralığına çevirir */
 function monthRange(monthStr) {
@@ -28,6 +33,119 @@ function normalizeRate(rate) {
   const r = Number(rate || 0);
   if (!Number.isFinite(r) || r <= 0) return 0;
   return r > 1 ? r / 100 : r;
+}
+
+/** Delivery siparişleri komisyon özeti (ay bazlı) */
+async function deliveryCommissions(rangeMatch) {
+  const rows = await DeliveryOrder.aggregate([
+    { $match: { status: "delivered", ...rangeMatch } },
+    {
+      $group: {
+        _id: "$restaurantId",
+        orderCount: { $sum: 1 },
+        commissionAmount: { $sum: "$commissionAmount" },
+      },
+    },
+    {
+      $lookup: {
+        from: "restaurants",
+        localField: "_id",
+        foreignField: "_id",
+        as: "rest",
+      },
+    },
+    {
+      $addFields: {
+        restaurantName: { $ifNull: [{ $arrayElemAt: ["$rest.name", 0] }, "(Restoran)"] },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        restaurantId: "$_id",
+        restaurantName: 1,
+        orderCount: 1,
+        commissionAmount: { $round: ["$commissionAmount", 2] },
+      },
+    },
+    { $sort: { restaurantName: 1 } },
+  ]);
+
+  const total = rows.reduce((a, r) => a + (r.commissionAmount ?? 0), 0);
+  return { total: Math.round(total * 100) / 100, rows };
+}
+
+/** Market siparişleri komisyon özeti (ay bazlı) */
+async function marketCommissions(rangeMatch) {
+  const rows = await MarketOrder.aggregate([
+    { $match: { status: "delivered", ...rangeMatch } },
+    {
+      $group: {
+        _id: "$store",
+        orderCount: { $sum: 1 },
+        totalSum: { $sum: "$total" },
+      },
+    },
+    {
+      $lookup: {
+        from: "marketstores",
+        localField: "_id",
+        foreignField: "_id",
+        as: "storeDoc",
+      },
+    },
+    {
+      $addFields: {
+        storeName: { $ifNull: [{ $arrayElemAt: ["$storeDoc.name", 0] }, "(Market)"] },
+        commissionRate: { $ifNull: [{ $arrayElemAt: ["$storeDoc.commissionRate", 0] }, 0.05] },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        storeId: "$_id",
+        storeName: 1,
+        orderCount: 1,
+        commissionAmount: {
+          $round: [{ $multiply: ["$totalSum", "$commissionRate"] }, 2],
+        },
+      },
+    },
+    { $sort: { storeName: 1 } },
+  ]);
+
+  const total = rows.reduce((a, r) => a + (r.commissionAmount ?? 0), 0);
+  return { total: Math.round(total * 100) / 100, rows };
+}
+
+/** Taxi yolculukları komisyon özeti (ay bazlı) */
+async function taxiCommissions(rangeMatch) {
+  const regionRows = await TaxiRide.aggregate([
+    { $match: { status: "completed", ...rangeMatch } },
+    {
+      $group: {
+        _id: { $ifNull: ["$region", null] },
+        rideCount: { $sum: 1 },
+        fareSum: { $sum: "$fare" },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]);
+
+  const rows = await Promise.all(
+    regionRows.map(async (r) => {
+      const rate = await getCommissionRate(r._id);
+      const commissionAmount = Math.round(r.fareSum * rate * 100) / 100;
+      return {
+        region: r._id ?? "DEFAULT",
+        rideCount: r.rideCount,
+        commissionAmount,
+      };
+    })
+  );
+
+  const total = rows.reduce((a, r) => a + (r.commissionAmount ?? 0), 0);
+  return { total: Math.round(total * 100) / 100, rows };
 }
 
 /** Arrived rezervasyonlar için restoran bazlı özet (JSON) */
@@ -128,7 +246,14 @@ export const commissionsPreview = async (req, res, next) => {
       { $sort: { restaurantName: 1 } },
     ]);
 
-    res.json({ ok: true, month: label, restaurants: rows });
+    const rangeMatch = { createdAt: { $gte: from, $lte: to } };
+    const [delivery, market, taxi] = await Promise.all([
+      deliveryCommissions(rangeMatch),
+      marketCommissions(rangeMatch),
+      taxiCommissions(rangeMatch),
+    ]);
+
+    res.json({ ok: true, month: label, restaurants: rows, modules: { delivery, market, taxi } });
   } catch (e) {
     next(e);
   }
