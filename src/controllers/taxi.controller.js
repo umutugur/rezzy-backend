@@ -8,6 +8,13 @@ import { getRouteInfo, searchPlaces, geocodeAddress } from "../services/places.s
 import { emitNewRideRequest, emitRideStatusChange } from "../sockets/taxi.socket.js";
 import { sendExpoPush } from "../utils/expoPush.js";
 
+const KNOWN_REGIONS = new Set(["TR", "CY", "UK", "US"]);
+function normalizeRegion(value) {
+  const r = String(value ?? "").trim().toUpperCase();
+  return KNOWN_REGIONS.has(r) ? r : null;
+}
+
+
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
   : null;
@@ -45,7 +52,7 @@ export async function estimateFare(req, res, next) {
 
     // Region-aware fare (falls back to hardcoded tariffs when no DB config exists)
     const passengerUser = await User.findById(req.user.id).select("region").lean();
-    const region = passengerUser?.region ?? null;
+    const region = normalizeRegion(req.body?.region) ?? passengerUser?.region ?? null;
     const fare = await estimateFareForRegion(region, vehicleType, distanceKm);
 
     return res.json({ fare, distanceKm, durationMin, vehicleType });
@@ -86,7 +93,7 @@ export async function createRide(req, res, next) {
 
     // Region-aware fare (falls back to hardcoded tariffs when no DB config exists)
     const passengerUser = await User.findById(passengerId).select("region").lean();
-    const region = passengerUser?.region ?? null;
+    const region = normalizeRegion(req.body?.region) ?? passengerUser?.region ?? null;
     const fare = await estimateFareForRegion(region, vehicleType, distanceKm);
 
     const safePaymentMethod = ["cash", "card", "online"].includes(paymentMethod) ? paymentMethod : "cash";
