@@ -34,6 +34,8 @@ import AdminBannersPage from "./pages/admin/Banners";
 import AdminMarketOrdersPage from "./pages/admin/AdminMarketOrders";
 import AdminTaxiRidesPage from "./pages/admin/AdminTaxiRides";
 import AdminTaxiDriversPage from "./pages/admin/AdminTaxiDrivers";
+import AdminDeliveryOrdersPage from "./pages/admin/AdminDeliveryOrders";
+import AdminTaxiConfigPage from "./pages/admin/AdminTaxiConfig";
 
 import RestaurantDashboardPage from "./pages/restaurant/Dashboard";
 import RestaurantReservationsPage from "./pages/restaurant/Reservations";
@@ -569,6 +571,22 @@ export default function App() {
           element={
             <Shell>
               <AdminTaxiDriversPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/delivery/orders"
+          element={
+            <Shell>
+              <AdminDeliveryOrdersPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin/taxi/config"
+          element={
+            <Shell>
+              <AdminTaxiConfigPage />
             </Shell>
           }
         />

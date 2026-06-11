@@ -1,31 +1,32 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { adminGetTaxiRides } from "../../api/adminTaxiMarket";
+import { adminGetDeliveryOrders } from "../../api/adminTaxiMarket";
 import Sidebar from "../../components/Sidebar";
 import { ADMIN_SIDEBAR_ITEMS } from "../../components/adminSidebarItems";
 import { useI18n } from "../../i18n";
 
-const STATUSES = ["", "searching", "matched", "inProgress", "completed", "cancelled"];
+// Status enum values from DeliveryOrder model: new, accepted, on_the_way, delivered, cancelled
+const STATUSES = ["", "new", "accepted", "on_the_way", "delivered", "cancelled"];
 const STATUS_LABELS: Record<string, string> = {
   "": "Tümü",
-  searching: "Aranıyor",
-  matched: "Eşleşti",
-  inProgress: "Devam Ediyor",
-  completed: "Tamamlandı",
+  new: "Beklemede",
+  accepted: "Onaylandı",
+  on_the_way: "Yolda",
+  delivered: "Teslim Edildi",
   cancelled: "İptal",
 };
 
-export default function AdminTaxiRidesPage() {
+export default function AdminDeliveryOrdersPage() {
   const { t } = useI18n();
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["admin-taxi-rides", status, page],
-    queryFn: () => adminGetTaxiRides({ status: status || undefined, page, limit: 20 }),
+    queryKey: ["admin-delivery-orders", status, page],
+    queryFn: () => adminGetDeliveryOrders({ status: status || undefined, page, limit: 20 }),
   });
 
-  const rides = data?.rides ?? [];
+  const orders = data?.orders ?? [];
   const pages = data?.pages ?? 1;
 
   return (
@@ -33,7 +34,7 @@ export default function AdminTaxiRidesPage() {
       <Sidebar items={ADMIN_SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
 
       <div className="flex-1 space-y-6">
-        <h2 className="text-lg font-semibold">{t("Taksi Yolculukları")}</h2>
+        <h2 className="text-lg font-semibold">{t("Paket Servis Siparişleri")}</h2>
 
         {/* Status filter */}
         <div className="flex gap-2 flex-wrap">
@@ -59,51 +60,53 @@ export default function AdminTaxiRidesPage() {
             <table className="min-w-full text-sm">
               <thead className="sticky top-0 bg-gray-50 border-b">
                 <tr className="text-left text-gray-500">
-                  {["ID", "Yolcu", "Sürücü", "Ücret", "Mesafe", "Durum", "Tarih"].map((h) => (
+                  {["Sipariş", "Restoran", "Müşteri", "Tutar", "Durum", "Tarih"].map((h) => (
                     <th key={h} className="py-2 px-4">{t(h)}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {rides.length === 0 ? (
+                {orders.length === 0 ? (
                   <tr>
-                    <td className="py-6 px-4 text-gray-500 text-center" colSpan={7}>
-                      {t("Yolculuk yok")}
+                    <td className="py-6 px-4 text-gray-500 text-center" colSpan={6}>
+                      {t("Sipariş yok")}
                     </td>
                   </tr>
                 ) : (
-                  rides.map((r: any) => (
-                    <tr key={r._id} className="border-t">
+                  orders.map((o: any) => (
+                    <tr key={o._id} className="border-t">
                       <td className="py-2 px-4 font-semibold">
-                        #{r._id.slice(-6).toUpperCase()}
+                        #{o._id.slice(-6).toUpperCase()}
                       </td>
                       <td className="py-2 px-4">
-                        {typeof r.passenger === "object" ? r.passenger.name : "—"}
+                        {typeof o.restaurantId === "object" ? o.restaurantId?.name : "—"}
                       </td>
                       <td className="py-2 px-4">
-                        {r.driver?.user?.name ?? "—"}
+                        <div className="font-medium">
+                          {typeof o.userId === "object" ? o.userId?.name : "—"}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {typeof o.userId === "object" ? o.userId?.email : ""}
+                        </div>
                       </td>
                       <td className="py-2 px-4 text-green-700 font-semibold">
-                        ₺{Number(r.fare ?? 0).toFixed(2)}
-                      </td>
-                      <td className="py-2 px-4">
-                        {Number(r.distanceKm ?? 0).toFixed(1)} km
+                        ₺{Number(o.total ?? 0).toFixed(2)}
                       </td>
                       <td className="py-2 px-4">
                         <span
                           className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
-                            r.status === "completed"
+                            o.status === "delivered"
                               ? "bg-green-100 text-green-800"
-                              : r.status === "cancelled"
+                              : o.status === "cancelled"
                               ? "bg-red-100 text-red-800"
-                              : "bg-violet-100 text-violet-800"
+                              : "bg-yellow-100 text-yellow-800"
                           }`}
                         >
-                          {t(STATUS_LABELS[r.status] ?? r.status)}
+                          {t(STATUS_LABELS[o.status] ?? o.status)}
                         </span>
                       </td>
                       <td className="py-2 px-4 text-gray-500">
-                        {new Date(r.requestedAt ?? r.createdAt).toLocaleDateString("tr-TR")}
+                        {new Date(o.createdAt).toLocaleDateString("tr-TR")}
                       </td>
                     </tr>
                   ))

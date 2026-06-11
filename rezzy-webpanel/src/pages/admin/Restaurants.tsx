@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import Sidebar from "../../components/Sidebar";
+import { ADMIN_SIDEBAR_ITEMS } from "../../components/adminSidebarItems";
 import { Card } from "../../components/Card";
 import { useI18n } from "../../i18n";
 
@@ -32,19 +33,7 @@ export default function AdminRestaurantsPage() {
 
   return (
     <div className="flex gap-6">
-      <Sidebar
-        items={[
-          { to: "/admin", label: t("Dashboard") },
-          { to: "/admin/banners", label: t("Bannerlar") },
-          { to: "/admin/commissions", label: t("Komisyonlar") }, // ✅ menüye eklendi
-          { to: "/admin/organizations", label: t("Organizasyonlar") },
-          { to: "/admin/restaurants", label: t("Restoranlar") },
-          { to: "/admin/users", label: t("Kullanıcılar") },
-          { to: "/admin/reservations", label: t("Rezervasyonlar") },
-          { to: "/admin/moderation", label: t("Moderasyon") },
-          { to: "/admin/notifications", label: t("Bildirim Gönder") },
-        ]}
-      />
+      <Sidebar items={ADMIN_SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
       <div className="flex-1 space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t("Restoranlar")}</h2>

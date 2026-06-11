@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { adminGetMarketOrders } from "../../api/adminTaxiMarket";
 import Sidebar from "../../components/Sidebar";
+import { ADMIN_SIDEBAR_ITEMS } from "../../components/adminSidebarItems";
 import { useI18n } from "../../i18n";
 
 const STATUSES = ["", "pending", "confirmed", "preparing", "ready", "delivered", "cancelled"];
@@ -14,21 +15,6 @@ const STATUS_LABELS: Record<string, string> = {
   delivered: "Teslim Edildi",
   cancelled: "İptal",
 };
-
-const SIDEBAR_ITEMS = [
-  { to: "/admin", label: "Dashboard" },
-  { to: "/admin/banners", label: "Bannerlar" },
-  { to: "/admin/commissions", label: "Komisyonlar" },
-  { to: "/admin/organizations", label: "Organizasyonlar" },
-  { to: "/admin/restaurants", label: "Restoranlar" },
-  { to: "/admin/users", label: "Kullanıcılar" },
-  { to: "/admin/reservations", label: "Rezervasyonlar" },
-  { to: "/admin/moderation", label: "Moderasyon" },
-  { to: "/admin/notifications", label: "Bildirim Gönder" },
-  { to: "/admin/taxi/drivers", label: "🚕 Sürücü Başvuruları" },
-  { to: "/admin/taxi/rides", label: "🗺️ Taksi Yolculukları" },
-  { to: "/admin/market/orders", label: "🛒 Market Siparişleri" },
-];
 
 export default function AdminMarketOrdersPage() {
   const { t } = useI18n();
@@ -45,7 +31,7 @@ export default function AdminMarketOrdersPage() {
 
   return (
     <div className="flex gap-6">
-      <Sidebar items={SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
+      <Sidebar items={ADMIN_SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
 
       <div className="flex-1 space-y-6">
         <h2 className="text-lg font-semibold">{t("Market Siparişleri")}</h2>

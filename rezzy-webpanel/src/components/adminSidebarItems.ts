@@ -1,0 +1,16 @@
+export const ADMIN_SIDEBAR_ITEMS = [
+  { to: "/admin", label: "Dashboard" },
+  { to: "/admin/banners", label: "Bannerlar" },
+  { to: "/admin/commissions", label: "Komisyonlar" },
+  { to: "/admin/organizations", label: "Organizasyonlar" },
+  { to: "/admin/restaurants", label: "Restoranlar" },
+  { to: "/admin/users", label: "Kullanıcılar" },
+  { to: "/admin/reservations", label: "Rezervasyonlar" },
+  { to: "/admin/moderation", label: "Moderasyon" },
+  { to: "/admin/notifications", label: "Bildirim Gönder" },
+  { to: "/admin/delivery/orders", label: "🛵 Paket Servis Siparişleri" },
+  { to: "/admin/market/orders", label: "🛒 Market Siparişleri" },
+  { to: "/admin/taxi/drivers", label: "🚕 Sürücü Başvuruları" },
+  { to: "/admin/taxi/rides", label: "🗺️ Taksi Yolculukları" },
+  { to: "/admin/taxi/config", label: "⚙️ Taksi Tarifeleri" },
+];
