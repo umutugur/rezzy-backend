@@ -240,7 +240,7 @@ export function MarketOrdersPage() {
                   {/* Card header */}
                   <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--rezvix-border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
-                      <span style={{ color: "var(--rezvix-text-muted)", fontWeight: 600, fontSize: 15, fontFamily: "var(--rezvix-font-mono)" }}>
+                      <span style={{ color: "var(--rezvix-text-main)", fontWeight: 700, fontSize: 15, fontFamily: "var(--rezvix-font-mono)" }}>
                         #{order._id.slice(-6).toUpperCase()}
                       </span>
                       <span style={{ color: "var(--rezvix-text-soft)", fontSize: 12, marginLeft: 8 }}>{dayStr} {timeStr}</span>
@@ -257,25 +257,41 @@ export function MarketOrdersPage() {
                     </span>
                   </div>
 
+                  {/* Customer */}
+                  {(order.customer?.name || order.customer?.phone) && (
+                    <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--rezvix-border-subtle)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      {order.customer?.name && (
+                        <span style={{ color: "var(--rezvix-text-main)", fontSize: 13, fontWeight: 600 }}>
+                          👤 {order.customer.name}
+                        </span>
+                      )}
+                      {order.customer?.phone && (
+                        <a href={`tel:${order.customer.phone}`} style={{ color: "var(--rezvix-primary)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+                          📞 {order.customer.phone}
+                        </a>
+                      )}
+                    </div>
+                  )}
+
                   {/* Items */}
-                  <div style={{ padding: "10px 16px", borderBottom: "1px solid #2d3348" }}>
+                  <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--rezvix-border-subtle)" }}>
                     {order.items.slice(0, 3).map((item, i) => (
-                      <div key={i} style={{ color: "#d1d5db", fontSize: 13, padding: "2px 0" }}>
+                      <div key={i} style={{ color: "var(--rezvix-text-main)", fontSize: 13, padding: "2px 0" }}>
                         {item.qty}x {item.title}
                       </div>
                     ))}
                     {order.items.length > 3 && (
-                      <div style={{ color: "#6b7280", fontSize: 12 }}>
+                      <div style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}>
                         +{order.items.length - 3} {t("ürün daha")}
                       </div>
                     )}
                     {order.note && (
-                      <div style={{ color: "#9ca3af", fontSize: 12, marginTop: 4, fontStyle: "italic" }}>
+                      <div style={{ color: "var(--rezvix-text-muted)", fontSize: 12, marginTop: 4, fontStyle: "italic" }}>
                         📝 {order.note}
                       </div>
                     )}
                     {order.status === "cancelled" && order.cancelReason && (
-                      <div style={{ color: "#e89a9a", fontSize: 12, marginTop: 6 }}>
+                      <div style={{ color: "var(--rezvix-danger)", fontSize: 12, marginTop: 6 }}>
                         <span style={{ fontWeight: 600 }}>{t("İptal nedeni")}: </span>
                         {cancelReasonLabel(order.cancelReason, t)}
                       </div>
@@ -285,7 +301,7 @@ export function MarketOrdersPage() {
                   {/* Footer */}
                   <div style={{ padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ background: "#2d3348", color: "#9ca3af", borderRadius: 6, padding: "2px 8px", fontSize: 12 }}>
+                      <span style={{ background: "var(--rezvix-bg-soft)", color: "var(--rezvix-text-muted)", border: "1px solid var(--rezvix-border-subtle)", borderRadius: 6, padding: "2px 8px", fontSize: 12 }}>
                         {order.type === "pickup" ? t("Gel-Al") : t("Teslimat")}
                       </span>
                       <span style={{ color: "#10b981", fontWeight: 700, fontSize: 15 }}>

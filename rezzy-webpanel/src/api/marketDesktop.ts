@@ -21,6 +21,8 @@ export interface MarketOrderItem {
 export interface MarketOrder {
   _id: string;
   status: MarketOrderStatus;
+  customer?: { _id?: string; name?: string; email?: string; phone?: string } | null;
+  deliveryAddress?: { fullText?: string; title?: string } | null;
   type: "delivery" | "pickup";
   items: MarketOrderItem[];
   subtotal: number;
