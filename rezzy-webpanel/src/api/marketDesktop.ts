@@ -29,6 +29,8 @@ export interface MarketOrder {
   note?: string;
   paymentMethod: string;
   createdAt: string;
+  cancelReason?: string | null;
+  cancelledBy?: string | null;
 }
 
 export interface PanelProduct {
@@ -57,8 +59,9 @@ export async function marketGetOrders(params?: {
 export async function marketUpdateOrderStatus(
   id: string,
   status: MarketOrderStatus,
+  reason?: string,
 ): Promise<MarketOrder> {
-  const { data } = await api.patch(`/market/orders/${id}/status`, { status });
+  const { data } = await api.patch(`/market/panel/orders/${id}/status`, { status, ...(reason ? { reason } : {}) });
   return data.order ?? data;
 }
 
