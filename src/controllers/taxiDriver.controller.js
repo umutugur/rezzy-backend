@@ -64,6 +64,7 @@ export async function toggleStatus(req, res, next) {
 
     driver.isOnline = isOnline;
     driver.isAvailable = isOnline;
+    driver.lastSeenAt = new Date();
     await driver.save();
 
     return res.json({ isOnline: driver.isOnline, isAvailable: driver.isAvailable });
@@ -84,7 +85,10 @@ export async function updateLocation(req, res, next) {
 
     const driver = await TaxiDriver.findOneAndUpdate(
       { user: userId },
-      { location: { type: "Point", coordinates: [Number(lng), Number(lat)] } },
+      {
+        location: { type: "Point", coordinates: [Number(lng), Number(lat)] },
+        lastSeenAt: new Date(),
+      },
       { new: true }
     );
 

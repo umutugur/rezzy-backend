@@ -131,6 +131,7 @@ export async function createRide(req, res, next) {
       isOnline: true,
       isAvailable: true,
       isApproved: true,
+      lastSeenAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) },
       type: vehicleTypeMap[vehicleType] ?? "sedan",
       location: {
         $near: {

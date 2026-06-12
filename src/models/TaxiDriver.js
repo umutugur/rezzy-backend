@@ -59,6 +59,9 @@ const TaxiDriverSchema = new mongoose.Schema(
 
     // Socket bağlantısı
     socketId: { type: String, default: null },
+
+    // Son görülme zamanı (connectivity freshness)
+    lastSeenAt: { type: Date, default: null, index: true },
   },
   {
     timestamps: true,

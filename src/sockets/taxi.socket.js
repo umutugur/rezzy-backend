@@ -38,6 +38,7 @@ export function registerTaxiSockets(io) {
         driver.isOnline = true;
         driver.isAvailable = true;
         driver.socketId = socket.id;
+        driver.lastSeenAt = new Date();
         await driver.save();
 
         // Sürücüyü kendi room'una ekle
@@ -122,6 +123,7 @@ export function registerTaxiSockets(io) {
           { user: socket.userId },
           {
             location: { type: "Point", coordinates: [Number(lng), Number(lat)] },
+            lastSeenAt: new Date(),
           },
           { new: false }
         );
@@ -251,17 +253,16 @@ export function registerTaxiSockets(io) {
     socket.on("disconnect", async (reason) => {
       console.log(`[taxi.socket] disconnect socket=${socket.id} reason=${reason}`);
       try {
-        // socketId'ye göre sürücüyü bul ve offline yap
-        // socketId temizle + isAvailable=false ama isOnline'a dokunma
-        // (isOnline sadece sürücü butonu ile değişir, socket kopması offline yapmaz)
+        // socketId'ye göre sürücüyü bul
+        // socketId temizle; isAvailable ve isOnline'a dokunma
+        // (TTL cron işlemi, lastSeenAt'e göre çevrimdışı olanları işler)
         const driver = await TaxiDriver.findOneAndUpdate(
           { socketId: socket.id },
-          { socketId: null, isAvailable: false },
+          { socketId: null },
           { new: false }
         );
         if (driver) {
-          console.log(`[taxi.socket] socket koptu (online kalıyor): driverId=${driver._id}`);
-          io.to("passengers:map").emit("driver:went_offline", { driverId: driver._id });
+          console.log(`[taxi.socket] socket koptu (online kalıyor, TTL devrede): driverId=${driver._id}`);
         }
       } catch (err) {
         console.error("[taxi.socket] disconnect cleanup hata:", err.message);
