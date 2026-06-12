@@ -45,7 +45,7 @@ export const listPanelOrders = async (req, res, next) => {
 
     const [items, total] = await Promise.all([
       MarketOrder.find(filter)
-        .populate({ path: "customer", select: "name email" })
+        .populate({ path: "customer", select: "name email phone" })
         .populate({ path: "deliveryAddress" })
         .sort({ createdAt: -1 })
         .skip(skip)
