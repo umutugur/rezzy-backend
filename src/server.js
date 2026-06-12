@@ -8,6 +8,7 @@ import { connectDB } from "./config/db.js";
 import { registerTaxiSockets } from "./sockets/taxi.socket.js";
 import { setSocketIo as taxiSetIo } from "./controllers/taxi.controller.js";
 import { setSocketIo as taxiDriverSetIo } from "./controllers/taxiDriver.controller.js";
+import { setIo } from "./sockets/io.js";
 
 // Cron job'ların importu (varsa)
 try {
@@ -17,6 +18,11 @@ try {
 }
 try {
   await import("./jobs/riskDecay.job.js");
+} catch (_) {
+  // opsiyonel
+}
+try {
+  await import("./jobs/staleDriver.job.js");
 } catch (_) {
   // opsiyonel
 }
@@ -46,6 +52,9 @@ const io = new Server(httpServer, {
 
 // Socket.io referansını app'e ekle (route içinden req.app.get("io") ile erişilebilir)
 app.set("io", io);
+
+// Cron job'lar gibi request-dışı bağlamlardan io erişimi için global register
+setIo(io);
 
 // Taxi socket event'larını kaydet
 registerTaxiSockets(io);
