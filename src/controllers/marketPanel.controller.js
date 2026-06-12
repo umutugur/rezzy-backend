@@ -68,7 +68,7 @@ export const updateOrderStatus = async (req, res, next) => {
   try {
     const userId = req.user?.id;
     const { id } = req.params;
-    const { status } = req.body || {};
+    const { status, reason } = req.body || {};
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return next({ status: 400, message: "Geçersiz sipariş id" });
@@ -94,6 +94,11 @@ export const updateOrderStatus = async (req, res, next) => {
 
     order.status = status;
     if (status === "delivered") order.deliveredAt = new Date();
+    if (status === "cancelled") {
+      const VALID_REASONS = ["out_of_stock", "closed", "out_of_zone", "cannot_fulfill", "other"];
+      order.cancelReason = VALID_REASONS.includes(reason) ? reason : "other";
+      order.cancelledBy = "store";
+    }
     await order.save();
 
     // Push notification — best-effort (müşteriyi bilgilendir)
@@ -105,14 +110,26 @@ export const updateOrderStatus = async (req, res, next) => {
       cancelled: "market_order_cancelled_by_store",
     };
 
-    const notifKey = STATUS_NOTIF_KEY[status];
+    const REASON_TEXT = {
+      out_of_stock: "Ürün stokta yok",
+      closed: "İşletme şu an kapalı",
+      out_of_zone: "Adres teslimat bölgesi dışında",
+      cannot_fulfill: "Sipariş karşılanamıyor",
+      other: "Diğer",
+    };
+
+    let notifKey = STATUS_NOTIF_KEY[status];
+    if (status === "ready" && order.type === "delivery") {
+      notifKey = "market_order_on_the_way";
+    }
+
     if (notifKey && order.customer) {
       notifyUser(String(order.customer), {
         type: "market_order_status",
         key: `market_order_${order._id}_${status}`,
         i18n: {
           key: notifKey,
-          vars: { storeName: store.name },
+          vars: { storeName: store.name, reason: REASON_TEXT[order.cancelReason] ?? "" },
         },
         data: {
           screen: "MarketOrderDetail",

@@ -492,6 +492,8 @@ export const cancelOrder = async (req, res, next) => {
     }
 
     order.status = "cancelled";
+    order.cancelReason = "customer_request";
+    order.cancelledBy = "customer";
     await order.save();
 
     // Best-effort: market sahibine bildirim

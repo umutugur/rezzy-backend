@@ -239,6 +239,20 @@ const NOTIFICATION_TEMPLATES = {
       el: "Η παραγγελία σου από το {storeName} παραδόθηκε επιτυχώς. Καλή όρεξη!",
     },
   },
+  market_order_on_the_way: {
+    title: {
+      tr: "Siparişiniz yola çıktı! 🛵",
+      en: "Your order is on the way! 🛵",
+      ru: "Ваш заказ в пути! 🛵",
+      el: "Η παραγγελία σου είναι καθ' οδόν! 🛵",
+    },
+    body: {
+      tr: "{storeName} siparişinizi yola çıkardı.",
+      en: "{storeName} has sent your order out for delivery.",
+      ru: "{storeName} отправил ваш заказ.",
+      el: "Το {storeName} έστειλε την παραγγελία σου.",
+    },
+  },
   market_order_cancelled_by_store: {
     title: {
       tr: "Sipariş iptal edildi",
@@ -247,10 +261,10 @@ const NOTIFICATION_TEMPLATES = {
       el: "Η παραγγελία ακυρώθηκε",
     },
     body: {
-      tr: "{storeName} siparişini iptal etti.",
-      en: "{storeName} cancelled your order.",
-      ru: "{storeName} отменил ваш заказ.",
-      el: "Το {storeName} ακύρωσε την παραγγελία σου.",
+      tr: "{storeName} siparişini iptal etti. Neden: {reason}",
+      en: "{storeName} cancelled your order. Reason: {reason}",
+      ru: "{storeName} отменил ваш заказ. Причина: {reason}",
+      el: "Το {storeName} ακύρωσε την παραγγελία σου. Λόγος: {reason}",
     },
   },
   market_order_cancelled_by_customer: {

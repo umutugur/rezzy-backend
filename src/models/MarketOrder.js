@@ -56,6 +56,17 @@ const MarketOrderSchema = new mongoose.Schema(
       index: true,
     },
 
+    cancelReason: {
+      type: String,
+      enum: ["out_of_stock", "closed", "out_of_zone", "cannot_fulfill", "customer_request", "other", null],
+      default: null,
+    },
+    cancelledBy: {
+      type: String,
+      enum: ["store", "customer", null],
+      default: null,
+    },
+
     paymentStatus: {
       type: String,
       enum: ["pending", "paid", "refunded"],
