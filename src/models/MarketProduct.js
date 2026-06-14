@@ -60,7 +60,7 @@ const MarketProductSchema = new mongoose.Schema(
 );
 
 MarketProductSchema.index({ title: "text" });
-MarketProductSchema.index({ store: 1, category: 1, isActive: 1 });
+// store+category+isActive eşitlik sorgusu mevcut composite index ile karşılanıyor
 MarketProductSchema.index(
   { store: 1, isActive: 1, category: 1 },
   { name: "market_product_store_active_category" }
