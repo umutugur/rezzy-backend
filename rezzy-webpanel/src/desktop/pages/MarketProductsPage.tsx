@@ -11,7 +11,9 @@ import {
 import { useI18n } from "../../i18n";
 import { showToast } from "../../ui/Toast";
 
-const emptyForm = { title: "", price: "", stock: "", unit: "adet", description: "" };
+const emptyForm = { title: "", price: "", stock: "", unit: "adet", description: "", brand: "", netQuantity: "" };
+const emptyNetUnit: "L" | "ml" | "kg" | "g" | "piece" | "" = "";
+const emptyAttributes: { label: string; value: string }[] = [];
 
 export function MarketProductsPage() {
   const { t } = useI18n();
@@ -19,6 +21,8 @@ export function MarketProductsPage() {
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<{ open: boolean; product: PanelProduct | null }>({ open: false, product: null });
   const [form, setForm] = useState(emptyForm);
+  const [formNetUnit, setFormNetUnit] = useState<"L" | "ml" | "kg" | "g" | "piece" | "">(emptyNetUnit);
+  const [formAttributes, setFormAttributes] = useState<{ label: string; value: string }[]>(emptyAttributes);
 
   const { data, isLoading } = useQuery({
     queryKey: ["market-products"],
@@ -29,7 +33,12 @@ export function MarketProductsPage() {
     !search || p.title.toLowerCase().includes(search.toLowerCase())
   );
 
-  const openAdd = () => { setForm(emptyForm); setModal({ open: true, product: null }); };
+  const openAdd = () => {
+    setForm(emptyForm);
+    setFormNetUnit(emptyNetUnit);
+    setFormAttributes([]);
+    setModal({ open: true, product: null });
+  };
   const openEdit = (p: PanelProduct) => {
     setForm({
       title: p.title,
@@ -37,7 +46,11 @@ export function MarketProductsPage() {
       stock: String(p.stock),
       unit: p.unit,
       description: p.description ?? "",
+      brand: p.brand ?? "",
+      netQuantity: p.netQuantity != null ? String(p.netQuantity) : "",
     });
+    setFormNetUnit((p.netUnit ?? "") as "L" | "ml" | "kg" | "g" | "piece" | "");
+    setFormAttributes(p.attributes ? p.attributes.map(a => ({ ...a })) : []);
     setModal({ open: true, product: p });
   };
   const closeModal = () => setModal({ open: false, product: null });
@@ -50,6 +63,10 @@ export function MarketProductsPage() {
         stock: Number(form.stock),
         unit: form.unit,
         description: form.description,
+        ...(form.brand.trim() ? { brand: form.brand.trim() } : {}),
+        netQuantity: form.netQuantity !== "" ? Number(form.netQuantity) : null,
+        netUnit: (formNetUnit || null) as "L" | "ml" | "kg" | "g" | "piece" | null,
+        attributes: formAttributes.filter(a => a.label.trim() && a.value.trim()),
       };
       if (modal.product) return marketUpdateProduct(modal.product._id, payload);
       return marketCreateProduct(payload);
@@ -232,6 +249,113 @@ export function MarketProductsPage() {
                     />
                   </div>
                 ))}
+
+                {/* Brand */}
+                <div>
+                  <label style={{ color: "#9ca3af", fontSize: 12, display: "block", marginBottom: 4 }}>{t("Marka")}</label>
+                  <input
+                    type="text"
+                    value={form.brand}
+                    onChange={e => setForm(f => ({ ...f, brand: e.target.value }))}
+                    placeholder="ör. Ülker"
+                    style={{
+                      width: "100%", padding: "10px 14px", borderRadius: 8,
+                      border: "1px solid #2d3348", background: "#0f1117", color: "#fff",
+                      fontSize: 14, outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                {/* Net Miktar + Net Birim */}
+                <div style={{ display: "flex", gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ color: "#9ca3af", fontSize: 12, display: "block", marginBottom: 4 }}>{t("Net Miktar")}</label>
+                    <input
+                      type="number"
+                      value={form.netQuantity}
+                      onChange={e => setForm(f => ({ ...f, netQuantity: e.target.value }))}
+                      placeholder="ör. 500"
+                      style={{
+                        width: "100%", padding: "10px 14px", borderRadius: 8,
+                        border: "1px solid #2d3348", background: "#0f1117", color: "#fff",
+                        fontSize: 14, outline: "none", boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ color: "#9ca3af", fontSize: 12, display: "block", marginBottom: 4 }}>{t("Net Birim")}</label>
+                    <select
+                      value={formNetUnit}
+                      onChange={e => setFormNetUnit(e.target.value as "L" | "ml" | "kg" | "g" | "piece" | "")}
+                      style={{
+                        width: "100%", padding: "10px 14px", borderRadius: 8,
+                        border: "1px solid #2d3348", background: "#0f1117", color: formNetUnit ? "#fff" : "#6b7280",
+                        fontSize: 14, outline: "none", boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="">{t("Seçiniz")}</option>
+                      <option value="L">L</option>
+                      <option value="ml">ml</option>
+                      <option value="kg">kg</option>
+                      <option value="g">g</option>
+                      <option value="piece">piece</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Attributes */}
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <label style={{ color: "#9ca3af", fontSize: 12 }}>{t("Özellikler")}</label>
+                    <button
+                      type="button"
+                      onClick={() => setFormAttributes(prev => [...prev, { label: "", value: "" }])}
+                      style={{
+                        padding: "4px 12px", borderRadius: 6, border: "1px solid #4f46e5",
+                        background: "transparent", color: "#818cf8", cursor: "pointer", fontSize: 12,
+                      }}
+                    >
+                      + {t("Özellik Ekle")}
+                    </button>
+                  </div>
+                  {formAttributes.map((attr, idx) => (
+                    <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                      <input
+                        type="text"
+                        value={attr.label}
+                        onChange={e => setFormAttributes(prev => prev.map((a, i) => i === idx ? { ...a, label: e.target.value } : a))}
+                        placeholder={t("ör. Renk")}
+                        style={{
+                          flex: 1, padding: "8px 12px", borderRadius: 8,
+                          border: "1px solid #2d3348", background: "#0f1117", color: "#fff",
+                          fontSize: 13, outline: "none",
+                        }}
+                      />
+                      <input
+                        type="text"
+                        value={attr.value}
+                        onChange={e => setFormAttributes(prev => prev.map((a, i) => i === idx ? { ...a, value: e.target.value } : a))}
+                        placeholder={t("ör. Kırmızı")}
+                        style={{
+                          flex: 1, padding: "8px 12px", borderRadius: 8,
+                          border: "1px solid #2d3348", background: "#0f1117", color: "#fff",
+                          fontSize: 13, outline: "none",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormAttributes(prev => prev.filter((_, i) => i !== idx))}
+                        style={{
+                          width: 28, height: 28, borderRadius: 6, border: "1px solid #ef4444",
+                          background: "transparent", color: "#ef4444", cursor: "pointer",
+                          fontWeight: 700, fontSize: 16, lineHeight: "26px", textAlign: "center",
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
               <div style={{ display: "flex", gap: 12, marginTop: 24, justifyContent: "flex-end" }}>
                 <button
