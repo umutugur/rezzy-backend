@@ -22,6 +22,15 @@ const findOwnerStore = async (userId) => {
   return MarketStore.findOne({ owner: oid }).lean();
 };
 
+// attributes: yalnızca {label,value} string çiftleri, label≤40 value≤80, max 30
+function sanitizeAttributes(input) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter((a) => a && typeof a.label === "string" && typeof a.value === "string" && a.label.trim() && a.value.trim())
+    .slice(0, 30)
+    .map((a) => ({ label: a.label.trim().slice(0, 40), value: a.value.trim().slice(0, 80) }));
+}
+
 // ---------------------------------------------------------------------------
 // SİPARİŞ YÖNETİMİ
 // ---------------------------------------------------------------------------
@@ -325,8 +334,8 @@ export const createProduct = async (req, res, next) => {
     const store = await findOwnerStore(userId);
     if (!store) return next({ status: 404, message: "Market bulunamadı" });
 
-    const { title, description, price, unit, stock, photos, category, barcode } =
-      req.body || {};
+    const { title, description, price, unit, stock, photos, category, barcode,
+      brand, attributes, netQuantity, netUnit } = req.body || {};
 
     if (!title || typeof title !== "string" || !title.trim()) {
       return next({ status: 400, message: "title zorunlu" });
@@ -348,6 +357,10 @@ export const createProduct = async (req, res, next) => {
       category: category ? toObjectId(category) : undefined,
       store: store._id,
       barcode: barcode || null,
+      brand: typeof brand === "string" ? brand.trim() : "",
+      attributes: sanitizeAttributes(attributes),
+      netQuantity: netQuantity != null && Number(netQuantity) >= 0 ? Number(netQuantity) : null,
+      netUnit: ["L","ml","kg","g","piece"].includes(netUnit) ? netUnit : null,
     });
 
     res.status(201).json(product);
@@ -385,6 +398,10 @@ export const updateProduct = async (req, res, next) => {
       "category",
       "isActive",
       "barcode",
+      "brand",
+      "attributes",
+      "netQuantity",
+      "netUnit",
     ];
 
     for (const key of allowed) {
@@ -394,6 +411,15 @@ export const updateProduct = async (req, res, next) => {
             return next({ status: 400, message: "Geçersiz category id" });
           }
           product.category = toObjectId(req.body[key]);
+        } else if (key === "attributes") {
+          product.attributes = sanitizeAttributes(req.body[key]);
+        } else if (key === "brand") {
+          product.brand = typeof req.body[key] === "string" ? req.body[key].trim() : "";
+        } else if (key === "netQuantity") {
+          const n = req.body[key];
+          product.netQuantity = n != null && Number(n) >= 0 ? Number(n) : null;
+        } else if (key === "netUnit") {
+          product.netUnit = ["L","ml","kg","g","piece"].includes(req.body[key]) ? req.body[key] : null;
         } else if (key === "price" || key === "stock") {
           const num = Number(req.body[key]);
           if (isNaN(num) || num < 0) {
