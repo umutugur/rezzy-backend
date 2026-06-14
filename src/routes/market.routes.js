@@ -4,6 +4,7 @@ import { auth } from "../middlewares/auth.js";
 import {
   listNearbyStores,
   getStoreDetail,
+  getProductDetail,
   listStoreProducts,
   createOrder,
   listMyOrders,
@@ -29,6 +30,9 @@ r.get("/market/stores/:id", getStoreDetail);
 
 // Marketteki ürünler
 r.get("/market/stores/:id/products", listStoreProducts);
+
+// Ürün detay
+r.get("/market/products/:id", getProductDetail);
 
 // Sipariş oluştur — JWT zorunlu
 r.post("/market/orders", auth(), createOrder);

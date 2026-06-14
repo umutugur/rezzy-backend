@@ -8,6 +8,7 @@ import UserAddress from "../models/UserAddress.js";
 import CoreCategory from "../models/CoreCategory.js";
 import { notifyUser } from "../services/notification.service.js";
 import { resolveZoneForMarketStore } from "../utils/deliveryZoneResolver.js";
+import { computeUnitPrice } from "../utils/marketUnitPrice.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
@@ -123,6 +124,54 @@ export const getStoreDetail = async (req, res, next) => {
     if (!store) return next({ status: 404, message: "Market bulunamadı" });
 
     res.json(store);
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * GET /api/market/products/:id
+ * Public. Ürün + birim fiyat + ilgili ürünler (aynı mağaza/kategori, max 8).
+ */
+export const getProductDetail = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return next({ status: 400, message: "Geçersiz ürün id" });
+    }
+
+    const product = await MarketProduct.findOne({ _id: id, isActive: true })
+      .populate("category")
+      .lean();
+    if (!product) return next({ status: 404, message: "Ürün bulunamadı" });
+
+    const unitPrice = computeUnitPrice(product.price, product.netQuantity, product.netUnit);
+
+    const categoryId = product.category?._id ?? product.category ?? null;
+    let related = [];
+    if (categoryId) {
+      related = await MarketProduct.find({
+        store: product.store,
+        category: categoryId,
+        isActive: true,
+        _id: { $ne: product._id },
+      })
+        .limit(8)
+        .lean();
+    }
+    if (related.length < 8) {
+      const excludeIds = [product._id, ...related.map((r) => r._id)];
+      const fill = await MarketProduct.find({
+        store: product.store,
+        isActive: true,
+        _id: { $nin: excludeIds },
+      })
+        .limit(8 - related.length)
+        .lean();
+      related = related.concat(fill);
+    }
+
+    res.json({ product: { ...product, unitPrice }, related });
   } catch (e) {
     next(e);
   }
