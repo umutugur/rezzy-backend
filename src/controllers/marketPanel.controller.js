@@ -23,6 +23,16 @@ const findOwnerStore = async (userId) => {
   return MarketStore.findOne({ owner: oid }).lean();
 };
 
+// Satış birimi enum'una güvenli normalize — geçersiz/eski etiketler "piece"e düşer
+const UNIT_ENUM = ["kg", "piece", "litre", "pack"];
+const UNIT_ALIASES = { adet: "piece", lt: "litre", l: "litre", litre: "litre", paket: "pack", kilo: "kg" };
+function normalizeUnit(u) {
+  const v = String(u || "").toLowerCase().trim();
+  if (UNIT_ENUM.includes(v)) return v;
+  if (UNIT_ALIASES[v]) return UNIT_ALIASES[v];
+  return "piece";
+}
+
 // attributes: yalnızca {label,value} string çiftleri, label≤40 value≤80, max 30
 function sanitizeAttributes(input) {
   if (!Array.isArray(input)) return [];
@@ -352,7 +362,7 @@ export const createProduct = async (req, res, next) => {
       title: title.trim(),
       description: description || "",
       price: Number(price),
-      unit: unit || "piece",
+      unit: normalizeUnit(unit),
       stock: Number(stock ?? 0),
       photos: Array.isArray(photos) ? photos : [],
       category: category ? toObjectId(category) : undefined,
@@ -434,6 +444,8 @@ export const updateProduct = async (req, res, next) => {
           const dv = req.body[key];
           product.discountPrice =
             dv != null && Number(dv) >= 0 && Number(dv) < Number(product.price) ? Number(dv) : null;
+        } else if (key === "unit") {
+          product.unit = normalizeUnit(req.body[key]);
         } else if (key === "price" || key === "stock") {
           const num = Number(req.body[key]);
           if (isNaN(num) || num < 0) {

@@ -11,7 +11,7 @@ import {
 import { useI18n } from "../../i18n";
 import { showToast } from "../../ui/Toast";
 
-const emptyForm = { title: "", price: "", stock: "", unit: "adet", description: "", brand: "", netQuantity: "", discountPrice: "" };
+const emptyForm = { title: "", price: "", stock: "", unit: "piece", description: "", brand: "", netQuantity: "", discountPrice: "" };
 const emptyNetUnit: "L" | "ml" | "kg" | "g" | "piece" | "" = "";
 const emptyAttributes: { label: string; value: string }[] = [];
 
