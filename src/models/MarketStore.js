@@ -33,7 +33,7 @@ const MarketStoreSchema = new mongoose.Schema(
       index: true,
     },
 
-    // GeoJSON Point — yakın market sorgusu için 2dsphere
+    // GeoJSON Point — yakın market sorgusu için 2dsphere index aşağıda `location` üzerinde tanımlı
     location: {
       type: {
         type: String,
@@ -42,7 +42,6 @@ const MarketStoreSchema = new mongoose.Schema(
       },
       coordinates: {
         type: [Number], // [lng, lat]
-        index: "2dsphere",
       },
     },
 
@@ -100,6 +99,11 @@ const MarketStoreSchema = new mongoose.Schema(
 );
 
 MarketStoreSchema.index({ name: "text" });
+// GeoJSON $near sorgusu için 2dsphere — `location` (Point objesi) üzerinde olmalı
+MarketStoreSchema.index(
+  { location: "2dsphere" },
+  { name: "market_store_location_2dsphere" }
+);
 MarketStoreSchema.index(
   { isActive: 1, city: 1, rating: -1 },
   { name: "market_store_active_city_rating" }
