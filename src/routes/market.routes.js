@@ -11,6 +11,7 @@ import {
   getOrderDetail,
   cancelOrder,
   listMarketCategories,
+  searchProducts,
 } from "../controllers/market.controller.js";
 
 const r = Router();
@@ -29,6 +30,7 @@ r.get("/market/stores", listNearbyStores);
 r.get("/market/stores/:id", getStoreDetail);
 
 // Marketteki ürünler
+r.get("/market/search", searchProducts);
 r.get("/market/stores/:id/products", listStoreProducts);
 
 // Ürün detay

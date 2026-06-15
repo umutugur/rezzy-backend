@@ -196,7 +196,7 @@ export const getProductDetail = async (req, res, next) => {
 export const listStoreProducts = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { category, page = 1, limit = 40 } = req.query;
+    const { category, q, page = 1, limit = 40 } = req.query;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return next({ status: 400, message: "Geçersiz market id" });
@@ -205,6 +205,9 @@ export const listStoreProducts = async (req, res, next) => {
     const filter = { store: toObjectId(id), isActive: true };
     if (category && mongoose.Types.ObjectId.isValid(category)) {
       filter.category = toObjectId(category);
+    }
+    if (q && String(q).trim().length >= 2) {
+      filter.$text = { $search: String(q).trim() };
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -585,6 +588,79 @@ export const cancelOrder = async (req, res, next) => {
     }
 
     res.json({ ok: true, order });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * GET /api/market/search
+ * Query: q (≥2), lat, lng, radius(km=10), category, brand, discounted(=1),
+ *        sort(relevance|price_asc|price_desc), page, limit(≤50)
+ */
+export const searchProducts = async (req, res, next) => {
+  try {
+    const {
+      q = "", lat, lng, radius = 10, category, brand,
+      discounted, sort = "relevance", page = 1, limit = 20,
+    } = req.query;
+
+    const query = String(q).trim();
+    if (query.length < 2) {
+      return res.json({ items: [], total: 0, page: Number(page), limit: Number(limit), brands: [] });
+    }
+
+    let storeIds;
+    if (lat && lng) {
+      const latNum = parseFloat(lat), lngNum = parseFloat(lng);
+      const radiusMeters = parseFloat(radius) * 1000;
+      if (isNaN(latNum) || isNaN(lngNum) || isNaN(radiusMeters)) {
+        return next({ status: 400, message: "Geçersiz konum parametresi" });
+      }
+      const stores = await MarketStore.find({
+        isActive: true,
+        location: { $near: { $geometry: { type: "Point", coordinates: [lngNum, latNum] }, $maxDistance: radiusMeters } },
+      }).select("_id").limit(200).lean();
+      storeIds = stores.map((s) => s._id);
+    } else {
+      const stores = await MarketStore.find({ isActive: true }).select("_id").limit(200).lean();
+      storeIds = stores.map((s) => s._id);
+    }
+    if (storeIds.length === 0) {
+      return res.json({ items: [], total: 0, page: Number(page), limit: Number(limit), brands: [] });
+    }
+
+    const filter = { isActive: true, store: { $in: storeIds }, $text: { $search: query } };
+    if (category && mongoose.Types.ObjectId.isValid(category)) filter.category = toObjectId(category);
+    if (brand) filter.brand = String(brand);
+    if (discounted === "1") filter.discountPrice = { $type: "number" };
+
+    const lim = Math.min(Number(limit) || 20, 50);
+    const pg = Math.max(Number(page) || 1, 1);
+    const skip = (pg - 1) * lim;
+
+    let sortSpec, projection;
+    if (sort === "price_asc") { sortSpec = { price: 1 }; }
+    else if (sort === "price_desc") { sortSpec = { price: -1 }; }
+    else { sortSpec = { score: { $meta: "textScore" } }; projection = { score: { $meta: "textScore" } }; }
+
+    const findQuery = projection ? MarketProduct.find(filter, projection) : MarketProduct.find(filter);
+
+    const [items, total, brandsRaw] = await Promise.all([
+      findQuery.sort(sortSpec).skip(skip).limit(lim).populate("store", "name").lean(),
+      MarketProduct.countDocuments(filter),
+      (() => { const bf = { ...filter }; delete bf.brand; return MarketProduct.distinct("brand", bf); })(),
+    ]);
+
+    const itemsOut = items.map((p) => {
+      const out = { ...p, effectivePrice: effectivePrice(p), discountPercent: discountPercent(p) };
+      delete out.priceHistory;
+      delete out.score;
+      return out;
+    });
+    const brands = (brandsRaw || []).filter((b) => b && String(b).trim()).sort();
+
+    res.json({ items: itemsOut, total: Math.min(total, 200), page: pg, limit: lim, brands });
   } catch (e) {
     next(e);
   }
