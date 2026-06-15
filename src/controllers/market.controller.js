@@ -304,13 +304,14 @@ export const createOrder = async (req, res, next) => {
         return next({ status: 400, message: `Geçersiz adet: ${item.productId}` });
       }
 
-      const lineTotal = +(product.price * qty).toFixed(2);
+      const unitEff = effectivePrice(product);
+      const lineTotal = +(unitEff * qty).toFixed(2);
       subtotal += lineTotal;
 
       orderItems.push({
         productId: product._id,
         title: product.title,
-        price: product.price,
+        price: unitEff,
         qty,
         unit: product.unit,
         lineTotal,
