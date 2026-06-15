@@ -11,7 +11,7 @@ import {
 import { useI18n } from "../../i18n";
 import { showToast } from "../../ui/Toast";
 
-const emptyForm = { title: "", price: "", stock: "", unit: "adet", description: "", brand: "", netQuantity: "" };
+const emptyForm = { title: "", price: "", stock: "", unit: "adet", description: "", brand: "", netQuantity: "", discountPrice: "" };
 const emptyNetUnit: "L" | "ml" | "kg" | "g" | "piece" | "" = "";
 const emptyAttributes: { label: string; value: string }[] = [];
 
@@ -48,6 +48,7 @@ export function MarketProductsPage() {
       description: p.description ?? "",
       brand: p.brand ?? "",
       netQuantity: p.netQuantity != null ? String(p.netQuantity) : "",
+      discountPrice: p.discountPrice != null ? String(p.discountPrice) : "",
     });
     setFormNetUnit((p.netUnit ?? "") as "L" | "ml" | "kg" | "g" | "piece" | "");
     setFormAttributes(p.attributes ? p.attributes.map(a => ({ ...a })) : []);
@@ -57,9 +58,12 @@ export function MarketProductsPage() {
 
   const { mutate: saveProduct, isPending: saving } = useMutation({
     mutationFn: async () => {
+      const priceNum = Number(form.price);
+      const dpNum = form.discountPrice !== "" ? Number(form.discountPrice) : NaN;
+      const validDiscount = !isNaN(dpNum) && dpNum >= 0 && dpNum < priceNum ? dpNum : null;
       const payload = {
         title: form.title.trim(),
-        price: Number(form.price),
+        price: priceNum,
         stock: Number(form.stock),
         unit: form.unit,
         description: form.description,
@@ -67,6 +71,7 @@ export function MarketProductsPage() {
         netQuantity: form.netQuantity !== "" ? Number(form.netQuantity) : null,
         netUnit: (formNetUnit || null) as "L" | "ml" | "kg" | "g" | "piece" | null,
         attributes: formAttributes.filter(a => a.label.trim() && a.value.trim()),
+        discountPrice: validDiscount,
       };
       if (modal.product) return marketUpdateProduct(modal.product._id, payload);
       return marketCreateProduct(payload);
@@ -249,6 +254,31 @@ export function MarketProductsPage() {
                     />
                   </div>
                 ))}
+
+                {/* Discount Price */}
+                <div>
+                  <label style={{ color: "#9ca3af", fontSize: 12, display: "block", marginBottom: 4 }}>{t("İndirimli Fiyat")} (₺)</label>
+                  <input
+                    type="number"
+                    value={form.discountPrice}
+                    onChange={e => setForm(f => ({ ...f, discountPrice: e.target.value }))}
+                    placeholder="ör. 8.99 (isteğe bağlı)"
+                    style={{
+                      width: "100%", padding: "10px 14px", borderRadius: 8,
+                      border: "1px solid #2d3348", background: "#0f1117", color: "#fff",
+                      fontSize: 14, outline: "none", boxSizing: "border-box",
+                    }}
+                  />
+                  {(() => {
+                    const dp = Number(form.discountPrice);
+                    const pr = Number(form.price);
+                    if (form.discountPrice !== "" && !isNaN(dp) && dp >= 0 && pr > 0 && dp < pr) {
+                      const pct = Math.round((1 - dp / pr) * 100);
+                      return <span style={{ color: "#10b981", fontSize: 12, marginTop: 4, display: "block" }}>%{pct} indirim</span>;
+                    }
+                    return null;
+                  })()}
+                </div>
 
                 {/* Brand */}
                 <div>
