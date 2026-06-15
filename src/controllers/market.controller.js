@@ -9,6 +9,7 @@ import CoreCategory from "../models/CoreCategory.js";
 import { notifyUser } from "../services/notification.service.js";
 import { resolveZoneForMarketStore } from "../utils/deliveryZoneResolver.js";
 import { computeUnitPrice } from "../utils/marketUnitPrice.js";
+import { effectivePrice, discountPercent, lowest30 } from "../utils/marketPricing.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
@@ -171,7 +172,18 @@ export const getProductDetail = async (req, res, next) => {
       related = related.concat(fill);
     }
 
-    res.json({ product: { ...product, unitPrice }, related });
+    product.effectivePrice = effectivePrice(product);
+    product.discountPercent = discountPercent(product);
+    product.lowest30 = lowest30(product);
+    delete product.priceHistory;
+
+    const relatedOut = related.map((r) => {
+      const out = { ...r, effectivePrice: effectivePrice(r), discountPercent: discountPercent(r) };
+      delete out.priceHistory;
+      return out;
+    });
+
+    res.json({ product: { ...product, unitPrice }, related: relatedOut });
   } catch (e) {
     next(e);
   }
@@ -208,7 +220,12 @@ export const listStoreProducts = async (req, res, next) => {
       MarketProduct.countDocuments(filter),
     ]);
 
-    res.json({ items, total, page: Number(page), limit: lim });
+    const itemsOut = items.map((p) => {
+      const out = { ...p, effectivePrice: effectivePrice(p), discountPercent: discountPercent(p) };
+      delete out.priceHistory;
+      return out;
+    });
+    res.json({ items: itemsOut, total, page: Number(page), limit: lim });
   } catch (e) {
     next(e);
   }
