@@ -55,11 +55,22 @@ const MarketProductSchema = new mongoose.Schema(
       enum: ["L", "ml", "kg", "g", "piece", null],
       default: null,
     },
+
+    discountPrice: { type: Number, default: null, min: 0 },
+
+    priceHistory: {
+      type: [{ price: { type: Number, required: true }, at: { type: Date, required: true } }],
+      default: [],
+    },
   },
   { timestamps: true }
 );
 
 MarketProductSchema.index({ title: "text" });
+MarketProductSchema.index(
+  { store: 1, discountPrice: 1 },
+  { partialFilterExpression: { discountPrice: { $type: "number" } } }
+);
 // store+category+isActive eşitlik sorgusu mevcut composite index ile karşılanıyor
 MarketProductSchema.index(
   { store: 1, isActive: 1, category: 1 },
