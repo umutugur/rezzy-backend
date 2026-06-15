@@ -68,7 +68,13 @@ r.post(
   createProduct
 );
 
-// Ürün güncelle
+// Ürün güncelle — client'lar PATCH gönderiyor; PUT'u da geriye dönük uyumluluk için tut
+r.patch(
+  "/market/panel/products/:id",
+  auth(),
+  allow("market_owner", "admin"),
+  updateProduct
+);
 r.put(
   "/market/panel/products/:id",
   auth(),
