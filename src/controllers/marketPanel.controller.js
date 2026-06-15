@@ -4,6 +4,7 @@ import MarketStore from "../models/MarketStore.js";
 import MarketProduct from "../models/MarketProduct.js";
 import MarketOrder from "../models/MarketOrder.js";
 import { notifyUser } from "../services/notification.service.js";
+import { effectivePrice, recordPriceHistory } from "../utils/marketPricing.js";
 
 const toObjectId = (id) => {
   try {
@@ -335,7 +336,7 @@ export const createProduct = async (req, res, next) => {
     if (!store) return next({ status: 404, message: "Market bulunamadı" });
 
     const { title, description, price, unit, stock, photos, category, barcode,
-      brand, attributes, netQuantity, netUnit } = req.body || {};
+      brand, attributes, netQuantity, netUnit, discountPrice } = req.body || {};
 
     if (!title || typeof title !== "string" || !title.trim()) {
       return next({ status: 400, message: "title zorunlu" });
@@ -361,6 +362,14 @@ export const createProduct = async (req, res, next) => {
       attributes: sanitizeAttributes(attributes),
       netQuantity: netQuantity != null && Number(netQuantity) >= 0 ? Number(netQuantity) : null,
       netUnit: ["L","ml","kg","g","piece"].includes(netUnit) ? netUnit : null,
+      discountPrice:
+        discountPrice != null && Number(discountPrice) >= 0 && Number(discountPrice) < Number(price)
+          ? Number(discountPrice) : null,
+      priceHistory: [{
+        price: (discountPrice != null && Number(discountPrice) >= 0 && Number(discountPrice) < Number(price))
+          ? Number(discountPrice) : Number(price),
+        at: new Date(),
+      }],
     });
 
     res.status(201).json(product);
@@ -402,6 +411,7 @@ export const updateProduct = async (req, res, next) => {
       "attributes",
       "netQuantity",
       "netUnit",
+      "discountPrice",
     ];
 
     for (const key of allowed) {
@@ -420,6 +430,10 @@ export const updateProduct = async (req, res, next) => {
           product.netQuantity = n != null && Number(n) >= 0 ? Number(n) : null;
         } else if (key === "netUnit") {
           product.netUnit = ["L","ml","kg","g","piece"].includes(req.body[key]) ? req.body[key] : null;
+        } else if (key === "discountPrice") {
+          const dv = req.body[key];
+          product.discountPrice =
+            dv != null && Number(dv) >= 0 && Number(dv) < Number(product.price) ? Number(dv) : null;
         } else if (key === "price" || key === "stock") {
           const num = Number(req.body[key]);
           if (isNaN(num) || num < 0) {
@@ -430,6 +444,10 @@ export const updateProduct = async (req, res, next) => {
           product[key] = req.body[key];
         }
       }
+    }
+
+    if (product.isModified("price") || product.isModified("discountPrice")) {
+      recordPriceHistory(product);
     }
 
     await product.save();
