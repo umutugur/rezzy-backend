@@ -66,7 +66,10 @@ const MarketProductSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-MarketProductSchema.index({ title: "text" });
+MarketProductSchema.index(
+  { title: "text", brand: "text" },
+  { weights: { title: 5, brand: 3 }, name: "market_product_text" }
+);
 MarketProductSchema.index(
   { store: 1, discountPrice: 1 },
   { partialFilterExpression: { discountPrice: { $type: "number" } } }
