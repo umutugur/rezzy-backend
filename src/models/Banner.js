@@ -17,8 +17,11 @@ const BannerSchema = new mongoose.Schema(
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
 
-    targetType: { type: String, enum: ["delivery", "reservation"], required: true },
-    restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: "Restaurant", required: true },
+    targetType: { type: String, enum: ["delivery", "reservation", "market"], required: true },
+    restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: "Restaurant", required: false },
+    marketStoreId: { type: mongoose.Schema.Types.ObjectId, ref: "MarketStore", default: null },
+    marketProductId: { type: mongoose.Schema.Types.ObjectId, ref: "MarketProduct", default: null },
+    marketCollectionId: { type: mongoose.Schema.Types.ObjectId, ref: "MarketCollection", default: null },
 },
   { timestamps: true }
 );

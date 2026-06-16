@@ -43,11 +43,16 @@ export const listActiveBanners = async (req, res, next) => {
 
     const items = await Banner.find(q)
       .sort({ order: 1, createdAt: -1 })
-      .select("_id title imageUrl linkUrl placement region order targetType restaurantId")
+      .select(
+        "_id title imageUrl linkUrl placement region order targetType restaurantId marketStoreId marketProductId marketCollectionId"
+      )
       .lean();
 
     const mapped = (items || []).map((b) => ({
       ...b,
+      marketStoreId: b.marketStoreId,
+      marketProductId: b.marketProductId,
+      marketCollectionId: b.marketCollectionId,
       action: {
         type: b.targetType,
         restaurantId: b.restaurantId ? String(b.restaurantId) : null,
@@ -110,11 +115,14 @@ export const adminCreateBanner = async (req, res, next) => {
 
     const targetType = req.body?.targetType ? String(req.body.targetType).trim() : null;
     const restaurantId = toObjectId(req.body?.restaurantId);
+    const marketStoreId = toObjectId(req.body?.marketStoreId);
+    const marketProductId = toObjectId(req.body?.marketProductId);
+    const marketCollectionId = toObjectId(req.body?.marketCollectionId);
 
-    if (!targetType || !["delivery", "reservation"].includes(targetType)) {
-      return res.status(400).json({ message: "targetType must be delivery or reservation" });
+    if (!targetType || !["delivery", "reservation", "market"].includes(targetType)) {
+      return res.status(400).json({ message: "targetType must be delivery, reservation or market" });
     }
-    if (!restaurantId) {
+    if (targetType !== "market" && !restaurantId) {
       return res.status(400).json({ message: "restaurantId is required" });
     }
 
@@ -140,6 +148,9 @@ export const adminCreateBanner = async (req, res, next) => {
       linkUrl,
       targetType,
       restaurantId,
+      marketStoreId,
+      marketProductId,
+      marketCollectionId,
       order: Number.isFinite(order) ? order : 0,
       isActive: !!isActive,
       startAt: isNaN(startAt?.getTime?.()) ? null : startAt,
@@ -179,16 +190,28 @@ export const adminUpdateBanner = async (req, res, next) => {
     if (req.body?.targetType != null) {
       const t = String(req.body.targetType).trim();
       if (!t) return res.status(400).json({ message: "targetType cannot be empty" });
-      if (!["delivery", "reservation"].includes(t)) {
-        return res.status(400).json({ message: "targetType must be delivery or reservation" });
+      if (!["delivery", "reservation", "market"].includes(t)) {
+        return res.status(400).json({ message: "targetType must be delivery, reservation or market" });
       }
       patch.targetType = t;
     }
 
     if (req.body?.restaurantId != null) {
       const rid = toObjectId(req.body.restaurantId);
-      if (!rid) return res.status(400).json({ message: "Invalid restaurantId" });
+      if (patch.targetType !== "market" && !rid) {
+        return res.status(400).json({ message: "Invalid restaurantId" });
+      }
       patch.restaurantId = rid;
+    }
+
+    if (req.body?.marketStoreId != null) {
+      patch.marketStoreId = toObjectId(req.body.marketStoreId);
+    }
+    if (req.body?.marketProductId != null) {
+      patch.marketProductId = toObjectId(req.body.marketProductId);
+    }
+    if (req.body?.marketCollectionId != null) {
+      patch.marketCollectionId = toObjectId(req.body.marketCollectionId);
     }
 
     if (req.body?.order != null) {
