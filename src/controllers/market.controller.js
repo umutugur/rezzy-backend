@@ -335,6 +335,10 @@ export const createOrder = async (req, res, next) => {
     const store = await MarketStore.findOne({ _id: storeId, isActive: true }).lean();
     if (!store) return next({ status: 404, message: "Market bulunamadı" });
 
+    if (type === "pickup" && store.pickupEnabled === false) {
+      return next({ status: 400, message: "Bu market gel-al hizmeti vermiyor" });
+    }
+
     if (type === "delivery" && deliveryAddressId) {
       if (!mongoose.Types.ObjectId.isValid(deliveryAddressId)) {
         return next({ status: 400, message: "Geçersiz deliveryAddressId" });
