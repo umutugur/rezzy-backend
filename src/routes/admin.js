@@ -67,6 +67,12 @@ import {
   updateOrgItem,
   deleteOrgItem,
 } from "../controllers/orgMenu.controller.js";
+import {
+  adminListCollections,
+  adminCreateCollection,
+  adminUpdateCollection,
+  adminDeleteCollection,
+} from "../controllers/marketCollection.controller.js";
 import multer from "multer";
 
 const upload = multer({
@@ -280,5 +286,11 @@ r.delete(
   allowOrgOwnerOrAdmin("oid"),
   deleteOrgItem
 );
+
+// ---- Market Collections ----
+r.get("/market/collections", auth(), allow("admin"), adminListCollections);
+r.post("/market/collections", auth(), allow("admin"), adminCreateCollection);
+r.patch("/market/collections/:id", auth(), allow("admin"), adminUpdateCollection);
+r.delete("/market/collections/:id", auth(), allow("admin"), adminDeleteCollection);
 
 export default r;
