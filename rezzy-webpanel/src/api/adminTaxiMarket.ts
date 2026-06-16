@@ -61,3 +61,56 @@ export async function adminRejectDriver(id: string, reason?: string) {
   const { data } = await api.patch(`/admin/taxi/drivers/${id}/reject`, { reason });
   return data;
 }
+
+// ── Market collections ──────────────────────────────────────────────────────
+export type MarketCollectionKind = "manual" | "discounted";
+
+export type MarketCollection = {
+  _id: string;
+  title: string;
+  region: string | null;
+  kind: MarketCollectionKind;
+  productIds: string[];
+  imageUrl: string | null;
+  order: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type MarketCollectionInput = {
+  title: string;
+  region?: string | null;
+  kind: MarketCollectionKind;
+  productIds?: string[];
+  imageUrl?: string | null;
+  order?: number;
+  isActive?: boolean;
+};
+
+export async function adminListMarketCollections(): Promise<{ items: MarketCollection[] }> {
+  const { data } = await api.get("/admin/market/collections");
+  const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+  return { items: items as MarketCollection[] };
+}
+
+export async function adminCreateMarketCollection(body: MarketCollectionInput) {
+  const { data } = await api.post("/admin/market/collections", body);
+  return data as { ok: boolean; collection: MarketCollection };
+}
+
+export async function adminUpdateMarketCollection(id: string, body: Partial<MarketCollectionInput>) {
+  const { data } = await api.patch(`/admin/market/collections/${id}`, body);
+  return data as { ok: boolean; collection: MarketCollection };
+}
+
+export async function adminDeleteMarketCollection(id: string) {
+  const { data } = await api.delete(`/admin/market/collections/${id}`);
+  return data as { ok: boolean };
+}
+
+// ── Market product search (for collection product picker) ─────────────────
+export async function marketSearchProducts(params: { q: string; page?: number; limit?: number }) {
+  const { data } = await api.get("/market/search", { params });
+  return data as { items: any[]; total: number; page: number; limit: number; brands?: any[] };
+}

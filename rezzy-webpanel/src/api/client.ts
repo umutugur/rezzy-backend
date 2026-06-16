@@ -680,7 +680,7 @@ export async function adminDismissComplaint(id: string) {
 // =========================
 // ADMIN — Banners
 // =========================
-export type AdminBannerTargetType = "delivery" | "reservation";
+export type AdminBannerTargetType = "delivery" | "reservation" | "market";
 
 export type AdminBanner = {
   _id: string;
@@ -696,7 +696,12 @@ export type AdminBanner = {
 
   // ✅ new
   targetType: AdminBannerTargetType;
-  restaurantId: string;
+  restaurantId?: string;
+
+  // ✅ market targets
+  marketStoreId?: string | null;
+  marketProductId?: string | null;
+  marketCollectionId?: string | null;
 
   createdAt?: string;
   updatedAt?: string;
@@ -723,7 +728,12 @@ export async function adminCreateBanner(input: {
   endAt?: string | null;   // ISO
 
   targetType: AdminBannerTargetType;
-  restaurantId: string;
+  restaurantId?: string;
+
+  // ✅ market targets
+  marketStoreId?: string | null;
+  marketProductId?: string | null;
+  marketCollectionId?: string | null;
 
   imageFile: File; // ✅ required
 }) {
@@ -739,7 +749,12 @@ export async function adminCreateBanner(input: {
 
   // ✅ action mapping
   fd.append("targetType", input.targetType);
-  fd.append("restaurantId", input.restaurantId);
+  if (input.restaurantId) fd.append("restaurantId", input.restaurantId);
+
+  // ✅ market targets
+  if (input.marketStoreId) fd.append("marketStoreId", input.marketStoreId);
+  if (input.marketProductId) fd.append("marketProductId", input.marketProductId);
+  if (input.marketCollectionId) fd.append("marketCollectionId", input.marketCollectionId);
 
   // ✅ backend upload.single("image")
   fd.append("image", input.imageFile);
@@ -763,6 +778,11 @@ export async function adminUpdateBanner(
     targetType?: AdminBannerTargetType;
     restaurantId?: string;
 
+    // ✅ market targets
+    marketStoreId?: string | null;
+    marketProductId?: string | null;
+    marketCollectionId?: string | null;
+
     imageFile?: File | null; // optional replace
   }
 ) {
@@ -778,6 +798,11 @@ export async function adminUpdateBanner(
 
   if (input.targetType != null) fd.append("targetType", input.targetType);
   if (input.restaurantId != null) fd.append("restaurantId", input.restaurantId);
+
+  // ✅ market targets
+  if (input.marketStoreId != null) fd.append("marketStoreId", input.marketStoreId || "");
+  if (input.marketProductId != null) fd.append("marketProductId", input.marketProductId || "");
+  if (input.marketCollectionId != null) fd.append("marketCollectionId", input.marketCollectionId || "");
 
   if (input.imageFile instanceof File) {
     fd.append("image", input.imageFile);

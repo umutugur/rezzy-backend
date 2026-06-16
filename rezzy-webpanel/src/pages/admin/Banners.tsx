@@ -122,6 +122,9 @@ export default function AdminBannersPage() {
   const [endAt, setEndAt] = React.useState("");
   const [targetType, setTargetType] = React.useState<AdminBannerTargetType>("delivery");
   const [restaurantId, setRestaurantId] = React.useState<string>("");
+  const [marketStoreId, setMarketStoreId] = React.useState<string>("");
+  const [marketProductId, setMarketProductId] = React.useState<string>("");
+  const [marketCollectionId, setMarketCollectionId] = React.useState<string>("");
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imageSrc, setImageSrc] = React.useState<string>("");
   React.useEffect(() => {
@@ -138,7 +141,7 @@ export default function AdminBannersPage() {
     mutationFn: async () => {
 if (!imageFile) throw new Error(t("Banner görseli zorunlu"));
 const finalImage = croppedFile ?? imageFile;
-      if (!restaurantId) throw new Error(t("Restoran seçmelisin"));
+      if (targetType !== "market" && !restaurantId) throw new Error(t("Restoran seçmelisin"));
       return adminCreateBanner({
         placement,
         region: region ? region.toUpperCase() : null,
@@ -149,7 +152,10 @@ const finalImage = croppedFile ?? imageFile;
         startAt: isoOrNull(startAt),
         endAt: isoOrNull(endAt),
         targetType,
-        restaurantId,
+        restaurantId: targetType === "market" ? undefined : restaurantId,
+        marketStoreId: targetType === "market" ? (marketStoreId.trim() || null) : undefined,
+        marketProductId: targetType === "market" ? (marketProductId.trim() || null) : undefined,
+        marketCollectionId: targetType === "market" ? (marketCollectionId.trim() || null) : undefined,
         imageFile: finalImage,
       });
     },
@@ -162,6 +168,9 @@ const finalImage = croppedFile ?? imageFile;
       setEndAt("");
       setTargetType("delivery");
       setRestaurantId("");
+      setMarketStoreId("");
+      setMarketProductId("");
+      setMarketCollectionId("");
       setImageFile(null);
       if (imageSrc) URL.revokeObjectURL(imageSrc);
 setImageSrc("");
@@ -287,24 +296,71 @@ setCropOpen(false);
               >
                 <option value="delivery">{t("Delivery (paket servis)")}</option>
                 <option value="reservation">{t("Reservation (rezervasyon)")}</option>
+                <option value="market">{t("Market")}</option>
               </select>
             </div>
 
-            <div className="md:col-span-2">
-              <div className="text-xs text-gray-500 mb-1">{t("Restoran")}</div>
-              <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={restaurantId}
-                onChange={(e) => setRestaurantId(e.target.value)}
-              >
-                <option value="">{t("Restoran seç")}</option>
-                {(restaurants ?? []).map((r) => (
-                  <option key={r._id} value={r._id}>
-                    {r.name} {r.region ? `(${r.region})` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {targetType === "market" ? (
+              <>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">{t("Market Placement")}</div>
+                  <select
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={placement}
+                    onChange={(e) => setPlacement(e.target.value)}
+                  >
+                    <option value="market_home_top">{t("market_home_top")}</option>
+                    <option value="market_store_top">{t("market_store_top")}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">{t("Market Store ID (opsiyonel)")}</div>
+                  <input
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={marketStoreId}
+                    onChange={(e) => setMarketStoreId(e.target.value)}
+                    placeholder={t("ObjectId")}
+                  />
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">{t("Market Product ID (opsiyonel)")}</div>
+                  <input
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={marketProductId}
+                    onChange={(e) => setMarketProductId(e.target.value)}
+                    placeholder={t("ObjectId")}
+                  />
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">{t("Market Collection ID (opsiyonel)")}</div>
+                  <input
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={marketCollectionId}
+                    onChange={(e) => setMarketCollectionId(e.target.value)}
+                    placeholder={t("ObjectId")}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="md:col-span-2">
+                <div className="text-xs text-gray-500 mb-1">{t("Restoran")}</div>
+                <select
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  value={restaurantId}
+                  onChange={(e) => setRestaurantId(e.target.value)}
+                >
+                  <option value="">{t("Restoran seç")}</option>
+                  {(restaurants ?? []).map((r) => (
+                    <option key={r._id} value={r._id}>
+                      {r.name} {r.region ? `(${r.region})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <div className="text-xs text-gray-500 mb-1">{t("StartAt")}</div>
@@ -473,26 +529,35 @@ setCropOpen(false);
                     >
                       <option value="delivery">{t("delivery")}</option>
                       <option value="reservation">{t("reservation")}</option>
+                      <option value="market">{t("market")}</option>
                     </select>
                   </td>
 
                   <td className="py-2 px-4">
-                    <select
-                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm max-w-[260px]"
-                      value={b.restaurantId}
-                      onChange={(e) =>
-                        updateMut.mutate({
-                          id: b._id,
-                          patch: { restaurantId: e.target.value },
-                        })
-                      }
-                    >
-                      {(restaurants ?? []).map((r) => (
-                        <option key={r._id} value={r._id}>
-                          {r.name}
-                        </option>
-                      ))}
-                    </select>
+                    {b.targetType === "market" ? (
+                      <div className="text-[11px] text-gray-500 space-y-0.5 max-w-[260px]">
+                        <div>{t("Store")}: {b.marketStoreId || "-"}</div>
+                        <div>{t("Product")}: {b.marketProductId || "-"}</div>
+                        <div>{t("Collection")}: {b.marketCollectionId || "-"}</div>
+                      </div>
+                    ) : (
+                      <select
+                        className="rounded-lg border border-gray-300 px-2 py-1 text-sm max-w-[260px]"
+                        value={b.restaurantId ?? ""}
+                        onChange={(e) =>
+                          updateMut.mutate({
+                            id: b._id,
+                            patch: { restaurantId: e.target.value },
+                          })
+                        }
+                      >
+                        {(restaurants ?? []).map((r) => (
+                          <option key={r._id} value={r._id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
 
                   <td className="py-2 px-4">{b.placement}</td>

@@ -10,6 +10,7 @@ export const ADMIN_SIDEBAR_ITEMS = [
   { to: "/admin/notifications", label: "Bildirim Gönder" },
   { to: "/admin/delivery/orders", label: "🛵 Paket Servis Siparişleri" },
   { to: "/admin/market/orders", label: "🛒 Market Siparişleri" },
+  { to: "/admin/market/collections", label: "🛒 Market Koleksiyonları" },
   { to: "/admin/taxi/drivers", label: "🚕 Sürücü Başvuruları" },
   { to: "/admin/taxi/rides", label: "🗺️ Taksi Yolculukları" },
   { to: "/admin/taxi/config", label: "⚙️ Taksi Tarifeleri" },
