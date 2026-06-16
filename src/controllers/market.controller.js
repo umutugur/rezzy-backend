@@ -38,6 +38,7 @@ export const listNearbyStores = async (req, res, next) => {
       lng,
       radius = 10,
       category,
+      pickup,
       page = 1,
       limit = 20,
     } = req.query;
@@ -45,6 +46,7 @@ export const listNearbyStores = async (req, res, next) => {
     const filter = { isActive: true };
 
     if (category) filter.category = category;
+    if (String(pickup) === "1") filter.pickupEnabled = { $ne: false };
 
     let stores;
     let total;
