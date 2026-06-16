@@ -50,9 +50,6 @@ export const listActiveBanners = async (req, res, next) => {
 
     const mapped = (items || []).map((b) => ({
       ...b,
-      marketStoreId: b.marketStoreId,
-      marketProductId: b.marketProductId,
-      marketCollectionId: b.marketCollectionId,
       action: {
         type: b.targetType,
         restaurantId: b.restaurantId ? String(b.restaurantId) : null,
@@ -198,7 +195,14 @@ export const adminUpdateBanner = async (req, res, next) => {
 
     if (req.body?.restaurantId != null) {
       const rid = toObjectId(req.body.restaurantId);
-      if (patch.targetType !== "market" && !rid) {
+      // Effective targetType: use the one in this patch, else fall back to the
+      // existing banner's targetType (partial PATCH may not resend targetType).
+      let effectiveTargetType = patch.targetType;
+      if (effectiveTargetType === undefined) {
+        const existing = await Banner.findById(id).select("targetType").lean();
+        effectiveTargetType = existing?.targetType;
+      }
+      if (effectiveTargetType !== "market" && !rid) {
         return res.status(400).json({ message: "Invalid restaurantId" });
       }
       patch.restaurantId = rid;
