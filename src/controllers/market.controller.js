@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import MarketStore from "../models/MarketStore.js";
 import MarketProduct from "../models/MarketProduct.js";
 import MarketOrder from "../models/MarketOrder.js";
+import MarketCollection from "../models/MarketCollection.js";
 import UserAddress from "../models/UserAddress.js";
 import CoreCategory from "../models/CoreCategory.js";
 import { notifyUser } from "../services/notification.service.js";
@@ -232,6 +233,70 @@ export const listStoreProducts = async (req, res, next) => {
   } catch (e) {
     next(e);
   }
+};
+
+// Bir koleksiyonun önizleme ürünlerini çözer (max `limit`)
+async function resolveCollectionProducts(col, limit = 10) {
+  let products = [];
+  if (col.kind === "discounted") {
+    products = await MarketProduct.find({ isActive: true, discountPrice: { $type: "number" } })
+      .sort({ updatedAt: -1 }).limit(limit).lean();
+  } else {
+    const ids = (col.productIds || []).slice(0, limit);
+    const found = await MarketProduct.find({ _id: { $in: ids }, isActive: true }).lean();
+    const byId = new Map(found.map((p) => [String(p._id), p]));
+    products = ids.map((id) => byId.get(String(id))).filter(Boolean);
+  }
+  return products.map((p) => {
+    const out = { ...p, effectivePrice: effectivePrice(p), discountPercent: discountPercent(p) };
+    delete out.priceHistory;
+    return out;
+  });
+}
+
+/** GET /api/market/collections?region= — aktif koleksiyonlar + önizleme ürünleri */
+export const listMarketCollections = async (req, res, next) => {
+  try {
+    const region = req.query.region ? String(req.query.region).trim().toUpperCase() : null;
+    const q = { isActive: true };
+    if (region) q.$or = [{ region }, { region: null }];
+    const cols = await MarketCollection.find(q).sort({ order: 1, createdAt: -1 }).limit(20).lean();
+    const items = await Promise.all(cols.map(async (c) => ({
+      _id: c._id, title: c.title, kind: c.kind, imageUrl: c.imageUrl,
+      products: await resolveCollectionProducts(c, 10),
+    })));
+    res.json({ items: items.filter((c) => c.products.length > 0) });
+  } catch (e) { next(e); }
+};
+
+/** GET /api/market/collections/:id?page=&limit= — koleksiyonun tüm ürünleri (sayfalı) */
+export const getMarketCollectionProducts = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) return next({ status: 400, message: "Geçersiz koleksiyon id" });
+    const col = await MarketCollection.findOne({ _id: id, isActive: true }).lean();
+    if (!col) return next({ status: 404, message: "Koleksiyon bulunamadı" });
+
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Number(req.query.limit) || 20, 50);
+    const skip = (page - 1) * limit;
+
+    let filter, totalCount;
+    if (col.kind === "discounted") {
+      filter = { isActive: true, discountPrice: { $type: "number" } };
+      totalCount = await MarketProduct.countDocuments(filter);
+      const docs = await MarketProduct.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(limit).lean();
+      const items = docs.map((p) => { const o = { ...p, effectivePrice: effectivePrice(p), discountPercent: discountPercent(p) }; delete o.priceHistory; return o; });
+      return res.json({ items, total: totalCount, page, limit });
+    }
+    const ids = col.productIds || [];
+    const pageIds = ids.slice(skip, skip + limit);
+    const found = await MarketProduct.find({ _id: { $in: pageIds }, isActive: true }).lean();
+    const byId = new Map(found.map((p) => [String(p._id), p]));
+    const items = pageIds.map((x) => byId.get(String(x))).filter(Boolean)
+      .map((p) => { const o = { ...p, effectivePrice: effectivePrice(p), discountPercent: discountPercent(p) }; delete o.priceHistory; return o; });
+    res.json({ items, total: ids.length, page, limit });
+  } catch (e) { next(e); }
 };
 
 /**

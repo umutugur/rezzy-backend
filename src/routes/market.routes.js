@@ -12,6 +12,8 @@ import {
   cancelOrder,
   listMarketCategories,
   searchProducts,
+  listMarketCollections,
+  getMarketCollectionProducts,
 } from "../controllers/market.controller.js";
 
 const r = Router();
@@ -32,6 +34,10 @@ r.get("/market/stores/:id", getStoreDetail);
 // Marketteki ürünler
 r.get("/market/search", searchProducts);
 r.get("/market/stores/:id/products", listStoreProducts);
+
+// Koleksiyonlar (banner/ana sayfa için ürün grupları)
+r.get("/market/collections", listMarketCollections);
+r.get("/market/collections/:id", getMarketCollectionProducts);
 
 // Ürün detay
 r.get("/market/products/:id", getProductDetail);
