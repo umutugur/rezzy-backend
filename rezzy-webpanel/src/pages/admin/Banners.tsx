@@ -121,6 +121,8 @@ export default function AdminBannersPage() {
   const [startAt, setStartAt] = React.useState("");
   const [endAt, setEndAt] = React.useState("");
   const [targetType, setTargetType] = React.useState<AdminBannerTargetType>("delivery");
+  // Create-form placement is independent from the list filter `placement` above.
+  const [formPlacement, setFormPlacement] = React.useState("home_top");
   const [restaurantId, setRestaurantId] = React.useState<string>("");
   const [marketStoreId, setMarketStoreId] = React.useState<string>("");
   const [marketProductId, setMarketProductId] = React.useState<string>("");
@@ -143,7 +145,7 @@ if (!imageFile) throw new Error(t("Banner görseli zorunlu"));
 const finalImage = croppedFile ?? imageFile;
       if (targetType !== "market" && !restaurantId) throw new Error(t("Restoran seçmelisin"));
       return adminCreateBanner({
-        placement,
+        placement: formPlacement,
         region: region ? region.toUpperCase() : null,
         title: title.trim() || null,
         linkUrl: linkUrl.trim() || null,
@@ -292,7 +294,20 @@ setCropOpen(false);
               <select
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 value={targetType}
-                onChange={(e) => setTargetType(e.target.value as AdminBannerTargetType)}
+                onChange={(e) => {
+                  const tt = e.target.value as AdminBannerTargetType;
+                  setTargetType(tt);
+                  // Keep the create-form placement consistent with target type.
+                  if (tt === "market") {
+                    setFormPlacement((p) =>
+                      p === "market_home_top" || p === "market_store_top" ? p : "market_home_top"
+                    );
+                  } else {
+                    setFormPlacement((p) =>
+                      p === "market_home_top" || p === "market_store_top" ? "home_top" : p
+                    );
+                  }
+                }}
               >
                 <option value="delivery">{t("Delivery (paket servis)")}</option>
                 <option value="reservation">{t("Reservation (rezervasyon)")}</option>
@@ -306,8 +321,8 @@ setCropOpen(false);
                   <div className="text-xs text-gray-500 mb-1">{t("Market Placement")}</div>
                   <select
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    value={placement}
-                    onChange={(e) => setPlacement(e.target.value)}
+                    value={formPlacement}
+                    onChange={(e) => setFormPlacement(e.target.value)}
                   >
                     <option value="market_home_top">{t("market_home_top")}</option>
                     <option value="market_store_top">{t("market_store_top")}</option>
@@ -345,7 +360,17 @@ setCropOpen(false);
                 </div>
               </>
             ) : (
-              <div className="md:col-span-2">
+              <>
+              <div>
+                <div className="text-xs text-gray-500 mb-1">{t("Placement")}</div>
+                <input
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  value={formPlacement}
+                  onChange={(e) => setFormPlacement(e.target.value)}
+                  placeholder={t("home_top")}
+                />
+              </div>
+              <div>
                 <div className="text-xs text-gray-500 mb-1">{t("Restoran")}</div>
                 <select
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -360,6 +385,7 @@ setCropOpen(false);
                   ))}
                 </select>
               </div>
+              </>
             )}
 
             <div>
