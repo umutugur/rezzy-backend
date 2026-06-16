@@ -57,6 +57,9 @@ const MarketStoreSchema = new mongoose.Schema(
     deliveryFee: { type: Number, default: 0, min: 0 },
     freeDeliveryThreshold: { type: Number, default: null },
 
+    // Gel-al (mağazadan teslim alma) hizmeti açık mı
+    pickupEnabled: { type: Boolean, default: true },
+
     // Hex-grid teslimat bölgeleri (Getir benzeri)
     gridSettings: {
       cellSizeMeters: { type: Number, default: 450, min: 50 },
