@@ -9,6 +9,7 @@ import UserAddress from "../models/UserAddress.js";
 import CoreCategory from "../models/CoreCategory.js";
 import { notifyUser } from "../services/notification.service.js";
 import { resolveZoneForMarketStore } from "../utils/deliveryZoneResolver.js";
+import { haversineMeters } from "../utils/haversine.js";
 import { computeUnitPrice } from "../utils/marketUnitPrice.js";
 import { effectivePrice, discountPercent, lowest30 } from "../utils/marketPricing.js";
 
@@ -420,6 +421,21 @@ export const createOrder = async (req, res, next) => {
                 : "Bu adres teslimat bölgesi dışında.",
             });
           }
+          // Hex-grid yoksa (flat pricing) → deliveryZoneKm yarıçapı ile serviceability
+          if (zoneResult.useFlatPricing) {
+            const storeCoords = Array.isArray(store.location?.coordinates)
+              ? store.location.coordinates
+              : null;
+            if (storeCoords && addrCoords) {
+              const distM = haversineMeters(
+                addrCoords[1], addrCoords[0], storeCoords[1], storeCoords[0]
+              );
+              const maxM = (store.deliveryZoneKm ?? 5) * 1000;
+              if (distM > maxM) {
+                return next({ status: 400, message: "Bu adres teslimat bölgesi dışında." });
+              }
+            }
+          }
           effectiveMinOrder = zoneResult.minOrderAmount;
           effectiveFreeThreshold = zoneResult.freeDeliveryThreshold;
           deliveryFee = effectiveFreeThreshold != null && subtotal >= effectiveFreeThreshold
@@ -428,7 +444,15 @@ export const createOrder = async (req, res, next) => {
         } catch (zoneErr) {
           // Zone resolver hata fırlatırsa (store inactive vs.) onu ilet
           if (zoneErr?.status) return next(zoneErr);
-          // Koordinat veya grid hatası → flat pricing'e dön
+          // Koordinat veya grid hatası → flat pricing'e dön; yine de yarıçap kontrolü
+          const storeCoordsForRadius = Array.isArray(store.location?.coordinates)
+            ? store.location.coordinates : null;
+          if (storeCoordsForRadius && addrCoords) {
+            const distM = haversineMeters(addrCoords[1], addrCoords[0], storeCoordsForRadius[1], storeCoordsForRadius[0]);
+            if (distM > (store.deliveryZoneKm ?? 5) * 1000) {
+              return next({ status: 400, message: "Bu adres teslimat bölgesi dışında." });
+            }
+          }
           deliveryFee = effectiveFreeThreshold != null && subtotal >= effectiveFreeThreshold
             ? 0
             : store.deliveryFee ?? 0;
