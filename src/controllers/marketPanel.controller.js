@@ -214,6 +214,7 @@ export const updateMyStore = async (req, res, next) => {
       "gridSettings",
       "deliveryZones",
       "location",
+      "pickupEnabled",
     ];
 
     for (const key of ALLOWED) {
@@ -235,6 +236,8 @@ export const updateMyStore = async (req, res, next) => {
             }
             store[key] = num;
           }
+        } else if (key === "pickupEnabled") {
+          store[key] = req.body[key] === true || req.body[key] === "true";
         } else if (key === "photos") {
           if (!Array.isArray(req.body[key])) {
             return next({ status: 400, message: "photos bir dizi olmalı" });
