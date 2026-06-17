@@ -11,6 +11,7 @@ import {
 } from "../../api/marketDesktop";
 import { showToast } from "../../ui/Toast";
 import { useI18n } from "../../i18n";
+import ImageCropField from "../components/ImageCropField";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -463,7 +464,40 @@ export function MarketSettingsPage() {
           </div>
         </div>
 
-        {/* ── Section B: Teslimat Bölgeleri ───────────────────────────────── */}
+        {/* ── Section B: Görseller ────────────────────────────────────────── */}
+        <div style={sectionCardStyle}>
+          <div style={sectionTitleStyle}>🖼️ {t("Görseller")}</div>
+          <ImageCropField
+            label={t("Logo")}
+            hint={t("Kare (1:1)")}
+            aspect={1}
+            outW={512}
+            outH={512}
+            shape="circle"
+            value={store?.logo}
+            onUploaded={(url) =>
+              marketUpdateMyStore({ logo: url }).then(() =>
+                qc.invalidateQueries({ queryKey: ["market-my-store"] }),
+              )
+            }
+          />
+          <ImageCropField
+            label={t("Kapak")}
+            hint={t("Geniş (16:9)")}
+            aspect={16 / 9}
+            outW={1280}
+            outH={720}
+            shape="rect"
+            value={store?.photos?.[0]}
+            onUploaded={(url) =>
+              marketUpdateMyStore({ photos: [url] }).then(() =>
+                qc.invalidateQueries({ queryKey: ["market-my-store"] }),
+              )
+            }
+          />
+        </div>
+
+        {/* ── Section C: Teslimat Bölgeleri ───────────────────────────────── */}
         <div style={sectionCardStyle}>
           <div style={sectionTitleStyle}>🗺️ {t("Teslimat Bölgeleri")}</div>
 

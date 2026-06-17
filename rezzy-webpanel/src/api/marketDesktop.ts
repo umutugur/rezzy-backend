@@ -150,6 +150,8 @@ export interface MarketStoreSettings {
   isActive: boolean;
   address?: string;
   city?: string;
+  logo?: string | null;
+  photos?: string[];
   location?: { type: string; coordinates: [number, number] };
   workingHours?: { open: string; close: string; days: number[] };
   deliveryFee?: number;
