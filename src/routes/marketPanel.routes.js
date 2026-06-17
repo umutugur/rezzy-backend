@@ -2,6 +2,7 @@
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
 import { allow } from "../middlewares/roles.js";
+import { imageUpload } from "../utils/multer.js";
 import {
   listPanelOrders,
   updateOrderStatus,
@@ -12,6 +13,8 @@ import {
   getMyStore,
   updateMyStore,
   listOrgStores,
+  uploadPanelImage,
+  productImageSuggestions,
 } from "../controllers/marketPanel.controller.js";
 
 const r = Router();
@@ -92,5 +95,11 @@ r.delete(
 
 // Aynı organizasyona ait şubeler
 r.get("/market/panel/org/stores", auth(), listOrgStores);
+
+// Görsel yükleme
+r.post("/market/panel/upload", auth(), allow("market_owner", "admin"), imageUpload.single("file"), uploadPanelImage);
+
+// Cross-store ürün görseli önerileri
+r.get("/market/panel/product-image-suggestions", auth(), allow("market_owner", "admin"), productImageSuggestions);
 
 export default r;

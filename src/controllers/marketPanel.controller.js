@@ -3,8 +3,10 @@ import mongoose from "mongoose";
 import MarketStore from "../models/MarketStore.js";
 import MarketProduct from "../models/MarketProduct.js";
 import MarketOrder from "../models/MarketOrder.js";
+import CoreCategory from "../models/CoreCategory.js";
 import { notifyUser } from "../services/notification.service.js";
 import { effectivePrice, recordPriceHistory } from "../utils/marketPricing.js";
+import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 
 const toObjectId = (id) => {
   try {
@@ -357,8 +359,15 @@ export const createProduct = async (req, res, next) => {
     if (price == null || isNaN(Number(price)) || Number(price) < 0) {
       return next({ status: 400, message: "Geçerli bir price giriniz" });
     }
-    if (category && !mongoose.Types.ObjectId.isValid(category)) {
+    if (!category) {
+      return next({ status: 400, message: "category zorunlu" });
+    }
+    if (!mongoose.Types.ObjectId.isValid(category)) {
       return next({ status: 400, message: "Geçersiz category id" });
+    }
+    const catDoc = await CoreCategory.findOne({ _id: category, businessTypes: "market", isActive: true }).select("_id").lean();
+    if (!catDoc) {
+      return next({ status: 400, message: "Geçersiz market kategorisi" });
     }
 
     const product = await MarketProduct.create({
@@ -368,7 +377,7 @@ export const createProduct = async (req, res, next) => {
       unit: normalizeUnit(unit),
       stock: Number(stock ?? 0),
       photos: Array.isArray(photos) ? photos : [],
-      category: category ? toObjectId(category) : undefined,
+      category: toObjectId(category),
       store: store._id,
       barcode: barcode || null,
       brand: typeof brand === "string" ? brand.trim() : "",
@@ -432,6 +441,10 @@ export const updateProduct = async (req, res, next) => {
         if (key === "category") {
           if (!mongoose.Types.ObjectId.isValid(req.body[key])) {
             return next({ status: 400, message: "Geçersiz category id" });
+          }
+          const catDoc = await CoreCategory.findOne({ _id: req.body[key], businessTypes: "market", isActive: true }).select("_id").lean();
+          if (!catDoc) {
+            return next({ status: 400, message: "Geçersiz market kategorisi" });
           }
           product.category = toObjectId(req.body[key]);
         } else if (key === "attributes") {
@@ -526,4 +539,55 @@ export const listOrgStores = async (req, res, next) => {
   } catch (e) {
     next(e);
   }
+};
+
+/** POST /api/market/panel/upload — tek görsel yükle, URL döner (photos alanında kullanılır) */
+export const uploadPanelImage = async (req, res, next) => {
+  try {
+    if (!req.file?.buffer) return next({ status: 400, message: "Görsel dosyası gerekli" });
+    const result = await uploadBufferToCloudinary(req.file.buffer, {
+      folder: process.env.CLOUDINARY_FOLDER_MARKET || "rezvix/market",
+      resource_type: "image",
+    });
+    res.json({ url: result.secure_url });
+  } catch (e) { next(e); }
+};
+
+/** GET /api/market/panel/product-image-suggestions?barcode=&title=&brand=&limit= */
+export const productImageSuggestions = async (req, res, next) => {
+  try {
+    const { barcode, title, brand } = req.query;
+    const limit = Math.min(Number(req.query.limit) || 8, 20);
+    const seen = new Set();
+    const items = [];
+    const pushDocs = (docs, source) => {
+      for (const p of docs) {
+        const url = p.photos?.[0];
+        if (!url || seen.has(url)) continue;
+        seen.add(url);
+        items.push({ url, source, title: p.title, brand: p.brand });
+        if (items.length >= limit) break;
+      }
+    };
+    if (barcode && String(barcode).trim()) {
+      const docs = await MarketProduct.find({
+        barcode: String(barcode).trim(),
+        isActive: true,
+        "photos.0": { $exists: true },
+      }).select("photos title brand").limit(limit).lean();
+      pushDocs(docs, "barcode");
+    }
+    if (items.length < limit) {
+      const term = [title, brand].filter(Boolean).map(String).join(" ").trim();
+      if (term) {
+        const docs = await MarketProduct.find({
+          $text: { $search: term },
+          isActive: true,
+          "photos.0": { $exists: true },
+        }).select("photos title brand").limit(limit * 2).lean();
+        pushDocs(docs, "match");
+      }
+    }
+    res.json({ items });
+  } catch (e) { next(e); }
 };
