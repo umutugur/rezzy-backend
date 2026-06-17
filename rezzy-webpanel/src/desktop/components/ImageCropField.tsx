@@ -11,7 +11,7 @@ type Props = {
   outH: number;
   shape: "circle" | "rect";
   value: string | null | undefined;
-  onUploaded: (url: string) => void;
+  onUploaded: (url: string) => void | Promise<void>;
 };
 
 export default function ImageCropField({ label, hint, aspect, outW, outH, shape, value, onUploaded }: Props) {
@@ -39,7 +39,7 @@ export default function ImageCropField({ label, hint, aspect, outW, outH, shape,
     try {
       const file = await cropToFile(imageSrc, areaPixels, fileName, outW, outH);
       const { url } = await uploadMarketImage(file);
-      onUploaded(url);
+      await onUploaded(url);
       setOpen(false);
       setImageSrc(null);
     } catch {
