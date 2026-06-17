@@ -213,6 +213,7 @@ export const updateMyStore = async (req, res, next) => {
       "deliveryFee",
       "freeDeliveryThreshold",
       "photos",
+      "logo",
       "gridSettings",
       "deliveryZones",
       "location",

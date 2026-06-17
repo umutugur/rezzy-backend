@@ -50,6 +50,9 @@ const MarketStoreSchema = new mongoose.Schema(
 
     photos: { type: [String], default: [] },
 
+    // Mağaza logosu (1:1) — liste yuvarlak logosu. Kapak = photos[0].
+    logo: { type: String, default: null },
+
     workingHours: { type: WorkingHoursSchema, default: () => ({}) },
 
     deliveryZoneKm: { type: Number, default: 5, min: 0 },
