@@ -100,6 +100,48 @@ export async function marketDeleteProduct(id: string): Promise<void> {
   await api.delete(`/market/panel/products/${id}`);
 }
 
+// ---- Market Categories (CoreCategory) ----
+
+export interface MarketCoreCategory {
+  _id: string;
+  key: string;
+  i18n: Record<string, { title: string }>;
+  order: number;
+}
+
+export async function getMarketCategories(): Promise<{ items: MarketCoreCategory[] }> {
+  const { data } = await api.get("/market/categories");
+  return data as { items: MarketCoreCategory[] };
+}
+
+// ---- Market Panel Image Upload ----
+
+export async function uploadMarketImage(file: File): Promise<{ url: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post("/market/panel/upload", form);
+  return data as { url: string };
+}
+
+// ---- Product Image Suggestions ----
+
+export interface ProductImageSuggestion {
+  url: string;
+  source: string;
+  title: string;
+  brand?: string;
+}
+
+export async function getProductImageSuggestions(params: {
+  barcode?: string;
+  title?: string;
+  brand?: string;
+  limit?: number;
+}): Promise<{ items: ProductImageSuggestion[] }> {
+  const { data } = await api.get("/market/panel/product-image-suggestions", { params });
+  return data as { items: ProductImageSuggestion[] };
+}
+
 export interface MarketStoreSettings {
   _id: string;
   name: string;

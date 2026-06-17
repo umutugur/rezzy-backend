@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MarketDesktopLayout } from "../layouts/MarketDesktopLayout";
 import {
@@ -6,14 +6,29 @@ import {
   marketCreateProduct,
   marketUpdateProduct,
   marketDeleteProduct,
+  getMarketCategories,
+  uploadMarketImage,
+  getProductImageSuggestions,
   type PanelProduct,
+  type MarketCoreCategory,
+  type ProductImageSuggestion,
 } from "../../api/marketDesktop";
 import { useI18n } from "../../i18n";
 import { showToast } from "../../ui/Toast";
 
-const emptyForm = { title: "", price: "", stock: "", unit: "piece", description: "", brand: "", netQuantity: "", discountPrice: "" };
+const emptyForm = { title: "", price: "", stock: "", unit: "piece", description: "", brand: "", netQuantity: "", discountPrice: "", barcode: "" };
 const emptyNetUnit: "L" | "ml" | "kg" | "g" | "piece" | "" = "";
 const emptyAttributes: { label: string; value: string }[] = [];
+
+const inputStyle: React.CSSProperties = {
+  width: "100%", padding: "10px 14px", borderRadius: 8,
+  border: "1px solid #2d3348", background: "#0f1117", color: "#fff",
+  fontSize: 14, outline: "none", boxSizing: "border-box",
+};
+
+const labelStyle: React.CSSProperties = {
+  color: "#9ca3af", fontSize: 12, display: "block", marginBottom: 4,
+};
 
 export function MarketProductsPage() {
   const { t } = useI18n();
@@ -23,6 +38,18 @@ export function MarketProductsPage() {
   const [form, setForm] = useState(emptyForm);
   const [formNetUnit, setFormNetUnit] = useState<"L" | "ml" | "kg" | "g" | "piece" | "">(emptyNetUnit);
   const [formAttributes, setFormAttributes] = useState<{ label: string; value: string }[]>(emptyAttributes);
+  const [formCategory, setFormCategory] = useState<string>("");
+  const [formPhoto, setFormPhoto] = useState<string>("");
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [suggestions, setSuggestions] = useState<ProductImageSuggestion[]>([]);
+  const suggestionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load categories
+  const { data: categoriesData } = useQuery({
+    queryKey: ["market-core-categories"],
+    queryFn: getMarketCategories,
+  });
+  const categories: MarketCoreCategory[] = categoriesData?.items ?? [];
 
   const { data, isLoading } = useQuery({
     queryKey: ["market-products"],
@@ -33,12 +60,39 @@ export function MarketProductsPage() {
     !search || p.title.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Debounced suggestions fetch
+  useEffect(() => {
+    if (!modal.open) return;
+    const { title, brand, barcode } = form;
+    if (!title.trim() && !brand.trim() && !barcode.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    if (suggestionsTimerRef.current) clearTimeout(suggestionsTimerRef.current);
+    suggestionsTimerRef.current = setTimeout(() => {
+      getProductImageSuggestions({
+        title: title.trim() || undefined,
+        brand: brand.trim() || undefined,
+        barcode: barcode.trim() || undefined,
+      })
+        .then(res => setSuggestions(res.items ?? []))
+        .catch(() => setSuggestions([]));
+    }, 500);
+    return () => {
+      if (suggestionsTimerRef.current) clearTimeout(suggestionsTimerRef.current);
+    };
+  }, [form.title, form.brand, form.barcode, modal.open]);
+
   const openAdd = () => {
     setForm(emptyForm);
     setFormNetUnit(emptyNetUnit);
     setFormAttributes([]);
+    setFormCategory("");
+    setFormPhoto("");
+    setSuggestions([]);
     setModal({ open: true, product: null });
   };
+
   const openEdit = (p: PanelProduct) => {
     setForm({
       title: p.title,
@@ -49,19 +103,44 @@ export function MarketProductsPage() {
       brand: p.brand ?? "",
       netQuantity: p.netQuantity != null ? String(p.netQuantity) : "",
       discountPrice: p.discountPrice != null ? String(p.discountPrice) : "",
+      barcode: (p as any).barcode ?? "",
     });
     setFormNetUnit((p.netUnit ?? "") as "L" | "ml" | "kg" | "g" | "piece" | "");
     setFormAttributes(p.attributes ? p.attributes.map(a => ({ ...a })) : []);
+    // category may be an object { _id } or a string id
+    const catVal = (p as any).category;
+    setFormCategory(typeof catVal === "string" ? catVal : catVal?._id ?? "");
+    setFormPhoto((p as any).photos?.[0] ?? "");
+    setSuggestions([]);
     setModal({ open: true, product: p });
   };
-  const closeModal = () => setModal({ open: false, product: null });
+
+  const closeModal = () => {
+    setModal({ open: false, product: null });
+    setSuggestions([]);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoUploading(true);
+    try {
+      const res = await uploadMarketImage(file);
+      setFormPhoto(res.url);
+    } catch {
+      showToast(t("Görsel yüklenemedi"), "error");
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
 
   const { mutate: saveProduct, isPending: saving } = useMutation({
     mutationFn: async () => {
+      if (!formCategory) throw new Error("category_required");
       const priceNum = Number(form.price);
       const dpNum = form.discountPrice !== "" ? Number(form.discountPrice) : NaN;
       const validDiscount = !isNaN(dpNum) && dpNum >= 0 && dpNum < priceNum ? dpNum : null;
-      const payload = {
+      const payload: any = {
         title: form.title.trim(),
         price: priceNum,
         stock: Number(form.stock),
@@ -72,6 +151,9 @@ export function MarketProductsPage() {
         netUnit: (formNetUnit || null) as "L" | "ml" | "kg" | "g" | "piece" | null,
         attributes: formAttributes.filter(a => a.label.trim() && a.value.trim()),
         discountPrice: validDiscount,
+        category: formCategory,
+        ...(form.barcode.trim() ? { barcode: form.barcode.trim() } : {}),
+        photos: formPhoto ? [formPhoto] : [],
       };
       if (modal.product) return marketUpdateProduct(modal.product._id, payload);
       return marketCreateProduct(payload);
@@ -81,7 +163,13 @@ export function MarketProductsPage() {
       showToast(t("Kaydedildi"), "success");
       closeModal();
     },
-    onError: () => showToast(t("Kayıt başarısız"), "error"),
+    onError: (err: any) => {
+      if (err?.message === "category_required") {
+        showToast(t("Kategori seçimi zorunludur"), "error");
+      } else {
+        showToast(t("Kayıt başarısız"), "error");
+      }
+    },
   });
 
   const { mutate: deleteProduct } = useMutation({
@@ -223,15 +311,42 @@ export function MarketProductsPage() {
           <div style={{
             position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
             display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
+            overflowY: "auto",
           }}>
             <div style={{
-              background: "#1e2330", borderRadius: 16, padding: 32, width: 480,
-              border: "1px solid #2d3348",
+              background: "#1e2330", borderRadius: 16, padding: 32, width: 500,
+              border: "1px solid #2d3348", margin: "24px auto",
             }}>
               <h3 style={{ color: "#fff", margin: "0 0 20px", fontSize: 18, fontWeight: 700 }}>
                 {modal.product ? t("Ürünü Düzenle") : t("Yeni Ürün")}
               </h3>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+                {/* Category (required) */}
+                <div>
+                  <label style={labelStyle}>{t("Kategori")} *</label>
+                  <select
+                    value={formCategory}
+                    onChange={e => setFormCategory(e.target.value)}
+                    style={{
+                      ...inputStyle,
+                      color: formCategory ? "#fff" : "#6b7280",
+                    }}
+                  >
+                    <option value="">{t("Kategori seçiniz")}</option>
+                    {categories.map(cat => (
+                      <option key={cat._id} value={cat._id}>
+                        {cat.i18n?.tr?.title ?? cat.key}
+                      </option>
+                    ))}
+                  </select>
+                  {!formCategory && (
+                    <span style={{ color: "#ef4444", fontSize: 11, marginTop: 4, display: "block" }}>
+                      {t("Kategori zorunludur")}
+                    </span>
+                  )}
+                </div>
+
                 {([
                   { label: "Ürün Adı *", key: "title", type: "text" },
                   { label: "Fiyat (₺) *", key: "price", type: "number" },
@@ -239,35 +354,25 @@ export function MarketProductsPage() {
                   { label: "Stok", key: "stock", type: "number" },
                 ] as Array<{ label: string; key: keyof typeof emptyForm; type: string }>).map(({ label, key, type }) => (
                   <div key={key}>
-                    <label style={{ color: "#9ca3af", fontSize: 12, display: "block", marginBottom: 4 }}>
-                      {t(label)}
-                    </label>
+                    <label style={labelStyle}>{t(label)}</label>
                     <input
                       type={type}
                       value={form[key]}
                       onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                      style={{
-                        width: "100%", padding: "10px 14px", borderRadius: 8,
-                        border: "1px solid #2d3348", background: "#0f1117", color: "#fff",
-                        fontSize: 14, outline: "none", boxSizing: "border-box",
-                      }}
+                      style={inputStyle}
                     />
                   </div>
                 ))}
 
                 {/* Discount Price */}
                 <div>
-                  <label style={{ color: "#9ca3af", fontSize: 12, display: "block", marginBottom: 4 }}>{t("İndirimli Fiyat")} (₺)</label>
+                  <label style={labelStyle}>{t("İndirimli Fiyat")} (₺)</label>
                   <input
                     type="number"
                     value={form.discountPrice}
                     onChange={e => setForm(f => ({ ...f, discountPrice: e.target.value }))}
                     placeholder="ör. 8.99 (isteğe bağlı)"
-                    style={{
-                      width: "100%", padding: "10px 14px", borderRadius: 8,
-                      border: "1px solid #2d3348", background: "#0f1117", color: "#fff",
-                      fontSize: 14, outline: "none", boxSizing: "border-box",
-                    }}
+                    style={inputStyle}
                   />
                   {(() => {
                     const dp = Number(form.discountPrice);
@@ -282,45 +387,48 @@ export function MarketProductsPage() {
 
                 {/* Brand */}
                 <div>
-                  <label style={{ color: "#9ca3af", fontSize: 12, display: "block", marginBottom: 4 }}>{t("Marka")}</label>
+                  <label style={labelStyle}>{t("Marka")}</label>
                   <input
                     type="text"
                     value={form.brand}
                     onChange={e => setForm(f => ({ ...f, brand: e.target.value }))}
                     placeholder="ör. Ülker"
-                    style={{
-                      width: "100%", padding: "10px 14px", borderRadius: 8,
-                      border: "1px solid #2d3348", background: "#0f1117", color: "#fff",
-                      fontSize: 14, outline: "none", boxSizing: "border-box",
-                    }}
+                    style={inputStyle}
+                  />
+                </div>
+
+                {/* Barcode */}
+                <div>
+                  <label style={labelStyle}>{t("Barkod")}</label>
+                  <input
+                    type="text"
+                    value={form.barcode}
+                    onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))}
+                    placeholder="ör. 8690504001986"
+                    style={inputStyle}
                   />
                 </div>
 
                 {/* Net Miktar + Net Birim */}
                 <div style={{ display: "flex", gap: 12 }}>
                   <div style={{ flex: 1 }}>
-                    <label style={{ color: "#9ca3af", fontSize: 12, display: "block", marginBottom: 4 }}>{t("Net Miktar")}</label>
+                    <label style={labelStyle}>{t("Net Miktar")}</label>
                     <input
                       type="number"
                       value={form.netQuantity}
                       onChange={e => setForm(f => ({ ...f, netQuantity: e.target.value }))}
                       placeholder="ör. 500"
-                      style={{
-                        width: "100%", padding: "10px 14px", borderRadius: 8,
-                        border: "1px solid #2d3348", background: "#0f1117", color: "#fff",
-                        fontSize: 14, outline: "none", boxSizing: "border-box",
-                      }}
+                      style={inputStyle}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <label style={{ color: "#9ca3af", fontSize: 12, display: "block", marginBottom: 4 }}>{t("Net Birim")}</label>
+                    <label style={labelStyle}>{t("Net Birim")}</label>
                     <select
                       value={formNetUnit}
                       onChange={e => setFormNetUnit(e.target.value as "L" | "ml" | "kg" | "g" | "piece" | "")}
                       style={{
-                        width: "100%", padding: "10px 14px", borderRadius: 8,
-                        border: "1px solid #2d3348", background: "#0f1117", color: formNetUnit ? "#fff" : "#6b7280",
-                        fontSize: 14, outline: "none", boxSizing: "border-box",
+                        ...inputStyle,
+                        color: formNetUnit ? "#fff" : "#6b7280",
                       }}
                     >
                       <option value="">{t("Seçiniz")}</option>
@@ -333,10 +441,75 @@ export function MarketProductsPage() {
                   </div>
                 </div>
 
+                {/* Product Image Upload */}
+                <div>
+                  <label style={labelStyle}>{t("Ürün Görseli")}</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    disabled={photoUploading}
+                    style={{
+                      width: "100%", padding: "8px 0", color: "#9ca3af", fontSize: 13,
+                      cursor: photoUploading ? "wait" : "pointer",
+                    }}
+                  />
+                  {photoUploading && (
+                    <span style={{ color: "#9ca3af", fontSize: 12, marginTop: 4, display: "block" }}>
+                      {t("Yükleniyor…")}
+                    </span>
+                  )}
+                  {formPhoto && (
+                    <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10 }}>
+                      <img
+                        src={formPhoto}
+                        alt="preview"
+                        style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid #2d3348" }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormPhoto("")}
+                        style={{
+                          padding: "4px 10px", borderRadius: 6, border: "1px solid #ef4444",
+                          background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 12,
+                        }}
+                      >
+                        {t("Kaldır")}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Image suggestions — only show when no photo chosen */}
+                  {!formPhoto && suggestions.length > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      <span style={{ color: "#6b7280", fontSize: 12 }}>
+                        {t("Bu ürünün görseli sistemde var")} — {t("birini seçin")}:
+                      </span>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+                        {suggestions.slice(0, 8).map((s, i) => (
+                          <img
+                            key={i}
+                            src={s.url}
+                            alt={s.title}
+                            title={s.title}
+                            onClick={() => setFormPhoto(s.url)}
+                            style={{
+                              width: 56, height: 56, objectFit: "cover", borderRadius: 8,
+                              border: "2px solid #2d3348", cursor: "pointer",
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.borderColor = "#4f46e5")}
+                            onMouseLeave={e => (e.currentTarget.style.borderColor = "#2d3348")}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Attributes */}
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <label style={{ color: "#9ca3af", fontSize: 12 }}>{t("Özellikler")}</label>
+                    <label style={labelStyle}>{t("Özellikler")}</label>
                     <button
                       type="button"
                       onClick={() => setFormAttributes(prev => [...prev, { label: "", value: "" }])}
@@ -399,12 +572,12 @@ export function MarketProductsPage() {
                 </button>
                 <button
                   onClick={() => saveProduct()}
-                  disabled={!form.title.trim() || !form.price || saving}
+                  disabled={!form.title.trim() || !form.price || !formCategory || saving}
                   style={{
                     padding: "10px 24px", borderRadius: 8, border: "none",
                     background: saving ? "#374151" : "#4f46e5", color: "#fff",
                     cursor: "pointer", fontWeight: 700,
-                    opacity: (!form.title.trim() || !form.price) ? 0.5 : 1,
+                    opacity: (!form.title.trim() || !form.price || !formCategory) ? 0.5 : 1,
                   }}
                 >
                   {saving ? t("Kaydediliyor…") : (modal.product ? t("Güncelle") : t("Ekle"))}
