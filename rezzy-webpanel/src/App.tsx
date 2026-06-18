@@ -35,6 +35,7 @@ import AdminMarketOrdersPage from "./pages/admin/AdminMarketOrders";
 import AdminMarketCollectionsPage from "./pages/admin/AdminMarketCollections";
 import AdminMarketsPage from "./pages/admin/Markets";
 import AdminMarketDetailPage from "./pages/admin/MarketDetail";
+import AdminMarketCreatePage from "./pages/admin/MarketCreate";
 import AdminTaxiRidesPage from "./pages/admin/AdminTaxiRides";
 import AdminTaxiDriversPage from "./pages/admin/AdminTaxiDrivers";
 import AdminDeliveryOrdersPage from "./pages/admin/AdminDeliveryOrders";
@@ -574,6 +575,14 @@ export default function App() {
           element={
             <AdminPage>
               <AdminMarketsPage />
+            </AdminPage>
+          }
+        />
+        <Route
+          path="/admin/market/stores/new"
+          element={
+            <AdminPage>
+              <AdminMarketCreatePage />
             </AdminPage>
           }
         />
