@@ -73,6 +73,11 @@ import {
   adminUpdateCollection,
   adminDeleteCollection,
 } from "../controllers/marketCollection.controller.js";
+import {
+  listStores,
+  getStore,
+  searchProducts,
+} from "../controllers/adminMarket.controller.js";
 import multer from "multer";
 
 const upload = multer({
@@ -286,6 +291,11 @@ r.delete(
   allowOrgOwnerOrAdmin("oid"),
   deleteOrgItem
 );
+
+// ---- Market Stores / Products (Admin) ----
+r.get("/market/stores", auth(), allow("admin"), listStores);
+r.get("/market/stores/:id", auth(), allow("admin"), getStore);
+r.get("/market/products", auth(), allow("admin"), searchProducts);
 
 // ---- Market Collections ----
 r.get("/market/collections", auth(), allow("admin"), adminListCollections);
