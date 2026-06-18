@@ -183,3 +183,24 @@ export async function marketUpdateMyStore(
   const { data } = await api.patch("/market/panel/store", payload);
   return data;
 }
+
+// ---- Market Reports ----
+
+export interface MarketReport {
+  range: { from: string; to: string };
+  kpis: {
+    revenue: number; deliveredOrders: number; totalOrders: number;
+    pendingOrders: number; cancelledOrders: number; avgOrderValue: number;
+    cancelRate: number; itemsSold: number;
+  };
+  timeseries: { date: string; revenue: number; orders: number }[];
+  byStatus: { status: string; count: number }[];
+  byPayment: { method: string; count: number; revenue: number }[];
+  byType: { type: string; count: number; revenue: number }[];
+  topProducts: { title: string; qty: number; revenue: number }[];
+}
+
+export async function marketGetReports(from?: string, to?: string): Promise<MarketReport> {
+  const { data } = await api.get("/market/panel/reports", { params: { from, to } });
+  return data as MarketReport;
+}
