@@ -235,9 +235,28 @@ export async function adminCreateOrganization(input: {
  * GET /admin/organizations/:id
  * - Detay + muhtemelen bağlı restoranlar, üyeler vs.
  */
+export interface AdminOrganizationDetail extends AdminOrganization {
+  restaurants?: Array<{
+    _id: string;
+    name: string;
+    city?: string;
+    region?: string;
+    isActive?: boolean;
+  }>;
+  marketStores?: Array<{
+    _id: string;
+    name: string;
+    city?: string;
+    isActive?: boolean;
+    rating?: number;
+    totalOrders?: number;
+  }>;
+  members?: any[];
+}
+
 export async function adminGetOrganization(id: string) {
   const { data } = await api.get(`/admin/organizations/${id}`);
-  return data as AdminOrganization;
+  return data as AdminOrganizationDetail;
 }
 
 /**

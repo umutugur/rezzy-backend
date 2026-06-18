@@ -14,22 +14,13 @@ import {
   adminRemoveOrganizationMember,
   adminUpdateOrganization,
   type AdminOrganization,
+  type AdminOrganizationDetail,
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
 import { DEFAULT_LANGUAGE, LANG_OPTIONS } from "../../utils/languages";
 import { t as i18nT, useI18n } from "../../i18n";
 
-type OrgDetail = AdminOrganization & {
-  // Backend'te farklı isimler kullanılabilir; hepsini zorlamıyoruz
-  restaurants?: Array<{
-    _id: string;
-    name: string;
-    city?: string;
-    region?: string;
-    isActive?: boolean;
-  }>;
-  members?: any[];
-};
+type OrgDetail = AdminOrganizationDetail;
 
 type UserOption = {
   _id: string;
@@ -68,7 +59,7 @@ export default function AdminOrganizationDetailPage() {
 
   const orgQ = useQuery<OrgDetail | null>({
     queryKey: ["admin-organization", oid],
-    queryFn: async () => (await adminGetOrganization(oid)) as OrgDetail,
+    queryFn: () => adminGetOrganization(oid),
     enabled: !!oid,
   });
 
@@ -108,6 +99,15 @@ export default function AdminOrganizationDetailPage() {
     (org as any)?.branches ??
     (org as any)?.restaurantList ??
     [];
+
+  const marketStores: Array<{
+    _id: string;
+    name: string;
+    city?: string;
+    isActive?: boolean;
+    rating?: number;
+    totalOrders?: number;
+  }> = org?.marketStores ?? [];
 
   // =======================
   // ORGANIZATION MEMBERSHIP
@@ -583,6 +583,59 @@ export default function AdminOrganizationDetailPage() {
           ) : (
             <div className="text-sm text-gray-500">
               {t("Henüz bu organizasyona bağlı restoran yok.")}
+            </div>
+          )}
+        </Card>
+
+        {/* Organizasyona bağlı market şubeleri */}
+        <Card title={t("Marketler")}>
+          {marketStores && marketStores.length > 0 ? (
+            <div className="overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500">
+                    <th className="py-2 px-4">{t("Ad")}</th>
+                    <th className="py-2 px-4">{t("Şehir")}</th>
+                    <th className="py-2 px-4">{t("Durum")}</th>
+                    <th className="py-2 px-4">{t("Toplam Sipariş")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {marketStores.map((m) => (
+                    <tr key={m._id} className="border-t">
+                      <td className="py-2 px-4">
+                        <Link
+                          to={`/admin/market/stores/${m._id}`}
+                          className="text-brand-700 underline"
+                        >
+                          {m.name}
+                        </Link>
+                      </td>
+                      <td className="py-2 px-4">
+                        {m.city || "-"}
+                      </td>
+                      <td className="py-2 px-4">
+                        {m.isActive ? (
+                          <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700">
+                            {t("Aktif")}
+                          </span>
+                        ) : (
+                          <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-rose-50 text-rose-700">
+                            {t("Pasif")}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-4">
+                        {m.totalOrders ?? "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">
+              {t("Bu zincire bağlı market yok")}
             </div>
           )}
         </Card>
