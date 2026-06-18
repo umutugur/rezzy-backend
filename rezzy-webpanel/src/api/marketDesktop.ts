@@ -48,6 +48,9 @@ export interface PanelProduct {
   netQuantity?: number | null;
   netUnit?: "L" | "ml" | "kg" | "g" | "piece" | null;
   discountPrice?: number | null;
+  barcode?: string | null;
+  photos?: string[];
+  category?: { _id: string; key?: string; i18n?: Record<string, { title?: string }> } | string | null;
   createdAt: string;
   updatedAt: string;
 }

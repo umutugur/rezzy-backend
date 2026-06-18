@@ -62,9 +62,21 @@ export function MarketProductsPage() {
     queryFn: () => marketGetProducts({ limit: 100 }),
   });
 
-  const products: PanelProduct[] = (data?.items ?? []).filter(p =>
-    !search || p.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const allProducts: PanelProduct[] = data?.items ?? [];
+  const products: PanelProduct[] = (() => {
+    const s = search.trim().toLowerCase();
+    if (!s) return allProducts;
+    return allProducts.filter(p =>
+      p.title.toLowerCase().includes(s) ||
+      (p.barcode ?? "").toLowerCase().includes(s) ||
+      (p.brand ?? "").toLowerCase().includes(s)
+    );
+  })();
+
+  // List summary stats
+  const statTotal = allProducts.length;
+  const statActive = allProducts.filter(p => p.isActive).length;
+  const statOut = allProducts.filter(p => p.stock === 0).length;
 
   // Debounced suggestions fetch
   useEffect(() => {
@@ -208,120 +220,168 @@ export function MarketProductsPage() {
   return (
     <MarketDesktopLayout>
       <div style={{ padding: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h2 style={{ color: "#fff", margin: 0, fontSize: 22, fontWeight: 700 }}>{t("Ürünler")}</h2>
-          <div style={{ display: "flex", gap: 12 }}>
-            <input
-              placeholder={t("Ara…")}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{
-                padding: "8px 14px", borderRadius: 8, border: "1px solid #2d3348",
-                background: "#1e2330", color: "#fff", fontSize: 13, outline: "none", width: 200,
-              }}
-            />
-            <button
-              onClick={openAdd}
-              style={{
-                padding: "8px 20px", borderRadius: 8, border: "none",
-                background: "#4f46e5", color: "#fff", cursor: "pointer",
-                fontWeight: 600, fontSize: 14,
-              }}
-            >
-              + {t("Ürün Ekle")}
-            </button>
+        {/* Header */}
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <h2 style={{ color: "#fff", margin: 0, fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em" }}>{t("Ürünler")}</h2>
+              <p style={{ color: "#6b7280", margin: "3px 0 0", fontSize: 13 }}>{t("Mağaza ürünlerinizi yönetin")}</p>
+            </div>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#5b6577", fontSize: 14, pointerEvents: "none" }}>🔍</span>
+                <input
+                  className="mp-input"
+                  placeholder={t("Ürün veya barkod ara…")}
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  style={{
+                    padding: "9px 14px 9px 34px", borderRadius: 10, border: "1px solid #2d3348",
+                    background: "#161a24", color: "#fff", fontSize: 13.5, outline: "none", width: 260,
+                  }}
+                />
+              </div>
+              <button
+                onClick={openAdd}
+                style={{
+                  padding: "9px 18px", borderRadius: 10, border: "none",
+                  background: "linear-gradient(135deg, #4f46e5, #6366f1)", color: "#fff", cursor: "pointer",
+                  fontWeight: 700, fontSize: 13.5, boxShadow: "0 6px 16px rgba(79,70,229,.32)", whiteSpace: "nowrap",
+                }}
+              >
+                + {t("Ürün Ekle")}
+              </button>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+            {[
+              { label: t("Toplam"), value: statTotal, color: "#a5b4fc", dot: "#6366f1" },
+              { label: t("Aktif"), value: statActive, color: "#34d399", dot: "#10b981" },
+              { label: t("Tükenen"), value: statOut, color: "#f87171", dot: "#ef4444" },
+            ].map(s => (
+              <div key={s.label} style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "8px 14px",
+                borderRadius: 10, background: "#161a24", border: "1px solid #232838",
+              }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: s.dot }} />
+                <span style={{ color: "#9ca3af", fontSize: 12.5 }}>{s.label}</span>
+                <span style={{ color: s.color, fontSize: 14, fontWeight: 700 }}>{s.value}</span>
+              </div>
+            ))}
           </div>
         </div>
 
+        <style>{`
+          .mp-input { transition: border-color .15s ease, box-shadow .15s ease }
+          .mp-input:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 3px rgba(99,102,241,.16) }
+          .mp-row { transition: background .12s ease }
+          .mp-row:hover { background: #181c27 }
+          .mp-act { transition: background .12s ease }
+          .mp-act:hover { background: rgba(99,102,241,.12) }
+          .mp-act-del:hover { background: rgba(239,68,68,.12) }
+        `}</style>
+
         {isLoading ? (
-          <div style={{ color: "#9ca3af" }}>{t("Yükleniyor…")}</div>
+          <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>{t("Yükleniyor…")}</div>
         ) : products.length === 0 ? (
-          <div style={{ color: "#6b7280", textAlign: "center", marginTop: 60, fontSize: 16 }}>
-            {t("Ürün bulunamadı.")}
+          <div style={{
+            color: "#6b7280", textAlign: "center", marginTop: 8, padding: "60px 20px",
+            background: "#13161f", borderRadius: 16, border: "1px dashed #232838",
+          }}>
+            <div style={{ fontSize: 40, marginBottom: 10, opacity: .7 }}>📦</div>
+            <div style={{ fontSize: 16, color: "#9ca3af" }}>
+              {search ? t("Eşleşen ürün yok.") : t("Ürün bulunamadı.")}
+            </div>
           </div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid #2d3348" }}>
-                {["Ürün Adı", "Fiyat", "Birim", "Stok", "Durum", ""].map(h => (
-                  <th key={h} style={{ padding: "10px 12px", color: "#6b7280", fontWeight: 600, fontSize: 12, textAlign: "left" }}>
-                    {t(h)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {products.map(p => (
-                <tr key={p._id} style={{ borderBottom: "1px solid #2d3348" }}>
-                  <td style={{ padding: "12px", color: "#e5e7eb", fontWeight: 500 }}>{p.title}</td>
-                  <td style={{ padding: "12px", color: "#10b981", fontWeight: 700 }}>₺{p.price.toFixed(2)}</td>
-                  <td style={{ padding: "12px", color: "#9ca3af" }}>{p.unit}</td>
-                  <td style={{ padding: "12px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <button
-                        onClick={() => quickStock({ id: p._id, stock: Math.max(0, p.stock - 1) })}
-                        style={{
-                          width: 24, height: 24, borderRadius: 4, border: "1px solid #374151",
-                          background: "#1e2330", color: "#fff", cursor: "pointer",
-                          fontWeight: 700, lineHeight: "22px", textAlign: "center",
-                        }}
-                      >
-                        −
-                      </button>
-                      <span style={{ color: p.stock === 0 ? "#ef4444" : "#e5e7eb", minWidth: 28, textAlign: "center" }}>
-                        {p.stock}
-                      </span>
-                      <button
-                        onClick={() => quickStock({ id: p._id, stock: p.stock + 1 })}
-                        style={{
-                          width: 24, height: 24, borderRadius: 4, border: "1px solid #374151",
-                          background: "#1e2330", color: "#fff", cursor: "pointer",
-                          fontWeight: 700, lineHeight: "22px", textAlign: "center",
-                        }}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </td>
-                  <td style={{ padding: "12px" }}>
-                    <span style={{
-                      borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600,
-                      background: p.isActive ? "#10b98122" : "#ef444422",
-                      color: p.isActive ? "#10b981" : "#ef4444",
-                    }}>
-                      {p.isActive ? t("Aktif") : t("Pasif")}
-                    </span>
-                  </td>
-                  <td style={{ padding: "12px" }}>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        onClick={() => openEdit(p)}
-                        style={{
-                          padding: "5px 12px", borderRadius: 6, border: "1px solid #4f46e5",
-                          background: "transparent", color: "#818cf8", cursor: "pointer", fontSize: 12,
-                        }}
-                      >
-                        {t("Düzenle")}
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (window.confirm(t("Silmek istediğinizden emin misiniz?"))) {
-                            deleteProduct(p._id);
-                          }
-                        }}
-                        style={{
-                          padding: "5px 12px", borderRadius: 6, border: "1px solid #ef4444",
-                          background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 12,
-                        }}
-                      >
-                        {t("Sil")}
-                      </button>
-                    </div>
-                  </td>
+          <div style={{ background: "#13161f", borderRadius: 14, border: "1px solid #232838", overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid #232838", background: "#161a24" }}>
+                  {[t("Ürün"), t("Kategori"), t("Fiyat"), t("Stok"), t("Durum"), ""].map((h, i) => (
+                    <th key={i} style={{ padding: "13px 16px", color: "#5b6577", fontWeight: 700, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", textAlign: (i === 2 || i === 3) ? "center" : "left" }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {products.map(p => {
+                  const cat = typeof p.category === "object" && p.category ? (p.category.i18n?.tr?.title ?? p.category.key ?? "") : "";
+                  const photo = p.photos?.[0] ?? null;
+                  const hasDisc = p.discountPrice != null && p.discountPrice < p.price;
+                  return (
+                    <tr key={p._id} className="mp-row" style={{ borderBottom: "1px solid #1d2230" }}>
+                      {/* Ürün: thumb + title + barcode */}
+                      <td style={{ padding: "12px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          {photo ? (
+                            <img src={photo} alt="" style={{ width: 42, height: 42, borderRadius: 10, objectFit: "cover", border: "1px solid #2d3348", flexShrink: 0 }} />
+                          ) : (
+                            <div style={{ width: 42, height: 42, borderRadius: 10, flexShrink: 0, background: "#1e2330", border: "1px solid #2d3348", display: "flex", alignItems: "center", justifyContent: "center", color: "#6366f1", fontWeight: 800, fontSize: 16 }}>
+                              {p.title.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ color: "#e5e7eb", fontWeight: 600, fontSize: 14 }}>{p.title}</div>
+                            {p.barcode ? (
+                              <div style={{ color: "#5b6577", fontSize: 12, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
+                                <span style={{ fontSize: 11, letterSpacing: "-1px" }}>▌▍▌</span>{p.barcode}
+                              </div>
+                            ) : (
+                              <div style={{ color: "#3f4655", fontSize: 11.5, marginTop: 2 }}>{t("Barkod yok")}</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      {/* Kategori */}
+                      <td style={{ padding: "12px 16px" }}>
+                        {cat ? (
+                          <span style={{ padding: "4px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: "#6366f118", color: "#a5b4fc", border: "1px solid #6366f130" }}>{cat}</span>
+                        ) : <span style={{ color: "#3f4655" }}>—</span>}
+                      </td>
+                      {/* Fiyat (discount-aware) */}
+                      <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                        {hasDisc ? (
+                          <div>
+                            <span style={{ color: "#6b7280", textDecoration: "line-through", fontSize: 12.5, marginRight: 6 }}>₺{p.price.toFixed(2)}</span>
+                            <span style={{ color: "#34d399", fontWeight: 700, fontSize: 14 }}>₺{(p.discountPrice as number).toFixed(2)}</span>
+                          </div>
+                        ) : (
+                          <span style={{ color: "#10b981", fontWeight: 700, fontSize: 14 }}>₺{p.price.toFixed(2)}</span>
+                        )}
+                        <div style={{ color: "#5b6577", fontSize: 11, marginTop: 1 }}>/ {p.unit}</div>
+                      </td>
+                      {/* Stok stepper */}
+                      <td style={{ padding: "12px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                          <button onClick={() => quickStock({ id: p._id, stock: Math.max(0, p.stock - 1) })} style={{ width: 26, height: 26, borderRadius: 7, border: "1px solid #2d3348", background: "#1e2330", color: "#9ca3af", cursor: "pointer", fontWeight: 700, fontSize: 15, lineHeight: "24px" }}>−</button>
+                          <span style={{ color: p.stock === 0 ? "#ef4444" : "#e5e7eb", minWidth: 30, textAlign: "center", fontWeight: 700, fontSize: 14 }}>{p.stock}</span>
+                          <button onClick={() => quickStock({ id: p._id, stock: p.stock + 1 })} style={{ width: 26, height: 26, borderRadius: 7, border: "1px solid #2d3348", background: "#1e2330", color: "#9ca3af", cursor: "pointer", fontWeight: 700, fontSize: 15, lineHeight: "24px" }}>+</button>
+                        </div>
+                      </td>
+                      {/* Durum */}
+                      <td style={{ padding: "12px 16px" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 999, padding: "4px 11px", fontSize: 12, fontWeight: 600, background: p.isActive ? "#10b98115" : "#ef444415", color: p.isActive ? "#34d399" : "#f87171", border: `1px solid ${p.isActive ? "#10b98130" : "#ef444430"}` }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: p.isActive ? "#10b981" : "#ef4444" }} />
+                          {p.isActive ? t("Aktif") : t("Pasif")}
+                        </span>
+                      </td>
+                      {/* Actions */}
+                      <td style={{ padding: "12px 16px" }}>
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          <button className="mp-act" onClick={() => openEdit(p)} style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #3730a3", background: "transparent", color: "#818cf8", cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>{t("Düzenle")}</button>
+                          <button className="mp-act-del" onClick={() => { if (window.confirm(t("Silmek istediğinizden emin misiniz?"))) deleteProduct(p._id); }} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #3f2330", background: "transparent", color: "#f87171", cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>{t("Sil")}</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* ── Product Modal (redesigned: two-column, sectioned, no-scroll-on-desktop) ── */}
