@@ -1,8 +1,6 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { adminGetMarketOrders } from "../../api/adminTaxiMarket";
-import Sidebar from "../../components/Sidebar";
-import { ADMIN_SIDEBAR_ITEMS } from "../../components/adminSidebarItems";
 import { useI18n } from "../../i18n";
 
 const STATUSES = ["", "pending", "confirmed", "preparing", "ready", "delivered", "cancelled"];
@@ -30,10 +28,7 @@ export default function AdminMarketOrdersPage() {
   const pages = data?.pages ?? 1;
 
   return (
-    <div className="flex gap-6">
-      <Sidebar items={ADMIN_SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
-
-      <div className="flex-1 space-y-6">
+          <div className="space-y-6 p-6">
         <h2 className="text-lg font-semibold">{t("Market Siparişleri")}</h2>
 
         {/* Status filter */}
@@ -137,6 +132,5 @@ export default function AdminMarketOrdersPage() {
           </div>
         )}
       </div>
-    </div>
   );
 }

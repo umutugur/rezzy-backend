@@ -1,7 +1,5 @@
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Sidebar from "../../components/Sidebar";
-import { ADMIN_SIDEBAR_ITEMS } from "../../components/adminSidebarItems";
 import { Card } from "../../components/Card";
 import {
   adminListReviews,
@@ -19,9 +17,7 @@ export default function AdminModerationPage() {
   const [tab, setTab] = React.useState<"reviews" | "complaints">("reviews");
   const { t } = useI18n();
   return (
-    <div className="flex gap-6">
-      <Sidebar items={ADMIN_SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
-      <div className="flex-1 space-y-6">
+          <div className="space-y-6 p-6">
         <h2 className="text-lg font-semibold">{t("Moderasyon")}</h2>
 
         <div className="flex gap-2">
@@ -45,7 +41,6 @@ export default function AdminModerationPage() {
 
         {tab === "reviews" ? <ReviewsTable /> : <ComplaintsTable />}
       </div>
-    </div>
   );
 }
 

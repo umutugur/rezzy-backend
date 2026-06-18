@@ -1,8 +1,6 @@
 // pages/admin/commissions.tsx
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import Sidebar from "../../components/Sidebar";
-import { ADMIN_SIDEBAR_ITEMS } from "../../components/adminSidebarItems";
 import { Card } from "../../components/Card";
 import { adminPreviewCommissions, adminExportCommissions } from "../../api/client";
 import { showToast } from "../../ui/Toast";
@@ -59,10 +57,7 @@ export default function AdminCommissionsPage() {
   ];
 
   return (
-    <div className="flex gap-6">
-      <Sidebar items={ADMIN_SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
-
-      <div className="flex-1 space-y-6">
+          <div className="space-y-6 p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t("Aylık Komisyonlar")}</h2>
           <div className="flex items-end gap-2">
@@ -263,6 +258,5 @@ export default function AdminCommissionsPage() {
           </div>
         )}
       </div>
-    </div>
   );
 }

@@ -53,6 +53,9 @@ import OrgDashboardPage from "./pages/org/Dashboard";
 import OrgBranchRequestsPage from "./pages/org/BranchRequests";
 import OrgMenuManagerPage from "./pages/org/OrgMenuManagerPage"; 
 
+// Admin layout
+import { AdminDesktopLayout } from "./desktop/layouts/AdminDesktopLayout";
+
 // Desktop mode
 import { LiveTablesPage } from "./desktop/pages/LiveTablesPage";
 import { KitchenBoardPage } from "./desktop/pages/KitchenBoardPage";
@@ -194,8 +197,20 @@ function Shell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      {isAdminRoute ? (
+        <main className="flex-1">{children}</main>
+      ) : (
+        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      )}
     </div>
+  );
+}
+
+function AdminPage({ children }: { children: React.ReactNode }) {
+  return (
+    <Shell>
+      <AdminDesktopLayout>{children}</AdminDesktopLayout>
+    </Shell>
   );
 }
 
@@ -451,153 +466,153 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <Shell>
+            <AdminPage>
               <AdminDashboardPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/notifications"
           element={
-            <Shell>
+            <AdminPage>
               <AdminNotificationsPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
-  path="/admin/banners"
-  element={
-    <Shell>
-      <AdminBannersPage />
-    </Shell>
-  }
-/>
+          path="/admin/banners"
+          element={
+            <AdminPage>
+              <AdminBannersPage />
+            </AdminPage>
+          }
+        />
         <Route
           path="/admin/organizations"
           element={
-            <Shell>
+            <AdminPage>
               <AdminOrganizationsPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/organizations/:oid"
           element={
-            <Shell>
+            <AdminPage>
               <AdminOrganizationDetailPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/commissions"
           element={
-            <Shell>
+            <AdminPage>
               <AdminCommissionsPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/restaurants"
           element={
-            <Shell>
+            <AdminPage>
               <AdminRestaurantsPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/restaurants/new"
           element={
-            <Shell>
+            <AdminPage>
               <AdminRestaurantCreatePage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/restaurants/:rid"
           element={
-            <Shell>
+            <AdminPage>
               <AdminRestaurantDetailPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/users"
           element={
-            <Shell>
+            <AdminPage>
               <AdminUsersPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/users/:uid"
           element={
-            <Shell>
+            <AdminPage>
               <AdminUserDetailPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/reservations"
           element={
-            <Shell>
+            <AdminPage>
               <AdminReservationsPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/moderation"
           element={
-            <Shell>
+            <AdminPage>
               <AdminModerationPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/market/orders"
           element={
-            <Shell>
+            <AdminPage>
               <AdminMarketOrdersPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/market/collections"
           element={
-            <Shell>
+            <AdminPage>
               <AdminMarketCollectionsPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/taxi/rides"
           element={
-            <Shell>
+            <AdminPage>
               <AdminTaxiRidesPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/taxi/drivers"
           element={
-            <Shell>
+            <AdminPage>
               <AdminTaxiDriversPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/delivery/orders"
           element={
-            <Shell>
+            <AdminPage>
               <AdminDeliveryOrdersPage />
-            </Shell>
+            </AdminPage>
           }
         />
         <Route
           path="/admin/taxi/config"
           element={
-            <Shell>
+            <AdminPage>
               <AdminTaxiConfigPage />
-            </Shell>
+            </AdminPage>
           }
         />
       </Route>

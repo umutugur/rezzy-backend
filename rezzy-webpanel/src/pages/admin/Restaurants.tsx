@@ -2,8 +2,6 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
-import Sidebar from "../../components/Sidebar";
-import { ADMIN_SIDEBAR_ITEMS } from "../../components/adminSidebarItems";
 import { Card } from "../../components/Card";
 import { useI18n } from "../../i18n";
 
@@ -32,9 +30,7 @@ export default function AdminRestaurantsPage() {
   const nav = useNavigate();
 
   return (
-    <div className="flex gap-6">
-      <Sidebar items={ADMIN_SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
-      <div className="flex-1 space-y-6">
+          <div className="space-y-6 p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t("Restoranlar")}</h2>
           <button
@@ -92,6 +88,5 @@ export default function AdminRestaurantsPage() {
           <div className="text-sm text-gray-500">{t("Satıra tıklayarak detaya gidebilirsin.")}</div>
         </Card>
       </div>
-    </div>
   );
 }

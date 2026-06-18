@@ -1,8 +1,6 @@
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import Sidebar from "../../components/Sidebar";
-import { ADMIN_SIDEBAR_ITEMS } from "../../components/adminSidebarItems";
 import { Card } from "../../components/Card";
 import {
   adminListOrganizations,
@@ -100,10 +98,7 @@ export default function AdminOrganizationsPage() {
   const list = data ?? [];
 
   return (
-    <div className="flex gap-6">
-      <Sidebar items={ADMIN_SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
-
-      <div className="flex-1 space-y-6">
+          <div className="space-y-6 p-6">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-lg font-semibold">{t("Organizasyonlar")}</h2>
 
@@ -342,6 +337,5 @@ export default function AdminOrganizationsPage() {
           </div>
         </Card>
       </div>
-    </div>
   );
 }

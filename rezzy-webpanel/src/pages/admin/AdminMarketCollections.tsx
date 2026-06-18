@@ -1,7 +1,5 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Sidebar from "../../components/Sidebar";
-import { ADMIN_SIDEBAR_ITEMS } from "../../components/adminSidebarItems";
 import { Card } from "../../components/Card";
 import {
   MarketCollection,
@@ -91,10 +89,7 @@ export default function AdminMarketCollectionsPage() {
   });
 
   return (
-    <div className="flex gap-6">
-      <Sidebar items={ADMIN_SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
-
-      <div className="flex-1 space-y-6">
+          <div className="space-y-6 p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t("Market Koleksiyonları")}</h2>
         </div>
@@ -358,6 +353,5 @@ export default function AdminMarketCollectionsPage() {
           </table>
         </div>
       </div>
-    </div>
   );
 }

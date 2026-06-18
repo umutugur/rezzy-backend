@@ -1,8 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminGetTaxiDrivers, adminApproveDriver, adminRejectDriver } from "../../api/adminTaxiMarket";
-import Sidebar from "../../components/Sidebar";
-import { ADMIN_SIDEBAR_ITEMS } from "../../components/adminSidebarItems";
 import { showToast } from "../../ui/Toast";
 import { useI18n } from "../../i18n";
 
@@ -52,10 +50,7 @@ export default function AdminTaxiDriversPage() {
   };
 
   return (
-    <div className="flex gap-6">
-      <Sidebar items={ADMIN_SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
-
-      <div className="flex-1 space-y-6">
+          <div className="space-y-6 p-6">
         <h2 className="text-lg font-semibold">{t("Sürücü Başvuruları")}</h2>
 
         {/* Filter tabs */}
@@ -172,6 +167,5 @@ export default function AdminTaxiDriversPage() {
           </div>
         )}
       </div>
-    </div>
   );
 }

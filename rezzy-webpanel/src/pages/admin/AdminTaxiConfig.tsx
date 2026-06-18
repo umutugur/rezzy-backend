@@ -6,8 +6,6 @@ import {
   TaxiRegionConfig,
   TaxiTariff,
 } from "../../api/adminTaxiMarket";
-import Sidebar from "../../components/Sidebar";
-import { ADMIN_SIDEBAR_ITEMS } from "../../components/adminSidebarItems";
 import { showToast } from "../../ui/Toast";
 import { useI18n } from "../../i18n";
 
@@ -106,10 +104,7 @@ export default function AdminTaxiConfigPage() {
   };
 
   return (
-    <div className="flex gap-6">
-      <Sidebar items={ADMIN_SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
-
-      <div className="flex-1 space-y-6">
+          <div className="space-y-6 p-6">
         <h2 className="text-lg font-semibold">{t("Taksi Tarifeleri")}</h2>
 
         {/* Region tabs */}
@@ -241,6 +236,5 @@ export default function AdminTaxiConfigPage() {
           </div>
         )}
       </div>
-    </div>
   );
 }

@@ -1,8 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
-import Sidebar from "../../components/Sidebar";
-import { ADMIN_SIDEBAR_ITEMS } from "../../components/adminSidebarItems";
 import { Card } from "../../components/Card";
 import { showToast } from "../../ui/Toast";
 import { t as i18nT, useI18n } from "../../i18n";
@@ -133,9 +131,7 @@ export default function AdminReservationsPage() {
   };
 
   return (
-    <div className="flex gap-6">
-      <Sidebar items={ADMIN_SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
-      <div className="flex-1 space-y-6">
+          <div className="space-y-6 p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t("Tüm Rezervasyonlar")}</h2>
           <button onClick={handleExport} className="rounded-lg bg-gray-900 hover:bg-black text-white px-4 py-2">
@@ -223,6 +219,5 @@ export default function AdminReservationsPage() {
           </div>
         )}
       </div>
-    </div>
   );
 }

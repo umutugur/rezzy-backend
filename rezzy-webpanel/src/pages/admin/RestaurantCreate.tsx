@@ -2,8 +2,6 @@
 import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import Sidebar from "../../components/Sidebar";
-import { ADMIN_SIDEBAR_ITEMS } from "../../components/adminSidebarItems";
 import { Card } from "../../components/Card";
 import {
   adminCreateSingleRestaurant,
@@ -180,10 +178,8 @@ export default function AdminRestaurantCreatePage() {
     (!!newEmail.trim() || !!newPhone.trim()); // en az e-posta veya telefon
 
   return (
-    <div className="flex gap-6">
-      <Sidebar items={ADMIN_SIDEBAR_ITEMS.map((i) => ({ ...i, label: t(i.label) }))} />
-
-      <div className="flex-1 space-y-6">
+    <>
+          <div className="space-y-6 p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t("Yeni Restoran Ekle")}</h2>
           <button
@@ -615,6 +611,6 @@ export default function AdminRestaurantCreatePage() {
           </div>
         </div>
       </Modal>
-    </div>
+    </>
   );
 }
