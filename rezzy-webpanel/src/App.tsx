@@ -64,6 +64,7 @@ import { DeliveryOrdersPage } from "./desktop/pages/DeliveryOrdersPage";
 import { MarketOrdersPage } from "./desktop/pages/MarketOrdersPage";
 import { MarketProductsPage } from "./desktop/pages/MarketProductsPage";
 import { MarketSettingsPage } from "./desktop/pages/MarketSettingsPage";
+import { MarketReportsPage } from "./desktop/pages/MarketReportsPage";
 
 // ---- Helpers ----
 
@@ -746,6 +747,7 @@ export default function App() {
       {/* Market Desktop routes */}
       <Route path="/market-desktop/orders" element={<MarketOrdersPage />} />
       <Route path="/market-desktop/products" element={<MarketProductsPage />} />
+      <Route path="/market-desktop/reports" element={<MarketReportsPage />} />
       <Route path="/market-desktop/settings" element={<MarketSettingsPage />} />
 
       {/* Kök rota */}

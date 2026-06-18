@@ -2,7 +2,7 @@ import React from "react";
 import { useI18n } from "../../i18n";
 import { authStore } from "../../store/auth";
 
-export type MarketNavKey = "orders" | "products" | "settings";
+export type MarketNavKey = "orders" | "products" | "reports" | "settings";
 
 interface Props {
   active: MarketNavKey;
@@ -55,6 +55,22 @@ export const MarketSideNav: React.FC<Props> = ({ active, onNavigate, alerts }) =
             <div className="rezvix-sidenav__icon">🏷️</div>
             <div className="rezvix-sidenav__label">
               <span>{t("Ürünler")}</span>
+            </div>
+          </button>
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <div className="rezvix-sidenav__group-label">{t("Analiz")}</div>
+          <button
+            type="button"
+            className={
+              "rezvix-sidenav__item" +
+              (active === "reports" ? " rezvix-sidenav__item--active" : "")
+            }
+            onClick={() => onNavigate("reports")}
+          >
+            <div className="rezvix-sidenav__icon">📊</div>
+            <div className="rezvix-sidenav__label">
+              <span>{t("Raporlar")}</span>
             </div>
           </button>
         </div>

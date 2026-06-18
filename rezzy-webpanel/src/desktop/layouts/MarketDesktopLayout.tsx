@@ -5,11 +5,13 @@ import { MarketSideNav, type MarketNavKey } from "../components/MarketSideNav";
 const ROUTE_MAP: Record<MarketNavKey, string> = {
   orders:   "/market-desktop/orders",
   products: "/market-desktop/products",
+  reports:  "/market-desktop/reports",
   settings: "/market-desktop/settings",
 };
 
 function resolveActiveKey(pathname: string): MarketNavKey {
   if (pathname.includes("products")) return "products";
+  if (pathname.includes("reports")) return "reports";
   if (pathname.includes("settings")) return "settings";
   return "orders";
 }
@@ -28,7 +30,7 @@ export const MarketDesktopLayout: React.FC<Props> = ({ children, alerts }) => {
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#0f1117" }}>
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "var(--rezvix-bg)" }}>
       <MarketSideNav active={activeKey} onNavigate={handleNav} alerts={alerts} />
       <main style={{ flex: 1, overflowY: "auto", padding: "0" }}>
         {children}
