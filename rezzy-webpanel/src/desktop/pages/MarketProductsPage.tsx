@@ -22,17 +22,17 @@ const emptyAttributes: { label: string; value: string }[] = [];
 
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "10px 14px", borderRadius: 8,
-  border: "1px solid #2d3348", background: "#0f1117", color: "#fff",
+  border: "1px solid #d7dbe6", background: "#ffffff", color: "#1b1c22",
   fontSize: 14, outline: "none", boxSizing: "border-box",
 };
 
 const labelStyle: React.CSSProperties = {
-  color: "#9ca3af", fontSize: 12, display: "block", marginBottom: 4,
+  color: "#5b6172", fontSize: 12, display: "block", marginBottom: 4,
 };
 
-// ── Redesigned modal style tokens ──────────────────────────────────────────
+// ── Light section label ──────────────────────────────────────────────────────
 const sectionLabel: React.CSSProperties = {
-  color: "#5b6577", fontSize: 11, fontWeight: 700, letterSpacing: "0.09em",
+  color: "#9aa1b1", fontSize: 11, fontWeight: 700, letterSpacing: "0.09em",
   textTransform: "uppercase", marginBottom: 14, display: "flex", alignItems: "center", gap: 8,
 };
 
@@ -224,20 +224,20 @@ export function MarketProductsPage() {
         <div style={{ marginBottom: 18 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
             <div>
-              <h2 style={{ color: "#fff", margin: 0, fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em" }}>{t("Ürünler")}</h2>
-              <p style={{ color: "#6b7280", margin: "3px 0 0", fontSize: 13 }}>{t("Mağaza ürünlerinizi yönetin")}</p>
+              <h2 style={{ color: "#1b1c22", margin: 0, fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em" }}>{t("Ürünler")}</h2>
+              <p style={{ color: "#5b6172", margin: "3px 0 0", fontSize: 13 }}>{t("Mağaza ürünlerinizi yönetin")}</p>
             </div>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
               <div style={{ position: "relative" }}>
-                <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#5b6577", fontSize: 14, pointerEvents: "none" }}>🔍</span>
+                <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9aa1b1", fontSize: 14, pointerEvents: "none" }}>🔍</span>
                 <input
                   className="mp-input"
                   placeholder={t("Ürün veya barkod ara…")}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   style={{
-                    padding: "9px 14px 9px 34px", borderRadius: 10, border: "1px solid #2d3348",
-                    background: "#161a24", color: "#fff", fontSize: 13.5, outline: "none", width: 260,
+                    padding: "9px 14px 9px 34px", borderRadius: 10, border: "1px solid #d7dbe6",
+                    background: "#ffffff", color: "#1b1c22", fontSize: 13.5, outline: "none", width: 260,
                   }}
                 />
               </div>
@@ -246,7 +246,7 @@ export function MarketProductsPage() {
                 style={{
                   padding: "9px 18px", borderRadius: 10, border: "none",
                   background: "linear-gradient(135deg, #4f46e5, #6366f1)", color: "#fff", cursor: "pointer",
-                  fontWeight: 700, fontSize: 13.5, boxShadow: "0 6px 16px rgba(79,70,229,.32)", whiteSpace: "nowrap",
+                  fontWeight: 700, fontSize: 13.5, boxShadow: "0 6px 16px rgba(79,70,229,.28)", whiteSpace: "nowrap",
                 }}
               >
                 + {t("Ürün Ekle")}
@@ -257,16 +257,16 @@ export function MarketProductsPage() {
           {/* Stats */}
           <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
             {[
-              { label: t("Toplam"), value: statTotal, color: "#a5b4fc", dot: "#6366f1" },
-              { label: t("Aktif"), value: statActive, color: "#34d399", dot: "#10b981" },
-              { label: t("Tükenen"), value: statOut, color: "#f87171", dot: "#ef4444" },
+              { label: t("Toplam"), value: statTotal, color: "#4f46e5", dot: "#6366f1" },
+              { label: t("Aktif"), value: statActive, color: "#16a34a", dot: "#22c55e" },
+              { label: t("Tükenen"), value: statOut, color: "#dc2626", dot: "#ef4444" },
             ].map(s => (
               <div key={s.label} style={{
                 display: "flex", alignItems: "center", gap: 8, padding: "8px 14px",
-                borderRadius: 10, background: "#161a24", border: "1px solid #232838",
+                borderRadius: 10, background: "#ffffff", border: "1px solid #e6e8ef", boxShadow: "0 1px 2px rgba(17,20,40,.04)",
               }}>
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: s.dot }} />
-                <span style={{ color: "#9ca3af", fontSize: 12.5 }}>{s.label}</span>
+                <span style={{ color: "#5b6172", fontSize: 12.5 }}>{s.label}</span>
                 <span style={{ color: s.color, fontSize: 14, fontWeight: 700 }}>{s.value}</span>
               </div>
             ))}
@@ -275,33 +275,44 @@ export function MarketProductsPage() {
 
         <style>{`
           .mp-input { transition: border-color .15s ease, box-shadow .15s ease }
-          .mp-input:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 3px rgba(99,102,241,.16) }
+          .mp-input:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 3px rgba(99,102,241,.14) }
+          .mp-input::placeholder { color: #9aa1b1 }
           .mp-row { transition: background .12s ease }
-          .mp-row:hover { background: #181c27 }
+          .mp-row:hover { background: #f5f6fa }
           .mp-act { transition: background .12s ease }
-          .mp-act:hover { background: rgba(99,102,241,.12) }
-          .mp-act-del:hover { background: rgba(239,68,68,.12) }
+          .mp-act:hover { background: rgba(99,102,241,.10) }
+          .mp-act-del:hover { background: rgba(220,38,38,.08) }
+          .mp-drop { transition: border-color .15s ease, background .15s ease }
+          .mp-drop:hover { border-color: #6366f1 !important; background: #f3f4fb !important }
+          .mp-sugg { transition: border-color .15s ease, transform .15s ease }
+          .mp-sugg:hover { border-color: #6366f1 !important; transform: translateY(-3px) }
+          .mp-body::-webkit-scrollbar { width: 9px }
+          .mp-body::-webkit-scrollbar-thumb { background: #d7dbe6; border-radius: 6px }
+          .mp-body::-webkit-scrollbar-track { background: transparent }
+          .mp-ghost { transition: background .15s ease }
+          .mp-ghost:hover { background: rgba(99,102,241,.10) }
+          .mp-x:hover { background: #f1f3f9 !important; color: #1b1c22 !important }
         `}</style>
 
         {isLoading ? (
-          <div style={{ color: "#9ca3af", padding: 40, textAlign: "center" }}>{t("Yükleniyor…")}</div>
+          <div style={{ color: "#5b6172", padding: 40, textAlign: "center" }}>{t("Yükleniyor…")}</div>
         ) : products.length === 0 ? (
           <div style={{
-            color: "#6b7280", textAlign: "center", marginTop: 8, padding: "60px 20px",
-            background: "#13161f", borderRadius: 16, border: "1px dashed #232838",
+            color: "#9aa1b1", textAlign: "center", marginTop: 8, padding: "60px 20px",
+            background: "#ffffff", borderRadius: 16, border: "1px dashed #e6e8ef",
           }}>
             <div style={{ fontSize: 40, marginBottom: 10, opacity: .7 }}>📦</div>
-            <div style={{ fontSize: 16, color: "#9ca3af" }}>
+            <div style={{ fontSize: 16, color: "#5b6172" }}>
               {search ? t("Eşleşen ürün yok.") : t("Ürün bulunamadı.")}
             </div>
           </div>
         ) : (
-          <div style={{ background: "#13161f", borderRadius: 14, border: "1px solid #232838", overflow: "hidden" }}>
+          <div style={{ background: "#ffffff", borderRadius: 14, border: "1px solid #e6e8ef", overflow: "hidden", boxShadow: "0 1px 2px rgba(17,20,40,.04)" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ borderBottom: "1px solid #232838", background: "#161a24" }}>
+                <tr style={{ borderBottom: "1px solid #eef0f4", background: "#f8f9fc" }}>
                   {[t("Ürün"), t("Kategori"), t("Fiyat"), t("Stok"), t("Durum"), ""].map((h, i) => (
-                    <th key={i} style={{ padding: "13px 16px", color: "#5b6577", fontWeight: 700, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", textAlign: (i === 2 || i === 3) ? "center" : "left" }}>
+                    <th key={i} style={{ padding: "13px 16px", color: "#9aa1b1", fontWeight: 700, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", textAlign: (i === 2 || i === 3) ? "center" : "left" }}>
                       {h}
                     </th>
                   ))}
@@ -313,25 +324,25 @@ export function MarketProductsPage() {
                   const photo = p.photos?.[0] ?? null;
                   const hasDisc = p.discountPrice != null && p.discountPrice < p.price;
                   return (
-                    <tr key={p._id} className="mp-row" style={{ borderBottom: "1px solid #1d2230" }}>
+                    <tr key={p._id} className="mp-row" style={{ borderBottom: "1px solid #f0f1f6" }}>
                       {/* Ürün: thumb + title + barcode */}
                       <td style={{ padding: "12px 16px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                           {photo ? (
-                            <img src={photo} alt="" style={{ width: 42, height: 42, borderRadius: 10, objectFit: "cover", border: "1px solid #2d3348", flexShrink: 0 }} />
+                            <img src={photo} alt="" style={{ width: 42, height: 42, borderRadius: 10, objectFit: "cover", border: "1px solid #e6e8ef", flexShrink: 0 }} />
                           ) : (
-                            <div style={{ width: 42, height: 42, borderRadius: 10, flexShrink: 0, background: "#1e2330", border: "1px solid #2d3348", display: "flex", alignItems: "center", justifyContent: "center", color: "#6366f1", fontWeight: 800, fontSize: 16 }}>
+                            <div style={{ width: 42, height: 42, borderRadius: 10, flexShrink: 0, background: "#f1f3f9", border: "1px solid #e6e8ef", display: "flex", alignItems: "center", justifyContent: "center", color: "#6366f1", fontWeight: 800, fontSize: 16 }}>
                               {p.title.charAt(0).toUpperCase()}
                             </div>
                           )}
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ color: "#e5e7eb", fontWeight: 600, fontSize: 14 }}>{p.title}</div>
+                            <div style={{ color: "#1b1c22", fontWeight: 600, fontSize: 14 }}>{p.title}</div>
                             {p.barcode ? (
-                              <div style={{ color: "#5b6577", fontSize: 12, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
+                              <div style={{ color: "#9aa1b1", fontSize: 12, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
                                 <span style={{ fontSize: 11, letterSpacing: "-1px" }}>▌▍▌</span>{p.barcode}
                               </div>
                             ) : (
-                              <div style={{ color: "#3f4655", fontSize: 11.5, marginTop: 2 }}>{t("Barkod yok")}</div>
+                              <div style={{ color: "#c3c7d2", fontSize: 11.5, marginTop: 2 }}>{t("Barkod yok")}</div>
                             )}
                           </div>
                         </div>
@@ -339,41 +350,41 @@ export function MarketProductsPage() {
                       {/* Kategori */}
                       <td style={{ padding: "12px 16px" }}>
                         {cat ? (
-                          <span style={{ padding: "4px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: "#6366f118", color: "#a5b4fc", border: "1px solid #6366f130" }}>{cat}</span>
-                        ) : <span style={{ color: "#3f4655" }}>—</span>}
+                          <span style={{ padding: "4px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: "rgba(99,102,241,.10)", color: "#4f46e5", border: "1px solid rgba(99,102,241,.22)" }}>{cat}</span>
+                        ) : <span style={{ color: "#c3c7d2" }}>—</span>}
                       </td>
                       {/* Fiyat (discount-aware) */}
                       <td style={{ padding: "12px 16px", textAlign: "center" }}>
                         {hasDisc ? (
                           <div>
-                            <span style={{ color: "#6b7280", textDecoration: "line-through", fontSize: 12.5, marginRight: 6 }}>₺{p.price.toFixed(2)}</span>
-                            <span style={{ color: "#34d399", fontWeight: 700, fontSize: 14 }}>₺{(p.discountPrice as number).toFixed(2)}</span>
+                            <span style={{ color: "#9aa1b1", textDecoration: "line-through", fontSize: 12.5, marginRight: 6 }}>₺{p.price.toFixed(2)}</span>
+                            <span style={{ color: "#16a34a", fontWeight: 700, fontSize: 14 }}>₺{(p.discountPrice as number).toFixed(2)}</span>
                           </div>
                         ) : (
-                          <span style={{ color: "#10b981", fontWeight: 700, fontSize: 14 }}>₺{p.price.toFixed(2)}</span>
+                          <span style={{ color: "#16a34a", fontWeight: 700, fontSize: 14 }}>₺{p.price.toFixed(2)}</span>
                         )}
-                        <div style={{ color: "#5b6577", fontSize: 11, marginTop: 1 }}>/ {p.unit}</div>
+                        <div style={{ color: "#9aa1b1", fontSize: 11, marginTop: 1 }}>/ {p.unit}</div>
                       </td>
                       {/* Stok stepper */}
                       <td style={{ padding: "12px 16px" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                          <button onClick={() => quickStock({ id: p._id, stock: Math.max(0, p.stock - 1) })} style={{ width: 26, height: 26, borderRadius: 7, border: "1px solid #2d3348", background: "#1e2330", color: "#9ca3af", cursor: "pointer", fontWeight: 700, fontSize: 15, lineHeight: "24px" }}>−</button>
-                          <span style={{ color: p.stock === 0 ? "#ef4444" : "#e5e7eb", minWidth: 30, textAlign: "center", fontWeight: 700, fontSize: 14 }}>{p.stock}</span>
-                          <button onClick={() => quickStock({ id: p._id, stock: p.stock + 1 })} style={{ width: 26, height: 26, borderRadius: 7, border: "1px solid #2d3348", background: "#1e2330", color: "#9ca3af", cursor: "pointer", fontWeight: 700, fontSize: 15, lineHeight: "24px" }}>+</button>
+                          <button onClick={() => quickStock({ id: p._id, stock: Math.max(0, p.stock - 1) })} style={{ width: 26, height: 26, borderRadius: 7, border: "1px solid #d7dbe6", background: "#ffffff", color: "#5b6172", cursor: "pointer", fontWeight: 700, fontSize: 15, lineHeight: "24px" }}>−</button>
+                          <span style={{ color: p.stock === 0 ? "#dc2626" : "#1b1c22", minWidth: 30, textAlign: "center", fontWeight: 700, fontSize: 14 }}>{p.stock}</span>
+                          <button onClick={() => quickStock({ id: p._id, stock: p.stock + 1 })} style={{ width: 26, height: 26, borderRadius: 7, border: "1px solid #d7dbe6", background: "#ffffff", color: "#5b6172", cursor: "pointer", fontWeight: 700, fontSize: 15, lineHeight: "24px" }}>+</button>
                         </div>
                       </td>
                       {/* Durum */}
                       <td style={{ padding: "12px 16px" }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 999, padding: "4px 11px", fontSize: 12, fontWeight: 600, background: p.isActive ? "#10b98115" : "#ef444415", color: p.isActive ? "#34d399" : "#f87171", border: `1px solid ${p.isActive ? "#10b98130" : "#ef444430"}` }}>
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: p.isActive ? "#10b981" : "#ef4444" }} />
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 999, padding: "4px 11px", fontSize: 12, fontWeight: 600, background: p.isActive ? "rgba(22,163,74,.10)" : "rgba(220,38,38,.10)", color: p.isActive ? "#16a34a" : "#dc2626", border: `1px solid ${p.isActive ? "rgba(22,163,74,.24)" : "rgba(220,38,38,.24)"}` }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: p.isActive ? "#16a34a" : "#dc2626" }} />
                           {p.isActive ? t("Aktif") : t("Pasif")}
                         </span>
                       </td>
                       {/* Actions */}
                       <td style={{ padding: "12px 16px" }}>
                         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                          <button className="mp-act" onClick={() => openEdit(p)} style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #3730a3", background: "transparent", color: "#818cf8", cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>{t("Düzenle")}</button>
-                          <button className="mp-act-del" onClick={() => { if (window.confirm(t("Silmek istediğinizden emin misiniz?"))) deleteProduct(p._id); }} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #3f2330", background: "transparent", color: "#f87171", cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>{t("Sil")}</button>
+                          <button className="mp-act" onClick={() => openEdit(p)} style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #cdd0f5", background: "transparent", color: "#4f46e5", cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>{t("Düzenle")}</button>
+                          <button className="mp-act-del" onClick={() => { if (window.confirm(t("Silmek istediğinizden emin misiniz?"))) deleteProduct(p._id); }} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #f1d5d5", background: "transparent", color: "#dc2626", cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>{t("Sil")}</button>
                         </div>
                       </td>
                     </tr>
@@ -384,10 +395,10 @@ export function MarketProductsPage() {
           </div>
         )}
 
-        {/* ── Product Modal (redesigned: two-column, sectioned, no-scroll-on-desktop) ── */}
+        {/* ── Product Modal (light, two-column, sectioned, no-scroll-on-desktop) ── */}
         {modal.open && (
           <div style={{
-            position: "fixed", inset: 0, background: "rgba(7,9,14,0.74)",
+            position: "fixed", inset: 0, background: "rgba(17,20,40,.42)",
             backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000,
             overflowY: "auto", padding: "32px 20px",
@@ -395,44 +406,31 @@ export function MarketProductsPage() {
             <style>{`
               @keyframes mpIn { from { opacity: 0; transform: translateY(10px) scale(.985) } to { opacity: 1; transform: none } }
               .mp-card { animation: mpIn .22s cubic-bezier(.16,1,.3,1) }
-              .mp-input { transition: border-color .15s ease, box-shadow .15s ease, background .15s ease }
-              .mp-input:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 3px rgba(99,102,241,.18) }
-              .mp-input::placeholder { color: #4b5563 }
-              .mp-drop { transition: border-color .15s ease, background .15s ease }
-              .mp-drop:hover { border-color: #6366f1 !important; background: #14161e !important }
-              .mp-sugg { transition: border-color .15s ease, transform .15s ease }
-              .mp-sugg:hover { border-color: #6366f1 !important; transform: translateY(-3px) }
-              .mp-body::-webkit-scrollbar { width: 9px }
-              .mp-body::-webkit-scrollbar-thumb { background: #2d3348; border-radius: 6px }
-              .mp-body::-webkit-scrollbar-track { background: transparent }
-              .mp-ghost { transition: background .15s ease, color .15s ease, border-color .15s ease }
-              .mp-ghost:hover { background: rgba(99,102,241,.12) }
-              .mp-x:hover { background: #2d3348 !important; color: #fff !important }
             `}</style>
 
             <div className="mp-card" style={{
-              background: "#161a24", borderRadius: 18, width: 960, maxWidth: "100%",
+              background: "#ffffff", borderRadius: 18, width: 960, maxWidth: "100%",
               maxHeight: "calc(100vh - 64px)", display: "flex", flexDirection: "column",
-              border: "1px solid #262c3a", boxShadow: "0 24px 70px rgba(0,0,0,.55)", overflow: "hidden",
+              border: "1px solid #e6e8ef", boxShadow: "0 24px 70px rgba(17,20,40,.22)", overflow: "hidden",
             }}>
               {/* Header */}
               <div style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "20px 28px", borderBottom: "1px solid #232838",
-                background: "linear-gradient(180deg, #1b2030 0%, #161a24 100%)",
+                padding: "20px 28px", borderBottom: "1px solid #eef0f4",
+                background: "linear-gradient(180deg, #fafbff 0%, #ffffff 100%)",
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <div style={{
                     width: 42, height: 42, borderRadius: 12, flexShrink: 0,
                     background: "linear-gradient(135deg, #4f46e5, #6366f1)",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 20, boxShadow: "0 6px 18px rgba(79,70,229,.4)",
+                    fontSize: 20, boxShadow: "0 6px 18px rgba(79,70,229,.32)",
                   }}>🛒</div>
                   <div>
-                    <h3 style={{ color: "#fff", margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em" }}>
+                    <h3 style={{ color: "#1b1c22", margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em" }}>
                       {modal.product ? t("Ürünü Düzenle") : t("Yeni Ürün")}
                     </h3>
-                    <p style={{ color: "#6b7280", margin: "2px 0 0", fontSize: 12.5 }}>
+                    <p style={{ color: "#9aa1b1", margin: "2px 0 0", fontSize: 12.5 }}>
                       {modal.product ? t("Ürün bilgilerini güncelleyin") : t("Mağazanıza yeni bir ürün ekleyin")}
                     </p>
                   </div>
@@ -441,8 +439,8 @@ export function MarketProductsPage() {
                   className="mp-x"
                   onClick={closeModal}
                   style={{
-                    width: 34, height: 34, borderRadius: 9, border: "1px solid #2d3348",
-                    background: "transparent", color: "#9ca3af", cursor: "pointer",
+                    width: 34, height: 34, borderRadius: 9, border: "1px solid #e6e8ef",
+                    background: "transparent", color: "#9aa1b1", cursor: "pointer",
                     fontSize: 20, lineHeight: "30px", textAlign: "center", flexShrink: 0,
                   }}
                   aria-label={t("Kapat")}
@@ -459,15 +457,15 @@ export function MarketProductsPage() {
                   <span style={sectionLabel}>{t("Görsel")}</span>
 
                   {formPhoto ? (
-                    <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", border: "1px solid #2d3348" }}>
+                    <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", border: "1px solid #e6e8ef" }}>
                       <img src={formPhoto} alt="preview" style={{ width: "100%", height: 200, objectFit: "cover", display: "block" }} />
                       <button
                         type="button"
                         onClick={() => setFormPhoto("")}
                         style={{
                           position: "absolute", top: 10, right: 10, padding: "6px 12px", borderRadius: 8,
-                          border: "none", background: "rgba(15,17,23,.82)", color: "#f87171",
-                          cursor: "pointer", fontSize: 12.5, fontWeight: 600, backdropFilter: "blur(4px)",
+                          border: "none", background: "rgba(255,255,255,.92)", color: "#dc2626",
+                          cursor: "pointer", fontSize: 12.5, fontWeight: 600, backdropFilter: "blur(4px)", boxShadow: "0 2px 8px rgba(17,20,40,.12)",
                         }}
                       >
                         {t("Kaldır")}
@@ -476,14 +474,14 @@ export function MarketProductsPage() {
                   ) : (
                     <label className="mp-drop" style={{
                       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                      gap: 8, height: 200, borderRadius: 14, border: "1.5px dashed #313a4e",
-                      background: "#10131b", cursor: photoUploading ? "wait" : "pointer", textAlign: "center", padding: 16,
+                      gap: 8, height: 200, borderRadius: 14, border: "1.5px dashed #d7dbe6",
+                      background: "#f8f9fc", cursor: photoUploading ? "wait" : "pointer", textAlign: "center", padding: 16,
                     }}>
                       <div style={{ fontSize: 30, opacity: 0.85 }}>{photoUploading ? "⏳" : "🖼️"}</div>
-                      <span style={{ color: "#cbd5e1", fontSize: 13.5, fontWeight: 600 }}>
+                      <span style={{ color: "#1b1c22", fontSize: 13.5, fontWeight: 600 }}>
                         {photoUploading ? t("Yükleniyor…") : t("Görsel yükle")}
                       </span>
-                      <span style={{ color: "#5b6577", fontSize: 11.5 }}>PNG · JPG</span>
+                      <span style={{ color: "#9aa1b1", fontSize: 11.5 }}>PNG · JPG</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -497,7 +495,7 @@ export function MarketProductsPage() {
                   {/* Image suggestions — only when no photo chosen */}
                   {!formPhoto && suggestions.length > 0 && (
                     <div style={{ marginTop: 16 }}>
-                      <span style={{ color: "#818cf8", fontSize: 12, fontWeight: 600, display: "block", marginBottom: 8 }}>
+                      <span style={{ color: "#4f46e5", fontSize: 12, fontWeight: 600, display: "block", marginBottom: 8 }}>
                         ✨ {t("Bu ürünün görseli sistemde var")}
                       </span>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
@@ -511,12 +509,12 @@ export function MarketProductsPage() {
                             onClick={() => setFormPhoto(s.url)}
                             style={{
                               width: "100%", aspectRatio: "1 / 1", objectFit: "cover", borderRadius: 9,
-                              border: "2px solid #2d3348", cursor: "pointer", display: "block",
+                              border: "2px solid #e6e8ef", cursor: "pointer", display: "block",
                             }}
                           />
                         ))}
                       </div>
-                      <span style={{ color: "#5b6577", fontSize: 11, marginTop: 6, display: "block" }}>
+                      <span style={{ color: "#9aa1b1", fontSize: 11, marginTop: 6, display: "block" }}>
                         {t("birini seçin")}
                       </span>
                     </div>
@@ -529,15 +527,15 @@ export function MarketProductsPage() {
                   <span style={sectionLabel}>{t("Temel Bilgiler")}</span>
 
                   <div style={{ marginBottom: 14 }}>
-                    <label style={labelStyle}>{t("Kategori")} <span style={{ color: "#f87171" }}>*</span></label>
+                    <label style={labelStyle}>{t("Kategori")} <span style={{ color: "#dc2626" }}>*</span></label>
                     <select
                       className="mp-input"
                       value={formCategory}
                       onChange={e => setFormCategory(e.target.value)}
-                      style={{ ...inputStyle, color: formCategory ? "#fff" : "#5b6577", cursor: "pointer", appearance: "none",
-                        backgroundImage: "linear-gradient(45deg, transparent 50%, #6b7280 50%), linear-gradient(135deg, #6b7280 50%, transparent 50%)",
+                      style={{ ...inputStyle, color: formCategory ? "#1b1c22" : "#9aa1b1", cursor: "pointer", appearance: "none",
+                        backgroundImage: "linear-gradient(45deg, transparent 50%, #9aa1b1 50%), linear-gradient(135deg, #9aa1b1 50%, transparent 50%)",
                         backgroundPosition: "calc(100% - 18px) 18px, calc(100% - 13px) 18px", backgroundSize: "5px 5px, 5px 5px", backgroundRepeat: "no-repeat",
-                        borderColor: !formCategory ? "#7f1d1d" : "#2d3348" }}
+                        borderColor: !formCategory ? "#f0c8c8" : "#d7dbe6" }}
                     >
                       <option value="">{t("Kategori seçiniz")}</option>
                       {categories.map(cat => (
@@ -547,14 +545,14 @@ export function MarketProductsPage() {
                       ))}
                     </select>
                     {!formCategory && (
-                      <span style={{ color: "#f87171", fontSize: 11, marginTop: 5, display: "block" }}>
+                      <span style={{ color: "#dc2626", fontSize: 11, marginTop: 5, display: "block" }}>
                         {t("Kategori zorunludur")}
                       </span>
                     )}
                   </div>
 
                   <div style={{ marginBottom: 14 }}>
-                    <label style={labelStyle}>{t("Ürün Adı")} <span style={{ color: "#f87171" }}>*</span></label>
+                    <label style={labelStyle}>{t("Ürün Adı")} <span style={{ color: "#dc2626" }}>*</span></label>
                     <input
                       className="mp-input"
                       type="text"
@@ -567,7 +565,7 @@ export function MarketProductsPage() {
 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
                     <div>
-                      <label style={labelStyle}>{t("Fiyat")} (₺) <span style={{ color: "#f87171" }}>*</span></label>
+                      <label style={labelStyle}>{t("Fiyat")} (₺) <span style={{ color: "#dc2626" }}>*</span></label>
                       <input
                         className="mp-input"
                         type="number"
@@ -581,7 +579,7 @@ export function MarketProductsPage() {
                       <label style={labelStyle}>
                         {t("İndirimli Fiyat")} (₺)
                         {discountPct != null && (
-                          <span style={{ color: "#10b981", marginLeft: 8, fontWeight: 700 }}>−%{discountPct}</span>
+                          <span style={{ color: "#16a34a", marginLeft: 8, fontWeight: 700 }}>−%{discountPct}</span>
                         )}
                       </label>
                       <input
@@ -590,7 +588,7 @@ export function MarketProductsPage() {
                         value={form.discountPrice}
                         onChange={e => setForm(f => ({ ...f, discountPrice: e.target.value }))}
                         placeholder={t("isteğe bağlı")}
-                        style={{ ...inputStyle, borderColor: discountPct != null ? "#10b98166" : "#2d3348" }}
+                        style={{ ...inputStyle, borderColor: discountPct != null ? "#9be0b6" : "#d7dbe6" }}
                       />
                     </div>
                   </div>
@@ -666,7 +664,7 @@ export function MarketProductsPage() {
                         className="mp-input"
                         value={formNetUnit}
                         onChange={e => setFormNetUnit(e.target.value as "L" | "ml" | "kg" | "g" | "piece" | "")}
-                        style={{ ...inputStyle, color: formNetUnit ? "#fff" : "#5b6577", cursor: "pointer" }}
+                        style={{ ...inputStyle, color: formNetUnit ? "#1b1c22" : "#9aa1b1", cursor: "pointer" }}
                       >
                         <option value="">{t("Seçiniz")}</option>
                         <option value="L">L</option>
@@ -686,8 +684,8 @@ export function MarketProductsPage() {
                       className="mp-ghost"
                       onClick={() => setFormAttributes(prev => [...prev, { label: "", value: "" }])}
                       style={{
-                        padding: "5px 12px", borderRadius: 7, border: "1px solid #3730a3",
-                        background: "transparent", color: "#818cf8", cursor: "pointer", fontSize: 12, fontWeight: 600,
+                        padding: "5px 12px", borderRadius: 7, border: "1px solid #cdd0f5",
+                        background: "transparent", color: "#4f46e5", cursor: "pointer", fontSize: 12, fontWeight: 600,
                       }}
                     >
                       + {t("Özellik Ekle")}
@@ -695,8 +693,8 @@ export function MarketProductsPage() {
                   </div>
                   {formAttributes.length === 0 ? (
                     <div style={{
-                      border: "1px dashed #262c3a", borderRadius: 10, padding: "14px 16px",
-                      color: "#5b6577", fontSize: 12.5, textAlign: "center",
+                      border: "1px dashed #e6e8ef", borderRadius: 10, padding: "14px 16px",
+                      color: "#9aa1b1", fontSize: 12.5, textAlign: "center",
                     }}>
                       {t("Renk, içerik gibi ek özellikler ekleyebilirsiniz")}
                     </div>
@@ -723,8 +721,8 @@ export function MarketProductsPage() {
                           type="button"
                           onClick={() => setFormAttributes(prev => prev.filter((_, i) => i !== idx))}
                           style={{
-                            width: 32, height: 32, borderRadius: 7, border: "1px solid #3f2330",
-                            background: "transparent", color: "#f87171", cursor: "pointer",
+                            width: 32, height: 32, borderRadius: 7, border: "1px solid #f1d5d5",
+                            background: "transparent", color: "#dc2626", cursor: "pointer",
                             fontWeight: 700, fontSize: 16, lineHeight: "30px", textAlign: "center", flexShrink: 0,
                           }}
                         >
@@ -739,18 +737,18 @@ export function MarketProductsPage() {
               {/* Footer */}
               <div style={{
                 display: "flex", alignItems: "center", gap: 12,
-                padding: "16px 28px", borderTop: "1px solid #232838",
-                background: "#13161f",
+                padding: "16px 28px", borderTop: "1px solid #eef0f4",
+                background: "#fafbff",
               }}>
-                <span style={{ color: canSave ? "#5b6577" : "#f8717199", fontSize: 12.5, flex: 1 }}>
+                <span style={{ color: canSave ? "#9aa1b1" : "#dc2626", fontSize: 12.5, flex: 1 }}>
                   {canSave ? t("Kaydetmeye hazır") : t("Kategori, ürün adı ve fiyat zorunludur")}
                 </span>
                 <button
                   className="mp-ghost"
                   onClick={closeModal}
                   style={{
-                    padding: "10px 20px", borderRadius: 9, border: "1px solid #2d3348",
-                    background: "transparent", color: "#9ca3af", cursor: "pointer", fontWeight: 600, fontSize: 14,
+                    padding: "10px 20px", borderRadius: 9, border: "1px solid #d7dbe6",
+                    background: "transparent", color: "#5b6172", cursor: "pointer", fontWeight: 600, fontSize: 14,
                   }}
                 >
                   {t("Vazgeç")}
@@ -760,10 +758,10 @@ export function MarketProductsPage() {
                   disabled={!canSave}
                   style={{
                     padding: "10px 26px", borderRadius: 9, border: "none",
-                    background: canSave ? "linear-gradient(135deg, #4f46e5, #6366f1)" : "#262c3a",
-                    color: canSave ? "#fff" : "#5b6577",
+                    background: canSave ? "linear-gradient(135deg, #4f46e5, #6366f1)" : "#eceef4",
+                    color: canSave ? "#fff" : "#9aa1b1",
                     cursor: canSave ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 14,
-                    boxShadow: canSave ? "0 6px 18px rgba(79,70,229,.35)" : "none",
+                    boxShadow: canSave ? "0 6px 18px rgba(79,70,229,.30)" : "none",
                     transition: "transform .12s ease, box-shadow .15s ease",
                   }}
                   onMouseDown={e => { if (canSave) e.currentTarget.style.transform = "scale(.97)"; }}
