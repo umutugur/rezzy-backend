@@ -12,6 +12,12 @@ import {
   adminUpdateBanner,
 } from "../../api/client";
 import { useI18n } from "../../i18n";
+import { EntityPicker } from "../../desktop/components/admin/EntityPicker";
+import {
+  pickMarketStores,
+  pickMarketProducts,
+  pickMarketCollections,
+} from "../../api/adminPickers";
 
 type RestaurantLite = { _id: string; name: string; region?: string };
 
@@ -326,31 +332,31 @@ setCropOpen(false);
 
                 <div>
                   <div className="text-xs text-gray-500 mb-1">{t("Market Store ID (opsiyonel)")}</div>
-                  <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    value={marketStoreId}
-                    onChange={(e) => setMarketStoreId(e.target.value)}
-                    placeholder={t("ObjectId")}
+                  <EntityPicker
+                    fetcher={pickMarketStores}
+                    value={marketStoreId || null}
+                    onChange={(id: string | null) => setMarketStoreId(id || "")}
+                    placeholder={t("Mağaza ara…")}
                   />
                 </div>
 
                 <div>
                   <div className="text-xs text-gray-500 mb-1">{t("Market Product ID (opsiyonel)")}</div>
-                  <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    value={marketProductId}
-                    onChange={(e) => setMarketProductId(e.target.value)}
-                    placeholder={t("ObjectId")}
+                  <EntityPicker
+                    fetcher={(q: string) => pickMarketProducts(q, marketStoreId || undefined)}
+                    value={marketProductId || null}
+                    onChange={(id: string | null) => setMarketProductId(id || "")}
+                    placeholder={t("Ürün ara…")}
                   />
                 </div>
 
                 <div>
                   <div className="text-xs text-gray-500 mb-1">{t("Market Collection ID (opsiyonel)")}</div>
-                  <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    value={marketCollectionId}
-                    onChange={(e) => setMarketCollectionId(e.target.value)}
-                    placeholder={t("ObjectId")}
+                  <EntityPicker
+                    fetcher={pickMarketCollections}
+                    value={marketCollectionId || null}
+                    onChange={(id: string | null) => setMarketCollectionId(id || "")}
+                    placeholder={t("Koleksiyon ara…")}
                   />
                 </div>
               </>
@@ -358,12 +364,15 @@ setCropOpen(false);
               <>
               <div>
                 <div className="text-xs text-gray-500 mb-1">{t("Placement")}</div>
-                <input
+                <select
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                   value={formPlacement}
                   onChange={(e) => setFormPlacement(e.target.value)}
-                  placeholder={t("home_top")}
-                />
+                >
+                  <option value="home_top">home_top</option>
+                  <option value="home_mid">home_mid</option>
+                  <option value="store_top">store_top</option>
+                </select>
               </div>
               <div>
                 <div className="text-xs text-gray-500 mb-1">{t("Restoran")}</div>
