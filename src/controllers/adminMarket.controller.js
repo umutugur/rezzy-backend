@@ -3,6 +3,14 @@ import mongoose from "mongoose";
 import MarketStore from "../models/MarketStore.js";
 import MarketProduct from "../models/MarketProduct.js";
 import MarketOrder from "../models/MarketOrder.js";
+import User from "../models/User.js";
+import Organization from "../models/Organization.js";
+
+const STORE_UPDATE_FIELDS = [
+  "name", "description", "category", "address", "city", "isActive",
+  "commissionRate", "deliveryZoneKm", "minOrderAmount", "deliveryFee",
+  "freeDeliveryThreshold", "pickupEnabled", "logo",
+];
 
 const toObjectId = (id) => {
   const v = String(id || "").trim();
@@ -97,4 +105,70 @@ export const searchProducts = async (req, res, next) => {
   } catch (e) {
     next(e);
   }
+};
+
+// PATCH /admin/market/stores/:id
+export const updateStore = async (req, res, next) => {
+  try {
+    const id = toObjectId(req.params.id);
+    if (!id) return next({ status: 400, message: "Geçersiz market id" });
+    const set = {};
+    for (const k of STORE_UPDATE_FIELDS) {
+      if (req.body[k] !== undefined) set[k] = req.body[k];
+    }
+    if (req.body.organization !== undefined) {
+      set.organization = req.body.organization ? toObjectId(req.body.organization) : null;
+      if (req.body.organization && !set.organization) {
+        return next({ status: 400, message: "Geçersiz organizasyon id" });
+      }
+      if (set.organization) {
+        const exists = await Organization.exists({ _id: set.organization });
+        if (!exists) return next({ status: 404, message: "Organizasyon bulunamadı" });
+      }
+    }
+    const store = await MarketStore.findByIdAndUpdate(id, { $set: set }, { new: true })
+      .populate("organization", "name").lean();
+    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    res.json({ store });
+  } catch (e) { next(e); }
+};
+
+// POST /admin/market/stores
+// body: { store:{...}, owner:{name,email,password} | {existingOwnerId}, organization?, organizationName? }
+export const createStore = async (req, res, next) => {
+  try {
+    const { store = {}, owner = {}, organization, organizationName } = req.body;
+    if (!store.name || !store.category) {
+      return next({ status: 400, message: "Market adı ve kategori zorunlu" });
+    }
+    // 1) owner: existing or new
+    let ownerId = owner.existingOwnerId ? toObjectId(owner.existingOwnerId) : null;
+    if (!ownerId) {
+      if (!owner.name || !owner.email || !owner.password) {
+        return next({ status: 400, message: "Yeni sahip için ad, e-posta ve şifre gerekli" });
+      }
+      const dup = await User.findOne({ email: owner.email }).lean();
+      if (dup) return next({ status: 409, message: "Bu e-posta zaten kayıtlı" });
+      const u = new User({
+        name: owner.name, email: owner.email, password: owner.password,
+        role: "market_owner",
+        providers: [{ name: "password", sub: owner.email }],
+      });
+      await u.save();
+      ownerId = u._id;
+    }
+    // 2) organization: attach existing or create new chain
+    let orgId = organization ? toObjectId(organization) : null;
+    if (!orgId && organizationName && String(organizationName).trim()) {
+      const org = await Organization.create({ name: String(organizationName).trim() });
+      orgId = org._id;
+    }
+    if (organization && !orgId) return next({ status: 400, message: "Geçersiz organizasyon id" });
+    // 3) create store
+    const allowed = {};
+    for (const k of STORE_UPDATE_FIELDS) if (store[k] !== undefined) allowed[k] = store[k];
+    if (store.location) allowed.location = store.location;
+    const created = await MarketStore.create({ ...allowed, owner: ownerId, organization: orgId });
+    res.status(201).json({ store: created });
+  } catch (e) { next(e); }
 };

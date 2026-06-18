@@ -77,6 +77,8 @@ import {
   listStores,
   getStore,
   searchProducts,
+  createStore,
+  updateStore,
 } from "../controllers/adminMarket.controller.js";
 import multer from "multer";
 
@@ -294,7 +296,9 @@ r.delete(
 
 // ---- Market Stores / Products (Admin) ----
 r.get("/market/stores", auth(), allow("admin"), listStores);
+r.post("/market/stores", auth(), allow("admin"), createStore);
 r.get("/market/stores/:id", auth(), allow("admin"), getStore);
+r.patch("/market/stores/:id", auth(), allow("admin"), updateStore);
 r.get("/market/products", auth(), allow("admin"), searchProducts);
 
 // ---- Market Collections ----
