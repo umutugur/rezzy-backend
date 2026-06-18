@@ -15,6 +15,7 @@ import {
   listOrgStores,
   uploadPanelImage,
   productImageSuggestions,
+  getReports,
 } from "../controllers/marketPanel.controller.js";
 
 const r = Router();
@@ -101,5 +102,8 @@ r.post("/market/panel/upload", auth(), allow("market_owner", "admin"), imageUplo
 
 // Cross-store ürün görseli önerileri
 r.get("/market/panel/product-image-suggestions", auth(), allow("market_owner", "admin"), productImageSuggestions);
+
+// Satış / sipariş raporları
+r.get("/market/panel/reports", auth(), allow("market_owner", "admin"), getReports);
 
 export default r;

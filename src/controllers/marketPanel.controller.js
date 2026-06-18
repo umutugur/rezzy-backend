@@ -592,3 +592,80 @@ export const productImageSuggestions = async (req, res, next) => {
     res.json({ items });
   } catch (e) { next(e); }
 };
+
+/** GET /api/market/panel/reports?from=&to= — mağaza satış/sipariş raporu (gelir = delivered) */
+export const getReports = async (req, res, next) => {
+  try {
+    const store = await findOwnerStore(req.user?.id);
+    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+
+    const now = new Date();
+    const to = req.query.to ? new Date(req.query.to) : now;
+    const from = req.query.from ? new Date(req.query.from) : new Date(now.getTime() - 30 * 864e5);
+    if (isNaN(to.getTime()) || isNaN(from.getTime())) {
+      return next({ status: 400, message: "Geçersiz tarih" });
+    }
+    const fromStart = new Date(from); fromStart.setHours(0, 0, 0, 0);
+    const toEnd = new Date(to); toEnd.setHours(23, 59, 59, 999);
+    const TZ = "Europe/Istanbul";
+    const match = { store: store._id, createdAt: { $gte: fromStart, $lte: toEnd } };
+    const deliveredOnly = { $match: { status: "delivered" } };
+
+    const [facet] = await MarketOrder.aggregate([
+      { $match: match },
+      { $facet: {
+        kpis: [
+          { $group: {
+            _id: null,
+            totalOrders: { $sum: 1 },
+            deliveredOrders: { $sum: { $cond: [{ $eq: ["$status", "delivered"] }, 1, 0] } },
+            revenue: { $sum: { $cond: [{ $eq: ["$status", "delivered"] }, "$total", 0] } },
+            cancelledOrders: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] } },
+            pendingOrders: { $sum: { $cond: [{ $in: ["$status", ["pending", "confirmed", "preparing", "ready"]] }, 1, 0] } },
+          } },
+        ],
+        itemsSold: [
+          deliveredOnly, { $unwind: "$items" },
+          { $group: { _id: null, qty: { $sum: "$items.qty" } } },
+        ],
+        timeseries: [
+          deliveredOnly,
+          { $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: TZ } },
+            revenue: { $sum: "$total" }, orders: { $sum: 1 },
+          } },
+          { $sort: { _id: 1 } },
+        ],
+        byStatus: [{ $group: { _id: "$status", count: { $sum: 1 } } }],
+        byPayment: [deliveredOnly, { $group: { _id: "$paymentMethod", count: { $sum: 1 }, revenue: { $sum: "$total" } } }],
+        byType: [deliveredOnly, { $group: { _id: "$type", count: { $sum: 1 }, revenue: { $sum: "$total" } } }],
+        topProducts: [
+          deliveredOnly, { $unwind: "$items" },
+          { $group: { _id: "$items.title", qty: { $sum: "$items.qty" }, revenue: { $sum: "$items.lineTotal" } } },
+          { $sort: { revenue: -1 } }, { $limit: 10 },
+        ],
+      } },
+    ]);
+
+    const k = facet.kpis[0] || { totalOrders: 0, deliveredOrders: 0, revenue: 0, cancelledOrders: 0, pendingOrders: 0 };
+    const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+    res.json({
+      range: { from: fromStart, to: toEnd },
+      kpis: {
+        revenue: round2(k.revenue),
+        deliveredOrders: k.deliveredOrders,
+        totalOrders: k.totalOrders,
+        pendingOrders: k.pendingOrders,
+        cancelledOrders: k.cancelledOrders,
+        avgOrderValue: k.deliveredOrders ? round2(k.revenue / k.deliveredOrders) : 0,
+        cancelRate: k.totalOrders ? Math.round((k.cancelledOrders / k.totalOrders) * 10000) / 10000 : 0,
+        itemsSold: facet.itemsSold[0]?.qty || 0,
+      },
+      timeseries: facet.timeseries.map((d) => ({ date: d._id, revenue: round2(d.revenue), orders: d.orders })),
+      byStatus: facet.byStatus.map((d) => ({ status: d._id, count: d.count })),
+      byPayment: facet.byPayment.map((d) => ({ method: d._id || "unknown", count: d.count, revenue: round2(d.revenue) })),
+      byType: facet.byType.map((d) => ({ type: d._id || "unknown", count: d.count, revenue: round2(d.revenue) })),
+      topProducts: facet.topProducts.map((d) => ({ title: d._id, qty: d.qty, revenue: round2(d.revenue) })),
+    });
+  } catch (e) { next(e); }
+};
