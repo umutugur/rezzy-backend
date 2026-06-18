@@ -30,6 +30,12 @@ const labelStyle: React.CSSProperties = {
   color: "#9ca3af", fontSize: 12, display: "block", marginBottom: 4,
 };
 
+// ── Redesigned modal style tokens ──────────────────────────────────────────
+const sectionLabel: React.CSSProperties = {
+  color: "#5b6577", fontSize: 11, fontWeight: 700, letterSpacing: "0.09em",
+  textTransform: "uppercase", marginBottom: 14, display: "flex", alignItems: "center", gap: 8,
+};
+
 export function MarketProductsPage() {
   const { t } = useI18n();
   const qc = useQueryClient();
@@ -187,6 +193,18 @@ export function MarketProductsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["market-products"] }),
   });
 
+  // Discount percent (for the inline badge)
+  const discountPct = (() => {
+    const dp = Number(form.discountPrice);
+    const pr = Number(form.price);
+    if (form.discountPrice !== "" && !isNaN(dp) && dp >= 0 && pr > 0 && dp < pr) {
+      return Math.round((1 - dp / pr) * 100);
+    }
+    return null;
+  })();
+
+  const canSave = !(!form.title.trim() || !form.price || !formCategory || saving);
+
   return (
     <MarketDesktopLayout>
       <div style={{ padding: 24 }}>
@@ -306,279 +324,391 @@ export function MarketProductsPage() {
           </table>
         )}
 
-        {/* Modal */}
+        {/* ── Product Modal (redesigned: two-column, sectioned, no-scroll-on-desktop) ── */}
         {modal.open && (
           <div style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+            position: "fixed", inset: 0, background: "rgba(7,9,14,0.74)",
+            backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000,
-            overflowY: "auto",
+            overflowY: "auto", padding: "32px 20px",
           }}>
-            <div style={{
-              background: "#1e2330", borderRadius: 16, padding: 32, width: 500,
-              border: "1px solid #2d3348", margin: "24px auto",
+            <style>{`
+              @keyframes mpIn { from { opacity: 0; transform: translateY(10px) scale(.985) } to { opacity: 1; transform: none } }
+              .mp-card { animation: mpIn .22s cubic-bezier(.16,1,.3,1) }
+              .mp-input { transition: border-color .15s ease, box-shadow .15s ease, background .15s ease }
+              .mp-input:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 3px rgba(99,102,241,.18) }
+              .mp-input::placeholder { color: #4b5563 }
+              .mp-drop { transition: border-color .15s ease, background .15s ease }
+              .mp-drop:hover { border-color: #6366f1 !important; background: #14161e !important }
+              .mp-sugg { transition: border-color .15s ease, transform .15s ease }
+              .mp-sugg:hover { border-color: #6366f1 !important; transform: translateY(-3px) }
+              .mp-body::-webkit-scrollbar { width: 9px }
+              .mp-body::-webkit-scrollbar-thumb { background: #2d3348; border-radius: 6px }
+              .mp-body::-webkit-scrollbar-track { background: transparent }
+              .mp-ghost { transition: background .15s ease, color .15s ease, border-color .15s ease }
+              .mp-ghost:hover { background: rgba(99,102,241,.12) }
+              .mp-x:hover { background: #2d3348 !important; color: #fff !important }
+            `}</style>
+
+            <div className="mp-card" style={{
+              background: "#161a24", borderRadius: 18, width: 960, maxWidth: "100%",
+              maxHeight: "calc(100vh - 64px)", display: "flex", flexDirection: "column",
+              border: "1px solid #262c3a", boxShadow: "0 24px 70px rgba(0,0,0,.55)", overflow: "hidden",
             }}>
-              <h3 style={{ color: "#fff", margin: "0 0 20px", fontSize: 18, fontWeight: 700 }}>
-                {modal.product ? t("Ürünü Düzenle") : t("Yeni Ürün")}
-              </h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-                {/* Category (required) */}
-                <div>
-                  <label style={labelStyle}>{t("Kategori")} *</label>
-                  <select
-                    value={formCategory}
-                    onChange={e => setFormCategory(e.target.value)}
-                    style={{
-                      ...inputStyle,
-                      color: formCategory ? "#fff" : "#6b7280",
-                    }}
-                  >
-                    <option value="">{t("Kategori seçiniz")}</option>
-                    {categories.map(cat => (
-                      <option key={cat._id} value={cat._id}>
-                        {cat.i18n?.tr?.title ?? cat.key}
-                      </option>
-                    ))}
-                  </select>
-                  {!formCategory && (
-                    <span style={{ color: "#ef4444", fontSize: 11, marginTop: 4, display: "block" }}>
-                      {t("Kategori zorunludur")}
-                    </span>
-                  )}
-                </div>
-
-                {([
-                  { label: "Ürün Adı *", key: "title", type: "text" },
-                  { label: "Fiyat (₺) *", key: "price", type: "number" },
-                  { label: "Birim", key: "unit", type: "text" },
-                  { label: "Stok", key: "stock", type: "number" },
-                ] as Array<{ label: string; key: keyof typeof emptyForm; type: string }>).map(({ label, key, type }) => (
-                  <div key={key}>
-                    <label style={labelStyle}>{t(label)}</label>
-                    <input
-                      type={type}
-                      value={form[key]}
-                      onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                      style={inputStyle}
-                    />
-                  </div>
-                ))}
-
-                {/* Discount Price */}
-                <div>
-                  <label style={labelStyle}>{t("İndirimli Fiyat")} (₺)</label>
-                  <input
-                    type="number"
-                    value={form.discountPrice}
-                    onChange={e => setForm(f => ({ ...f, discountPrice: e.target.value }))}
-                    placeholder="ör. 8.99 (isteğe bağlı)"
-                    style={inputStyle}
-                  />
-                  {(() => {
-                    const dp = Number(form.discountPrice);
-                    const pr = Number(form.price);
-                    if (form.discountPrice !== "" && !isNaN(dp) && dp >= 0 && pr > 0 && dp < pr) {
-                      const pct = Math.round((1 - dp / pr) * 100);
-                      return <span style={{ color: "#10b981", fontSize: 12, marginTop: 4, display: "block" }}>%{pct} indirim</span>;
-                    }
-                    return null;
-                  })()}
-                </div>
-
-                {/* Brand */}
-                <div>
-                  <label style={labelStyle}>{t("Marka")}</label>
-                  <input
-                    type="text"
-                    value={form.brand}
-                    onChange={e => setForm(f => ({ ...f, brand: e.target.value }))}
-                    placeholder="ör. Ülker"
-                    style={inputStyle}
-                  />
-                </div>
-
-                {/* Barcode */}
-                <div>
-                  <label style={labelStyle}>{t("Barkod")}</label>
-                  <input
-                    type="text"
-                    value={form.barcode}
-                    onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))}
-                    placeholder="ör. 8690504001986"
-                    style={inputStyle}
-                  />
-                </div>
-
-                {/* Net Miktar + Net Birim */}
-                <div style={{ display: "flex", gap: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={labelStyle}>{t("Net Miktar")}</label>
-                    <input
-                      type="number"
-                      value={form.netQuantity}
-                      onChange={e => setForm(f => ({ ...f, netQuantity: e.target.value }))}
-                      placeholder="ör. 500"
-                      style={inputStyle}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={labelStyle}>{t("Net Birim")}</label>
-                    <select
-                      value={formNetUnit}
-                      onChange={e => setFormNetUnit(e.target.value as "L" | "ml" | "kg" | "g" | "piece" | "")}
-                      style={{
-                        ...inputStyle,
-                        color: formNetUnit ? "#fff" : "#6b7280",
-                      }}
-                    >
-                      <option value="">{t("Seçiniz")}</option>
-                      <option value="L">L</option>
-                      <option value="ml">ml</option>
-                      <option value="kg">kg</option>
-                      <option value="g">g</option>
-                      <option value="piece">piece</option>
-                    </select>
+              {/* Header */}
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "20px 28px", borderBottom: "1px solid #232838",
+                background: "linear-gradient(180deg, #1b2030 0%, #161a24 100%)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{
+                    width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+                    background: "linear-gradient(135deg, #4f46e5, #6366f1)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 20, boxShadow: "0 6px 18px rgba(79,70,229,.4)",
+                  }}>🛒</div>
+                  <div>
+                    <h3 style={{ color: "#fff", margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em" }}>
+                      {modal.product ? t("Ürünü Düzenle") : t("Yeni Ürün")}
+                    </h3>
+                    <p style={{ color: "#6b7280", margin: "2px 0 0", fontSize: 12.5 }}>
+                      {modal.product ? t("Ürün bilgilerini güncelleyin") : t("Mağazanıza yeni bir ürün ekleyin")}
+                    </p>
                   </div>
                 </div>
+                <button
+                  className="mp-x"
+                  onClick={closeModal}
+                  style={{
+                    width: 34, height: 34, borderRadius: 9, border: "1px solid #2d3348",
+                    background: "transparent", color: "#9ca3af", cursor: "pointer",
+                    fontSize: 20, lineHeight: "30px", textAlign: "center", flexShrink: 0,
+                  }}
+                  aria-label={t("Kapat")}
+                >×</button>
+              </div>
 
-                {/* Product Image Upload */}
+              {/* Body — two columns */}
+              <div className="mp-body" style={{
+                flex: 1, overflowY: "auto", padding: 28,
+                display: "grid", gridTemplateColumns: "300px 1fr", gap: 28, alignItems: "start",
+              }}>
+                {/* ── LEFT: media + identity ── */}
                 <div>
-                  <label style={labelStyle}>{t("Ürün Görseli")}</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    disabled={photoUploading}
-                    style={{
-                      width: "100%", padding: "8px 0", color: "#9ca3af", fontSize: 13,
-                      cursor: photoUploading ? "wait" : "pointer",
-                    }}
-                  />
-                  {photoUploading && (
-                    <span style={{ color: "#9ca3af", fontSize: 12, marginTop: 4, display: "block" }}>
-                      {t("Yükleniyor…")}
-                    </span>
-                  )}
-                  {formPhoto && (
-                    <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10 }}>
-                      <img
-                        src={formPhoto}
-                        alt="preview"
-                        style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid #2d3348" }}
-                      />
+                  <span style={sectionLabel}>{t("Görsel")}</span>
+
+                  {formPhoto ? (
+                    <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", border: "1px solid #2d3348" }}>
+                      <img src={formPhoto} alt="preview" style={{ width: "100%", height: 200, objectFit: "cover", display: "block" }} />
                       <button
                         type="button"
                         onClick={() => setFormPhoto("")}
                         style={{
-                          padding: "4px 10px", borderRadius: 6, border: "1px solid #ef4444",
-                          background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 12,
+                          position: "absolute", top: 10, right: 10, padding: "6px 12px", borderRadius: 8,
+                          border: "none", background: "rgba(15,17,23,.82)", color: "#f87171",
+                          cursor: "pointer", fontSize: 12.5, fontWeight: 600, backdropFilter: "blur(4px)",
                         }}
                       >
                         {t("Kaldır")}
                       </button>
                     </div>
+                  ) : (
+                    <label className="mp-drop" style={{
+                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                      gap: 8, height: 200, borderRadius: 14, border: "1.5px dashed #313a4e",
+                      background: "#10131b", cursor: photoUploading ? "wait" : "pointer", textAlign: "center", padding: 16,
+                    }}>
+                      <div style={{ fontSize: 30, opacity: 0.85 }}>{photoUploading ? "⏳" : "🖼️"}</div>
+                      <span style={{ color: "#cbd5e1", fontSize: 13.5, fontWeight: 600 }}>
+                        {photoUploading ? t("Yükleniyor…") : t("Görsel yükle")}
+                      </span>
+                      <span style={{ color: "#5b6577", fontSize: 11.5 }}>PNG · JPG</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        disabled={photoUploading}
+                        style={{ display: "none" }}
+                      />
+                    </label>
                   )}
 
-                  {/* Image suggestions — only show when no photo chosen */}
+                  {/* Image suggestions — only when no photo chosen */}
                   {!formPhoto && suggestions.length > 0 && (
-                    <div style={{ marginTop: 10 }}>
-                      <span style={{ color: "#6b7280", fontSize: 12 }}>
-                        {t("Bu ürünün görseli sistemde var")} — {t("birini seçin")}:
+                    <div style={{ marginTop: 16 }}>
+                      <span style={{ color: "#818cf8", fontSize: 12, fontWeight: 600, display: "block", marginBottom: 8 }}>
+                        ✨ {t("Bu ürünün görseli sistemde var")}
                       </span>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
                         {suggestions.slice(0, 8).map((s, i) => (
                           <img
                             key={i}
+                            className="mp-sugg"
                             src={s.url}
                             alt={s.title}
                             title={s.title}
                             onClick={() => setFormPhoto(s.url)}
                             style={{
-                              width: 56, height: 56, objectFit: "cover", borderRadius: 8,
-                              border: "2px solid #2d3348", cursor: "pointer",
+                              width: "100%", aspectRatio: "1 / 1", objectFit: "cover", borderRadius: 9,
+                              border: "2px solid #2d3348", cursor: "pointer", display: "block",
                             }}
-                            onMouseEnter={e => (e.currentTarget.style.borderColor = "#4f46e5")}
-                            onMouseLeave={e => (e.currentTarget.style.borderColor = "#2d3348")}
                           />
                         ))}
                       </div>
+                      <span style={{ color: "#5b6577", fontSize: 11, marginTop: 6, display: "block" }}>
+                        {t("birini seçin")}
+                      </span>
                     </div>
                   )}
                 </div>
 
-                {/* Attributes */}
+                {/* ── RIGHT: fields ── */}
                 <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <label style={labelStyle}>{t("Özellikler")}</label>
+                  {/* TEMEL BİLGİLER */}
+                  <span style={sectionLabel}>{t("Temel Bilgiler")}</span>
+
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={labelStyle}>{t("Kategori")} <span style={{ color: "#f87171" }}>*</span></label>
+                    <select
+                      className="mp-input"
+                      value={formCategory}
+                      onChange={e => setFormCategory(e.target.value)}
+                      style={{ ...inputStyle, color: formCategory ? "#fff" : "#5b6577", cursor: "pointer", appearance: "none",
+                        backgroundImage: "linear-gradient(45deg, transparent 50%, #6b7280 50%), linear-gradient(135deg, #6b7280 50%, transparent 50%)",
+                        backgroundPosition: "calc(100% - 18px) 18px, calc(100% - 13px) 18px", backgroundSize: "5px 5px, 5px 5px", backgroundRepeat: "no-repeat",
+                        borderColor: !formCategory ? "#7f1d1d" : "#2d3348" }}
+                    >
+                      <option value="">{t("Kategori seçiniz")}</option>
+                      {categories.map(cat => (
+                        <option key={cat._id} value={cat._id}>
+                          {cat.i18n?.tr?.title ?? cat.key}
+                        </option>
+                      ))}
+                    </select>
+                    {!formCategory && (
+                      <span style={{ color: "#f87171", fontSize: 11, marginTop: 5, display: "block" }}>
+                        {t("Kategori zorunludur")}
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={labelStyle}>{t("Ürün Adı")} <span style={{ color: "#f87171" }}>*</span></label>
+                    <input
+                      className="mp-input"
+                      type="text"
+                      value={form.title}
+                      onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                      placeholder={t("ör. Tam Yağlı Süt 1L")}
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                    <div>
+                      <label style={labelStyle}>{t("Fiyat")} (₺) <span style={{ color: "#f87171" }}>*</span></label>
+                      <input
+                        className="mp-input"
+                        type="number"
+                        value={form.price}
+                        onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
+                        placeholder="0.00"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>
+                        {t("İndirimli Fiyat")} (₺)
+                        {discountPct != null && (
+                          <span style={{ color: "#10b981", marginLeft: 8, fontWeight: 700 }}>−%{discountPct}</span>
+                        )}
+                      </label>
+                      <input
+                        className="mp-input"
+                        type="number"
+                        value={form.discountPrice}
+                        onChange={e => setForm(f => ({ ...f, discountPrice: e.target.value }))}
+                        placeholder={t("isteğe bağlı")}
+                        style={{ ...inputStyle, borderColor: discountPct != null ? "#10b98166" : "#2d3348" }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div>
+                      <label style={labelStyle}>{t("Birim")}</label>
+                      <input
+                        className="mp-input"
+                        type="text"
+                        value={form.unit}
+                        onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
+                        placeholder="piece"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>{t("Stok")}</label>
+                      <input
+                        className="mp-input"
+                        type="number"
+                        value={form.stock}
+                        onChange={e => setForm(f => ({ ...f, stock: e.target.value }))}
+                        placeholder="0"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+
+                  {/* DETAYLAR */}
+                  <span style={{ ...sectionLabel, marginTop: 26 }}>{t("Detaylar")}</span>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                    <div>
+                      <label style={labelStyle}>{t("Marka")}</label>
+                      <input
+                        className="mp-input"
+                        type="text"
+                        value={form.brand}
+                        onChange={e => setForm(f => ({ ...f, brand: e.target.value }))}
+                        placeholder="ör. Ülker"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>{t("Barkod")}</label>
+                      <input
+                        className="mp-input"
+                        type="text"
+                        value={form.barcode}
+                        onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))}
+                        placeholder="8690504001986"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div>
+                      <label style={labelStyle}>{t("Net Miktar")}</label>
+                      <input
+                        className="mp-input"
+                        type="number"
+                        value={form.netQuantity}
+                        onChange={e => setForm(f => ({ ...f, netQuantity: e.target.value }))}
+                        placeholder="ör. 500"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>{t("Net Birim")}</label>
+                      <select
+                        className="mp-input"
+                        value={formNetUnit}
+                        onChange={e => setFormNetUnit(e.target.value as "L" | "ml" | "kg" | "g" | "piece" | "")}
+                        style={{ ...inputStyle, color: formNetUnit ? "#fff" : "#5b6577", cursor: "pointer" }}
+                      >
+                        <option value="">{t("Seçiniz")}</option>
+                        <option value="L">L</option>
+                        <option value="ml">ml</option>
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                        <option value="piece">piece</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* ÖZELLİKLER */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 26, marginBottom: 14 }}>
+                    <span style={{ ...sectionLabel, margin: 0 }}>{t("Özellikler")}</span>
                     <button
                       type="button"
+                      className="mp-ghost"
                       onClick={() => setFormAttributes(prev => [...prev, { label: "", value: "" }])}
                       style={{
-                        padding: "4px 12px", borderRadius: 6, border: "1px solid #4f46e5",
-                        background: "transparent", color: "#818cf8", cursor: "pointer", fontSize: 12,
+                        padding: "5px 12px", borderRadius: 7, border: "1px solid #3730a3",
+                        background: "transparent", color: "#818cf8", cursor: "pointer", fontSize: 12, fontWeight: 600,
                       }}
                     >
                       + {t("Özellik Ekle")}
                     </button>
                   </div>
-                  {formAttributes.map((attr, idx) => (
-                    <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-                      <input
-                        type="text"
-                        value={attr.label}
-                        onChange={e => setFormAttributes(prev => prev.map((a, i) => i === idx ? { ...a, label: e.target.value } : a))}
-                        placeholder={t("ör. Renk")}
-                        style={{
-                          flex: 1, padding: "8px 12px", borderRadius: 8,
-                          border: "1px solid #2d3348", background: "#0f1117", color: "#fff",
-                          fontSize: 13, outline: "none",
-                        }}
-                      />
-                      <input
-                        type="text"
-                        value={attr.value}
-                        onChange={e => setFormAttributes(prev => prev.map((a, i) => i === idx ? { ...a, value: e.target.value } : a))}
-                        placeholder={t("ör. Kırmızı")}
-                        style={{
-                          flex: 1, padding: "8px 12px", borderRadius: 8,
-                          border: "1px solid #2d3348", background: "#0f1117", color: "#fff",
-                          fontSize: 13, outline: "none",
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setFormAttributes(prev => prev.filter((_, i) => i !== idx))}
-                        style={{
-                          width: 28, height: 28, borderRadius: 6, border: "1px solid #ef4444",
-                          background: "transparent", color: "#ef4444", cursor: "pointer",
-                          fontWeight: 700, fontSize: 16, lineHeight: "26px", textAlign: "center",
-                        }}
-                      >
-                        ×
-                      </button>
+                  {formAttributes.length === 0 ? (
+                    <div style={{
+                      border: "1px dashed #262c3a", borderRadius: 10, padding: "14px 16px",
+                      color: "#5b6577", fontSize: 12.5, textAlign: "center",
+                    }}>
+                      {t("Renk, içerik gibi ek özellikler ekleyebilirsiniz")}
                     </div>
-                  ))}
+                  ) : (
+                    formAttributes.map((attr, idx) => (
+                      <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                        <input
+                          className="mp-input"
+                          type="text"
+                          value={attr.label}
+                          onChange={e => setFormAttributes(prev => prev.map((a, i) => i === idx ? { ...a, label: e.target.value } : a))}
+                          placeholder={t("ör. Renk")}
+                          style={{ ...inputStyle, flex: 1, padding: "9px 12px", fontSize: 13 }}
+                        />
+                        <input
+                          className="mp-input"
+                          type="text"
+                          value={attr.value}
+                          onChange={e => setFormAttributes(prev => prev.map((a, i) => i === idx ? { ...a, value: e.target.value } : a))}
+                          placeholder={t("ör. Kırmızı")}
+                          style={{ ...inputStyle, flex: 1, padding: "9px 12px", fontSize: 13 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setFormAttributes(prev => prev.filter((_, i) => i !== idx))}
+                          style={{
+                            width: 32, height: 32, borderRadius: 7, border: "1px solid #3f2330",
+                            background: "transparent", color: "#f87171", cursor: "pointer",
+                            fontWeight: 700, fontSize: 16, lineHeight: "30px", textAlign: "center", flexShrink: 0,
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 12, marginTop: 24, justifyContent: "flex-end" }}>
+
+              {/* Footer */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "16px 28px", borderTop: "1px solid #232838",
+                background: "#13161f",
+              }}>
+                <span style={{ color: canSave ? "#5b6577" : "#f8717199", fontSize: 12.5, flex: 1 }}>
+                  {canSave ? t("Kaydetmeye hazır") : t("Kategori, ürün adı ve fiyat zorunludur")}
+                </span>
                 <button
+                  className="mp-ghost"
                   onClick={closeModal}
                   style={{
-                    padding: "10px 20px", borderRadius: 8, border: "1px solid #374151",
-                    background: "transparent", color: "#9ca3af", cursor: "pointer",
+                    padding: "10px 20px", borderRadius: 9, border: "1px solid #2d3348",
+                    background: "transparent", color: "#9ca3af", cursor: "pointer", fontWeight: 600, fontSize: 14,
                   }}
                 >
                   {t("Vazgeç")}
                 </button>
                 <button
                   onClick={() => saveProduct()}
-                  disabled={!form.title.trim() || !form.price || !formCategory || saving}
+                  disabled={!canSave}
                   style={{
-                    padding: "10px 24px", borderRadius: 8, border: "none",
-                    background: saving ? "#374151" : "#4f46e5", color: "#fff",
-                    cursor: "pointer", fontWeight: 700,
-                    opacity: (!form.title.trim() || !form.price || !formCategory) ? 0.5 : 1,
+                    padding: "10px 26px", borderRadius: 9, border: "none",
+                    background: canSave ? "linear-gradient(135deg, #4f46e5, #6366f1)" : "#262c3a",
+                    color: canSave ? "#fff" : "#5b6577",
+                    cursor: canSave ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 14,
+                    boxShadow: canSave ? "0 6px 18px rgba(79,70,229,.35)" : "none",
+                    transition: "transform .12s ease, box-shadow .15s ease",
                   }}
+                  onMouseDown={e => { if (canSave) e.currentTarget.style.transform = "scale(.97)"; }}
+                  onMouseUp={e => { e.currentTarget.style.transform = "none"; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = "none"; }}
                 >
                   {saving ? t("Kaydediliyor…") : (modal.product ? t("Güncelle") : t("Ekle"))}
                 </button>
