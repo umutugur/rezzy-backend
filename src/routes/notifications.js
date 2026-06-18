@@ -5,6 +5,9 @@ import User from "../models/User.js";
 import Device from "../models/Device.js";
 import NotificationLog from "../models/NotificationLog.js";
 import { sendToDevices } from "../services/notification.service.js";
+import MarketOrder from "../models/MarketOrder.js";
+import TaxiDriver from "../models/TaxiDriver.js";
+import TaxiRide from "../models/TaxiRide.js";
 
 const r = Router();
 
@@ -328,7 +331,16 @@ r.post("/admin/send", auth(), requireAdmin, async (req, res) => {
       } titleLen=${(title || "").length} bodyLen=${(body || "").length}`
     );
 
-    const validTargets = ["all", "customers", "restaurants", "email"];
+    const validTargets = [
+      "all",
+      "customers",
+      "restaurants",
+      "email",
+      "market_owners",
+      "market_customers",
+      "taxi_drivers",
+      "taxi_passengers",
+    ];
     if (!validTargets.includes(targets)) {
       console.warn("[notifications][admin/send] invalid targets:", targets);
       return res
@@ -343,20 +355,41 @@ r.post("/admin/send", auth(), requireAdmin, async (req, res) => {
     }
 
     // Hedef kullanıcıları bul
-    let userQuery = {};
-    if (targets === "customers") userQuery = { role: "customer" };
-    if (targets === "restaurants") userQuery = { role: "restaurant" };
-    if (targets === "email") {
-      if (!email)
-        return res
-          .status(400)
-          .json({ ok: false, error: "email required" });
-      userQuery = { email: String(email).trim().toLowerCase() };
+    let users;
+    if (targets === "market_customers") {
+      const customerIds = await MarketOrder.distinct("customer");
+      users = await User.find({ _id: { $in: customerIds } })
+        .select("_id pushTokens")
+        .lean();
+    } else if (targets === "taxi_drivers") {
+      const driverDocs = await TaxiDriver.find({})
+        .select("user")
+        .lean();
+      const driverUserIds = driverDocs.map((d) => d.user);
+      users = await User.find({ _id: { $in: driverUserIds } })
+        .select("_id pushTokens")
+        .lean();
+    } else if (targets === "taxi_passengers") {
+      const passengerIds = await TaxiRide.distinct("passenger");
+      users = await User.find({ _id: { $in: passengerIds } })
+        .select("_id pushTokens")
+        .lean();
+    } else {
+      let userQuery = {};
+      if (targets === "customers") userQuery = { role: "customer" };
+      if (targets === "restaurants") userQuery = { role: "restaurant" };
+      if (targets === "market_owners") userQuery = { role: "market_owner" };
+      if (targets === "email") {
+        if (!email)
+          return res
+            .status(400)
+            .json({ ok: false, error: "email required" });
+        userQuery = { email: String(email).trim().toLowerCase() };
+      }
+      users = await User.find(userQuery)
+        .select("_id pushTokens")
+        .lean();
     }
-
-    const users = await User.find(userQuery)
-      .select("_id pushTokens")
-      .lean();
 
     // Aktif token’ları topla
     const tokenTuples = [];

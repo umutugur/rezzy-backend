@@ -566,6 +566,11 @@ export const getOrganizationDetail = async (req, res, next) => {
       .sort({ name: 1 })
       .lean();
 
+    // 🔹 Bu organizasyona bağlı market şubeleri
+    const marketStores = await MarketStore.find({ organization: oid })
+      .select("_id name city isActive rating totalOrders")
+      .lean();
+
     // 🔹 Organizasyona bağlı kullanıcılar (organizations[] içinden)
     const userDocs = await User.find({
       "organizations.organization": oid,
@@ -589,6 +594,7 @@ export const getOrganizationDetail = async (req, res, next) => {
     res.json({
       ...org,
       restaurants,
+      marketStores,
       members,
     });
   } catch (e) {
