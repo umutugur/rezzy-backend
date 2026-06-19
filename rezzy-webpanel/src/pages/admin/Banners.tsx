@@ -18,7 +18,49 @@ import {
   pickMarketProducts,
   pickMarketCollections,
 } from "../../api/adminPickers";
+import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
+import { FormField } from "../../desktop/components/admin/FormField";
 
+// ─── Human-readable placement labels ─────────────────────────────────────────
+const PLACEMENT_LABELS: Record<string, string> = {
+  home_top:          "Ana Sayfa — Üst Banner",
+  home_mid:          "Ana Sayfa — Orta Banner",
+  store_top:         "Restoran Sayfası — Üst",
+  market_home_top:   "Market Ana Sayfa — Üst",
+  market_store_top:  "Market Mağaza Sayfası — Üst",
+};
+
+// Non-market placements
+const DELIVERY_PLACEMENTS = ["home_top", "home_mid", "store_top"] as const;
+// Market placements
+const MARKET_PLACEMENTS = ["market_home_top", "market_store_top"] as const;
+// All placements combined
+const ALL_PLACEMENTS = [...DELIVERY_PLACEMENTS, ...MARKET_PLACEMENTS] as const;
+
+// ─── Shared style constants ───────────────────────────────────────────────────
+const inputCls =
+  "w-full rounded-lg border border-[var(--rezvix-border-strong)] bg-[var(--rezvix-bg-elevated)] text-[var(--rezvix-text-main)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--rezvix-primary)] placeholder:text-[var(--rezvix-text-soft)]";
+
+const cardStyle: React.CSSProperties = {
+  background: "var(--rezvix-bg-elevated)",
+  border: "1.5px solid var(--rezvix-border-subtle)",
+  borderRadius: 16,
+  padding: "22px 24px",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+};
+
+const sectionHeadingStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.07em",
+  textTransform: "uppercase",
+  color: "var(--rezvix-text-soft)",
+  marginBottom: 14,
+  paddingBottom: 8,
+  borderBottom: "1px solid var(--rezvix-border-subtle)",
+};
+
+// ─── Type helpers ─────────────────────────────────────────────────────────────
 type RestaurantLite = { _id: string; name: string; region?: string };
 
 async function fetchRestaurantsLite(): Promise<RestaurantLite[]> {
@@ -59,9 +101,8 @@ async function getCroppedImgFile(
     img.src = imageSrc;
   });
 
-  // Standard banner output (mobile home_top)
   const OUT_W = 1200;
-  const OUT_H = 520; // ~2.307:1
+  const OUT_H = 520;
 
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
@@ -70,7 +111,6 @@ async function getCroppedImgFile(
   canvas.width = OUT_W;
   canvas.height = OUT_H;
 
-  // Defensive bounds
   const sx = clamp(cropPixels.x, 0, Math.max(0, image.naturalWidth - 1));
   const sy = clamp(cropPixels.y, 0, Math.max(0, image.naturalHeight - 1));
   const sw = clamp(cropPixels.width, 1, image.naturalWidth - sx);
@@ -92,12 +132,14 @@ async function getCroppedImgFile(
   return new File([blob], `${safe}-banner.jpg`, { type: "image/jpeg" });
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AdminBannersPage() {
   const qc = useQueryClient();
   const { t } = useI18n();
 
+  // ── List filter state ────────────────────────────────────────────────────────
   const [placement, setPlacement] = React.useState("home_top");
-  const [region, setRegion] = React.useState<string>(""); // empty => all
+  const [region, setRegion] = React.useState<string>("");
   const [active, setActive] = React.useState<string>("true");
 
   const { data: bannersResp, isLoading } = useQuery({
@@ -117,7 +159,7 @@ export default function AdminBannersPage() {
 
   const banners = bannersResp?.items ?? [];
 
-  // Create form
+  // ── Create form state ────────────────────────────────────────────────────────
   const [title, setTitle] = React.useState("");
   const [linkUrl, setLinkUrl] = React.useState("");
   const [order, setOrder] = React.useState<number>(0);
@@ -125,7 +167,6 @@ export default function AdminBannersPage() {
   const [startAt, setStartAt] = React.useState("");
   const [endAt, setEndAt] = React.useState("");
   const [targetType, setTargetType] = React.useState<AdminBannerTargetType>("delivery");
-  // Create-form placement is independent from the list filter `placement` above.
   const [formPlacement, setFormPlacement] = React.useState("home_top");
   const [restaurantId, setRestaurantId] = React.useState<string>("");
   const [marketStoreId, setMarketStoreId] = React.useState<string>("");
@@ -143,10 +184,11 @@ export default function AdminBannersPage() {
   const [zoom, setZoom] = React.useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = React.useState<any>(null);
   const [croppedFile, setCroppedFile] = React.useState<File | null>(null);
+
   const createMut = useMutation({
     mutationFn: async () => {
-if (!imageFile) throw new Error(t("Banner görseli zorunlu"));
-const finalImage = croppedFile ?? imageFile;
+      if (!imageFile) throw new Error(t("Banner görseli zorunlu"));
+      const finalImage = croppedFile ?? imageFile;
       if (targetType !== "market" && !restaurantId) throw new Error(t("Restoran seçmelisin"));
       return adminCreateBanner({
         placement: formPlacement,
@@ -179,12 +221,12 @@ const finalImage = croppedFile ?? imageFile;
       setMarketCollectionId("");
       setImageFile(null);
       if (imageSrc) URL.revokeObjectURL(imageSrc);
-setImageSrc("");
-setCroppedFile(null);
-setCrop({ x: 0, y: 0 });
-setZoom(1);
-setCroppedAreaPixels(null);
-setCropOpen(false);
+      setImageSrc("");
+      setCroppedFile(null);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+      setCroppedAreaPixels(null);
+      setCropOpen(false);
       await qc.invalidateQueries({ queryKey: ["admin-banners"] });
     },
   });
@@ -206,35 +248,73 @@ setCropOpen(false);
   });
 
   return (
-          <div className="space-y-6 p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{t("Banner Yönetimi")}</h2>
-        </div>
+    <div style={{ padding: "24px 28px", maxWidth: 1280 }}>
+      <AdminPageHeader
+        title={t("Banner Yönetimi")}
+        subtitle={t("Uygulamada gösterilecek banner reklamlarını yönetin")}
+        actions={
+          <button
+            style={{
+              padding: "8px 18px",
+              borderRadius: 10,
+              background: "var(--rezvix-bg-soft)",
+              border: "1.5px solid var(--rezvix-border-strong)",
+              color: "var(--rezvix-text-muted)",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+            onClick={() => qc.invalidateQueries({ queryKey: ["admin-banners"] })}
+          >
+            ↺ {t("Yenile")}
+          </button>
+        }
+      />
 
-        <Card>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("Placement")}</div>
-              <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+      {/* ── Filter row ──────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          ...cardStyle,
+          marginBottom: 20,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 16,
+          alignItems: "end",
+        }}
+      >
+        <div>
+          <div style={sectionHeadingStyle as any}>{t("Filtreler")}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, gridColumn: "1 / -1" }}>
+            <FormField label={t("Yerleşim")}>
+              <select
+                className={inputCls}
                 value={placement}
                 onChange={(e) => setPlacement(e.target.value)}
-                placeholder={t("home_top")}
-              />
-            </div>
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("Region (opsiyonel)")}</div>
-              <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="">{t("Tüm yerleşimler")}</option>
+                {ALL_PLACEMENTS.map((key) => (
+                  <option key={key} value={key}>
+                    {PLACEMENT_LABELS[key] ?? key}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label={t("Bölge")}>
+              <select
+                className={inputCls}
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
-                placeholder={t("TR / CY / boş=hepsi")}
-              />
-            </div>
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("Aktif filtresi")}</div>
+              >
+                <option value="">{t("Tüm bölgeler")}</option>
+                <option value="TR">TR — Türkiye</option>
+                <option value="CY">CY — Kıbrıs</option>
+              </select>
+            </FormField>
+
+            <FormField label={t("Durum")}>
               <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                className={inputCls}
                 value={active}
                 onChange={(e) => setActive(e.target.value)}
               >
@@ -242,142 +322,137 @@ setCropOpen(false);
                 <option value="false">{t("Sadece pasif")}</option>
                 <option value="all">{t("Hepsi")}</option>
               </select>
-            </div>
-            <div className="flex items-end">
-              <button
-                className="w-full px-3 py-2 rounded-lg bg-gray-900 text-white text-sm hover:opacity-90"
-                onClick={() => qc.invalidateQueries({ queryKey: ["admin-banners"] })}
-              >
-                {t("Yenile")}
-              </button>
-            </div>
+            </FormField>
           </div>
-        </Card>
+        </div>
+      </div>
 
-        <Card>
-          <div className="flex items-center justify-between mb-3">
-            <div className="font-medium">{t("Yeni Banner Ekle")}</div>
-          </div>
+      {/* ── Create form ─────────────────────────────────────────────────────── */}
+      <div style={{ ...cardStyle, marginBottom: 20 }}>
+        <div style={sectionHeadingStyle as any}>{t("Yeni Banner Ekle")}</div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("Başlık")}</div>
-              <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={t("opsiyonel")}
-              />
-            </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          <FormField label={t("Başlık")}>
+            <input
+              className={inputCls}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t("opsiyonel")}
+            />
+          </FormField>
 
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("Link (opsiyonel)")}</div>
-              <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                placeholder="https://..."
-              />
-            </div>
+          <FormField label={t("Link")}>
+            <input
+              className={inputCls}
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="https://..."
+            />
+          </FormField>
 
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("Sıra (order)")}</div>
-              <input
-                type="number"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={order}
-                onChange={(e) => setOrder(Number(e.target.value))}
-              />
-            </div>
+          <FormField label={t("Sıra")}>
+            <input
+              type="number"
+              className={inputCls}
+              value={order}
+              onChange={(e) => setOrder(Number(e.target.value))}
+            />
+          </FormField>
 
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("Hedef Tip")}</div>
-              <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={targetType}
-                onChange={(e) => {
-                  const tt = e.target.value as AdminBannerTargetType;
-                  setTargetType(tt);
-                  // Keep the create-form placement consistent with target type.
-                  if (tt === "market") {
-                    setFormPlacement((p) =>
-                      p === "market_home_top" || p === "market_store_top" ? p : "market_home_top"
-                    );
-                  } else {
-                    setFormPlacement((p) =>
-                      p === "market_home_top" || p === "market_store_top" ? "home_top" : p
-                    );
-                  }
-                }}
+          <FormField label={t("Hedef Tip")} required>
+            <select
+              className={inputCls}
+              value={targetType}
+              onChange={(e) => {
+                const tt = e.target.value as AdminBannerTargetType;
+                setTargetType(tt);
+                if (tt === "market") {
+                  setFormPlacement((p) =>
+                    p === "market_home_top" || p === "market_store_top" ? p : "market_home_top"
+                  );
+                } else {
+                  setFormPlacement((p) =>
+                    p === "market_home_top" || p === "market_store_top" ? "home_top" : p
+                  );
+                }
+              }}
+            >
+              <option value="delivery">{t("Delivery (paket servis)")}</option>
+              <option value="reservation">{t("Reservation (rezervasyon)")}</option>
+              <option value="market">{t("Market")}</option>
+            </select>
+          </FormField>
+
+          {targetType === "market" ? (
+            <>
+              <FormField
+                label={t("Yerleşim")}
+                hint={t("Bu banner uygulamada nerede gösterilecek?")}
+                required
               >
-                <option value="delivery">{t("Delivery (paket servis)")}</option>
-                <option value="reservation">{t("Reservation (rezervasyon)")}</option>
-                <option value="market">{t("Market")}</option>
-              </select>
-            </div>
-
-            {targetType === "market" ? (
-              <>
-                <div>
-                  <div className="text-xs text-gray-500 mb-1">{t("Market Placement")}</div>
-                  <select
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    value={formPlacement}
-                    onChange={(e) => setFormPlacement(e.target.value)}
-                  >
-                    <option value="market_home_top">{t("market_home_top")}</option>
-                    <option value="market_store_top">{t("market_store_top")}</option>
-                  </select>
-                </div>
-
-                <div>
-                  <div className="text-xs text-gray-500 mb-1">{t("Market Store ID (opsiyonel)")}</div>
-                  <EntityPicker
-                    fetcher={pickMarketStores}
-                    value={marketStoreId || null}
-                    onChange={(id: string | null) => setMarketStoreId(id || "")}
-                    placeholder={t("Mağaza ara…")}
-                  />
-                </div>
-
-                <div>
-                  <div className="text-xs text-gray-500 mb-1">{t("Market Product ID (opsiyonel)")}</div>
-                  <EntityPicker
-                    fetcher={(q: string) => pickMarketProducts(q, marketStoreId || undefined)}
-                    value={marketProductId || null}
-                    onChange={(id: string | null) => setMarketProductId(id || "")}
-                    placeholder={t("Ürün ara…")}
-                  />
-                </div>
-
-                <div>
-                  <div className="text-xs text-gray-500 mb-1">{t("Market Collection ID (opsiyonel)")}</div>
-                  <EntityPicker
-                    fetcher={pickMarketCollections}
-                    value={marketCollectionId || null}
-                    onChange={(id: string | null) => setMarketCollectionId(id || "")}
-                    placeholder={t("Koleksiyon ara…")}
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-              <div>
-                <div className="text-xs text-gray-500 mb-1">{t("Placement")}</div>
                 <select
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className={inputCls}
                   value={formPlacement}
                   onChange={(e) => setFormPlacement(e.target.value)}
                 >
-                  <option value="home_top">home_top</option>
-                  <option value="home_mid">home_mid</option>
-                  <option value="store_top">store_top</option>
+                  {MARKET_PLACEMENTS.map((key) => (
+                    <option key={key} value={key}>
+                      {PLACEMENT_LABELS[key] ?? key}
+                    </option>
+                  ))}
                 </select>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500 mb-1">{t("Restoran")}</div>
+              </FormField>
+
+              <FormField label={t("Market Mağazası")}>
+                <EntityPicker
+                  fetcher={pickMarketStores}
+                  value={marketStoreId || null}
+                  onChange={(id: string | null) => setMarketStoreId(id || "")}
+                  placeholder={t("Mağaza ara…")}
+                />
+              </FormField>
+
+              <FormField label={t("Market Ürünü")}>
+                <EntityPicker
+                  fetcher={(q: string) => pickMarketProducts(q, marketStoreId || undefined)}
+                  value={marketProductId || null}
+                  onChange={(id: string | null) => setMarketProductId(id || "")}
+                  placeholder={t("Ürün ara…")}
+                />
+              </FormField>
+
+              <FormField label={t("Market Koleksiyonu")}>
+                <EntityPicker
+                  fetcher={pickMarketCollections}
+                  value={marketCollectionId || null}
+                  onChange={(id: string | null) => setMarketCollectionId(id || "")}
+                  placeholder={t("Koleksiyon ara…")}
+                />
+              </FormField>
+            </>
+          ) : (
+            <>
+              <FormField
+                label={t("Yerleşim")}
+                hint={t("Bu banner uygulamada nerede gösterilecek?")}
+                required
+              >
                 <select
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className={inputCls}
+                  value={formPlacement}
+                  onChange={(e) => setFormPlacement(e.target.value)}
+                >
+                  {DELIVERY_PLACEMENTS.map((key) => (
+                    <option key={key} value={key}>
+                      {PLACEMENT_LABELS[key] ?? key}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+
+              <FormField label={t("Restoran")} required>
+                <select
+                  className={inputCls}
                   value={restaurantId}
                   onChange={(e) => setRestaurantId(e.target.value)}
                 >
@@ -388,167 +463,385 @@ setCropOpen(false);
                     </option>
                   ))}
                 </select>
-              </div>
-              </>
-            )}
+              </FormField>
+            </>
+          )}
 
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("StartAt")}</div>
+          <FormField label={t("Başlangıç Tarihi")}>
+            <input
+              type="datetime-local"
+              className={inputCls}
+              value={startAt}
+              onChange={(e) => setStartAt(e.target.value)}
+            />
+          </FormField>
+
+          <FormField label={t("Bitiş Tarihi")}>
+            <input
+              type="datetime-local"
+              className={inputCls}
+              value={endAt}
+              onChange={(e) => setEndAt(e.target.value)}
+            />
+          </FormField>
+
+          <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 14 }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 13,
+                color: "var(--rezvix-text-main)",
+                cursor: "pointer",
+                fontWeight: 500,
+              }}
+            >
               <input
-                type="datetime-local"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={startAt}
-                onChange={(e) => setStartAt(e.target.value)}
+                type="checkbox"
+                checked={isActiveCreate}
+                onChange={(e) => setIsActiveCreate(e.target.checked)}
+                style={{ accentColor: "var(--rezvix-primary)", width: 15, height: 15 }}
               />
-            </div>
-
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("EndAt")}</div>
-              <input
-                type="datetime-local"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={endAt}
-                onChange={(e) => setEndAt(e.target.value)}
-              />
-            </div>
-
-            <div className="flex items-end gap-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={isActiveCreate}
-                  onChange={(e) => setIsActiveCreate(e.target.checked)}
-                />
-                {t("Aktif")}
-              </label>
-            </div>
-
-           <div className="md:col-span-3">
-  <div className="flex items-center justify-between mb-1">
-    <div className="text-xs text-gray-500">
-      {t("Görsel")} <span className="text-gray-400">{t("(önerilen: 1200×520 • oran ~2.3:1)")}</span>
-    </div>
-    {imageSrc ? (
-      <button
-        type="button"
-        className="text-xs px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50"
-        onClick={() => setCropOpen(true)}
-      >
-        {t("Kırp")}
-      </button>
-    ) : null}
-  </div>
-
-  <input
-    type="file"
-    accept="image/*"
-    onChange={async (e) => {
-      const f = e.target.files?.[0] ?? null;
-      setImageFile(f);
-      setCroppedFile(null);
-      setCroppedAreaPixels(null);
-      setCrop({ x: 0, y: 0 });
-      setZoom(1);
-
-      if (imageSrc) URL.revokeObjectURL(imageSrc);
-
-      if (f) {
-        const url = await fileToObjectUrl(f);
-        setImageSrc(url);
-      } else {
-        setImageSrc("");
-      }
-    }}
-  />
-
-  {imageSrc ? (
-    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-      <div className="rounded-xl border border-gray-200 p-3 bg-gray-50">
-        <div className="text-xs text-gray-500 mb-2">{t("Önizleme (home_top)")}</div>
-        <div className="w-full aspect-[2.3/1] overflow-hidden rounded-lg border bg-white">
-          <img
-            src={croppedFile ? URL.createObjectURL(croppedFile) : imageSrc}
-            alt={t("banner preview")}
-            className="w-full h-full object-cover"
-          />
-        </div>
-        <div className="mt-2 text-[11px] text-gray-500">
-          {croppedFile ? t("Kırpılmış görsel kullanılacak.") : t("Görsel kırpılmadı; mobilde cover ile kesilebilir.")}
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-gray-200 p-3">
-        <div className="text-xs text-gray-500 mb-2">{t("İpucu")}</div>
-        <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1">
-          <li>{t("Metin/logoları merkeze yakın tut.")}</li>
-          <li>{t("Çok yüksek görsellerde üst-alt kesilir; mutlaka kırp.")}</li>
-          <li>{t("Yükleme JPEG’e çevrilir (kalite 0.9).")}</li>
-        </ul>
-      </div>
-    </div>
-  ) : null}
-</div>
-
-            <div className="md:col-span-3">
-              <button
-                onClick={() => createMut.mutate()}
-                disabled={createMut.isPending}
-                className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm disabled:opacity-60"
-              >
-                {createMut.isPending ? t("Ekleniyor...") : t("Banner Ekle")}
-              </button>
-            </div>
+              {t("Aktif olarak yayınla")}
+            </label>
           </div>
-        </Card>
 
-        <div className="overflow-auto bg-white rounded-2xl shadow-soft">
-          <table className="min-w-full text-sm">
+          {/* Image upload — full width */}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 8,
+              }}
+            >
+              <div>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "var(--rezvix-text-muted)",
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  {t("Görsel")} <span style={{ color: "var(--rezvix-danger)" }}>*</span>
+                </span>
+                <span
+                  style={{
+                    marginLeft: 8,
+                    fontSize: 11,
+                    color: "var(--rezvix-text-soft)",
+                  }}
+                >
+                  {t("Önerilen: 1200×520 — oran ~2.3:1")}
+                </span>
+              </div>
+              {imageSrc && (
+                <button
+                  type="button"
+                  onClick={() => setCropOpen(true)}
+                  style={{
+                    padding: "5px 14px",
+                    borderRadius: 8,
+                    border: "1.5px solid var(--rezvix-border-strong)",
+                    background: "var(--rezvix-bg-soft)",
+                    color: "var(--rezvix-text-muted)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  ✂ {t("Kırp")}
+                </button>
+              )}
+            </div>
+
+            <input
+              type="file"
+              accept="image/*"
+              style={{ fontSize: 13, color: "var(--rezvix-text-muted)" }}
+              onChange={async (e) => {
+                const f = e.target.files?.[0] ?? null;
+                setImageFile(f);
+                setCroppedFile(null);
+                setCroppedAreaPixels(null);
+                setCrop({ x: 0, y: 0 });
+                setZoom(1);
+                if (imageSrc) URL.revokeObjectURL(imageSrc);
+                if (f) {
+                  const url = await fileToObjectUrl(f);
+                  setImageSrc(url);
+                } else {
+                  setImageSrc("");
+                }
+              }}
+            />
+
+            {imageSrc && (
+              <div
+                style={{
+                  marginTop: 16,
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 16,
+                }}
+              >
+                <div
+                  style={{
+                    borderRadius: 12,
+                    border: "1.5px solid var(--rezvix-border-subtle)",
+                    padding: 12,
+                    background: "var(--rezvix-bg-soft)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "var(--rezvix-text-soft)",
+                      marginBottom: 8,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    {t("Önizleme")}
+                  </div>
+                  <div
+                    style={{
+                      width: "100%",
+                      aspectRatio: "2.3 / 1",
+                      overflow: "hidden",
+                      borderRadius: 8,
+                      border: "1px solid var(--rezvix-border-subtle)",
+                      background: "white",
+                    }}
+                  >
+                    <img
+                      src={croppedFile ? URL.createObjectURL(croppedFile) : imageSrc}
+                      alt={t("banner preview")}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 11,
+                      color: "var(--rezvix-text-soft)",
+                    }}
+                  >
+                    {croppedFile
+                      ? t("Kırpılmış görsel kullanılacak.")
+                      : t("Görsel kırpılmadı; mobilde cover ile kesilebilir.")}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    borderRadius: 12,
+                    border: "1.5px solid var(--rezvix-border-subtle)",
+                    padding: 12,
+                    background: "var(--rezvix-bg-elevated)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "var(--rezvix-text-soft)",
+                      marginBottom: 8,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    {t("İpuçları")}
+                  </div>
+                  <ul
+                    style={{
+                      margin: 0,
+                      paddingLeft: 16,
+                      fontSize: 13,
+                      color: "var(--rezvix-text-muted)",
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    <li>{t("Metin/logoları merkeze yakın tut.")}</li>
+                    <li>{t("Çok yüksek görsellerde üst-alt kesilir; mutlaka kırp.")}</li>
+                    <li>{t("Yükleme JPEG'e çevrilir (kalite 0.9).")}</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Submit button */}
+          <div style={{ gridColumn: "1 / -1", paddingTop: 4 }}>
+            <button
+              onClick={() => createMut.mutate()}
+              disabled={createMut.isPending}
+              style={{
+                padding: "10px 24px",
+                borderRadius: 10,
+                background: "var(--rezvix-primary)",
+                color: "#fff",
+                fontSize: 14,
+                fontWeight: 600,
+                border: "none",
+                cursor: createMut.isPending ? "not-allowed" : "pointer",
+                opacity: createMut.isPending ? 0.6 : 1,
+                transition: "opacity 0.15s",
+              }}
+            >
+              {createMut.isPending ? t("Ekleniyor...") : t("Banner Ekle")}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Banners table ────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          background: "var(--rezvix-bg-elevated)",
+          border: "1.5px solid var(--rezvix-border-subtle)",
+          borderRadius: 16,
+          overflow: "hidden",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+        }}
+      >
+        <div
+          style={{
+            padding: "14px 20px",
+            borderBottom: "1px solid var(--rezvix-border-subtle)",
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.07em",
+              textTransform: "uppercase",
+              color: "var(--rezvix-text-soft)",
+            }}
+          >
+            {t("Mevcut Bannerlar")}
+          </span>
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
             <thead>
-              <tr className="text-left text-gray-500">
-                <th className="py-2 px-4">{t("Görsel")}</th>
-                <th className="py-2 px-4">{t("Başlık")}</th>
-                <th className="py-2 px-4">{t("Target")}</th>
-                <th className="py-2 px-4">{t("RestaurantId")}</th>
-                <th className="py-2 px-4">{t("Placement")}</th>
-                <th className="py-2 px-4">{t("Region")}</th>
-                <th className="py-2 px-4">{t("Order")}</th>
-                <th className="py-2 px-4">{t("Durum")}</th>
-                <th className="py-2 px-4">{t("İşlem")}</th>
+              <tr
+                style={{
+                  background: "var(--rezvix-bg-soft)",
+                  textAlign: "left",
+                }}
+              >
+                {[
+                  t("Görsel"),
+                  t("Başlık"),
+                  t("Target"),
+                  t("Bağlantılı Kayıt"),
+                  t("Yerleşim"),
+                  t("Bölge"),
+                  t("Sıra"),
+                  t("Durum"),
+                  t("İşlem"),
+                ].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: "10px 16px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: "var(--rezvix-text-soft)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {isLoading && (
                 <tr>
-                  <td className="py-3 px-4 text-gray-500" colSpan={9}>
+                  <td
+                    colSpan={9}
+                    style={{
+                      padding: "24px 16px",
+                      color: "var(--rezvix-text-soft)",
+                      fontSize: 13,
+                      textAlign: "center",
+                    }}
+                  >
                     {t("Yükleniyor…")}
                   </td>
                 </tr>
               )}
 
-              {(banners ?? []).map((b: AdminBanner) => (
-                <tr key={b._id} className="border-t align-top">
-                  <td className="py-2 px-4">
+              {(banners ?? []).map((b: AdminBanner, idx: number) => (
+                <tr
+                  key={b._id}
+                  style={{
+                    borderTop: "1px solid var(--rezvix-border-subtle)",
+                    background: idx % 2 === 0 ? "transparent" : "rgba(0,0,0,0.012)",
+                    verticalAlign: "top",
+                  }}
+                >
+                  {/* Image */}
+                  <td style={{ padding: "12px 16px" }}>
                     <img
                       src={b.imageUrl}
                       alt={b.title ?? "banner"}
-                      className="w-36 h-20 object-cover rounded-xl border"
+                      style={{
+                        width: 128,
+                        height: 56,
+                        objectFit: "cover",
+                        borderRadius: 8,
+                        border: "1px solid var(--rezvix-border-subtle)",
+                      }}
                     />
                   </td>
 
-                  <td className="py-2 px-4">
-                    <div className="font-medium">{b.title ?? "-"}</div>
+                  {/* Title + link */}
+                  <td style={{ padding: "12px 16px" }}>
+                    <div
+                      style={{
+                        fontWeight: 600,
+                        color: "var(--rezvix-text-main)",
+                        marginBottom: 2,
+                      }}
+                    >
+                      {b.title ?? "-"}
+                    </div>
                     {b.linkUrl ? (
-                      <a className="text-brand-700 underline" href={b.linkUrl} target="_blank">
+                      <a
+                        style={{
+                          color: "var(--rezvix-primary)",
+                          fontSize: 12,
+                          textDecoration: "underline",
+                        }}
+                        href={b.linkUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
                         {t("link")}
                       </a>
                     ) : (
-                      <div className="text-gray-400">{t("link yok")}</div>
+                      <span style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}>
+                        {t("link yok")}
+                      </span>
                     )}
                   </td>
 
-                  <td className="py-2 px-4">
+                  {/* Target type */}
+                  <td style={{ padding: "12px 16px" }}>
                     <select
-                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                      className={inputCls}
+                      style={{ width: "auto", minWidth: 120 }}
                       value={b.targetType}
                       onChange={(e) =>
                         updateMut.mutate({
@@ -563,16 +856,25 @@ setCropOpen(false);
                     </select>
                   </td>
 
-                  <td className="py-2 px-4">
+                  {/* Restaurant / market entity */}
+                  <td style={{ padding: "12px 16px" }}>
                     {b.targetType === "market" ? (
-                      <div className="text-[11px] text-gray-500 space-y-0.5 max-w-[260px]">
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "var(--rezvix-text-soft)",
+                          lineHeight: 1.6,
+                          maxWidth: 220,
+                        }}
+                      >
                         <div>{t("Store")}: {b.marketStoreId || "-"}</div>
                         <div>{t("Product")}: {b.marketProductId || "-"}</div>
                         <div>{t("Collection")}: {b.marketCollectionId || "-"}</div>
                       </div>
                     ) : (
                       <select
-                        className="rounded-lg border border-gray-300 px-2 py-1 text-sm max-w-[260px]"
+                        className={inputCls}
+                        style={{ width: "auto", minWidth: 160, maxWidth: 220 }}
                         value={b.restaurantId ?? ""}
                         onChange={(e) =>
                           updateMut.mutate({
@@ -590,13 +892,40 @@ setCropOpen(false);
                     )}
                   </td>
 
-                  <td className="py-2 px-4">{b.placement}</td>
-                  <td className="py-2 px-4">{b.region ?? "-"}</td>
+                  {/* Placement — human-readable label */}
+                  <td style={{ padding: "12px 16px" }}>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "3px 10px",
+                        borderRadius: 999,
+                        background: "var(--rezvix-bg-soft)",
+                        border: "1px solid var(--rezvix-border-strong)",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "var(--rezvix-text-muted)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {PLACEMENT_LABELS[b.placement] ?? b.placement}
+                    </span>
+                  </td>
 
-                  <td className="py-2 px-4">
+                  {/* Region */}
+                  <td style={{ padding: "12px 16px", color: "var(--rezvix-text-muted)", fontSize: 13 }}>
+                    {b.region ?? (
+                      <span style={{ color: "var(--rezvix-text-soft)", fontStyle: "italic" }}>
+                        {t("Hepsi")}
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Order */}
+                  <td style={{ padding: "12px 16px" }}>
                     <input
                       type="number"
-                      className="w-20 rounded-lg border border-gray-300 px-2 py-1"
+                      className={inputCls}
+                      style={{ width: 70 }}
                       defaultValue={b.order}
                       onBlur={(e) =>
                         updateMut.mutate({
@@ -607,30 +936,54 @@ setCropOpen(false);
                     />
                   </td>
 
-                  <td className="py-2 px-4">
+                  {/* Status badge */}
+                  <td style={{ padding: "12px 16px" }}>
                     <button
-                      className={
-                        "inline-flex px-2 py-0.5 text-xs rounded-full " +
-                        (b.isActive
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-rose-50 text-rose-700")
-                      }
                       onClick={() =>
                         updateMut.mutate({
                           id: b._id,
                           patch: { isActive: !b.isActive },
                         })
                       }
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "4px 12px",
+                        borderRadius: 999,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: "0.04em",
+                        border: "none",
+                        cursor: "pointer",
+                        background: b.isActive
+                          ? "rgba(22, 163, 74, 0.1)"
+                          : "rgba(220, 38, 38, 0.08)",
+                        color: b.isActive
+                          ? "var(--rezvix-success)"
+                          : "var(--rezvix-danger)",
+                      }}
                     >
+                      <span style={{ fontSize: 9 }}>●</span>
                       {b.isActive ? t("Aktif") : t("Pasif")}
                     </button>
                   </td>
 
-                  <td className="py-2 px-4">
+                  {/* Actions */}
+                  <td style={{ padding: "12px 16px" }}>
                     <button
-                      className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs hover:opacity-90"
                       onClick={() => {
                         if (confirm(t("Banner silinsin mi?"))) deleteMut.mutate(b._id);
+                      }}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: 8,
+                        background: "rgba(220, 38, 38, 0.08)",
+                        border: "1px solid rgba(220, 38, 38, 0.2)",
+                        color: "var(--rezvix-danger)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
                       }}
                     >
                       {t("Sil")}
@@ -641,7 +994,15 @@ setCropOpen(false);
 
               {!isLoading && banners.length === 0 && (
                 <tr>
-                  <td className="py-3 px-4 text-gray-500" colSpan={9}>
+                  <td
+                    colSpan={9}
+                    style={{
+                      padding: "32px 16px",
+                      textAlign: "center",
+                      color: "var(--rezvix-text-soft)",
+                      fontSize: 13,
+                    }}
+                  >
                     {t("Kayıt yok")}
                   </td>
                 </tr>
@@ -649,97 +1010,196 @@ setCropOpen(false);
             </tbody>
           </table>
         </div>
+      </div>
 
-        <div className="text-xs text-gray-500">
-          {t("Not: Banner tıklama aksiyonunu mobilde `targetType` üzerinden route edeceğiz.")}
-        </div>
-        {cropOpen && imageSrc ? (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-    <div className="w-full max-w-3xl rounded-2xl bg-white shadow-xl overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b">
-        <div>
-          <div className="font-semibold">{t("Banner Kırp")}</div>
-          <div className="text-xs text-gray-500">{t("Çıktı: 1200×520 (oran ~2.3:1)")}</div>
-        </div>
-        <button
-          type="button"
-          className="px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
-          onClick={() => setCropOpen(false)}
+      <div
+        style={{
+          marginTop: 12,
+          fontSize: 12,
+          color: "var(--rezvix-text-soft)",
+          fontStyle: "italic",
+        }}
+      >
+        {t("Not: Banner tıklama aksiyonunu mobilde `targetType` üzerinden route edeceğiz.")}
+      </div>
+
+      {/* ── Crop modal ──────────────────────────────────────────────────────── */}
+      {cropOpen && imageSrc ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(0,0,0,0.55)",
+            padding: 16,
+          }}
         >
-          {t("Kapat")}
-        </button>
-      </div>
-
-      <div className="relative w-full" style={{ height: 420 }}>
-        <Cropper
-          image={imageSrc}
-          crop={crop}
-          zoom={zoom}
-          aspect={2.3 / 1}
-          onCropChange={setCrop}
-          onZoomChange={setZoom}
-          onCropComplete={(_, areaPixels) => setCroppedAreaPixels(areaPixels)}
-        />
-      </div>
-
-      <div className="px-4 py-4 border-t">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="text-sm text-gray-700 font-medium">{t("Zoom")}</div>
-            <input
-              type="range"
-              min={1}
-              max={3}
-              step={0.01}
-              value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
-              className="w-56"
-            />
-            <div className="text-xs text-gray-500">{zoom.toFixed(2)}x</div>
-          </div>
-
-          <div className="flex items-center gap-2 justify-end">
-            <button
-              type="button"
-              className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
-              onClick={() => {
-                setCroppedFile(null);
-                setCrop({ x: 0, y: 0 });
-                setZoom(1);
-                setCroppedAreaPixels(null);
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 760,
+              borderRadius: 18,
+              background: "var(--rezvix-bg-elevated)",
+              boxShadow: "var(--rezvix-shadow-soft)",
+              overflow: "hidden",
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "16px 20px",
+                borderBottom: "1px solid var(--rezvix-border-subtle)",
               }}
             >
-              {t("Sıfırla")}
-            </button>
+              <div>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 15,
+                    color: "var(--rezvix-text-main)",
+                  }}
+                >
+                  {t("Banner Kırp")}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--rezvix-text-soft)", marginTop: 2 }}>
+                  {t("Çıktı: 1200×520 (oran ~2.3:1)")}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCropOpen(false)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 9,
+                  border: "1.5px solid var(--rezvix-border-strong)",
+                  background: "transparent",
+                  color: "var(--rezvix-text-muted)",
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                {t("Kapat")}
+              </button>
+            </div>
 
-            <button
-              type="button"
-              className="px-4 py-2 rounded-lg bg-gray-900 text-white hover:opacity-90"
-              onClick={async () => {
-                if (!imageFile) return;
-                if (!croppedAreaPixels) {
-                  setCropOpen(false);
-                  return;
-                }
+            {/* Crop area */}
+            <div style={{ position: "relative", width: "100%", height: 420 }}>
+              <Cropper
+                image={imageSrc}
+                crop={crop}
+                zoom={zoom}
+                aspect={2.3 / 1}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={(_, areaPixels) => setCroppedAreaPixels(areaPixels)}
+              />
+            </div>
 
-                try {
-                  const f = await getCroppedImgFile(imageSrc, croppedAreaPixels, imageFile.name);
-                  setCroppedFile(f);
-                  setCropOpen(false);
-                } catch (e) {
-                  console.error(e);
-                  alert(t("Kırpma sırasında hata oluştu"));
-                }
+            {/* Controls */}
+            <div
+              style={{
+                padding: "16px 20px",
+                borderTop: "1px solid var(--rezvix-border-subtle)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
               }}
             >
-              {t("Kırpmayı Kaydet")}
-            </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "var(--rezvix-text-muted)",
+                    minWidth: 40,
+                  }}
+                >
+                  {t("Zoom")}
+                </span>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.01}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  style={{ flex: 1, accentColor: "var(--rezvix-primary)" }}
+                />
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: "var(--rezvix-text-soft)",
+                    minWidth: 36,
+                    textAlign: "right",
+                  }}
+                >
+                  {zoom.toFixed(2)}x
+                </span>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCroppedFile(null);
+                    setCrop({ x: 0, y: 0 });
+                    setZoom(1);
+                    setCroppedAreaPixels(null);
+                  }}
+                  style={{
+                    padding: "8px 18px",
+                    borderRadius: 9,
+                    border: "1.5px solid var(--rezvix-border-strong)",
+                    background: "transparent",
+                    color: "var(--rezvix-text-muted)",
+                    fontSize: 13,
+                    cursor: "pointer",
+                  }}
+                >
+                  {t("Sıfırla")}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!imageFile) return;
+                    if (!croppedAreaPixels) {
+                      setCropOpen(false);
+                      return;
+                    }
+                    try {
+                      const f = await getCroppedImgFile(imageSrc, croppedAreaPixels, imageFile.name);
+                      setCroppedFile(f);
+                      setCropOpen(false);
+                    } catch (e) {
+                      console.error(e);
+                      alert(t("Kırpma sırasında hata oluştu"));
+                    }
+                  }}
+                  style={{
+                    padding: "8px 20px",
+                    borderRadius: 9,
+                    background: "var(--rezvix-primary)",
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {t("Kırpmayı Kaydet")}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </div>
-  </div>
-) : null}
-      </div>
   );
 }

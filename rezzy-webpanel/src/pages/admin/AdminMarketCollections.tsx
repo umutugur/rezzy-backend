@@ -13,7 +13,34 @@ import {
 import { EntityPicker } from "../../desktop/components/admin/EntityPicker";
 import { pickMarketProducts } from "../../api/adminPickers";
 import { useI18n } from "../../i18n";
+import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
+import { FormField } from "../../desktop/components/admin/FormField";
 
+// ─── Shared style constants ───────────────────────────────────────────────────
+const inputCls =
+  "w-full rounded-lg border border-[var(--rezvix-border-strong)] bg-[var(--rezvix-bg-elevated)] text-[var(--rezvix-text-main)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--rezvix-primary)] placeholder:text-[var(--rezvix-text-soft)]";
+
+const cardStyle: React.CSSProperties = {
+  background: "var(--rezvix-bg-elevated)",
+  border: "1.5px solid var(--rezvix-border-subtle)",
+  borderRadius: 16,
+  padding: "22px 24px",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+  marginBottom: 20,
+};
+
+const sectionHeadingStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.07em",
+  textTransform: "uppercase",
+  color: "var(--rezvix-text-soft)",
+  marginBottom: 14,
+  paddingBottom: 8,
+  borderBottom: "1px solid var(--rezvix-border-subtle)",
+};
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AdminMarketCollectionsPage() {
   const qc = useQueryClient();
   const { t } = useI18n();
@@ -75,86 +102,92 @@ export default function AdminMarketCollectionsPage() {
   });
 
   return (
-          <div className="space-y-6 p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{t("Market Koleksiyonları")}</h2>
-        </div>
+    <div style={{ padding: "24px 28px", maxWidth: 1200 }}>
+      <AdminPageHeader
+        title={t("Market Koleksiyonları")}
+        subtitle={t("Ürün gruplarını ve otomatik koleksiyonları yönetin")}
+      />
 
-        <Card>
-          <div className="flex items-center justify-between mb-3">
-            <div className="font-medium">{t("Yeni Koleksiyon Ekle")}</div>
+      {/* ── Create form ─────────────────────────────────────────────────────── */}
+      <div style={cardStyle}>
+        <div style={sectionHeadingStyle as any}>{t("Yeni Koleksiyon Ekle")}</div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          <FormField label={t("Başlık")} required>
+            <input
+              className={inputCls}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t("örn: İndirimdekiler")}
+            />
+          </FormField>
+
+          <FormField label={t("Bölge")} hint={t("Boş bırakırsanız tüm bölgelerde gösterilir")}>
+            <select
+              className={inputCls}
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+            >
+              <option value="">{t("Tüm bölgeler")}</option>
+              <option value="TR">TR — Türkiye</option>
+              <option value="CY">CY — Kıbrıs</option>
+            </select>
+          </FormField>
+
+          <FormField label={t("Koleksiyon Tipi")}>
+            <select
+              className={inputCls}
+              value={kind}
+              onChange={(e) => setKind(e.target.value as MarketCollectionKind)}
+            >
+              <option value="manual">{t("Elle seçilen ürünler")}</option>
+              <option value="discounted">{t("İndirimdekiler")}</option>
+            </select>
+          </FormField>
+
+          <FormField label={t("Görsel URL")}>
+            <input
+              className={inputCls}
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="https://..."
+            />
+          </FormField>
+
+          <FormField label={t("Sıra")}>
+            <input
+              type="number"
+              className={inputCls}
+              value={order}
+              onChange={(e) => setOrder(Number(e.target.value))}
+            />
+          </FormField>
+
+          <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 14 }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 13,
+                color: "var(--rezvix-text-main)",
+                cursor: "pointer",
+                fontWeight: 500,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={isActiveCreate}
+                onChange={(e) => setIsActiveCreate(e.target.checked)}
+                style={{ accentColor: "var(--rezvix-primary)", width: 15, height: 15 }}
+              />
+              {t("Aktif olarak yayınla")}
+            </label>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("Başlık")}</div>
-              <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={t("örn: İndirimdekiler")}
-              />
-            </div>
-
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("Bölge (opsiyonel)")}</div>
-              <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={region}
-                onChange={(e) => setRegion(e.target.value)}
-              >
-                <option value="">{t("Hepsi")}</option>
-                <option value="TR">TR</option>
-                <option value="CY">CY</option>
-              </select>
-            </div>
-
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("Tip")}</div>
-              <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={kind}
-                onChange={(e) => setKind(e.target.value as MarketCollectionKind)}
-              >
-                <option value="manual">{t("Elle seçilen ürünler")}</option>
-                <option value="discounted">{t("İndirimdekiler")}</option>
-              </select>
-            </div>
-
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("Görsel URL (opsiyonel)")}</div>
-              <input
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://..."
-              />
-            </div>
-
-            <div>
-              <div className="text-xs text-gray-500 mb-1">{t("Sıra (order)")}</div>
-              <input
-                type="number"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={order}
-                onChange={(e) => setOrder(Number(e.target.value))}
-              />
-            </div>
-
-            <div className="flex items-end gap-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={isActiveCreate}
-                  onChange={(e) => setIsActiveCreate(e.target.checked)}
-                />
-                {t("Aktif")}
-              </label>
-            </div>
-
-            {kind === "manual" ? (
-              <div className="md:col-span-3">
-                <div className="text-xs text-gray-500 mb-1">{t("Ürünler")}</div>
+          {kind === "manual" && (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <FormField label={t("Ürünler")} hint={t("Arama yaparak koleksiyona ürün ekleyin")}>
                 <EntityPicker
                   multiple
                   fetcher={pickMarketProducts}
@@ -162,48 +195,123 @@ export default function AdminMarketCollectionsPage() {
                   onChange={(ids) => setProductIds(ids as string[])}
                   placeholder={t("Ürün ara ve ekle...")}
                 />
-              </div>
-            ) : null}
-
-            <div className="md:col-span-3">
-              <button
-                onClick={() => createMut.mutate()}
-                disabled={createMut.isPending}
-                className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm disabled:opacity-60"
-              >
-                {createMut.isPending ? t("Ekleniyor...") : t("Koleksiyon Ekle")}
-              </button>
+              </FormField>
             </div>
-          </div>
-        </Card>
+          )}
 
-        <div className="overflow-auto bg-white rounded-2xl shadow-soft">
-          <table className="min-w-full text-sm">
+          <div style={{ gridColumn: "1 / -1", paddingTop: 4 }}>
+            <button
+              onClick={() => createMut.mutate()}
+              disabled={createMut.isPending}
+              style={{
+                padding: "10px 24px",
+                borderRadius: 10,
+                background: "var(--rezvix-primary)",
+                color: "#fff",
+                fontSize: 14,
+                fontWeight: 600,
+                border: "none",
+                cursor: createMut.isPending ? "not-allowed" : "pointer",
+                opacity: createMut.isPending ? 0.6 : 1,
+                transition: "opacity 0.15s",
+              }}
+            >
+              {createMut.isPending ? t("Ekleniyor...") : t("Koleksiyon Ekle")}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Collections table ────────────────────────────────────────────────── */}
+      <div
+        style={{
+          background: "var(--rezvix-bg-elevated)",
+          border: "1.5px solid var(--rezvix-border-subtle)",
+          borderRadius: 16,
+          overflow: "hidden",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+        }}
+      >
+        <div
+          style={{
+            padding: "14px 20px",
+            borderBottom: "1px solid var(--rezvix-border-subtle)",
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.07em",
+              textTransform: "uppercase",
+              color: "var(--rezvix-text-soft)",
+            }}
+          >
+            {t("Mevcut Koleksiyonlar")}
+          </span>
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
             <thead>
-              <tr className="text-left text-gray-500">
-                <th className="py-2 px-4">{t("Başlık")}</th>
-                <th className="py-2 px-4">{t("Region")}</th>
-                <th className="py-2 px-4">{t("Tip")}</th>
-                <th className="py-2 px-4">{t("Ürün Sayısı")}</th>
-                <th className="py-2 px-4">{t("Order")}</th>
-                <th className="py-2 px-4">{t("Durum")}</th>
-                <th className="py-2 px-4">{t("İşlem")}</th>
+              <tr style={{ background: "var(--rezvix-bg-soft)", textAlign: "left" }}>
+                {[
+                  t("Başlık"),
+                  t("Bölge"),
+                  t("Tip"),
+                  t("Ürün Sayısı"),
+                  t("Sıra"),
+                  t("Durum"),
+                  t("İşlem"),
+                ].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: "10px 16px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: "var(--rezvix-text-soft)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {isLoading && (
                 <tr>
-                  <td className="py-3 px-4 text-gray-500" colSpan={7}>
+                  <td
+                    colSpan={7}
+                    style={{
+                      padding: "24px 16px",
+                      color: "var(--rezvix-text-soft)",
+                      fontSize: 13,
+                      textAlign: "center",
+                    }}
+                  >
                     {t("Yükleniyor…")}
                   </td>
                 </tr>
               )}
 
-              {(collections ?? []).map((c: MarketCollection) => (
-                <tr key={c._id} className="border-t align-top">
-                  <td className="py-2 px-4">
+              {(collections ?? []).map((c: MarketCollection, idx: number) => (
+                <tr
+                  key={c._id}
+                  style={{
+                    borderTop: "1px solid var(--rezvix-border-subtle)",
+                    background: idx % 2 === 0 ? "transparent" : "rgba(0,0,0,0.012)",
+                    verticalAlign: "top",
+                  }}
+                >
+                  {/* Title (editable) */}
+                  <td style={{ padding: "12px 16px" }}>
                     <input
-                      className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                      className={inputCls}
+                      style={{ minWidth: 160 }}
                       defaultValue={c.title}
                       onBlur={(e) => {
                         if (e.target.value.trim() && e.target.value !== c.title) {
@@ -213,24 +321,31 @@ export default function AdminMarketCollectionsPage() {
                     />
                   </td>
 
-                  <td className="py-2 px-4">
-                    <input
-                      className="w-24 rounded-lg border border-gray-300 px-2 py-1 text-sm"
-                      defaultValue={c.region ?? ""}
-                      placeholder={t("hepsi")}
-                      onBlur={(e) => {
+                  {/* Region */}
+                  <td style={{ padding: "12px 16px" }}>
+                    <select
+                      className={inputCls}
+                      style={{ width: "auto", minWidth: 100 }}
+                      value={c.region ?? ""}
+                      onChange={(e) => {
                         const v = e.target.value.trim();
                         updateMut.mutate({
                           id: c._id,
                           patch: { region: v ? v.toUpperCase() : null },
                         });
                       }}
-                    />
+                    >
+                      <option value="">{t("Tüm bölgeler")}</option>
+                      <option value="TR">TR</option>
+                      <option value="CY">CY</option>
+                    </select>
                   </td>
 
-                  <td className="py-2 px-4">
+                  {/* Kind */}
+                  <td style={{ padding: "12px 16px" }}>
                     <select
-                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                      className={inputCls}
+                      style={{ width: "auto", minWidth: 140 }}
                       value={c.kind}
                       onChange={(e) =>
                         updateMut.mutate({
@@ -239,19 +354,48 @@ export default function AdminMarketCollectionsPage() {
                         })
                       }
                     >
-                      <option value="manual">{t("manual")}</option>
-                      <option value="discounted">{t("discounted")}</option>
+                      <option value="manual">{t("Elle seçilen ürünler")}</option>
+                      <option value="discounted">{t("İndirimdekiler")}</option>
                     </select>
                   </td>
 
-                  <td className="py-2 px-4 text-gray-600">
-                    {c.kind === "manual" ? c.productIds?.length ?? 0 : "—"}
+                  {/* Product count */}
+                  <td
+                    style={{
+                      padding: "12px 16px",
+                      color: "var(--rezvix-text-muted)",
+                      fontWeight: 600,
+                      fontSize: 13,
+                    }}
+                  >
+                    {c.kind === "manual" ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          padding: "3px 10px",
+                          borderRadius: 999,
+                          background: "var(--rezvix-bg-soft)",
+                          border: "1px solid var(--rezvix-border-strong)",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: "var(--rezvix-text-muted)",
+                        }}
+                      >
+                        {c.productIds?.length ?? 0} {t("ürün")}
+                      </span>
+                    ) : (
+                      <span style={{ color: "var(--rezvix-text-soft)", fontStyle: "italic" }}>—</span>
+                    )}
                   </td>
 
-                  <td className="py-2 px-4">
+                  {/* Order */}
+                  <td style={{ padding: "12px 16px" }}>
                     <input
                       type="number"
-                      className="w-20 rounded-lg border border-gray-300 px-2 py-1"
+                      className={inputCls}
+                      style={{ width: 70 }}
                       defaultValue={c.order}
                       onBlur={(e) =>
                         updateMut.mutate({
@@ -262,30 +406,52 @@ export default function AdminMarketCollectionsPage() {
                     />
                   </td>
 
-                  <td className="py-2 px-4">
+                  {/* Status */}
+                  <td style={{ padding: "12px 16px" }}>
                     <button
-                      className={
-                        "inline-flex px-2 py-0.5 text-xs rounded-full " +
-                        (c.isActive
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-rose-50 text-rose-700")
-                      }
                       onClick={() =>
                         updateMut.mutate({
                           id: c._id,
                           patch: { isActive: !c.isActive },
                         })
                       }
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "4px 12px",
+                        borderRadius: 999,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: "0.04em",
+                        border: "none",
+                        cursor: "pointer",
+                        background: c.isActive
+                          ? "rgba(22, 163, 74, 0.1)"
+                          : "rgba(220, 38, 38, 0.08)",
+                        color: c.isActive ? "var(--rezvix-success)" : "var(--rezvix-danger)",
+                      }}
                     >
+                      <span style={{ fontSize: 9 }}>●</span>
                       {c.isActive ? t("Aktif") : t("Pasif")}
                     </button>
                   </td>
 
-                  <td className="py-2 px-4">
+                  {/* Delete */}
+                  <td style={{ padding: "12px 16px" }}>
                     <button
-                      className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs hover:opacity-90"
                       onClick={() => {
                         if (confirm(t("Koleksiyon silinsin mi?"))) deleteMut.mutate(c._id);
+                      }}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: 8,
+                        background: "rgba(220, 38, 38, 0.08)",
+                        border: "1px solid rgba(220, 38, 38, 0.2)",
+                        color: "var(--rezvix-danger)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
                       }}
                     >
                       {t("Sil")}
@@ -296,7 +462,15 @@ export default function AdminMarketCollectionsPage() {
 
               {!isLoading && collections.length === 0 && (
                 <tr>
-                  <td className="py-3 px-4 text-gray-500" colSpan={7}>
+                  <td
+                    colSpan={7}
+                    style={{
+                      padding: "32px 16px",
+                      textAlign: "center",
+                      color: "var(--rezvix-text-soft)",
+                      fontSize: 13,
+                    }}
+                  >
                     {t("Kayıt yok")}
                   </td>
                 </tr>
@@ -305,5 +479,6 @@ export default function AdminMarketCollectionsPage() {
           </table>
         </div>
       </div>
+    </div>
   );
 }
