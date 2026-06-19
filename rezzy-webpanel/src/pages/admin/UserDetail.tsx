@@ -11,6 +11,7 @@ import {
 } from "../../api/client";
 import { showToast } from "../../ui/Toast";
 import { useI18n, t as i18nT } from "../../i18n";
+import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
 
 const TYPE_LABEL: Record<string, string> = {
   NO_SHOW: "Gelmedi",
@@ -18,6 +19,114 @@ const TYPE_LABEL: Record<string, string> = {
   UNDER_ATTEND: "Eksik katılım",
   GOOD_ATTEND: "İyi katılım",
 };
+
+// ── Shared style helpers ──────────────────────────────────────────────────────
+const inputCls = "border rounded-lg px-3 py-2 bg-white text-sm";
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 13,
+  color: "var(--rezvix-text-soft)",
+  marginBottom: 4,
+};
+
+const primaryBtn: React.CSSProperties = {
+  padding: "7px 16px",
+  borderRadius: 8,
+  border: "none",
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 700,
+  background: "var(--rezvix-primary)",
+  color: "#fff",
+  transition: "opacity 0.15s ease",
+};
+
+const dangerBtn: React.CSSProperties = {
+  padding: "7px 16px",
+  borderRadius: 8,
+  border: "none",
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 700,
+  background: "var(--rezvix-danger)",
+  color: "#fff",
+  transition: "opacity 0.15s ease",
+};
+
+const secondaryBtn: React.CSSProperties = {
+  padding: "7px 16px",
+  borderRadius: 8,
+  border: "1px solid var(--rezvix-border-strong)",
+  background: "var(--rezvix-bg-soft)",
+  color: "var(--rezvix-text-muted)",
+  fontSize: 13,
+  cursor: "pointer",
+  fontWeight: 500,
+};
+
+const tableHeaderStyle: React.CSSProperties = {
+  padding: "10px 16px",
+  paddingRight: 16,
+  color: "var(--rezvix-text-soft)",
+  fontWeight: 600,
+  fontSize: 11,
+  letterSpacing: "0.03em",
+  textTransform: "uppercase",
+  background: "var(--rezvix-bg-soft)",
+  textAlign: "left",
+};
+
+const statCardStyle: React.CSSProperties = {
+  padding: 12,
+  borderRadius: 10,
+  border: "1px solid var(--rezvix-border-subtle)",
+  background: "var(--rezvix-bg-elevated)",
+};
+
+// Risk incident badge style
+function riskBadgeStyle(type: string): React.CSSProperties {
+  if (type === "NO_SHOW")
+    return {
+      display: "inline-block",
+      fontSize: 11,
+      padding: "2px 8px",
+      borderRadius: 999,
+      background: "rgba(220, 38, 38, 0.10)",
+      color: "var(--rezvix-danger)",
+      border: "1px solid rgba(220, 38, 38, 0.20)",
+    };
+  if (type === "LATE_CANCEL")
+    return {
+      display: "inline-block",
+      fontSize: 11,
+      padding: "2px 8px",
+      borderRadius: 999,
+      background: "rgba(245, 158, 11, 0.12)",
+      color: "#b45309",
+      border: "1px solid rgba(245, 158, 11, 0.22)",
+    };
+  if (type === "UNDER_ATTEND")
+    return {
+      display: "inline-block",
+      fontSize: 11,
+      padding: "2px 8px",
+      borderRadius: 999,
+      background: "rgba(245, 158, 11, 0.10)",
+      color: "#92400e",
+      border: "1px solid rgba(245, 158, 11, 0.20)",
+    };
+  // GOOD_ATTEND
+  return {
+    display: "inline-block",
+    fontSize: 11,
+    padding: "2px 8px",
+    borderRadius: 999,
+    background: "rgba(22, 163, 74, 0.10)",
+    color: "var(--rezvix-success)",
+    border: "1px solid rgba(22, 163, 74, 0.20)",
+  };
+}
 
 export default function AdminUserDetailPage() {
   const { uid = "" } = useParams();
@@ -104,71 +213,106 @@ export default function AdminUserDetailPage() {
   const riskScore = riskQ.data?.snapshot?.riskScore ?? 0;
 
   return (
-          <div className="space-y-6 p-6">
-        <h2 className="text-lg font-semibold">{t("Kullanıcı Detayı")}</h2>
+    <div style={{ padding: 24 }}>
+      <AdminPageHeader
+        title={t("Kullanıcı Detayı")}
+        subtitle={user?.name || user?.email || ""}
+      />
 
-        <Card title={t("Bilgiler")}>
-          {uQ.isLoading ? (
-            t("Yükleniyor…")
-          ) : uQ.error ? (
-            <div className="text-red-600 text-sm">{t("Kullanıcı bilgileri alınamadı.")}</div>
-          ) : (
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <span className="text-gray-500 text-sm">{t("Ad")}</span>
-                <div>{user?.name || t("-")}</div>
+      <Card title={t("Bilgiler")}>
+        {uQ.isLoading ? (
+          <span style={{ color: "var(--rezvix-text-soft)", fontSize: 13 }}>
+            {t("Yükleniyor…")}
+          </span>
+        ) : uQ.error ? (
+          <div style={{ color: "var(--rezvix-danger)", fontSize: 13 }}>
+            {t("Kullanıcı bilgileri alınamadı.")}
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-4">
+            {[
+              { label: t("Ad"), val: user?.name || t("-") },
+              { label: t("E-posta"), val: user?.email || t("-") },
+              { label: t("Telefon"), val: user?.phone || t("-") },
+              { label: t("Rol"), val: user?.role || t("-") },
+              {
+                label: t("Durum"),
+                val: user?.banned ? t("Banlı") : t("Aktif"),
+              },
+            ].map(({ label, val }) => (
+              <div key={label}>
+                <span
+                  style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}
+                >
+                  {label}
+                </span>
+                <div style={{ color: "var(--rezvix-text-main)", fontSize: 14 }}>
+                  {val}
+                </div>
               </div>
-              <div>
-                <span className="text-gray-500 text-sm">{t("E-posta")}</span>
-                <div>{user?.email || t("-")}</div>
-              </div>
-              <div>
-                <span className="text-gray-500 text-sm">{t("Telefon")}</span>
-                <div>{user?.phone || t("-")}</div>
-              </div>
-              <div>
-                <span className="text-gray-500 text-sm">{t("Rol")}</span>
-                <div>{user?.role || t("-")}</div>
-              </div>
-              <div>
-                <span className="text-gray-500 text-sm">{t("Durum")}</span>
-                <div>{user?.banned ? t("Banlı") : t("Aktif")}</div>
-              </div>
-            </div>
-          )}
-        </Card>
+            ))}
+          </div>
+        )}
+      </Card>
 
+      <div style={{ marginTop: 20 }}>
         <Card title={t("İşlemler")}>
-          <div className="flex flex-col gap-3">
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {/* Ban formu */}
             <div className="grid md:grid-cols-3 gap-3">
               <div className="md:col-span-2">
-                <label className="block text-sm text-gray-600 mb-1">{t("Ban Sebebi *")}</label>
+                <label style={labelStyle}>{t("Ban Sebebi *")}</label>
                 <input
                   type="text"
-                  className="w-full border rounded-lg px-3 py-2"
+                  className={`${inputCls} w-full`}
                   placeholder={t("Örn: Son 3 rezervasyonda no-show")}
                   value={banReason}
                   onChange={(e) => setBanReason(e.target.value)}
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">{t("Bitiş (opsiyonel)")}</label>
+                <label style={labelStyle}>{t("Bitiş (opsiyonel)")}</label>
                 <input
                   type="date"
-                  className="w-full border rounded-lg px-3 py-2"
+                  className={`${inputCls} w-full`}
                   value={banUntil}
                   onChange={(e) => setBanUntil(e.target.value)}
                 />
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
               <button
-                className="px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-black text-white disabled:opacity-60"
+                style={{
+                  ...dangerBtn,
+                  opacity:
+                    banMut.isPending ||
+                    uQ.isLoading ||
+                    user?.banned ||
+                    banReason.trim().length === 0
+                      ? 0.5
+                      : 1,
+                  cursor:
+                    banMut.isPending ||
+                    uQ.isLoading ||
+                    user?.banned ||
+                    banReason.trim().length === 0
+                      ? "not-allowed"
+                      : "pointer",
+                }}
                 onClick={() => banMut.mutate()}
                 disabled={
-                  banMut.isPending || uQ.isLoading || user?.banned || banReason.trim().length === 0
+                  banMut.isPending ||
+                  uQ.isLoading ||
+                  user?.banned ||
+                  banReason.trim().length === 0
                 }
                 title={banReason.trim() ? "" : t("Sebep gerekli")}
               >
@@ -176,20 +320,37 @@ export default function AdminUserDetailPage() {
               </button>
 
               <button
-                className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
+                style={{
+                  ...secondaryBtn,
+                  opacity:
+                    unbanMut.isPending || uQ.isLoading || !user?.banned
+                      ? 0.5
+                      : 1,
+                  cursor:
+                    unbanMut.isPending || uQ.isLoading || !user?.banned
+                      ? "not-allowed"
+                      : "pointer",
+                }}
                 onClick={() => unbanMut.mutate()}
                 disabled={unbanMut.isPending || uQ.isLoading || !user?.banned}
               >
                 {t("Banı Kaldır")}
               </button>
 
-              <div className="ml-auto flex items-end gap-2">
+              <div
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  alignItems: "flex-end",
+                  gap: 8,
+                }}
+              >
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">{t("Rol")}</label>
+                  <label style={labelStyle}>{t("Rol")}</label>
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
-                    className="border rounded-lg px-3 py-2"
+                    className={inputCls}
                   >
                     <option value="customer">{t("Müşteri")}</option>
                     <option value="restaurant">{t("Restaurant")}</option>
@@ -197,7 +358,11 @@ export default function AdminUserDetailPage() {
                   </select>
                 </div>
                 <button
-                  className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-60"
+                  style={{
+                    ...primaryBtn,
+                    opacity:
+                      roleMut.isPending || uQ.isLoading ? 0.5 : 1,
+                  }}
                   onClick={() => roleMut.mutate()}
                   disabled={roleMut.isPending || uQ.isLoading}
                 >
@@ -207,103 +372,180 @@ export default function AdminUserDetailPage() {
             </div>
           </div>
         </Card>
+      </div>
 
-        {/* RİSK ÖZETİ */}
+      {/* RİSK ÖZETİ */}
+      <div style={{ marginTop: 20 }}>
         <Card title={t("Risk Özeti")}>
           {riskQ.isLoading ? (
-            t("Yükleniyor…")
+            <span style={{ color: "var(--rezvix-text-soft)", fontSize: 13 }}>
+              {t("Yükleniyor…")}
+            </span>
           ) : riskQ.error ? (
-            <div className="text-red-600 text-sm">{t("Risk verisi alınamadı.")}</div>
+            <div style={{ color: "var(--rezvix-danger)", fontSize: 13 }}>
+              {t("Risk verisi alınamadı.")}
+            </div>
           ) : (
             <div className="grid md:grid-cols-3 gap-4">
-              <div className="p-3 rounded-lg border">
-                <div className="text-gray-500 text-sm">{t("Risk Skoru")}</div>
-                <div className="flex items-center gap-2">
-                  <div className="text-2xl font-semibold">{riskScore}</div>
+              <div style={statCardStyle}>
+                <div style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}>
+                  {t("Risk Skoru")}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    style={{
+                      fontSize: 24,
+                      fontWeight: 700,
+                      color: "var(--rezvix-text-main)",
+                    }}
+                  >
+                    {riskScore}
+                  </div>
                   {riskScore >= 75 && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+                    <span
+                      style={{
+                        fontSize: 11,
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        background: "rgba(220, 38, 38, 0.10)",
+                        color: "var(--rezvix-danger)",
+                        border: "1px solid rgba(220, 38, 38, 0.20)",
+                      }}
+                    >
                       {t("Yüksek risk")}
                     </span>
                   )}
                 </div>
               </div>
-              <div className="p-3 rounded-lg border">
-                <div className="text-gray-500 text-sm">{t("No-show Sayısı")}</div>
-                <div className="text-2xl font-semibold">
+              <div style={statCardStyle}>
+                <div style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}>
+                  {t("No-show Sayısı")}
+                </div>
+                <div
+                  style={{
+                    fontSize: 24,
+                    fontWeight: 700,
+                    color: "var(--rezvix-text-main)",
+                  }}
+                >
                   {riskQ.data?.snapshot?.noShowCount ?? 0}
                 </div>
               </div>
-              <div className="p-3 rounded-lg border">
-                <div className="text-gray-500 text-sm">{t("Ban Durumu")}</div>
-                <div className="text-2xl font-semibold">
+              <div style={statCardStyle}>
+                <div style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}>
+                  {t("Ban Durumu")}
+                </div>
+                <div
+                  style={{
+                    fontSize: 24,
+                    fontWeight: 700,
+                    color: "var(--rezvix-text-main)",
+                  }}
+                >
                   {riskQ.data?.snapshot?.banned ? t("Banlı") : t("Aktif")}
                 </div>
                 {riskQ.data?.snapshot?.bannedUntil && (
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div
+                    style={{ fontSize: 11, color: "var(--rezvix-text-soft)", marginTop: 4 }}
+                  >
                     {fmtDateTime(riskQ.data.snapshot.bannedUntil)}
                   </div>
                 )}
               </div>
 
               <div className="md:col-span-3 grid md:grid-cols-4 gap-4">
-                <div className="p-3 rounded-lg border">
-                  <div className="text-gray-500 text-sm">{t("İyi Katılım Serisi")}</div>
-                  <div className="text-xl font-semibold">
-                    {riskQ.data?.snapshot?.consecutiveGoodShows ?? 0}
+                {[
+                  {
+                    label: t("İyi Katılım Serisi"),
+                    val: riskQ.data?.snapshot?.consecutiveGoodShows ?? 0,
+                  },
+                  {
+                    label: t("Pencere (gün)"),
+                    val: riskQ.data?.snapshot?.windowDays ?? 180,
+                  },
+                  {
+                    label: t("Ağırlık Çarpanı"),
+                    val: riskQ.data?.snapshot?.multiplier ?? 25,
+                  },
+                  {
+                    label: t("Ban Nedeni"),
+                    val: riskQ.data?.snapshot?.banReason || t("-"),
+                    small: true,
+                  },
+                ].map(({ label, val, small }) => (
+                  <div key={label} style={statCardStyle}>
+                    <div
+                      style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}
+                    >
+                      {label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: small ? 14 : 20,
+                        fontWeight: 700,
+                        color: "var(--rezvix-text-main)",
+                      }}
+                    >
+                      {val}
+                    </div>
                   </div>
-                </div>
-                <div className="p-3 rounded-lg border">
-                  <div className="text-gray-500 text-sm">{t("Pencere (gün)")}</div>
-                  <div className="text-xl font-semibold">
-                    {riskQ.data?.snapshot?.windowDays ?? 180}
-                  </div>
-                </div>
-                <div className="p-3 rounded-lg border">
-                  <div className="text-gray-500 text-sm">{t("Ağırlık Çarpanı")}</div>
-                  <div className="text-xl font-semibold">
-                    {riskQ.data?.snapshot?.multiplier ?? 25}
-                  </div>
-                </div>
-                <div className="p-3 rounded-lg border">
-                  <div className="text-gray-500 text-sm">{t("Ban Nedeni")}</div>
-                  <div className="text-sm">
-                    {riskQ.data?.snapshot?.banReason || t("-")}
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           )}
         </Card>
+      </div>
 
-        {/* RİSK OLAYLARI */}
+      {/* RİSK OLAYLARI */}
+      <div style={{ marginTop: 20 }}>
         <Card title={t("Risk Olayları")}>
-          <div className="flex flex-wrap items-end gap-3 mb-3">
-            <div className="ml-auto flex items-end gap-2">
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "flex-end",
+              gap: 12,
+              marginBottom: 12,
+            }}
+          >
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "flex-end", gap: 8 }}>
               <div>
-                <label className="block text-xs text-gray-500">{t("Başlangıç")}</label>
+                <label
+                  style={{ ...labelStyle, fontSize: 11 }}
+                >
+                  {t("Başlangıç")}
+                </label>
                 <input
                   type="date"
-                  className="border rounded px-2 py-1"
+                  className={inputCls}
                   value={start}
                   onChange={(e) => setStart(e.target.value)}
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500">{t("Bitiş")}</label>
+                <label
+                  style={{ ...labelStyle, fontSize: 11 }}
+                >
+                  {t("Bitiş")}
+                </label>
                 <input
                   type="date"
-                  className="border rounded px-2 py-1"
+                  className={inputCls}
                   value={end}
                   onChange={(e) => setEnd(e.target.value)}
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500">{t("Limit")}</label>
+                <label
+                  style={{ ...labelStyle, fontSize: 11 }}
+                >
+                  {t("Limit")}
+                </label>
                 <input
                   type="number"
                   min={1}
                   max={500}
-                  className="border rounded px-2 py-1 w-24"
+                  className={`${inputCls} w-24`}
                   value={limit}
                   onChange={(e) => setLimit(Number(e.target.value || 100))}
                 />
@@ -312,18 +554,30 @@ export default function AdminUserDetailPage() {
           </div>
 
           {riskQ.isLoading ? (
-            t("Yükleniyor…")
+            <span style={{ color: "var(--rezvix-text-soft)", fontSize: 13 }}>
+              {t("Yükleniyor…")}
+            </span>
           ) : !riskQ.data?.incidents?.length ? (
-            <div className="text-gray-500 text-sm">{t("Kayıt bulunamadı.")}</div>
+            <div style={{ color: "var(--rezvix-text-soft)", fontSize: 13 }}>
+              {t("Kayıt bulunamadı.")}
+            </div>
           ) : (
-            <div className="overflow-auto">
-              <table className="min-w-full text-sm">
+            <div style={{ overflow: "auto" }}>
+              <table
+                style={{ minWidth: "100%", borderCollapse: "collapse", fontSize: 13 }}
+              >
                 <thead>
-                  <tr className="text-left text-gray-500">
-                    <th className="py-2 pr-4">{t("Tarih")}</th>
-                    <th className="py-2 pr-4">{t("Tip")}</th>
-                    <th className="py-2 pr-4">{t("Ağırlık")}</th>
-                    <th className="py-2 pr-4">{t("Rezervasyon")}</th>
+                  <tr>
+                    {[t("Tarih"), t("Tip"), t("Ağırlık"), t("Rezervasyon")].map(
+                      (h) => (
+                        <th
+                          key={h}
+                          style={{ ...tableHeaderStyle, paddingRight: 16 }}
+                        >
+                          {h}
+                        </th>
+                      )
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -336,39 +590,72 @@ export default function AdminUserDetailPage() {
                         : it.type === "UNDER_ATTEND"
                         ? t("Eksik katılım: oran*25*0.25")
                         : t("İyi katılım: -2.5");
-                    const cls =
-                      it.type === "NO_SHOW"
-                        ? "bg-red-100 text-red-700 border border-red-200"
-                        : it.type === "LATE_CANCEL"
-                        ? "bg-orange-100 text-orange-700 border border-orange-200"
-                        : it.type === "UNDER_ATTEND"
-                        ? "bg-amber-100 text-amber-800 border border-amber-200"
-                        : "bg-green-100 text-green-700 border border-green-200";
 
                     return (
-                      <tr key={idx} className="border-t">
-                        <td className="py-2 pr-4">{fmtDateTime(it.at)}</td>
-                        <td className="py-2 pr-4">
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded-full ${cls}`}
-                            title={tooltip}
-                          >
+                      <tr
+                        key={idx}
+                        style={{
+                          borderTop: "1px solid var(--rezvix-border-subtle)",
+                        }}
+                      >
+                        <td
+                          style={{
+                            padding: "10px 16px",
+                            paddingRight: 16,
+                            color: "var(--rezvix-text-main)",
+                          }}
+                        >
+                          {fmtDateTime(it.at)}
+                        </td>
+                        <td
+                          style={{
+                            padding: "10px 16px",
+                            paddingRight: 16,
+                          }}
+                        >
+                          <span style={riskBadgeStyle(it.type)} title={tooltip}>
                             {t(TYPE_LABEL[it.type] ?? it.type)}
                           </span>
                         </td>
-                        <td className="py-2 pr-4">{it.weight}</td>
-                        <td className="py-2 pr-4">
+                        <td
+                          style={{
+                            padding: "10px 16px",
+                            paddingRight: 16,
+                            color: "var(--rezvix-text-main)",
+                          }}
+                        >
+                          {it.weight}
+                        </td>
+                        <td
+                          style={{
+                            padding: "10px 16px",
+                            paddingRight: 16,
+                          }}
+                        >
                           {it.reservationId ? (
                             <a
-                              className="text-blue-600 hover:underline"
+                              style={{
+                                color: "var(--rezvix-primary)",
+                                textDecoration: "underline",
+                              }}
                               href={`/admin/reservations?reservationId=${it.reservationId}`}
                               title={t("Rezervasyon listesinde aç")}
                             >
                               {t("Rezervasyonu aç")}{" "}
-                              <code className="text-xs ml-1">{it.reservationId}</code>
+                              <code
+                                style={{
+                                  fontSize: 11,
+                                  marginLeft: 4,
+                                  color: "var(--rezvix-text-soft)",
+                                }}
+                              >
+                                {it.reservationId}
+                              </code>
                             </a>
                           ) : (
-                            t("-")
+                            <span style={{ color: "var(--rezvix-text-soft)" }}>
+                              {t("-")}
+                            </span>
                           )}
                         </td>
                       </tr>
@@ -380,5 +667,6 @@ export default function AdminUserDetailPage() {
           )}
         </Card>
       </div>
+    </div>
   );
 }

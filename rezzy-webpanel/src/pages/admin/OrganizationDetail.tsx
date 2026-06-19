@@ -19,6 +19,7 @@ import {
 import { showToast } from "../../ui/Toast";
 import { DEFAULT_LANGUAGE, LANG_OPTIONS } from "../../utils/languages";
 import { t as i18nT, useI18n } from "../../i18n";
+import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
 
 type OrgDetail = AdminOrganizationDetail;
 
@@ -51,6 +52,78 @@ function prettyOrgRole(role?: string) {
       return role;
   }
 }
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+const inputCls = "border rounded-lg px-3 py-2 w-full text-sm bg-white";
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 11,
+  color: "var(--rezvix-text-soft)",
+  marginBottom: 4,
+};
+
+const primaryBtn: React.CSSProperties = {
+  padding: "8px 18px",
+  borderRadius: 8,
+  border: "none",
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 700,
+  background: "var(--rezvix-primary)",
+  color: "#fff",
+  transition: "opacity 0.15s ease",
+};
+
+const secondaryBtn: React.CSSProperties = {
+  padding: "6px 12px",
+  borderRadius: 6,
+  border: "1px solid var(--rezvix-border-strong)",
+  background: "var(--rezvix-bg-soft)",
+  color: "var(--rezvix-text-muted)",
+  fontSize: 12,
+  cursor: "pointer",
+  fontWeight: 500,
+};
+
+function ActiveBadge({ isActive }: { isActive?: boolean }) {
+  const { t } = useI18n();
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        padding: "2px 9px",
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 700,
+        background: isActive
+          ? "rgba(22, 163, 74, 0.10)"
+          : "var(--rezvix-bg-soft)",
+        color: isActive
+          ? "var(--rezvix-success)"
+          : "var(--rezvix-text-soft)",
+        border: isActive
+          ? "1px solid rgba(22, 163, 74, 0.25)"
+          : "1px solid var(--rezvix-border-subtle)",
+      }}
+    >
+      {isActive ? t("Aktif") : t("Pasif")}
+    </span>
+  );
+}
+
+const tableHeaderStyle: React.CSSProperties = {
+  padding: "10px 16px",
+  color: "var(--rezvix-text-soft)",
+  fontWeight: 600,
+  fontSize: 11,
+  letterSpacing: "0.03em",
+  textTransform: "uppercase",
+  background: "var(--rezvix-bg-soft)",
+  textAlign: "left",
+};
 
 export default function AdminOrganizationDetailPage() {
   const { oid = "" } = useParams<{ oid: string }>();
@@ -294,104 +367,126 @@ export default function AdminOrganizationDetailPage() {
   };
 
   return (
-          <div className="space-y-6 p-6">
-        <h2 className="text-lg font-semibold">
-          {org?.name || t("Organizasyon Detayı")}
-        </h2>
+    <div style={{ padding: 24 }}>
+      <AdminPageHeader
+        title={org?.name || t("Organizasyon Detayı")}
+        subtitle={t("Organizasyon bilgileri ve yönetimi")}
+      />
 
-        {/* Genel bilgiler */}
-        <Card title={t("Bilgiler")}>
-          {orgQ.isLoading ? (
-            t("Yükleniyor…")
-          ) : !org ? (
-            <div className="text-sm text-gray-500">
-              {t("Kayıt bulunamadı.")}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <span className="text-gray-500 text-sm">{t("Ad")}</span>
-                  <div>{org.name}</div>
-                </div>
-                <div>
-                  <span className="text-gray-500 text-sm">{t("Bölge")}</span>
-                  <div>{org.region || "-"}</div>
-                </div>
-                <div>
-                  <span className="text-gray-500 text-sm">
-                    {t("Vergi No")}
-                  </span>
-                  <div>{org.taxNumber || "-"}</div>
-                </div>
-                <div>
-                  <span className="text-gray-500 text-sm">
-                    {t("Oluşturulma")}
-                  </span>
-                  <div>
-                    {org.createdAt
-                      ? new Date(
-                          org.createdAt
-                        ).toLocaleString("tr-TR")
-                      : "-"}
-                  </div>
+      {/* Genel bilgiler */}
+      <Card title={t("Bilgiler")}>
+        {orgQ.isLoading ? (
+          <span style={{ color: "var(--rezvix-text-soft)", fontSize: 13 }}>
+            {t("Yükleniyor…")}
+          </span>
+        ) : !org ? (
+          <div style={{ fontSize: 13, color: "var(--rezvix-text-soft)" }}>
+            {t("Kayıt bulunamadı.")}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <span style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}>
+                  {t("Ad")}
+                </span>
+                <div style={{ color: "var(--rezvix-text-main)", fontSize: 14 }}>
+                  {org.name}
                 </div>
               </div>
-
-              <div className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">
-                    {t("Varsayılan Dil")}
-                  </label>
-                  <select
-                    className="border rounded-lg px-3 py-2 text-sm bg-white"
-                    value={orgLang}
-                    onChange={(e) => setOrgLang(e.target.value)}
-                  >
-                    {LANG_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+              <div>
+                <span style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}>
+                  {t("Bölge")}
+                </span>
+                <div style={{ color: "var(--rezvix-text-main)", fontSize: 14 }}>
+                  {org.region || "-"}
                 </div>
-                <button
-                  type="button"
-                  className="px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs disabled:opacity-60"
-                  onClick={() => updateOrgLangMut.mutate()}
-                  disabled={
+              </div>
+              <div>
+                <span style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}>
+                  {t("Vergi No")}
+                </span>
+                <div style={{ color: "var(--rezvix-text-main)", fontSize: 14 }}>
+                  {org.taxNumber || "-"}
+                </div>
+              </div>
+              <div>
+                <span style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}>
+                  {t("Oluşturulma")}
+                </span>
+                <div style={{ color: "var(--rezvix-text-main)", fontSize: 14 }}>
+                  {org.createdAt
+                    ? new Date(org.createdAt).toLocaleString("tr-TR")
+                    : "-"}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label style={labelStyle}>{t("Varsayılan Dil")}</label>
+                <select
+                  className="border rounded-lg px-3 py-2 text-sm bg-white"
+                  value={orgLang}
+                  onChange={(e) => setOrgLang(e.target.value)}
+                >
+                  {LANG_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                style={{
+                  ...primaryBtn,
+                  fontSize: 12,
+                  padding: "8px 14px",
+                  opacity:
                     updateOrgLangMut.isPending ||
                     orgLang === (org.defaultLanguage || DEFAULT_LANGUAGE)
-                  }
-                >
-                  {updateOrgLangMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
-                </button>
-              </div>
+                      ? 0.5
+                      : 1,
+                }}
+                onClick={() => updateOrgLangMut.mutate()}
+                disabled={
+                  updateOrgLangMut.isPending ||
+                  orgLang === (org.defaultLanguage || DEFAULT_LANGUAGE)
+                }
+              >
+                {updateOrgLangMut.isPending ? t("Kaydediliyor…") : t("Kaydet")}
+              </button>
             </div>
-          )}
-        </Card>
+          </div>
+        )}
+      </Card>
 
+      <div style={{ marginTop: 20 }}>
         {/* Organizasyon Üyeleri */}
         <Card title={t("Organizasyon Üyeleri")}>
           {/* Liste */}
           {members && members.length > 0 ? (
-            <div className="overflow-auto mb-4">
-              <table className="min-w-full text-sm">
+            <div style={{ overflow: "auto", marginBottom: 16 }}>
+              <table
+                style={{ minWidth: "100%", borderCollapse: "collapse", fontSize: 13 }}
+              >
                 <thead>
-                  <tr className="text-left text-gray-500">
-                    <th className="py-2 px-4">{t("Ad")}</th>
-                    <th className="py-2 px-4">{t("E-posta")}</th>
-                    <th className="py-2 px-4">{t("Rol")}</th>
-                    <th className="py-2 px-4"></th>
+                  <tr>
+                    {[t("Ad"), t("E-posta"), t("Rol"), ""].map((h, i) => (
+                      <th key={i} style={tableHeaderStyle}>
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {members.map((m) => {
                     const userId =
                       m.userId || m.user?._id || m._id || "";
-                    const name =
+                    const memberName =
                       m.name || m.user?.name || t("İsimsiz");
-                    const email =
+                    const memberEmail =
                       m.email || m.user?.email || "-";
                     const role =
                       m.role ||
@@ -400,18 +495,50 @@ export default function AdminOrganizationDetailPage() {
                       "";
 
                     return (
-                      <tr key={userId} className="border-t">
-                        <td className="py-2 px-4">{name}</td>
-                        <td className="py-2 px-4">{email}</td>
-                        <td className="py-2 px-4">
+                      <tr
+                        key={userId}
+                        style={{
+                          borderTop: "1px solid var(--rezvix-border-subtle)",
+                        }}
+                      >
+                        <td
+                          style={{
+                            padding: "10px 16px",
+                            color: "var(--rezvix-text-main)",
+                          }}
+                        >
+                          {memberName}
+                        </td>
+                        <td
+                          style={{
+                            padding: "10px 16px",
+                            color: "var(--rezvix-text-main)",
+                          }}
+                        >
+                          {memberEmail}
+                        </td>
+                        <td
+                          style={{
+                            padding: "10px 16px",
+                            color: "var(--rezvix-text-main)",
+                          }}
+                        >
                           {prettyOrgRole(role)}
                         </td>
-                        <td className="py-2 px-4 text-right">
+                        <td
+                          style={{
+                            padding: "10px 16px",
+                            textAlign: "right",
+                          }}
+                        >
                           <button
                             type="button"
                             onClick={() => handleRemoveMember(userId)}
                             disabled={removeMemberMut.isPending}
-                            className="px-2 py-1 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-60"
+                            style={{
+                              ...secondaryBtn,
+                              opacity: removeMemberMut.isPending ? 0.5 : 1,
+                            }}
                           >
                             {t("Kaldır")}
                           </button>
@@ -423,7 +550,13 @@ export default function AdminOrganizationDetailPage() {
               </table>
             </div>
           ) : (
-            <div className="text-sm text-gray-500 mb-4">
+            <div
+              style={{
+                fontSize: 13,
+                color: "var(--rezvix-text-soft)",
+                marginBottom: 16,
+              }}
+            >
               {t("Henüz bu organizasyona bağlı üye yok.")}
             </div>
           )}
@@ -434,12 +567,12 @@ export default function AdminOrganizationDetailPage() {
             className="grid md:grid-cols-3 gap-3 items-start"
           >
             <div className="md:col-span-2 space-y-1">
-              <label className="block text-xs text-gray-600">
+              <label style={labelStyle}>
                 {t("Kullanıcı Ara (isim / e-posta)")}
               </label>
               <input
                 type="text"
-                className="border rounded-lg px-3 py-2 w-full text-sm"
+                className={inputCls}
                 value={memberQuery}
                 onChange={(e) => {
                   setMemberQuery(e.target.value);
@@ -453,16 +586,37 @@ export default function AdminOrganizationDetailPage() {
                 className="hidden"
               />
               {memberQuery.trim().length >= 2 && (
-                <div className="mt-2 max-h-48 overflow-auto border rounded-lg bg-gray-50">
+                <div
+                  style={{
+                    marginTop: 8,
+                    maxHeight: 192,
+                    overflow: "auto",
+                    border: "1px solid var(--rezvix-border-strong)",
+                    borderRadius: 8,
+                    background: "var(--rezvix-bg-soft)",
+                  }}
+                >
                   {memberSearchLoading && (
-                    <div className="px-3 py-2 text-sm text-gray-500">
+                    <div
+                      style={{
+                        padding: "8px 12px",
+                        fontSize: 13,
+                        color: "var(--rezvix-text-soft)",
+                      }}
+                    >
                       {t("Aranıyor…")}
                     </div>
                   )}
                   {!memberSearchLoading &&
                     memberResults.length === 0 &&
                     memberQuery.trim() && (
-                      <div className="px-3 py-2 text-sm text-gray-500">
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          color: "var(--rezvix-text-soft)",
+                        }}
+                      >
                         {t("Sonuç yok")}
                       </div>
                     )}
@@ -471,26 +625,47 @@ export default function AdminOrganizationDetailPage() {
                       key={u._id}
                       type="button"
                       onClick={() => selectMember(u)}
-                      className={`w-full flex justify-between items-center px-3 py-2 text-sm hover:bg-white ${
-                        selectedMember?._id === u._id
-                          ? "bg-brand-50"
-                          : ""
-                      }`}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "8px 12px",
+                        fontSize: 13,
+                        cursor: "pointer",
+                        border: "none",
+                        background:
+                          selectedMember?._id === u._id
+                            ? "var(--rezvix-primary-soft)"
+                            : "transparent",
+                        color: "var(--rezvix-text-main)",
+                      }}
                     >
                       <span>
                         {u.name || t("İsimsiz")}{" "}
-                        <span className="text-gray-500">
+                        <span style={{ color: "var(--rezvix-text-soft)" }}>
                           ({u.email || "-"})
                         </span>
                       </span>
-                      <span className="text-xs text-gray-400">
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: "var(--rezvix-text-soft)",
+                        }}
+                      >
                         {u.role || ""}
                       </span>
                     </button>
                   ))}
                 </div>
               )}
-              <div className="text-xs text-emerald-700 mt-1">
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--rezvix-success)",
+                  marginTop: 4,
+                }}
+              >
                 {selectedMember
                   ? t("Seçili kullanıcı: {name} ({email})", {
                       name: selectedMember.name || t("İsimsiz"),
@@ -501,11 +676,11 @@ export default function AdminOrganizationDetailPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs text-gray-600 mb-1">
+              <label style={{ ...labelStyle, marginBottom: 4 }}>
                 {t("Rol")}
               </label>
               <select
-                className="border rounded-lg px-3 py-2 w-full text-sm"
+                className={inputCls}
                 value={memberRole}
                 onChange={(e) => setMemberRole(e.target.value)}
               >
@@ -524,7 +699,17 @@ export default function AdminOrganizationDetailPage() {
                   !memberRole ||
                   addMemberMut.isPending
                 }
-                className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs w-full disabled:opacity-60"
+                style={{
+                  ...primaryBtn,
+                  marginTop: 8,
+                  width: "100%",
+                  fontSize: 12,
+                  padding: "8px 14px",
+                  opacity:
+                    !selectedMember || !memberRole || addMemberMut.isPending
+                      ? 0.5
+                      : 1,
+                }}
               >
                 {addMemberMut.isPending
                   ? t("Ekleniyor…")
@@ -533,47 +718,63 @@ export default function AdminOrganizationDetailPage() {
             </div>
           </form>
         </Card>
+      </div>
 
+      <div style={{ marginTop: 20 }}>
         {/* Organizasyona bağlı restoranlar */}
         <Card title={t("Bu Organizasyona Bağlı Restoranlar")}>
           {restaurants && restaurants.length > 0 ? (
-            <div className="overflow-auto">
-              <table className="min-w-full text-sm">
+            <div style={{ overflow: "auto" }}>
+              <table
+                style={{ minWidth: "100%", borderCollapse: "collapse", fontSize: 13 }}
+              >
                 <thead>
-                  <tr className="text-left text-gray-500">
-                    <th className="py-2 px-4">{t("Ad")}</th>
-                    <th className="py-2 px-4">{t("Şehir")}</th>
-                    <th className="py-2 px-4">{t("Bölge")}</th>
-                    <th className="py-2 px-4">{t("Durum")}</th>
+                  <tr>
+                    {[t("Ad"), t("Şehir"), t("Bölge"), t("Durum")].map((h) => (
+                      <th key={h} style={tableHeaderStyle}>
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {restaurants.map((r) => (
-                    <tr key={r._id} className="border-t">
-                      <td className="py-2 px-4">
+                    <tr
+                      key={r._id}
+                      style={{
+                        borderTop: "1px solid var(--rezvix-border-subtle)",
+                      }}
+                    >
+                      <td style={{ padding: "10px 16px" }}>
                         <Link
                           to={`/admin/restaurants/${r._id}`}
-                          className="text-brand-700 underline"
+                          style={{
+                            color: "var(--rezvix-primary)",
+                            fontWeight: 600,
+                            textDecoration: "underline",
+                          }}
                         >
                           {r.name}
                         </Link>
                       </td>
-                      <td className="py-2 px-4">
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          color: "var(--rezvix-text-main)",
+                        }}
+                      >
                         {r.city || "-"}
                       </td>
-                      <td className="py-2 px-4">
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          color: "var(--rezvix-text-main)",
+                        }}
+                      >
                         {r.region || "-"}
                       </td>
-                      <td className="py-2 px-4">
-                        {r.isActive ? (
-                          <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700">
-                            {t("Aktif")}
-                          </span>
-                        ) : (
-                          <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-rose-50 text-rose-700">
-                            {t("Pasif")}
-                          </span>
-                        )}
+                      <td style={{ padding: "10px 16px" }}>
+                        <ActiveBadge isActive={r.isActive} />
                       </td>
                     </tr>
                   ))}
@@ -581,51 +782,67 @@ export default function AdminOrganizationDetailPage() {
               </table>
             </div>
           ) : (
-            <div className="text-sm text-gray-500">
+            <div style={{ fontSize: 13, color: "var(--rezvix-text-soft)" }}>
               {t("Henüz bu organizasyona bağlı restoran yok.")}
             </div>
           )}
         </Card>
+      </div>
 
+      <div style={{ marginTop: 20 }}>
         {/* Organizasyona bağlı market şubeleri */}
         <Card title={t("Marketler")}>
           {marketStores && marketStores.length > 0 ? (
-            <div className="overflow-auto">
-              <table className="min-w-full text-sm">
+            <div style={{ overflow: "auto" }}>
+              <table
+                style={{ minWidth: "100%", borderCollapse: "collapse", fontSize: 13 }}
+              >
                 <thead>
-                  <tr className="text-left text-gray-500">
-                    <th className="py-2 px-4">{t("Ad")}</th>
-                    <th className="py-2 px-4">{t("Şehir")}</th>
-                    <th className="py-2 px-4">{t("Durum")}</th>
-                    <th className="py-2 px-4">{t("Toplam Sipariş")}</th>
+                  <tr>
+                    {[t("Ad"), t("Şehir"), t("Durum"), t("Toplam Sipariş")].map((h) => (
+                      <th key={h} style={tableHeaderStyle}>
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {marketStores.map((m) => (
-                    <tr key={m._id} className="border-t">
-                      <td className="py-2 px-4">
+                    <tr
+                      key={m._id}
+                      style={{
+                        borderTop: "1px solid var(--rezvix-border-subtle)",
+                      }}
+                    >
+                      <td style={{ padding: "10px 16px" }}>
                         <Link
                           to={`/admin/market/stores/${m._id}`}
-                          className="text-brand-700 underline"
+                          style={{
+                            color: "var(--rezvix-primary)",
+                            fontWeight: 600,
+                            textDecoration: "underline",
+                          }}
                         >
                           {m.name}
                         </Link>
                       </td>
-                      <td className="py-2 px-4">
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          color: "var(--rezvix-text-main)",
+                        }}
+                      >
                         {m.city || "-"}
                       </td>
-                      <td className="py-2 px-4">
-                        {m.isActive ? (
-                          <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700">
-                            {t("Aktif")}
-                          </span>
-                        ) : (
-                          <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-rose-50 text-rose-700">
-                            {t("Pasif")}
-                          </span>
-                        )}
+                      <td style={{ padding: "10px 16px" }}>
+                        <ActiveBadge isActive={m.isActive} />
                       </td>
-                      <td className="py-2 px-4">
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          color: "var(--rezvix-text-main)",
+                        }}
+                      >
                         {m.totalOrders ?? "-"}
                       </td>
                     </tr>
@@ -634,27 +851,26 @@ export default function AdminOrganizationDetailPage() {
               </table>
             </div>
           ) : (
-            <div className="text-sm text-gray-500">
+            <div style={{ fontSize: 13, color: "var(--rezvix-text-soft)" }}>
               {t("Bu zincire bağlı market yok")}
             </div>
           )}
         </Card>
+      </div>
 
+      <div style={{ marginTop: 20 }}>
         {/* Bu organizasyona yeni restoran ekle */}
         <Card title={t("Bu Organizasyona Yeni Restoran (Şube) Ekle")}>
           {/* Owner search */}
-          <form
-            onSubmit={handleSearchOwner}
-            className="space-y-3 mb-4"
-          >
+          <form onSubmit={handleSearchOwner} className="space-y-3 mb-4">
             <div className="grid md:grid-cols-3 gap-3 items-end">
               <div className="md:col-span-2">
-                <label className="block text-xs text-gray-600 mb-1">
+                <label style={labelStyle}>
                   {t("Restoran Sahibi Ara (isim / e-posta)")}
                 </label>
                 <input
                   type="text"
-                  className="border rounded-lg px-3 py-2 w-full text-sm"
+                  className={inputCls}
                   value={ownerQuery}
                   onChange={(e) => setOwnerQuery(e.target.value)}
                 />
@@ -663,7 +879,12 @@ export default function AdminOrganizationDetailPage() {
                 <button
                   type="submit"
                   disabled={ownerSearchLoading}
-                  className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm w-full disabled:opacity-60"
+                  style={{
+                    ...secondaryBtn,
+                    width: "100%",
+                    padding: "9px 14px",
+                    opacity: ownerSearchLoading ? 0.5 : 1,
+                  }}
                 >
                   {ownerSearchLoading ? t("Aranıyor…") : t("Kullanıcı Ara")}
                 </button>
@@ -671,21 +892,45 @@ export default function AdminOrganizationDetailPage() {
             </div>
 
             {ownerResults.length > 0 && (
-              <div className="border rounded-lg p-2 max-h-48 overflow-auto text-sm bg-gray-50">
+              <div
+                style={{
+                  border: "1px solid var(--rezvix-border-strong)",
+                  borderRadius: 8,
+                  padding: 8,
+                  maxHeight: 192,
+                  overflow: "auto",
+                  fontSize: 13,
+                  background: "var(--rezvix-bg-soft)",
+                }}
+              >
                 {ownerResults.map((u) => (
                   <button
                     key={u._id}
                     type="button"
                     onClick={() => selectOwner(u)}
-                    className="w-full flex justify-between items-center px-2 py-1 rounded-lg hover:bg-white text-left"
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "6px 8px",
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      border: "none",
+                      background: "transparent",
+                      textAlign: "left",
+                      color: "var(--rezvix-text-main)",
+                    }}
                   >
                     <span>
                       {u.name || t("İsimsiz")}{" "}
-                      <span className="text-gray-500">
+                      <span style={{ color: "var(--rezvix-text-soft)" }}>
                         ({u.email || "-"})
                       </span>
                     </span>
-                    <span className="text-xs text-gray-400">
+                    <span
+                      style={{ fontSize: 11, color: "var(--rezvix-text-soft)" }}
+                    >
                       {u.role || ""}
                     </span>
                   </button>
@@ -694,7 +939,7 @@ export default function AdminOrganizationDetailPage() {
             )}
 
             {ownerLabel && (
-              <div className="text-xs text-emerald-700 mt-1">
+              <div style={{ fontSize: 11, color: "var(--rezvix-success)", marginTop: 4 }}>
                 {t("Seçili sahip: {label}", { label: ownerLabel })}
               </div>
             )}
@@ -706,35 +951,31 @@ export default function AdminOrganizationDetailPage() {
             className="grid md:grid-cols-3 gap-3"
           >
             <div className="md:col-span-1">
-              <label className="block text-xs text-gray-600 mb-1">
-                {t("Restoran Adı *")}
-              </label>
+              <label style={labelStyle}>{t("Restoran Adı *")}</label>
               <input
                 type="text"
-                className="border rounded-lg px-3 py-2 w-full text-sm"
+                className={inputCls}
                 value={rName}
                 onChange={(e) => setRName(e.target.value)}
                 required
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-600 mb-1">
-                {t("Şehir")}
-              </label>
+              <label style={labelStyle}>{t("Şehir")}</label>
               <input
                 type="text"
-                className="border rounded-lg px-3 py-2 w-full text-sm"
+                className={inputCls}
                 value={rCity}
                 onChange={(e) => setRCity(e.target.value)}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-600 mb-1">
+              <label style={labelStyle}>
                 {t("Bölge (ülke kodu, örn: TR, UK)")}
               </label>
               <input
                 type="text"
-                className="border rounded-lg px-3 py-2 w-full text-sm"
+                className={inputCls}
                 value={rRegion}
                 onChange={(e) =>
                   setRRegion(e.target.value.toUpperCase())
@@ -744,34 +985,28 @@ export default function AdminOrganizationDetailPage() {
             </div>
 
             <div>
-              <label className="block text-xs text-gray-600 mb-1">
-                {t("Telefon")}
-              </label>
+              <label style={labelStyle}>{t("Telefon")}</label>
               <input
                 type="text"
-                className="border rounded-lg px-3 py-2 w-full text-sm"
+                className={inputCls}
                 value={rPhone}
                 onChange={(e) => setRPhone(e.target.value)}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-600 mb-1">
-                {t("E-posta")}
-              </label>
+              <label style={labelStyle}>{t("E-posta")}</label>
               <input
                 type="email"
-                className="border rounded-lg px-3 py-2 w-full text-sm"
+                className={inputCls}
                 value={rEmail}
                 onChange={(e) => setREmail(e.target.value)}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-600 mb-1">
-                {t("Adres")}
-              </label>
+              <label style={labelStyle}>{t("Adres")}</label>
               <input
                 type="text"
-                className="border rounded-lg px-3 py-2 w-full text-sm"
+                className={inputCls}
                 value={rAddress}
                 onChange={(e) => setRAddress(e.target.value)}
               />
@@ -781,7 +1016,11 @@ export default function AdminOrganizationDetailPage() {
               <button
                 type="submit"
                 disabled={createRestMut.isPending}
-                className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm disabled:opacity-60"
+                style={{
+                  ...primaryBtn,
+                  marginTop: 8,
+                  opacity: createRestMut.isPending ? 0.5 : 1,
+                }}
               >
                 {createRestMut.isPending
                   ? t("Restoran oluşturuluyor…")
@@ -791,5 +1030,6 @@ export default function AdminOrganizationDetailPage() {
           </form>
         </Card>
       </div>
+    </div>
   );
 }

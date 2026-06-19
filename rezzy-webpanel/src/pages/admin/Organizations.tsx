@@ -11,6 +11,7 @@ import {
 import { showToast } from "../../ui/Toast";
 import { LANG_OPTIONS, DEFAULT_LANGUAGE } from "../../utils/languages";
 import { useI18n } from "../../i18n";
+import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
 
 type UserLite = { _id: string; name?: string; email?: string; role?: string };
 
@@ -20,6 +21,10 @@ async function fetchOrganizations(
   const params = query ? { query } : undefined;
   return adminListOrganizations(params);
 }
+
+// ── Shared input style ────────────────────────────────────────────────────────
+const inputCls =
+  "border rounded-lg px-3 py-2 w-full text-sm bg-white";
 
 export default function AdminOrganizationsPage() {
   const { t } = useI18n();
@@ -98,21 +103,39 @@ export default function AdminOrganizationsPage() {
   const list = data ?? [];
 
   return (
-          <div className="space-y-6 p-6">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold">{t("Organizasyonlar")}</h2>
-
-          <div className="flex items-center gap-2">
+    <div style={{ padding: 24 }}>
+      <AdminPageHeader
+        title={t("Organizasyonlar")}
+        subtitle={t("Tüm organizasyonları yönetin")}
+        actions={
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
               type="text"
               placeholder={t("İsim / vergi no / bölge ara…")}
-              className="border rounded-lg px-3 py-2 text-sm"
+              style={{
+                border: "1px solid var(--rezvix-border-strong)",
+                borderRadius: 8,
+                padding: "7px 12px",
+                fontSize: 13,
+                background: "var(--rezvix-bg-elevated)",
+                color: "var(--rezvix-text-main)",
+                outline: "none",
+                minWidth: 220,
+              }}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
             />
             <button
               onClick={() => setSearch(searchInput.trim())}
-              className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm"
+              style={{
+                padding: "7px 14px",
+                borderRadius: 8,
+                border: "1px solid var(--rezvix-border-strong)",
+                background: "var(--rezvix-bg-soft)",
+                color: "var(--rezvix-text-main)",
+                fontSize: 13,
+                cursor: "pointer",
+              }}
             >
               {t("Ara")}
             </button>
@@ -122,220 +145,387 @@ export default function AdminOrganizationsPage() {
                   setSearch("");
                   setSearchInput("");
                 }}
-                className="px-2 py-1 text-xs text-gray-500"
+                style={{
+                  padding: "4px 10px",
+                  fontSize: 12,
+                  color: "var(--rezvix-text-soft)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
               >
                 {t("Temizle")}
               </button>
             )}
           </div>
+        }
+      />
+
+      {isLoading && (
+        <div style={{ color: "var(--rezvix-text-soft)", fontSize: 14 }}>
+          {t("Yükleniyor…")}
         </div>
+      )}
+      {error && (
+        <div style={{ color: "var(--rezvix-danger)", fontSize: 13, marginBottom: 12 }}>
+          {t("Organizasyon listesi alınamadı")}
+        </div>
+      )}
 
-        {isLoading && <div>{t("Yükleniyor…")}</div>}
-        {error && (
-          <div className="text-red-600 text-sm">
-            {t("Organizasyon listesi alınamadı")}
-          </div>
-        )}
+      {/* Liste */}
+      <div
+        style={{
+          background: "var(--rezvix-bg-elevated)",
+          borderRadius: "var(--rezvix-radius-lg)",
+          border: "1px solid var(--rezvix-border-subtle)",
+          boxShadow: "var(--rezvix-shadow-soft)",
+          overflow: "auto",
+          marginBottom: 24,
+        }}
+      >
+        <table style={{ minWidth: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr
+              style={{
+                background: "var(--rezvix-bg-soft)",
+                textAlign: "left",
+              }}
+            >
+              {[t("Ad"), t("Bölge"), t("Vergi No"), t("Restoran Sayısı"), t("Oluşturulma")].map(
+                (h) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: "10px 16px",
+                      color: "var(--rezvix-text-soft)",
+                      fontWeight: 600,
+                      fontSize: 12,
+                      letterSpacing: "0.03em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {h}
+                  </th>
+                )
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((o) => {
+              const restaurantsCount =
+                (o as any).restaurantsCount ??
+                (o as any).restaurantCount ??
+                (o as any).branchesCount ??
+                "-";
 
-        {/* Liste */}
-        <div className="overflow-auto bg-white rounded-2xl shadow-soft">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500">
-                <th className="py-2 px-4">{t("Ad")}</th>
-                <th className="py-2 px-4">{t("Bölge")}</th>
-                <th className="py-2 px-4">{t("Vergi No")}</th>
-                <th className="py-2 px-4">{t("Restoran Sayısı")}</th>
-                <th className="py-2 px-4">{t("Oluşturulma")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((o) => {
-                const restaurantsCount =
-                  (o as any).restaurantsCount ??
-                  (o as any).restaurantCount ??
-                  (o as any).branchesCount ??
-                  "-";
-
-                return (
-                  <tr key={o._id} className="border-t">
-                    <td className="py-2 px-4">
-                      <Link
-                        to={`/admin/organizations/${o._id}`}
-                        className="text-brand-700 underline"
-                      >
-                        {o.name}
-                      </Link>
-                    </td>
-                    <td className="py-2 px-4">{o.region || "-"}</td>
-                    <td className="py-2 px-4">{o.taxNumber || "-"}</td>
-                    <td className="py-2 px-4">{restaurantsCount}</td>
-                    <td className="py-2 px-4">
-                      {o.createdAt
-                        ? new Date(o.createdAt).toLocaleDateString("tr-TR")
-                        : "-"}
-                    </td>
-                  </tr>
-                );
-              })}
-              {(!list || list.length === 0) && (
-                <tr>
-                  <td className="py-3 px-4 text-gray-500" colSpan={5}>
-                    {t("Kayıt yok")}
+              return (
+                <tr
+                  key={o._id}
+                  style={{
+                    borderTop: "1px solid var(--rezvix-border-subtle)",
+                  }}
+                >
+                  <td style={{ padding: "10px 16px" }}>
+                    <Link
+                      to={`/admin/organizations/${o._id}`}
+                      style={{
+                        color: "var(--rezvix-primary)",
+                        fontWeight: 600,
+                        textDecoration: "underline",
+                        fontSize: 13,
+                      }}
+                    >
+                      {o.name}
+                    </Link>
+                  </td>
+                  <td style={{ padding: "10px 16px", color: "var(--rezvix-text-main)" }}>
+                    {o.region || "-"}
+                  </td>
+                  <td style={{ padding: "10px 16px", color: "var(--rezvix-text-main)" }}>
+                    {o.taxNumber || "-"}
+                  </td>
+                  <td style={{ padding: "10px 16px", color: "var(--rezvix-text-main)" }}>
+                    {restaurantsCount}
+                  </td>
+                  <td style={{ padding: "10px 16px", color: "var(--rezvix-text-main)" }}>
+                    {o.createdAt
+                      ? new Date(o.createdAt).toLocaleDateString("tr-TR")
+                      : "-"}
                   </td>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              );
+            })}
+            {(!list || list.length === 0) && (
+              <tr>
+                <td
+                  style={{
+                    padding: "14px 16px",
+                    color: "var(--rezvix-text-soft)",
+                    fontSize: 13,
+                  }}
+                  colSpan={5}
+                >
+                  {t("Kayıt yok")}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
-        {/* Yeni organization formu */}
-        <Card title={t("Yeni Organizasyon Ekle")}>
-          <div className="space-y-4">
-            {/* Owner seçimi */}
-            <div>
-              <h3 className="text-sm font-medium mb-2">
-                {t("Organizasyon Sahibi Seçimi")}
-              </h3>
-              <div className="grid md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">
-                    {t("Kullanıcı Ara (isim / e-posta)")}
-                  </label>
-                  <input
-                    type="text"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={ownerQuery}
-                    onChange={(e) => {
-                      setOwnerQuery(e.target.value);
-                      setOwner(null);
+      {/* Yeni organization formu */}
+      <Card title={t("Yeni Organizasyon Ekle")}>
+        <div className="space-y-4">
+          {/* Owner seçimi */}
+          <div>
+            <h3
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                marginBottom: 8,
+                color: "var(--rezvix-text-main)",
+              }}
+            >
+              {t("Organizasyon Sahibi Seçimi")}
+            </h3>
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 11,
+                    color: "var(--rezvix-text-soft)",
+                    marginBottom: 4,
+                  }}
+                >
+                  {t("Kullanıcı Ara (isim / e-posta)")}
+                </label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={ownerQuery}
+                  onChange={(e) => {
+                    setOwnerQuery(e.target.value);
+                    setOwner(null);
+                  }}
+                  placeholder={t("En az 2 karakter girin")}
+                />
+                {ownerQuery.trim().length >= 2 && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      maxHeight: 192,
+                      overflow: "auto",
+                      border: "1px solid var(--rezvix-border-strong)",
+                      borderRadius: 8,
+                      background: "var(--rezvix-bg-elevated)",
                     }}
-                    placeholder={t("En az 2 karakter girin")}
-                  />
-                  {ownerQuery.trim().length >= 2 && (
-                    <div className="mt-2 max-h-48 overflow-auto border rounded-lg">
-                      {userSearchQ.isLoading && (
-                        <div className="px-3 py-2 text-sm text-gray-500">
-                          {t("Aranıyor…")}
+                  >
+                    {userSearchQ.isLoading && (
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          color: "var(--rezvix-text-soft)",
+                        }}
+                      >
+                        {t("Aranıyor…")}
+                      </div>
+                    )}
+                    {userSearchQ.data?.length === 0 && !userSearchQ.isLoading && (
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          color: "var(--rezvix-text-soft)",
+                        }}
+                      >
+                        {t("Sonuç yok")}
+                      </div>
+                    )}
+                    {(userSearchQ.data ?? []).map((u: UserLite) => (
+                      <button
+                        key={u._id}
+                        type="button"
+                        onClick={() => setOwner(u)}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          cursor: "pointer",
+                          border: "none",
+                          background:
+                            owner?._id === u._id
+                              ? "var(--rezvix-primary-soft)"
+                              : "transparent",
+                          color: "var(--rezvix-text-main)",
+                        }}
+                      >
+                        <div style={{ fontWeight: 600 }}>{u.name || "-"}</div>
+                        <div style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}>
+                          {u.email || ""}
                         </div>
-                      )}
-                      {userSearchQ.data?.length === 0 && !userSearchQ.isLoading && (
-                        <div className="px-3 py-2 text-sm text-gray-500">
-                          {t("Sonuç yok")}
-                        </div>
-                      )}
-                      {(userSearchQ.data ?? []).map((u: UserLite) => (
-                        <button
-                          key={u._id}
-                          type="button"
-                          onClick={() => setOwner(u)}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                            owner?._id === u._id ? "bg-brand-50" : ""
-                          }`}
-                        >
-                          <div className="font-medium">{u.name || "-"}</div>
-                          <div className="text-gray-500">{u.email || ""}</div>
-                        </button>
-                      ))}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 11,
+                    color: "var(--rezvix-text-soft)",
+                    marginBottom: 4,
+                  }}
+                >
+                  {t("Seçilen Sahip")}
+                </label>
+                <div
+                  style={{
+                    border: "1px solid var(--rezvix-border-strong)",
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    minHeight: 42,
+                    background: "var(--rezvix-bg-elevated)",
+                  }}
+                >
+                  {owner ? (
+                    <div>
+                      <div style={{ fontWeight: 600, color: "var(--rezvix-text-main)" }}>
+                        {owner.name || "-"}
+                      </div>
+                      <div style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}>
+                        {owner.email || ""}
+                      </div>
                     </div>
+                  ) : (
+                    <span style={{ color: "var(--rezvix-text-soft)", fontSize: 13 }}>
+                      {t("Henüz seçilmedi")}
+                    </span>
                   )}
                 </div>
-
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">
-                    {t("Seçilen Sahip")}
-                  </label>
-                  <div className="border rounded-lg px-3 py-2 min-h-[42px]">
-                    {owner ? (
-                      <div>
-                        <div className="font-medium">{owner.name || "-"}</div>
-                        <div className="text-gray-500 text-sm">
-                          {owner.email || ""}
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="text-gray-500 text-sm">
-                        {t("Henüz seçilmedi")}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {t("Organizasyon oluştururken en az bir ana sahip kullanıcı seçilmelidir.")}
-                  </p>
-                </div>
+                <p style={{ marginTop: 4, fontSize: 11, color: "var(--rezvix-text-soft)" }}>
+                  {t(
+                    "Organizasyon oluştururken en az bir ana sahip kullanıcı seçilmelidir."
+                  )}
+                </p>
               </div>
             </div>
-
-            {/* Form alanları */}
-            <form
-              onSubmit={handleCreate}
-              className="grid gap-3 md:grid-cols-3"
-            >
-              <div className="md:col-span-1">
-                <label className="block text-xs text-gray-600 mb-1">
-                  {t("İsim *")}
-                </label>
-                <input
-                  type="text"
-                  className="border rounded-lg px-3 py-2 w-full text-sm"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">
-                  {t("Bölge (ülke kodu, örn: TR, UK)")}
-                </label>
-                <input
-                  type="text"
-                  className="border rounded-lg px-3 py-2 w-full text-sm"
-                  value={region}
-                  onChange={(e) => setRegion(e.target.value.toUpperCase())}
-                  maxLength={3}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">
-                  {t("Varsayılan Dil")}
-                </label>
-                <select
-                  className="border rounded-lg px-3 py-2 w-full text-sm bg-white"
-                  value={defaultLanguage}
-                  onChange={(e) => setDefaultLanguage(e.target.value)}
-                >
-                  {LANG_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">
-                  {t("Vergi No")}
-                </label>
-                <input
-                  type="text"
-                  className="border rounded-lg px-3 py-2 w-full text-sm"
-                  value={taxNumber}
-                  onChange={(e) => setTaxNumber(e.target.value)}
-                />
-              </div>
-              <div className="md:col-span-3">
-                <button
-                  type="submit"
-                  disabled={createMut.isPending}
-                  className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm disabled:opacity-60"
-                >
-                  {createMut.isPending
-                    ? t("Oluşturuluyor…")
-                    : t("Organizasyon Oluştur")}
-                </button>
-              </div>
-            </form>
           </div>
-        </Card>
-      </div>
+
+          {/* Form alanları */}
+          <form
+            onSubmit={handleCreate}
+            className="grid gap-3 md:grid-cols-3"
+          >
+            <div className="md:col-span-1">
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 11,
+                  color: "var(--rezvix-text-soft)",
+                  marginBottom: 4,
+                }}
+              >
+                {t("İsim *")}
+              </label>
+              <input
+                type="text"
+                className={inputCls}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 11,
+                  color: "var(--rezvix-text-soft)",
+                  marginBottom: 4,
+                }}
+              >
+                {t("Bölge (ülke kodu, örn: TR, UK)")}
+              </label>
+              <input
+                type="text"
+                className={inputCls}
+                value={region}
+                onChange={(e) => setRegion(e.target.value.toUpperCase())}
+                maxLength={3}
+              />
+            </div>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 11,
+                  color: "var(--rezvix-text-soft)",
+                  marginBottom: 4,
+                }}
+              >
+                {t("Varsayılan Dil")}
+              </label>
+              <select
+                className={inputCls}
+                value={defaultLanguage}
+                onChange={(e) => setDefaultLanguage(e.target.value)}
+              >
+                {LANG_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 11,
+                  color: "var(--rezvix-text-soft)",
+                  marginBottom: 4,
+                }}
+              >
+                {t("Vergi No")}
+              </label>
+              <input
+                type="text"
+                className={inputCls}
+                value={taxNumber}
+                onChange={(e) => setTaxNumber(e.target.value)}
+              />
+            </div>
+            <div className="md:col-span-3">
+              <button
+                type="submit"
+                disabled={createMut.isPending}
+                style={{
+                  marginTop: 8,
+                  padding: "9px 20px",
+                  borderRadius: 8,
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  background: "var(--rezvix-primary)",
+                  color: "#fff",
+                  opacity: createMut.isPending ? 0.6 : 1,
+                  transition: "opacity 0.15s ease",
+                }}
+              >
+                {createMut.isPending
+                  ? t("Oluşturuluyor…")
+                  : t("Organizasyon Oluştur")}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Card>
+    </div>
   );
 }

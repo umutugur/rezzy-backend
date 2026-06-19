@@ -15,6 +15,7 @@ import {
 import { showToast } from "../../ui/Toast";
 import { DEFAULT_LANGUAGE, LANG_OPTIONS } from "../../utils/languages";
 import { t as i18nT, useI18n } from "../../i18n";
+import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
 
 // ---- Tipler
 type RestaurantMember = {
@@ -101,6 +102,52 @@ function prettyRestaurantRole(role?: string) {
       return role;
   }
 }
+
+// ── Shared style helpers ──────────────────────────────────────────────────────
+const inputCls = "border rounded-lg px-3 py-2 w-full text-sm bg-white";
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 12,
+  color: "var(--rezvix-text-soft)",
+  marginBottom: 4,
+};
+
+const primaryBtn: React.CSSProperties = {
+  padding: "8px 18px",
+  borderRadius: 8,
+  border: "none",
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 700,
+  background: "var(--rezvix-primary)",
+  color: "#fff",
+  transition: "opacity 0.15s ease",
+};
+
+const secondaryBtn: React.CSSProperties = {
+  padding: "6px 12px",
+  borderRadius: 6,
+  border: "1px solid var(--rezvix-border-strong)",
+  background: "var(--rezvix-bg-soft)",
+  color: "var(--rezvix-text-muted)",
+  fontSize: 12,
+  cursor: "pointer",
+  fontWeight: 500,
+};
+
+const tableHeaderStyle: React.CSSProperties = {
+  padding: "10px 16px",
+  color: "var(--rezvix-text-soft)",
+  fontWeight: 600,
+  fontSize: 11,
+  letterSpacing: "0.03em",
+  textTransform: "uppercase",
+  background: "var(--rezvix-bg-soft)",
+  textAlign: "left",
+};
+
+const cardSpacing = { marginTop: 20 };
 
 export default function AdminRestaurantDetailPage() {
   const params = useParams();
@@ -475,314 +522,365 @@ export default function AdminRestaurantDetailPage() {
       : 1;
 
   return (
-          <div className="space-y-6 p-6">
-        <h2 className="text-lg font-semibold">
-          {infoQ.data?.name || t("Restoran Detayı")}
-        </h2>
+    <div style={{ padding: 24 }}>
+      <AdminPageHeader
+        title={infoQ.data?.name || t("Restoran Detayı")}
+        subtitle={t("Restoran bilgileri, üyeler ve rezervasyonlar")}
+      />
 
-        {/* Bilgiler */}
-        <Card title={t("Bilgiler")}>
-          {infoQ.isLoading ? (
-            t("Yükleniyor…")
-          ) : (
-            <div className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-gray-500 text-sm block">
-                    {t("Restoran Adı")}
-                  </label>
-                  <input
-                    type="text"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.name}
-                    onChange={(e) => setInfoField("name", e.target.value)}
-                    placeholder={t("Restoran adı")}
-                  />
-                </div>
+      {/* Bilgiler */}
+      <Card title={t("Bilgiler")}>
+        {infoQ.isLoading ? (
+          <span style={{ color: "var(--rezvix-text-soft)", fontSize: 13 }}>
+            {t("Yükleniyor…")}
+          </span>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label style={labelStyle}>{t("Restoran Adı")}</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={infoForm.name}
+                  onChange={(e) => setInfoField("name", e.target.value)}
+                  placeholder={t("Restoran adı")}
+                />
+              </div>
 
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Bölge")}</label>
-                  <input
-                    type="text"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.region}
-                    onChange={(e) => setInfoField("region", e.target.value)}
-                    placeholder={t("TR")}
-                  />
-                  <div className="text-xs text-gray-400 mt-1">
-                    {t("Örn: TR / DE / US")}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Dil")}</label>
-                  <select
-                    className="border rounded-lg px-3 py-2 w-full text-sm bg-white"
-                    value={infoForm.preferredLanguage}
-                    onChange={(e) =>
-                      setInfoField("preferredLanguage", e.target.value)
-                    }
-                  >
-                    {LANG_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Business Type */}
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Business Type")}</label>
-                  <input
-                    type="text"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.businessType}
-                    onChange={(e) => setInfoField("businessType", e.target.value)}
-                    placeholder={t("restaurant / cafe / bar ...")}
-                  />
-                </div>
-
-                {/* Category Set */}
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Category Set")}</label>
-                  <input
-                    type="text"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.categorySet}
-                    onChange={(e) => setInfoField("categorySet", e.target.value)}
-                    placeholder={t("default")}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Şehir")}</label>
-                  <input
-                    type="text"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.city}
-                    onChange={(e) => setInfoField("city", e.target.value)}
-                    placeholder={t("İstanbul")}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Telefon")}</label>
-                  <input
-                    type="text"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.phone}
-                    onChange={(e) => setInfoField("phone", e.target.value)}
-                    placeholder={t("05xx...")}
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="text-gray-500 text-sm block">{t("Adres")}</label>
-                  <input
-                    type="text"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.address}
-                    onChange={(e) => setInfoField("address", e.target.value)}
-                    placeholder={t("Adres")}
-                  />
-                </div>
-
-                {/* Map Address */}
-                <div className="md:col-span-2">
-                  <label className="text-gray-500 text-sm block">{t("Map Address")}</label>
-                  <input
-                    type="text"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.mapAddress}
-                    onChange={(e) => setInfoField("mapAddress", e.target.value)}
-                    placeholder={t("Harita adresi")}
-                  />
-                </div>
-
-                {/* Place ID */}
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Place ID")}</label>
-                  <input
-                    type="text"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.placeId}
-                    onChange={(e) => setInfoField("placeId", e.target.value)}
-                    placeholder={t("Google placeId")}
-                  />
-                </div>
-
-                {/* Google Maps URL */}
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Google Maps URL")}</label>
-                  <input
-                    type="text"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.googleMapsUrl}
-                    onChange={(e) => setInfoField("googleMapsUrl", e.target.value)}
-                    placeholder={t("https://maps.google.com/...")}
-                  />
-                </div>
-
-                {/* Konum Lng */}
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Konum (Lng)")}</label>
-                  <input
-                    type="number"
-                    step="any"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.locationLng}
-                    onChange={(e) => setInfoField("locationLng", e.target.value)}
-                    placeholder={t("29.0")}
-                  />
-                </div>
-
-                {/* Konum Lat */}
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Konum (Lat)")}</label>
-                  <input
-                    type="number"
-                    step="any"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.locationLat}
-                    onChange={(e) => setInfoField("locationLat", e.target.value)}
-                    placeholder={t("41.0")}
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="text-gray-500 text-sm block">{t("E-posta")}</label>
-                  <input
-                    type="email"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.email}
-                    onChange={(e) => setInfoField("email", e.target.value)}
-                    placeholder={t("mail@ornek.com")}
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500 text-sm">{t("Aktif")}</span>
-                  <input
-                    type="checkbox"
-                    checked={!!isActive}
-                    onChange={(e) => {
-                      const next = e.target.checked;
-                      setIsActive(next);
-                      activeMut.mutate(next);
-                    }}
-                    disabled={activeMut.isPending || infoQ.isLoading}
-                  />
-                </div>
-
-                {/* Deposit Required */}
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500 text-sm">{t("Deposit Required")}</span>
-                  <input
-                    type="checkbox"
-                    checked={!!infoForm.depositRequired}
-                    onChange={(e) => setInfoField("depositRequired", e.target.checked)}
-                    disabled={infoQ.isLoading}
-                  />
-                </div>
-
-                {/* Deposit Amount */}
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Deposit Amount")}</label>
-                  <input
-                    type="number"
-                    step="any"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.depositAmount}
-                    onChange={(e) => setInfoField("depositAmount", e.target.value)}
-                    disabled={!infoForm.depositRequired}
-                    placeholder={t("0")}
-                  />
-                </div>
-
-                {/* Check-in Window Before */}
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Check-in Window Before (min)")}</label>
-                  <input
-                    type="number"
-                    step="1"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.checkinWindowBeforeMinutes}
-                    onChange={(e) => setInfoField("checkinWindowBeforeMinutes", e.target.value)}
-                    placeholder={t("15")}
-                  />
-                </div>
-
-                {/* Check-in Window After */}
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Check-in Window After (min)")}</label>
-                  <input
-                    type="number"
-                    step="1"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.checkinWindowAfterMinutes}
-                    onChange={(e) => setInfoField("checkinWindowAfterMinutes", e.target.value)}
-                    placeholder={t("15")}
-                  />
-                </div>
-
-                {/* Underattendance Threshold */}
-                <div>
-                  <label className="text-gray-500 text-sm block">{t("Underattendance Threshold (%)")}</label>
-                  <input
-                    type="number"
-                    step="any"
-                    className="border rounded-lg px-3 py-2 w-full text-sm"
-                    value={infoForm.underattendanceThresholdPercent}
-                    onChange={(e) => setInfoField("underattendanceThresholdPercent", e.target.value)}
-                    placeholder={t("50")}
-                  />
+              <div>
+                <label style={labelStyle}>{t("Bölge")}</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={infoForm.region}
+                  onChange={(e) => setInfoField("region", e.target.value)}
+                  placeholder={t("TR")}
+                />
+                <div style={{ fontSize: 11, color: "var(--rezvix-text-soft)", marginTop: 4 }}>
+                  {t("Örn: TR / DE / US")}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => saveInfoMut.mutate()}
-                  disabled={saveInfoMut.isPending || infoQ.isLoading}
-                  className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs disabled:opacity-60"
+              <div>
+                <label style={labelStyle}>{t("Dil")}</label>
+                <select
+                  className={inputCls}
+                  value={infoForm.preferredLanguage}
+                  onChange={(e) =>
+                    setInfoField("preferredLanguage", e.target.value)
+                  }
                 >
-                  {saveInfoMut.isPending ? t("Kaydediliyor…") : t("Bilgileri Kaydet")}
-                </button>
-                <div className="text-xs text-gray-400">
-                  {t("Not: Boş bırakırsan alan temizlenir (name/region hariç). Konum güncellemek için lng+lat birlikte gir.")}
-                </div>
+                  {LANG_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Business Type */}
+              <div>
+                <label style={labelStyle}>{t("Business Type")}</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={infoForm.businessType}
+                  onChange={(e) => setInfoField("businessType", e.target.value)}
+                  placeholder={t("restaurant / cafe / bar ...")}
+                />
+              </div>
+
+              {/* Category Set */}
+              <div>
+                <label style={labelStyle}>{t("Category Set")}</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={infoForm.categorySet}
+                  onChange={(e) => setInfoField("categorySet", e.target.value)}
+                  placeholder={t("default")}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>{t("Şehir")}</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={infoForm.city}
+                  onChange={(e) => setInfoField("city", e.target.value)}
+                  placeholder={t("İstanbul")}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>{t("Telefon")}</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={infoForm.phone}
+                  onChange={(e) => setInfoField("phone", e.target.value)}
+                  placeholder={t("05xx...")}
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label style={labelStyle}>{t("Adres")}</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={infoForm.address}
+                  onChange={(e) => setInfoField("address", e.target.value)}
+                  placeholder={t("Adres")}
+                />
+              </div>
+
+              {/* Map Address */}
+              <div className="md:col-span-2">
+                <label style={labelStyle}>{t("Map Address")}</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={infoForm.mapAddress}
+                  onChange={(e) => setInfoField("mapAddress", e.target.value)}
+                  placeholder={t("Harita adresi")}
+                />
+              </div>
+
+              {/* Place ID */}
+              <div>
+                <label style={labelStyle}>{t("Place ID")}</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={infoForm.placeId}
+                  onChange={(e) => setInfoField("placeId", e.target.value)}
+                  placeholder={t("Google placeId")}
+                />
+              </div>
+
+              {/* Google Maps URL */}
+              <div>
+                <label style={labelStyle}>{t("Google Maps URL")}</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={infoForm.googleMapsUrl}
+                  onChange={(e) => setInfoField("googleMapsUrl", e.target.value)}
+                  placeholder={t("https://maps.google.com/...")}
+                />
+              </div>
+
+              {/* Konum Lng */}
+              <div>
+                <label style={labelStyle}>{t("Konum (Lng)")}</label>
+                <input
+                  type="number"
+                  step="any"
+                  className={inputCls}
+                  value={infoForm.locationLng}
+                  onChange={(e) => setInfoField("locationLng", e.target.value)}
+                  placeholder={t("29.0")}
+                />
+              </div>
+
+              {/* Konum Lat */}
+              <div>
+                <label style={labelStyle}>{t("Konum (Lat)")}</label>
+                <input
+                  type="number"
+                  step="any"
+                  className={inputCls}
+                  value={infoForm.locationLat}
+                  onChange={(e) => setInfoField("locationLat", e.target.value)}
+                  placeholder={t("41.0")}
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label style={labelStyle}>{t("E-posta")}</label>
+                <input
+                  type="email"
+                  className={inputCls}
+                  value={infoForm.email}
+                  onChange={(e) => setInfoField("email", e.target.value)}
+                  placeholder={t("mail@ornek.com")}
+                />
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ color: "var(--rezvix-text-soft)", fontSize: 13 }}>
+                  {t("Aktif")}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={!!isActive}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setIsActive(next);
+                    activeMut.mutate(next);
+                  }}
+                  disabled={activeMut.isPending || infoQ.isLoading}
+                />
+              </div>
+
+              {/* Deposit Required */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ color: "var(--rezvix-text-soft)", fontSize: 13 }}>
+                  {t("Deposit Required")}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={!!infoForm.depositRequired}
+                  onChange={(e) => setInfoField("depositRequired", e.target.checked)}
+                  disabled={infoQ.isLoading}
+                />
+              </div>
+
+              {/* Deposit Amount */}
+              <div>
+                <label style={labelStyle}>{t("Deposit Amount")}</label>
+                <input
+                  type="number"
+                  step="any"
+                  className={inputCls}
+                  value={infoForm.depositAmount}
+                  onChange={(e) => setInfoField("depositAmount", e.target.value)}
+                  disabled={!infoForm.depositRequired}
+                  placeholder={t("0")}
+                />
+              </div>
+
+              {/* Check-in Window Before */}
+              <div>
+                <label style={labelStyle}>{t("Check-in Window Before (min)")}</label>
+                <input
+                  type="number"
+                  step="1"
+                  className={inputCls}
+                  value={infoForm.checkinWindowBeforeMinutes}
+                  onChange={(e) => setInfoField("checkinWindowBeforeMinutes", e.target.value)}
+                  placeholder={t("15")}
+                />
+              </div>
+
+              {/* Check-in Window After */}
+              <div>
+                <label style={labelStyle}>{t("Check-in Window After (min)")}</label>
+                <input
+                  type="number"
+                  step="1"
+                  className={inputCls}
+                  value={infoForm.checkinWindowAfterMinutes}
+                  onChange={(e) => setInfoField("checkinWindowAfterMinutes", e.target.value)}
+                  placeholder={t("15")}
+                />
+              </div>
+
+              {/* Underattendance Threshold */}
+              <div>
+                <label style={labelStyle}>{t("Underattendance Threshold (%)")}</label>
+                <input
+                  type="number"
+                  step="any"
+                  className={inputCls}
+                  value={infoForm.underattendanceThresholdPercent}
+                  onChange={(e) => setInfoField("underattendanceThresholdPercent", e.target.value)}
+                  placeholder={t("50")}
+                />
               </div>
             </div>
-          )}
-        </Card>
 
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button
+                type="button"
+                onClick={() => saveInfoMut.mutate()}
+                disabled={saveInfoMut.isPending || infoQ.isLoading}
+                style={{
+                  ...primaryBtn,
+                  fontSize: 12,
+                  padding: "8px 16px",
+                  opacity:
+                    saveInfoMut.isPending || infoQ.isLoading ? 0.5 : 1,
+                }}
+              >
+                {saveInfoMut.isPending ? t("Kaydediliyor…") : t("Bilgileri Kaydet")}
+              </button>
+              <div style={{ fontSize: 11, color: "var(--rezvix-text-soft)" }}>
+                {t(
+                  "Not: Boş bırakırsan alan temizlenir (name/region hariç). Konum güncellemek için lng+lat birlikte gir."
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <div style={cardSpacing}>
         {/* Restoran Üyeleri */}
         <Card title={t("Restoran Üyeleri")}>
           {/* Liste */}
           {members && members.length > 0 ? (
-            <div className="overflow-auto mb-4">
-              <table className="min-w-full text-sm">
+            <div style={{ overflow: "auto", marginBottom: 16 }}>
+              <table
+                style={{ minWidth: "100%", borderCollapse: "collapse", fontSize: 13 }}
+              >
                 <thead>
-                  <tr className="text-left text-gray-500">
-                    <th className="py-2 px-4">{t("Ad")}</th>
-                    <th className="py-2 px-4">{t("E-posta")}</th>
-                    <th className="py-2 px-4">{t("Rol")}</th>
-                    <th className="py-2 px-4"></th>
+                  <tr>
+                    {[t("Ad"), t("E-posta"), t("Rol"), ""].map((h, i) => (
+                      <th key={i} style={tableHeaderStyle}>
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {members.map((m) => (
-                    <tr key={m.userId} className="border-t">
-                      <td className="py-2 px-4">{m.name || t("İsimsiz")}</td>
-                      <td className="py-2 px-4">{m.email || "-"}</td>
-                      <td className="py-2 px-4">{prettyRestaurantRole(m.role)}</td>
-                      <td className="py-2 px-4 text-right">
+                    <tr
+                      key={m.userId}
+                      style={{
+                        borderTop: "1px solid var(--rezvix-border-subtle)",
+                      }}
+                    >
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          color: "var(--rezvix-text-main)",
+                        }}
+                      >
+                        {m.name || t("İsimsiz")}
+                      </td>
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          color: "var(--rezvix-text-main)",
+                        }}
+                      >
+                        {m.email || "-"}
+                      </td>
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          color: "var(--rezvix-text-main)",
+                        }}
+                      >
+                        {prettyRestaurantRole(m.role)}
+                      </td>
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          textAlign: "right",
+                        }}
+                      >
                         <button
                           type="button"
                           onClick={() => handleRemoveMember(m.userId)}
                           disabled={removeMemberMut.isPending}
-                          className="px-2 py-1 text-xs rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-60"
+                          style={{
+                            ...secondaryBtn,
+                            opacity: removeMemberMut.isPending ? 0.5 : 1,
+                          }}
                         >
                           {t("Kaldır")}
                         </button>
@@ -793,7 +891,13 @@ export default function AdminRestaurantDetailPage() {
               </table>
             </div>
           ) : (
-            <div className="text-sm text-gray-500 mb-4">
+            <div
+              style={{
+                fontSize: 13,
+                color: "var(--rezvix-text-soft)",
+                marginBottom: 16,
+              }}
+            >
               {t("Henüz bu restorana bağlı üye yok.")}
             </div>
           )}
@@ -801,13 +905,13 @@ export default function AdminRestaurantDetailPage() {
           {/* Üye ekleme formu */}
           <div className="grid md:grid-cols-3 gap-3 items-start">
             <div className="md:col-span-2 space-y-2">
-              <label className="block text-xs text-gray-600">
+              <label style={labelStyle}>
                 {t("Kullanıcı Ara (isim / e-posta)")}
               </label>
-              <div className="flex gap-2">
+              <div style={{ display: "flex", gap: 8 }}>
                 <input
                   type="text"
-                  className="border rounded-lg px-3 py-2 w-full text-sm"
+                  className={inputCls}
                   value={memberQuery}
                   onChange={(e) => {
                     setMemberQuery(e.target.value);
@@ -819,23 +923,48 @@ export default function AdminRestaurantDetailPage() {
                   type="button"
                   onClick={handleSearchMember}
                   disabled={memberSearchLoading}
-                  className="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs disabled:opacity-60"
+                  style={{
+                    ...secondaryBtn,
+                    whiteSpace: "nowrap",
+                    opacity: memberSearchLoading ? 0.5 : 1,
+                  }}
                 >
                   {memberSearchLoading ? t("Aranıyor…") : t("Ara")}
                 </button>
               </div>
 
               {memberQuery.trim().length >= 2 && (
-                <div className="mt-2 max-h-48 overflow-auto border rounded-lg bg-gray-50">
+                <div
+                  style={{
+                    marginTop: 8,
+                    maxHeight: 192,
+                    overflow: "auto",
+                    border: "1px solid var(--rezvix-border-strong)",
+                    borderRadius: 8,
+                    background: "var(--rezvix-bg-soft)",
+                  }}
+                >
                   {memberSearchLoading && (
-                    <div className="px-3 py-2 text-sm text-gray-500">
+                    <div
+                      style={{
+                        padding: "8px 12px",
+                        fontSize: 13,
+                        color: "var(--rezvix-text-soft)",
+                      }}
+                    >
                       {t("Aranıyor…")}
                     </div>
                   )}
                   {!memberSearchLoading &&
                     memberResults.length === 0 &&
                     memberQuery.trim() && (
-                      <div className="px-3 py-2 text-sm text-gray-500">
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          color: "var(--rezvix-text-soft)",
+                        }}
+                      >
                         {t("Sonuç yok")}
                       </div>
                     )}
@@ -844,23 +973,39 @@ export default function AdminRestaurantDetailPage() {
                       key={u._id}
                       type="button"
                       onClick={() => selectMember(u)}
-                      className={`w-full flex justify-between items-center px-3 py-2 text-sm hover:bg-white ${
-                        selectedMember?._id === u._id ? "bg-brand-50" : ""
-                      }`}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "8px 12px",
+                        fontSize: 13,
+                        cursor: "pointer",
+                        border: "none",
+                        background:
+                          selectedMember?._id === u._id
+                            ? "var(--rezvix-primary-soft)"
+                            : "transparent",
+                        color: "var(--rezvix-text-main)",
+                      }}
                     >
                       <span>
                         {u.name || t("İsimsiz")}{" "}
-                        <span className="text-gray-500">
+                        <span style={{ color: "var(--rezvix-text-soft)" }}>
                           ({u.email || "-"})
                         </span>
                       </span>
-                      <span className="text-xs text-gray-400">{u.role || ""}</span>
+                      <span
+                        style={{ fontSize: 11, color: "var(--rezvix-text-soft)" }}
+                      >
+                        {u.role || ""}
+                      </span>
                     </button>
                   ))}
                 </div>
               )}
 
-              <div className="text-xs text-emerald-700 mt-1">
+              <div style={{ fontSize: 11, color: "var(--rezvix-success)", marginTop: 4 }}>
                 {selectedMember
                   ? t("Seçili kullanıcı: {name} ({email})", {
                       name: selectedMember.name || t("İsimsiz"),
@@ -871,9 +1016,9 @@ export default function AdminRestaurantDetailPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs text-gray-600 mb-1">{t("Rol")}</label>
+              <label style={{ ...labelStyle, marginBottom: 4 }}>{t("Rol")}</label>
               <select
-                className="border rounded-lg px-3 py-2 w-full text-sm"
+                className={inputCls}
                 value={memberRole}
                 onChange={(e) => setMemberRole(e.target.value)}
               >
@@ -888,47 +1033,72 @@ export default function AdminRestaurantDetailPage() {
                 type="button"
                 onClick={handleAddMember}
                 disabled={!selectedMember || !memberRole || addMemberMut.isPending}
-                className="mt-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs w-full disabled:opacity-60"
+                style={{
+                  ...primaryBtn,
+                  marginTop: 8,
+                  width: "100%",
+                  fontSize: 12,
+                  padding: "8px 14px",
+                  opacity:
+                    !selectedMember || !memberRole || addMemberMut.isPending
+                      ? 0.5
+                      : 1,
+                }}
               >
                 {addMemberMut.isPending ? t("Ekleniyor…") : t("Üye Ekle")}
               </button>
             </div>
           </div>
         </Card>
+      </div>
 
+      <div style={cardSpacing}>
         {/* Komisyon */}
         <Card title={t("Komisyon")}>
-          <div className="flex items-end gap-3">
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">{t("% Oran")}</label>
+              <label style={labelStyle}>{t("% Oran")}</label>
               <input
                 type="number"
                 min={0}
                 step={0.1}
-                className="border rounded-lg px-3 py-2 w-40"
+                className="border rounded-lg px-3 py-2 w-40 bg-white text-sm"
                 value={commission}
                 onChange={(e) => setCommission(e.target.value)}
               />
             </div>
             <button
               onClick={() => saveMut.mutate()}
-              className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 disabled:opacity-60"
+              style={{
+                ...primaryBtn,
+                opacity: saveMut.isPending ? 0.5 : 1,
+              }}
               disabled={saveMut.isPending}
             >
               {t("Kaydet")}
             </button>
           </div>
         </Card>
+      </div>
 
+      <div style={cardSpacing}>
         {/* Rezervasyonlar */}
         <Card title={t("Rezervasyonlar")}>
-          <div className="flex flex-wrap gap-3 items-end mb-3">
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              alignItems: "flex-end",
+              marginBottom: 12,
+            }}
+          >
             <div>
-              <label className="block text-sm text-gray-600 mb-1">{t("Durum")}</label>
+              <label style={labelStyle}>{t("Durum")}</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="border rounded-lg px-3 py-2"
+                className="border rounded-lg px-3 py-2 bg-white text-sm"
               >
                 <option value="">{t("Hepsi")}</option>
                 <option value="pending">{t("Bekleyen")}</option>
@@ -939,80 +1109,129 @@ export default function AdminRestaurantDetailPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">
-                {t("Başlangıç")}
-              </label>
+              <label style={labelStyle}>{t("Başlangıç")}</label>
               <input
                 type="date"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
-                className="border rounded-lg px-3 py-2"
+                className="border rounded-lg px-3 py-2 bg-white text-sm"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">{t("Bitiş")}</label>
+              <label style={labelStyle}>{t("Bitiş")}</label>
               <input
                 type="date"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                className="border rounded-lg px-3 py-2"
+                className="border rounded-lg px-3 py-2 bg-white text-sm"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">{t("Sayfa")}</label>
+              <label style={labelStyle}>{t("Sayfa")}</label>
               <input
                 type="number"
                 min={1}
                 value={page}
                 onChange={(e) => setPage(Number(e.target.value) || 1)}
-                className="w-24 border rounded-lg px-3 py-2"
+                className="w-24 border rounded-lg px-3 py-2 bg-white text-sm"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">{t("Limit")}</label>
+              <label style={labelStyle}>{t("Limit")}</label>
               <input
                 type="number"
                 min={1}
                 value={limit}
                 onChange={(e) => setLimit(Number(e.target.value) || 20)}
-                className="w-24 border rounded-lg px-3 py-2"
+                className="w-24 border rounded-lg px-3 py-2 bg-white text-sm"
               />
             </div>
           </div>
 
-          <div className="overflow-auto">
-            <table className="min-w-full text-sm">
+          <div style={{ overflow: "auto" }}>
+            <table
+              style={{ minWidth: "100%", borderCollapse: "collapse", fontSize: 13 }}
+            >
               <thead>
-                <tr className="text-left text-gray-500">
-                  <th className="py-2 px-4">{t("Tarih")}</th>
-                  <th className="py-2 px-4">{t("Kullanıcı")}</th>
-                  <th className="py-2 px-4">{t("Durum")}</th>
-                  <th className="py-2 px-4">{t("Kişi")}</th>
-                  <th className="py-2 px-4">{t("Tutar (₺)")}</th>
+                <tr>
+                  {[
+                    t("Tarih"),
+                    t("Kullanıcı"),
+                    t("Durum"),
+                    t("Kişi"),
+                    t("Tutar (₺)"),
+                  ].map((h) => (
+                    <th key={h} style={tableHeaderStyle}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {(rsvQ.data?.items ?? []).map((r) => (
-                  <tr key={r._id} className="border-t">
-                    <td className="py-2 px-4">
-                      {r.dateTimeUTC ? new Date(r.dateTimeUTC).toLocaleString() : "-"}
+                  <tr
+                    key={r._id}
+                    style={{ borderTop: "1px solid var(--rezvix-border-subtle)" }}
+                  >
+                    <td
+                      style={{
+                        padding: "10px 16px",
+                        color: "var(--rezvix-text-main)",
+                      }}
+                    >
+                      {r.dateTimeUTC
+                        ? new Date(r.dateTimeUTC).toLocaleString()
+                        : "-"}
                     </td>
-                    <td className="py-2 px-4">
+                    <td
+                      style={{
+                        padding: "10px 16px",
+                        color: "var(--rezvix-text-main)",
+                      }}
+                    >
                       {r.user?.name || "-"}{" "}
-                      <span className="text-gray-500">
+                      <span style={{ color: "var(--rezvix-text-soft)" }}>
                         ({r.user?.email || "-"})
                       </span>
                     </td>
-                    <td className="py-2 px-4">{r.status}</td>
-                    <td className="py-2 px-4">{r.partySize ?? "-"}</td>
-                    <td className="py-2 px-4">
-                      {r.totalPrice != null ? r.totalPrice.toLocaleString("tr-TR") : "-"}
+                    <td
+                      style={{
+                        padding: "10px 16px",
+                        color: "var(--rezvix-text-main)",
+                      }}
+                    >
+                      {r.status}
+                    </td>
+                    <td
+                      style={{
+                        padding: "10px 16px",
+                        color: "var(--rezvix-text-main)",
+                      }}
+                    >
+                      {r.partySize ?? "-"}
+                    </td>
+                    <td
+                      style={{
+                        padding: "10px 16px",
+                        color: "var(--rezvix-text-main)",
+                      }}
+                    >
+                      {r.totalPrice != null
+                        ? r.totalPrice.toLocaleString("tr-TR")
+                        : "-"}
                     </td>
                   </tr>
                 ))}
                 {(!rsvQ.data?.items || rsvQ.data.items.length === 0) && (
                   <tr>
-                    <td className="py-3 px-4 text-gray-500" colSpan={5}>
+                    <td
+                      style={{
+                        padding: "14px 16px",
+                        color: "var(--rezvix-text-soft)",
+                        fontSize: 13,
+                      }}
+                      colSpan={5}
+                    >
                       {t("Kayıt yok")}
                     </td>
                   </tr>
@@ -1022,19 +1241,36 @@ export default function AdminRestaurantDetailPage() {
           </div>
 
           {rsvQ.data && (
-            <div className="flex items-center gap-2 mt-3">
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginTop: 12,
+              }}
+            >
               <button
-                className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                style={{
+                  ...secondaryBtn,
+                  opacity: page <= 1 ? 0.4 : 1,
+                  cursor: page <= 1 ? "not-allowed" : "pointer",
+                }}
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
                 {t("Önceki")}
               </button>
-              <div className="text-sm text-gray-600">
+              <div
+                style={{ fontSize: 13, color: "var(--rezvix-text-muted)" }}
+              >
                 {t("Sayfa {page} / {totalPages}", { page, totalPages })}
               </div>
               <button
-                className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                style={{
+                  ...secondaryBtn,
+                  opacity: page >= totalPages ? 0.4 : 1,
+                  cursor: page >= totalPages ? "not-allowed" : "pointer",
+                }}
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
               >
@@ -1044,5 +1280,6 @@ export default function AdminRestaurantDetailPage() {
           )}
         </Card>
       </div>
+    </div>
   );
 }
