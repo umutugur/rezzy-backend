@@ -16,6 +16,8 @@ import {
   uploadPanelImage,
   productImageSuggestions,
   getReports,
+  listMyOrgProducts,
+  upsertBranchOverride,
 } from "../controllers/marketPanel.controller.js";
 
 const r = Router();
@@ -105,5 +107,9 @@ r.get("/market/panel/product-image-suggestions", auth(), allow("market_owner", "
 
 // Satış / sipariş raporları
 r.get("/market/panel/reports", auth(), allow("market_owner", "admin"), getReports);
+
+// Zincir kataloğu — şube override
+r.get("/market/panel/org-products", auth(), allow("market_owner", "admin"), listMyOrgProducts);
+r.put("/market/panel/org-products/:orgProductId/override", auth(), allow("market_owner", "admin"), upsertBranchOverride);
 
 export default r;

@@ -7,6 +7,9 @@ import CoreCategory from "../models/CoreCategory.js";
 import { notifyUser } from "../services/notification.service.js";
 import { effectivePrice, recordPriceHistory } from "../utils/marketPricing.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
+import { resolveStoreCatalog } from "../services/marketCatalogResolve.service.js";
+import MarketBranchOverride from "../models/MarketBranchOverride.js";
+import MarketOrgProduct from "../models/MarketOrgProduct.js";
 
 const toObjectId = (id) => {
   try {
@@ -590,6 +593,65 @@ export const productImageSuggestions = async (req, res, next) => {
       }
     }
     res.json({ items });
+  } catch (e) { next(e); }
+};
+
+// ---------------------------------------------------------------------------
+// ZİNCİR KATALOĞU — ŞUBE OVERRIDE
+// ---------------------------------------------------------------------------
+
+// GET /market/panel/org-products?q=
+export const listMyOrgProducts = async (req, res, next) => {
+  try {
+    const store = await findOwnerStore(req.user?.id);
+    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    if (!store.organization) return res.json({ items: [], organization: null });
+    const resolved = await resolveStoreCatalog(store);
+    const overrides = await MarketBranchOverride.find({ store: store._id }).lean();
+    const ovMap = new Map(overrides.map((o) => [String(o.orgProductId), o]));
+    let items = resolved.filter((it) => it.source === "org").map((it) => {
+      const ov = ovMap.get(String(it.orgProductId));
+      return {
+        ...it,
+        override: ov
+          ? { price: ov.price ?? null, discountPrice: ov.discountPrice ?? null, isAvailable: ov.isAvailable ?? null, hidden: !!ov.hidden }
+          : null,
+      };
+    });
+    const q = String(req.query.q || "").trim().toLowerCase();
+    if (q) items = items.filter((it) => it.title.toLowerCase().includes(q) || String(it.barcode || "").includes(q));
+    res.json({ items, organization: store.organization });
+  } catch (e) { next(e); }
+};
+
+// PUT /market/panel/org-products/:orgProductId/override  body {price?,discountPrice?,isAvailable?,hidden?} | {} clears
+export const upsertBranchOverride = async (req, res, next) => {
+  try {
+    const store = await findOwnerStore(req.user?.id);
+    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    if (!store.organization) return next({ status: 400, message: "Bu market bir zincire bağlı değil" });
+    const orgProductId = req.params.orgProductId;
+    const op = await MarketOrgProduct.findOne({ _id: orgProductId, organizationId: store.organization }).lean();
+    if (!op) return next({ status: 404, message: "Zincir ürünü bulunamadı" });
+
+    const { price, discountPrice, isAvailable, hidden } = req.body || {};
+    const isEmpty = price == null && discountPrice == null && isAvailable == null && hidden == null;
+    if (isEmpty) {
+      await MarketBranchOverride.deleteOne({ store: store._id, orgProductId });
+      return res.json({ ok: true, cleared: true });
+    }
+    const set = {};
+    const unset = {};
+    if (price != null) set.price = Number(price); else unset.price = "";
+    if (discountPrice != null) set.discountPrice = Number(discountPrice); else unset.discountPrice = "";
+    if (isAvailable != null) set.isAvailable = !!isAvailable; else unset.isAvailable = "";
+    set.hidden = !!hidden;
+    const update = { $set: set };
+    if (Object.keys(unset).length) update.$unset = unset;
+    const doc = await MarketBranchOverride.findOneAndUpdate(
+      { store: store._id, orgProductId }, update, { new: true, upsert: true }
+    ).lean();
+    res.json({ ok: true, override: doc });
   } catch (e) { next(e); }
 };
 
