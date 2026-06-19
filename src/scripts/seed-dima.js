@@ -76,6 +76,13 @@ async function run() {
     console.log(`  ℹ️  Sahip zaten var: ${OWNER.email}`);
   }
 
+  // ─ 2b. org_owner üyeliği ──────────────────────────────────────────────────
+  await User.updateOne(
+    { _id: owner._id, "organizations.organization": { $ne: org._id } },
+    { $push: { organizations: { organization: org._id, role: "org_owner" } } }
+  );
+  console.log("  ✅ Sahibe org_owner üyeliği verildi (idempotent)");
+
   // ─ 3. Şubeler ─────────────────────────────────────────────────────────────
   console.log("\n🏪 Şubeler:");
   let created = 0;

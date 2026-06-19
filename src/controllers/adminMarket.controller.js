@@ -164,6 +164,13 @@ export const createStore = async (req, res, next) => {
       orgId = org._id;
     }
     if (organization && !orgId) return next({ status: 400, message: "Geçersiz organizasyon id" });
+    // grant org_owner membership idempotently
+    if (orgId && ownerId) {
+      await User.updateOne(
+        { _id: ownerId, "organizations.organization": { $ne: orgId } },
+        { $push: { organizations: { organization: orgId, role: "org_owner" } } }
+      );
+    }
     // 3) create store
     const allowed = {};
     for (const k of STORE_UPDATE_FIELDS) if (store[k] !== undefined) allowed[k] = store[k];
