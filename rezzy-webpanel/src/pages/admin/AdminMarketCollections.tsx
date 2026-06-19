@@ -9,16 +9,10 @@ import {
   adminDeleteMarketCollection,
   adminListMarketCollections,
   adminUpdateMarketCollection,
-  marketSearchProducts,
 } from "../../api/adminTaxiMarket";
+import { EntityPicker } from "../../desktop/components/admin/EntityPicker";
+import { pickMarketProducts } from "../../api/adminPickers";
 import { useI18n } from "../../i18n";
-
-function parseProductIds(text: string): string[] {
-  return text
-    .split(/[\n,]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
 
 export default function AdminMarketCollectionsPage() {
   const qc = useQueryClient();
@@ -34,18 +28,10 @@ export default function AdminMarketCollectionsPage() {
   const [title, setTitle] = React.useState("");
   const [region, setRegion] = React.useState("");
   const [kind, setKind] = React.useState<MarketCollectionKind>("manual");
-  const [productIdsText, setProductIdsText] = React.useState("");
+  const [productIds, setProductIds] = React.useState<string[]>([]);
   const [imageUrl, setImageUrl] = React.useState("");
   const [order, setOrder] = React.useState<number>(0);
   const [isActiveCreate, setIsActiveCreate] = React.useState(true);
-
-  // Product search (for picker)
-  const [searchQ, setSearchQ] = React.useState("");
-  const { data: searchResp, isFetching: searching } = useQuery({
-    queryKey: ["admin-market-collections-search", searchQ],
-    queryFn: () => marketSearchProducts({ q: searchQ, limit: 10 }),
-    enabled: searchQ.trim().length >= 2,
-  });
 
   const createMut = useMutation({
     mutationFn: async () => {
@@ -54,7 +40,7 @@ export default function AdminMarketCollectionsPage() {
         title: title.trim(),
         region: region ? region.toUpperCase() : null,
         kind,
-        productIds: kind === "manual" ? parseProductIds(productIdsText) : [],
+        productIds: kind === "manual" ? productIds : [],
         imageUrl: imageUrl.trim() || null,
         order,
         isActive: isActiveCreate,
@@ -65,7 +51,7 @@ export default function AdminMarketCollectionsPage() {
       setTitle("");
       setRegion("");
       setKind("manual");
-      setProductIdsText("");
+      setProductIds([]);
       setImageUrl("");
       setOrder(0);
       setIsActiveCreate(true);
@@ -111,13 +97,16 @@ export default function AdminMarketCollectionsPage() {
             </div>
 
             <div>
-              <div className="text-xs text-gray-500 mb-1">{t("Region (opsiyonel)")}</div>
-              <input
+              <div className="text-xs text-gray-500 mb-1">{t("Bölge (opsiyonel)")}</div>
+              <select
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 value={region}
                 onChange={(e) => setRegion(e.target.value)}
-                placeholder={t("TR / CY / boş=hepsi")}
-              />
+              >
+                <option value="">{t("Hepsi")}</option>
+                <option value="TR">TR</option>
+                <option value="CY">CY</option>
+              </select>
             </div>
 
             <div>
@@ -127,8 +116,8 @@ export default function AdminMarketCollectionsPage() {
                 value={kind}
                 onChange={(e) => setKind(e.target.value as MarketCollectionKind)}
               >
-                <option value="manual">{t("manual (elle seçilen ürünler)")}</option>
-                <option value="discounted">{t("discounted (indirimdekiler)")}</option>
+                <option value="manual">{t("Elle seçilen ürünler")}</option>
+                <option value="discounted">{t("İndirimdekiler")}</option>
               </select>
             </div>
 
@@ -165,51 +154,14 @@ export default function AdminMarketCollectionsPage() {
 
             {kind === "manual" ? (
               <div className="md:col-span-3">
-                <div className="text-xs text-gray-500 mb-1">
-                  {t("Ürün ID'leri")}{" "}
-                  <span className="text-gray-400">{t("(virgül veya yeni satırla ayır)")}</span>
-                </div>
-                <textarea
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono"
-                  rows={3}
-                  value={productIdsText}
-                  onChange={(e) => setProductIdsText(e.target.value)}
-                  placeholder={t("ObjectId, ObjectId, ...")}
+                <div className="text-xs text-gray-500 mb-1">{t("Ürünler")}</div>
+                <EntityPicker
+                  multiple
+                  fetcher={pickMarketProducts}
+                  value={productIds}
+                  onChange={(ids) => setProductIds(ids as string[])}
+                  placeholder={t("Ürün ara ve ekle...")}
                 />
-
-                <div className="mt-3 rounded-xl border border-gray-200 p-3 bg-gray-50">
-                  <div className="text-xs text-gray-500 mb-2">{t("Ürün ara (eklemek için ID'yi kopyala)")}</div>
-                  <input
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    value={searchQ}
-                    onChange={(e) => setSearchQ(e.target.value)}
-                    placeholder={t("Ürün adı ara...")}
-                  />
-                  {searching && <div className="text-xs text-gray-400 mt-2">{t("Aranıyor…")}</div>}
-                  {!searching && searchResp?.items?.length ? (
-                    <div className="mt-2 space-y-1 max-h-48 overflow-auto">
-                      {searchResp.items.map((p: any) => (
-                        <div
-                          key={p._id}
-                          className="flex items-center justify-between text-sm bg-white border border-gray-200 rounded-lg px-2 py-1"
-                        >
-                          <div className="truncate">{p.title}</div>
-                          <button
-                            type="button"
-                            className="text-xs px-2 py-0.5 rounded-md border border-gray-300 hover:bg-gray-50 shrink-0 ml-2"
-                            onClick={() => {
-                              const ids = new Set(parseProductIds(productIdsText));
-                              ids.add(String(p._id));
-                              setProductIdsText(Array.from(ids).join("\n"));
-                            }}
-                          >
-                            {t("Ekle")}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
               </div>
             ) : null}
 
