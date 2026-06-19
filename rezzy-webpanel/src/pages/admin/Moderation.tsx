@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card } from "../../components/Card";
+import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
 import {
   adminListReviews,
   adminHideReview,
@@ -13,36 +13,119 @@ import {
 import { showToast } from "../../ui/Toast";
 import { useI18n } from "../../i18n";
 
+// ── Style helpers ──────────────────────────────────────────────────────────────
+
+const cardStyle: React.CSSProperties = {
+  background: "var(--rezvix-bg-elevated)",
+  border: "1px solid var(--rezvix-border-subtle)",
+  borderRadius: 16,
+  overflow: "hidden",
+  boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+};
+
+const cardHeaderStyle: React.CSSProperties = {
+  padding: "12px 16px",
+  fontSize: 12,
+  fontWeight: 600,
+  color: "var(--rezvix-text-muted)",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  borderBottom: "1px solid var(--rezvix-border-subtle)",
+  background: "var(--rezvix-bg-soft)",
+};
+
+const thStyle: React.CSSProperties = {
+  padding: "10px 14px",
+  textAlign: "left",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "var(--rezvix-text-soft)",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  background: "var(--rezvix-bg-soft)",
+  borderBottom: "1px solid var(--rezvix-border-subtle)",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "10px 14px",
+  fontSize: 13,
+  color: "var(--rezvix-text-main)",
+  borderBottom: "1px solid var(--rezvix-border-subtle)",
+  verticalAlign: "middle",
+};
+
+const emptyTdStyle: React.CSSProperties = {
+  padding: "16px 14px",
+  fontSize: 13,
+  color: "var(--rezvix-text-soft)",
+};
+
+const ghostActionBtn: React.CSSProperties = {
+  padding: "5px 10px",
+  borderRadius: 6,
+  border: "1px solid var(--rezvix-border-strong)",
+  background: "var(--rezvix-bg-elevated)",
+  color: "var(--rezvix-text-muted)",
+  fontSize: 12,
+  cursor: "pointer",
+  transition: "background 0.15s",
+};
+
+const dangerActionBtn: React.CSSProperties = {
+  padding: "5px 10px",
+  borderRadius: 6,
+  border: "none",
+  background: "var(--rezvix-danger)",
+  color: "#fff",
+  fontSize: 12,
+  cursor: "pointer",
+  transition: "opacity 0.15s",
+};
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export default function AdminModerationPage() {
   const [tab, setTab] = React.useState<"reviews" | "complaints">("reviews");
   const { t } = useI18n();
+
   return (
-          <div className="space-y-6 p-6">
-        <h2 className="text-lg font-semibold">{t("Moderasyon")}</h2>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 24 }}>
+      {/* Header */}
+      <AdminPageHeader title={t("Moderasyon")} />
 
-        <div className="flex gap-2">
-          <button
-            className={`px-3 py-1.5 rounded-lg ${
-              tab === "reviews" ? "bg-brand-600 text-white" : "bg-gray-100 hover:bg-gray-200"
-            }`}
-            onClick={() => setTab("reviews")}
-          >
-            {t("Yorumlar")}
-          </button>
-          <button
-            className={`px-3 py-1.5 rounded-lg ${
-              tab === "complaints" ? "bg-brand-600 text-white" : "bg-gray-100 hover:bg-gray-200"
-            }`}
-            onClick={() => setTab("complaints")}
-          >
-            {t("Şikayetler")}
-          </button>
-        </div>
-
-        {tab === "reviews" ? <ReviewsTable /> : <ComplaintsTable />}
+      {/* Tab switcher */}
+      <div style={{ display: "flex", gap: 6 }}>
+        {(["reviews", "complaints"] as const).map((key) => {
+          const active = tab === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: "1px solid",
+                borderColor: active ? "var(--rezvix-primary)" : "var(--rezvix-border-strong)",
+                background: active ? "var(--rezvix-primary)" : "var(--rezvix-bg-elevated)",
+                color: active ? "#fff" : "var(--rezvix-text-muted)",
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: "pointer",
+                transition: "background 0.15s, color 0.15s, border-color 0.15s",
+              }}
+            >
+              {key === "reviews" ? t("Yorumlar") : t("Şikayetler")}
+            </button>
+          );
+        })}
       </div>
+
+      {tab === "reviews" ? <ReviewsTable /> : <ComplaintsTable />}
+    </div>
   );
 }
+
+// ── Reviews table ─────────────────────────────────────────────────────────────
 
 function ReviewsTable() {
   const { t } = useI18n();
@@ -77,47 +160,72 @@ function ReviewsTable() {
   const rows = Array.isArray(q.data?.items) ? q.data.items : Array.isArray(q.data) ? q.data : [];
 
   return (
-    <Card title={t("Yorumlar")}>
-      <div className="overflow-auto">
-        <table className="min-w-full text-sm">
+    <div style={cardStyle}>
+      <div style={cardHeaderStyle}>{t("Yorumlar")}</div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ minWidth: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr className="text-left text-gray-500">
-              <th className="py-2 px-4">{t("Tarih")}</th>
-              <th className="py-2 px-4">{t("Restoran")}</th>
-              <th className="py-2 px-4">{t("Kullanıcı")}</th>
-              <th className="py-2 px-4">{t("Puan")}</th>
-              <th className="py-2 px-4">{t("Yorum")}</th>
-              <th className="py-2 px-4">{t("Durum")}</th>
-              <th className="py-2 px-4">{t("Aksiyon")}</th>
+            <tr>
+              <th style={thStyle}>{t("Tarih")}</th>
+              <th style={thStyle}>{t("Restoran")}</th>
+              <th style={thStyle}>{t("Kullanıcı")}</th>
+              <th style={thStyle}>{t("Puan")}</th>
+              <th style={thStyle}>{t("Yorum")}</th>
+              <th style={thStyle}>{t("Durum")}</th>
+              <th style={thStyle}>{t("Aksiyon")}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r: any) => (
-              <tr key={r._id} className="border-t">
-                <td className="py-2 px-4">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "-"}</td>
-                <td className="py-2 px-4">{r.restaurant?.name || "-"}</td>
-                <td className="py-2 px-4">{r.user?.name || "-"} <span className="text-gray-500">({r.user?.email || "-"})</span></td>
-                <td className="py-2 px-4">{r.rating ?? "-"}</td>
-                <td className="py-2 px-4">{r.comment ?? "-"}</td>
-                <td className="py-2 px-4">{r.hidden ? t("Gizli") : t("Görünür")}</td>
-                <td className="py-2 px-4">
-                  <div className="flex gap-2">
-                    <button className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => hideMut.mutate(r._id)} disabled={r.hidden}>{t("Gizle")}</button>
-                    <button className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => unhideMut.mutate(r._id)} disabled={!r.hidden}>{t("Göster")}</button>
-                    <button className="px-2 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700" onClick={() => delMut.mutate(r._id)}>{t("Sil")}</button>
+              <tr key={r._id}>
+                <td style={tdStyle}>{r.createdAt ? new Date(r.createdAt).toLocaleString() : "-"}</td>
+                <td style={tdStyle}>{r.restaurant?.name || "-"}</td>
+                <td style={tdStyle}>
+                  {r.user?.name || "-"}{" "}
+                  <span style={{ color: "var(--rezvix-text-soft)" }}>({r.user?.email || "-"})</span>
+                </td>
+                <td style={tdStyle}>{r.rating ?? "-"}</td>
+                <td style={tdStyle}>{r.comment ?? "-"}</td>
+                <td style={tdStyle}>{r.hidden ? t("Gizli") : t("Görünür")}</td>
+                <td style={tdStyle}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      style={{ ...ghostActionBtn, opacity: r.hidden ? 0.4 : 1, cursor: r.hidden ? "not-allowed" : "pointer" }}
+                      onClick={() => hideMut.mutate(r._id)}
+                      disabled={r.hidden}
+                    >
+                      {t("Gizle")}
+                    </button>
+                    <button
+                      style={{ ...ghostActionBtn, opacity: !r.hidden ? 0.4 : 1, cursor: !r.hidden ? "not-allowed" : "pointer" }}
+                      onClick={() => unhideMut.mutate(r._id)}
+                      disabled={!r.hidden}
+                    >
+                      {t("Göster")}
+                    </button>
+                    <button
+                      style={dangerActionBtn}
+                      onClick={() => delMut.mutate(r._id)}
+                    >
+                      {t("Sil")}
+                    </button>
                   </div>
                 </td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td className="py-3 px-4 text-gray-500" colSpan={7}>{t("Kayıt yok")}</td></tr>
+              <tr>
+                <td style={emptyTdStyle} colSpan={7}>{t("Kayıt yok")}</td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
-    </Card>
+    </div>
   );
 }
+
+// ── Complaints table ──────────────────────────────────────────────────────────
 
 function ComplaintsTable() {
   const { t } = useI18n();
@@ -145,41 +253,67 @@ function ComplaintsTable() {
   const rows = Array.isArray(q.data?.items) ? q.data.items : Array.isArray(q.data) ? q.data : [];
 
   return (
-    <Card title={t("Şikayetler")}>
-      <div className="overflow-auto">
-        <table className="min-w-full text-sm">
+    <div style={cardStyle}>
+      <div style={cardHeaderStyle}>{t("Şikayetler")}</div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ minWidth: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr className="text-left text-gray-500">
-              <th className="py-2 px-4">{t("Tarih")}</th>
-              <th className="py-2 px-4">{t("Restoran")}</th>
-              <th className="py-2 px-4">{t("Kullanıcı")}</th>
-              <th className="py-2 px-4">{t("Konu")}</th>
-              <th className="py-2 px-4">{t("Durum")}</th>
-              <th className="py-2 px-4">{t("Aksiyon")}</th>
+            <tr>
+              <th style={thStyle}>{t("Tarih")}</th>
+              <th style={thStyle}>{t("Restoran")}</th>
+              <th style={thStyle}>{t("Kullanıcı")}</th>
+              <th style={thStyle}>{t("Konu")}</th>
+              <th style={thStyle}>{t("Durum")}</th>
+              <th style={thStyle}>{t("Aksiyon")}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((c: any) => (
-              <tr key={c._id} className="border-t">
-                <td className="py-2 px-4">{c.createdAt ? new Date(c.createdAt).toLocaleString() : "-"}</td>
-                <td className="py-2 px-4">{c.restaurant?.name || "-"}</td>
-                <td className="py-2 px-4">{c.user?.name || "-"} <span className="text-gray-500">({c.user?.email || "-"})</span></td>
-                <td className="py-2 px-4">{c.subject || "-"}</td>
-                <td className="py-2 px-4">{c.status || "-"}</td>
-                <td className="py-2 px-4">
-                  <div className="flex gap-2">
-                    <button className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => resolveMut.mutate(c._id)} disabled={c.status === "resolved"}>{t("Çöz")}</button>
-                    <button className="px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200" onClick={() => dismissMut.mutate(c._id)} disabled={c.status === "dismissed"}>{t("Reddet")}</button>
+              <tr key={c._id}>
+                <td style={tdStyle}>{c.createdAt ? new Date(c.createdAt).toLocaleString() : "-"}</td>
+                <td style={tdStyle}>{c.restaurant?.name || "-"}</td>
+                <td style={tdStyle}>
+                  {c.user?.name || "-"}{" "}
+                  <span style={{ color: "var(--rezvix-text-soft)" }}>({c.user?.email || "-"})</span>
+                </td>
+                <td style={tdStyle}>{c.subject || "-"}</td>
+                <td style={tdStyle}>{c.status || "-"}</td>
+                <td style={tdStyle}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      style={{
+                        ...ghostActionBtn,
+                        opacity: c.status === "resolved" ? 0.4 : 1,
+                        cursor: c.status === "resolved" ? "not-allowed" : "pointer",
+                      }}
+                      onClick={() => resolveMut.mutate(c._id)}
+                      disabled={c.status === "resolved"}
+                    >
+                      {t("Çöz")}
+                    </button>
+                    <button
+                      style={{
+                        ...ghostActionBtn,
+                        opacity: c.status === "dismissed" ? 0.4 : 1,
+                        cursor: c.status === "dismissed" ? "not-allowed" : "pointer",
+                      }}
+                      onClick={() => dismissMut.mutate(c._id)}
+                      disabled={c.status === "dismissed"}
+                    >
+                      {t("Reddet")}
+                    </button>
                   </div>
                 </td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td className="py-3 px-4 text-gray-500" colSpan={6}>{t("Kayıt yok")}</td></tr>
+              <tr>
+                <td style={emptyTdStyle} colSpan={6}>{t("Kayıt yok")}</td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
-    </Card>
+    </div>
   );
 }

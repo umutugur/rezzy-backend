@@ -1,7 +1,7 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
-import { Card } from "../../components/Card";
+import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
 import { showToast } from "../../ui/Toast";
 import { t as i18nT, useI18n } from "../../i18n";
 
@@ -82,6 +82,80 @@ function toCSV(rows: Row[]) {
   return [head.map(esc).join(";"), ...lines].join("\n");
 }
 
+// ── Style helpers ──────────────────────────────────────────────────────────────
+
+const inputBase: React.CSSProperties = {
+  padding: "7px 12px",
+  borderRadius: 8,
+  border: "1px solid var(--rezvix-border-strong)",
+  background: "var(--rezvix-bg-elevated)",
+  color: "var(--rezvix-text-main)",
+  fontSize: 13,
+  outline: "none",
+  height: 36,
+  boxSizing: "border-box",
+};
+
+const primaryBtn: React.CSSProperties = {
+  padding: "8px 16px",
+  borderRadius: 8,
+  border: "none",
+  background: "var(--rezvix-primary)",
+  color: "#fff",
+  fontSize: 13,
+  fontWeight: 500,
+  cursor: "pointer",
+  height: 36,
+  transition: "opacity 0.15s",
+  alignSelf: "flex-end",
+};
+
+const ghostBtn: React.CSSProperties = {
+  padding: "6px 14px",
+  borderRadius: 8,
+  border: "1px solid var(--rezvix-border-strong)",
+  background: "var(--rezvix-bg-elevated)",
+  color: "var(--rezvix-text-muted)",
+  fontSize: 13,
+  cursor: "pointer",
+  transition: "background 0.15s",
+};
+
+const cardStyle: React.CSSProperties = {
+  background: "var(--rezvix-bg-elevated)",
+  border: "1px solid var(--rezvix-border-subtle)",
+  borderRadius: 16,
+  padding: "16px 20px",
+  boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+};
+
+const thStyle: React.CSSProperties = {
+  padding: "10px 14px",
+  textAlign: "left",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "var(--rezvix-text-soft)",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  background: "var(--rezvix-bg-soft)",
+  borderBottom: "1px solid var(--rezvix-border-subtle)",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "10px 14px",
+  fontSize: 13,
+  color: "var(--rezvix-text-main)",
+  borderBottom: "1px solid var(--rezvix-border-subtle)",
+};
+
+const emptyTdStyle: React.CSSProperties = {
+  padding: "16px 14px",
+  fontSize: 13,
+  color: "var(--rezvix-text-soft)",
+};
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export default function AdminReservationsPage() {
   const { t } = useI18n();
   const [status, setStatus] = React.useState("");
@@ -115,7 +189,7 @@ export default function AdminReservationsPage() {
         limit: 10000
       });
       const csv = toCSV(resp.items);
-      const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+      const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -131,93 +205,158 @@ export default function AdminReservationsPage() {
   };
 
   return (
-          <div className="space-y-6 p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{t("Tüm Rezervasyonlar")}</h2>
-          <button onClick={handleExport} className="rounded-lg bg-gray-900 hover:bg-black text-white px-4 py-2">
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 24 }}>
+      {/* Header */}
+      <AdminPageHeader
+        title={t("Tüm Rezervasyonlar")}
+        actions={
+          <button style={primaryBtn} onClick={handleExport}>
             {t("CSV Dışa Aktar")}
           </button>
+        }
+      />
+
+      {/* Filter card */}
+      <div style={cardStyle}>
+        <div style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: "var(--rezvix-text-muted)",
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          marginBottom: 14,
+        }}>
+          {t("Filtreler")}
         </div>
-
-        <Card title={t("Filtreler")}>
-          <div className="flex flex-wrap gap-3 items-end">
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">{t("Durum")}</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} className="border rounded-lg px-3 py-2">
-                <option value="">{t("Hepsi")}</option>
-                <option value="pending">{t("Bekleyen")}</option>
-                <option value="confirmed">{t("Onaylı")}</option>
-                <option value="arrived">{t("Geldi")}</option>
-                <option value="cancelled">{t("İptal")}</option>
-                <option value="no_show">{t("Gelmedi")}</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">{t("Başlangıç")}</label>
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="border rounded-lg px-3 py-2" />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">{t("Bitiş")}</label>
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="border rounded-lg px-3 py-2" />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">{t("Sayfa")}</label>
-              <input type="number" min={1} value={page} onChange={(e) => setPage(Number(e.target.value) || 1)} className="w-24 border rounded-lg px-3 py-2" />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">{t("Limit")}</label>
-              <input type="number" min={1} value={limit} onChange={(e) => setLimit(Number(e.target.value) || 20)} className="w-24 border rounded-lg px-3 py-2" />
-            </div>
-            <button onClick={() => refetch()} className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2" disabled={isFetching}>
-              {isFetching ? t("Getiriliyor…") : t("Uygula")}
-            </button>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 11, color: "var(--rezvix-text-soft)" }}>{t("Durum")}</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              style={{ ...inputBase, cursor: "pointer" }}
+            >
+              <option value="">{t("Hepsi")}</option>
+              <option value="pending">{t("Bekleyen")}</option>
+              <option value="confirmed">{t("Onaylı")}</option>
+              <option value="arrived">{t("Geldi")}</option>
+              <option value="cancelled">{t("İptal")}</option>
+              <option value="no_show">{t("Gelmedi")}</option>
+            </select>
           </div>
-        </Card>
-
-        {isLoading && <div>{t("Yükleniyor…")}</div>}
-        {error && <div className="text-red-600 text-sm">{t("Liste çekilemedi")}</div>}
-
-        <div className="overflow-auto bg-white rounded-2xl shadow-soft">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500">
-                <th className="py-2 px-4">{t("Tarih")}</th>
-                <th className="py-2 px-4">{t("Restoran")}</th>
-                <th className="py-2 px-4">{t("Kullanıcı")}</th>
-                <th className="py-2 px-4">{t("Durum")}</th>
-                <th className="py-2 px-4">{t("Kişi")}</th>
-                <th className="py-2 px-4">{t("Tutar (₺)")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data?.items ?? []).map((r) => (
-                <tr key={r._id} className="border-t">
-                  <td className="py-2 px-4">{new Date(r.dateTimeUTC).toLocaleString()}</td>
-                  <td className="py-2 px-4">{getRestaurantLabel(r)}</td>
-                  <td className="py-2 px-4">
-                    {getUserLabel(r)} <span className="text-gray-500">({getUserEmail(r)})</span>
-                  </td>
-                  <td className="py-2 px-4">{t(statusLabels[r.status] || r.status)}</td>
-                  <td className="py-2 px-4">{r.partySize ?? "-"}</td>
-                  <td className="py-2 px-4">{r.totalPrice?.toLocaleString("tr-TR") ?? "-"}</td>
-                </tr>
-              ))}
-              {(!data?.items || data.items.length === 0) && (
-                <tr><td className="py-3 px-4 text-gray-500" colSpan={6}>{t("Kayıt yok")}</td></tr>
-              )}
-            </tbody>
-          </table>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 11, color: "var(--rezvix-text-soft)" }}>{t("Başlangıç")}</label>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              style={inputBase}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 11, color: "var(--rezvix-text-soft)" }}>{t("Bitiş")}</label>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              style={inputBase}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 11, color: "var(--rezvix-text-soft)" }}>{t("Sayfa")}</label>
+            <input
+              type="number"
+              min={1}
+              value={page}
+              onChange={(e) => setPage(Number(e.target.value) || 1)}
+              style={{ ...inputBase, width: 80 }}
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 11, color: "var(--rezvix-text-soft)" }}>{t("Limit")}</label>
+            <input
+              type="number"
+              min={1}
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value) || 20)}
+              style={{ ...inputBase, width: 80 }}
+            />
+          </div>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            style={{ ...primaryBtn, opacity: isFetching ? 0.6 : 1 }}
+          >
+            {isFetching ? t("Getiriliyor…") : t("Uygula")}
+          </button>
         </div>
-
-        {data && (
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>{t("Önceki")}</button>
-            <div className="text-sm text-gray-600">
-              {t("Sayfa {page} / {totalPages} • Toplam {total}", { page, totalPages, total: data.total })}
-            </div>
-            <button className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>{t("Sonraki")}</button>
-          </div>
-        )}
       </div>
+
+      {isLoading && (
+        <div style={{ color: "var(--rezvix-text-soft)", fontSize: 14 }}>{t("Yükleniyor…")}</div>
+      )}
+      {error && (
+        <div style={{ color: "var(--rezvix-danger)", fontSize: 13 }}>{t("Liste çekilemedi")}</div>
+      )}
+
+      {/* Table */}
+      <div style={{ overflowX: "auto", borderRadius: 16, border: "1px solid var(--rezvix-border-subtle)", background: "var(--rezvix-bg-elevated)" }}>
+        <table style={{ minWidth: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={thStyle}>{t("Tarih")}</th>
+              <th style={thStyle}>{t("Restoran")}</th>
+              <th style={thStyle}>{t("Kullanıcı")}</th>
+              <th style={thStyle}>{t("Durum")}</th>
+              <th style={thStyle}>{t("Kişi")}</th>
+              <th style={thStyle}>{t("Tutar (₺)")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data?.items ?? []).map((r) => (
+              <tr key={r._id}>
+                <td style={tdStyle}>{new Date(r.dateTimeUTC).toLocaleString()}</td>
+                <td style={tdStyle}>{getRestaurantLabel(r)}</td>
+                <td style={tdStyle}>
+                  {getUserLabel(r)}{" "}
+                  <span style={{ color: "var(--rezvix-text-soft)" }}>({getUserEmail(r)})</span>
+                </td>
+                <td style={tdStyle}>{t(statusLabels[r.status] || r.status)}</td>
+                <td style={tdStyle}>{r.partySize ?? "-"}</td>
+                <td style={tdStyle}>{r.totalPrice?.toLocaleString("tr-TR") ?? "-"}</td>
+              </tr>
+            ))}
+            {(!data?.items || data.items.length === 0) && (
+              <tr>
+                <td style={emptyTdStyle} colSpan={6}>{t("Kayıt yok")}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      {data && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button
+            style={{ ...ghostBtn, opacity: page <= 1 ? 0.4 : 1, cursor: page <= 1 ? "not-allowed" : "pointer" }}
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            {t("Önceki")}
+          </button>
+          <div style={{ fontSize: 13, color: "var(--rezvix-text-muted)" }}>
+            {t("Sayfa {page} / {totalPages} • Toplam {total}", { page, totalPages, total: data.total })}
+          </div>
+          <button
+            style={{ ...ghostBtn, opacity: page >= totalPages ? 0.4 : 1, cursor: page >= totalPages ? "not-allowed" : "pointer" }}
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            {t("Sonraki")}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
