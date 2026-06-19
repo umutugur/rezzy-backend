@@ -37,6 +37,7 @@ import deliveryPanelRoutes from "./routes/deliveryOrders.panel.routes.js";
 // Market modülü
 import marketRoutes from "./routes/market.routes.js";
 import marketPanelRoutes from "./routes/marketPanel.routes.js";
+import marketOrgRoutes from "./routes/marketOrg.routes.js";
 
 // Taksi modülü
 import taxiRoutes from "./routes/taxi.routes.js";
@@ -130,6 +131,7 @@ app.use("/api/admin", adminBannersRoutes);
 // Market modülü
 app.use("/api", marketRoutes);
 app.use("/api", marketPanelRoutes);
+app.use("/api", marketOrgRoutes);
 
 // Taksi modülü
 app.use("/api", taxiRoutes);
