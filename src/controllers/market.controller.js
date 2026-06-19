@@ -12,6 +12,7 @@ import { resolveZoneForMarketStore } from "../utils/deliveryZoneResolver.js";
 import { haversineMeters } from "../utils/haversine.js";
 import { computeUnitPrice } from "../utils/marketUnitPrice.js";
 import { effectivePrice, discountPercent, lowest30 } from "../utils/marketPricing.js";
+import { resolveStoreCatalog, resolveOrgProductForOrder } from "../services/marketCatalogResolve.service.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
@@ -195,7 +196,9 @@ export const getProductDetail = async (req, res, next) => {
 
 /**
  * GET /api/market/stores/:id/products
- * Query: category, page, limit
+ * Query: category, q, page, limit
+ * Uses resolveStoreCatalog so chain stores also return resolved org items.
+ * Standalone stores are unaffected (service returns local-only).
  */
 export const listStoreProducts = async (req, res, next) => {
   try {
@@ -206,33 +209,42 @@ export const listStoreProducts = async (req, res, next) => {
       return next({ status: 400, message: "Geçersiz market id" });
     }
 
-    const filter = { store: toObjectId(id), isActive: true };
+    // Fetch full resolved catalog (org items + local products)
+    let all = await resolveStoreCatalog(id);
+
+    // Category filter (match ObjectId string or populated category._id)
     if (category && mongoose.Types.ObjectId.isValid(category)) {
-      filter.category = toObjectId(category);
+      const catStr = String(category);
+      all = all.filter((p) => {
+        const cat = p.category;
+        if (!cat) return false;
+        if (typeof cat === "object") return String(cat._id) === catStr;
+        return String(cat) === catStr;
+      });
     }
+
+    // Text search filter (q ≥ 2 chars — case-insensitive substring on title)
     if (q && String(q).trim().length >= 2) {
-      filter.$text = { $search: String(q).trim() };
+      const needle = String(q).trim().toLowerCase();
+      all = all.filter((p) => p.title && p.title.toLowerCase().includes(needle));
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
+    // Sort by title (mirrors the existing .sort({ title: 1 }))
+    all.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+
+    const total = all.length;
+    const pg = Number(page);
     const lim = Number(limit);
+    const skip = (pg - 1) * lim;
 
-    const [items, total] = await Promise.all([
-      MarketProduct.find(filter)
-        .populate({ path: "category", select: "key i18n" })
-        .sort({ title: 1 })
-        .skip(skip)
-        .limit(lim)
-        .lean(),
-      MarketProduct.countDocuments(filter),
-    ]);
+    const pageItems = all.slice(skip, skip + lim);
 
-    const itemsOut = items.map((p) => {
+    const itemsOut = pageItems.map((p) => {
       const out = { ...p, effectivePrice: effectivePrice(p), discountPercent: discountPercent(p) };
       delete out.priceHistory;
       return out;
     });
-    res.json({ items: itemsOut, total, page: Number(page), limit: lim });
+    res.json({ items: itemsOut, total, page: pg, limit: lim });
   } catch (e) {
     next(e);
   }
@@ -353,44 +365,90 @@ export const createOrder = async (req, res, next) => {
     }
 
     // Ürün snapshot'larını topla
-    const productIds = items.map((i) => i.productId).filter(Boolean);
-    const products = await MarketProduct.find({
-      _id: { $in: productIds },
-      store: toObjectId(storeId),
-      isActive: true,
-    }).lean();
+    // Local lines: productId present (and/or source absent / "product") → existing DB lookup
+    // Org lines: source === "org" with orgProductId → resolveOrgProductForOrder
 
-    const productMap = new Map(products.map((p) => [String(p._id), p]));
+    // Pre-fetch all local product IDs in one query for efficiency
+    const localProductIds = items
+      .filter((i) => !i.source || i.source === "product")
+      .map((i) => i.productId)
+      .filter(Boolean);
+
+    const localProducts = localProductIds.length
+      ? await MarketProduct.find({
+          _id: { $in: localProductIds },
+          store: toObjectId(storeId),
+          isActive: true,
+        }).lean()
+      : [];
+
+    const productMap = new Map(localProducts.map((p) => [String(p._id), p]));
 
     const orderItems = [];
     let subtotal = 0;
 
     for (const item of items) {
-      if (!item.productId || !mongoose.Types.ObjectId.isValid(item.productId)) {
-        return next({ status: 400, message: `Geçersiz productId: ${item.productId}` });
-      }
-      const product = productMap.get(String(item.productId));
-      if (!product) {
-        return next({ status: 400, message: `Ürün bulunamadı: ${item.productId}` });
-      }
-
+      const source = item.source || "product"; // absent source → local ("product")
       const qty = Number(item.qty);
-      if (!qty || qty < 1) {
-        return next({ status: 400, message: `Geçersiz adet: ${item.productId}` });
+
+      if (source === "org") {
+        // ── Org-catalog line ────────────────────────────────────────────────
+        const { orgProductId } = item;
+        if (!orgProductId || !mongoose.Types.ObjectId.isValid(orgProductId)) {
+          return next({ status: 400, message: `Geçersiz orgProductId: ${orgProductId}` });
+        }
+        if (!qty || qty < 1) {
+          return next({ status: 400, message: `Geçersiz adet: ${orgProductId}` });
+        }
+
+        const resolved = await resolveOrgProductForOrder(storeId, orgProductId);
+        if (!resolved) {
+          return next({ status: 400, message: "Ürün bu mağazada mevcut değil" });
+        }
+        if (resolved.isAvailable === false) {
+          return next({ status: 400, message: "Ürün stokta yok" });
+        }
+
+        const unitEff = effectivePrice(resolved);
+        const lineTotal = +(unitEff * qty).toFixed(2);
+        subtotal += lineTotal;
+
+        orderItems.push({
+          productId: resolved.orgProductId,  // store the orgProductId as reference
+          title: resolved.title,
+          price: unitEff,                    // server-side price, client price ignored
+          qty,
+          unit: resolved.unit,
+          imageUrl: resolved.imageUrl,
+          lineTotal,
+        });
+      } else {
+        // ── Local-product line (existing logic, byte-for-byte) ───────────────
+        if (!item.productId || !mongoose.Types.ObjectId.isValid(item.productId)) {
+          return next({ status: 400, message: `Geçersiz productId: ${item.productId}` });
+        }
+        const product = productMap.get(String(item.productId));
+        if (!product) {
+          return next({ status: 400, message: `Ürün bulunamadı: ${item.productId}` });
+        }
+
+        if (!qty || qty < 1) {
+          return next({ status: 400, message: `Geçersiz adet: ${item.productId}` });
+        }
+
+        const unitEff = effectivePrice(product);
+        const lineTotal = +(unitEff * qty).toFixed(2);
+        subtotal += lineTotal;
+
+        orderItems.push({
+          productId: product._id,
+          title: product.title,
+          price: unitEff,
+          qty,
+          unit: product.unit,
+          lineTotal,
+        });
       }
-
-      const unitEff = effectivePrice(product);
-      const lineTotal = +(unitEff * qty).toFixed(2);
-      subtotal += lineTotal;
-
-      orderItems.push({
-        productId: product._id,
-        title: product.title,
-        price: unitEff,
-        qty,
-        unit: product.unit,
-        lineTotal,
-      });
     }
 
     subtotal = +subtotal.toFixed(2);
