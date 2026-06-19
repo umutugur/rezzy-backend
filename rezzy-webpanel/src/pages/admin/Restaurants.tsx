@@ -1,92 +1,335 @@
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
-import { api } from "../../api/client";
-import { Card } from "../../components/Card";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useI18n } from "../../i18n";
+import { DataTable, Column } from "../../desktop/components/admin/DataTable";
+import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
+import {
+  adminListRestaurants,
+  AdminRestaurantRow,
+} from "../../api/adminRestaurants";
 
-type Restaurant = {
-  _id: string;
-  name: string;
-  city?: string;
-  address?: string;
-  phone?: string;
-  email?: string;
-  region?:string;
-  isActive?:boolean;
-};
+const PAGE_LIMIT = 25;
 
-async function fetchRestaurants(): Promise<Restaurant[]> {
-  const { data } = await api.get("/admin/restaurants");
-  return Array.isArray(data) ? data : data?.items || [];
+// ── Status badge ──────────────────────────────────────────────────────────────
+function StatusBadge({ isActive }: { isActive?: boolean }) {
+  const { t } = useI18n();
+  const active = isActive !== false; // treat undefined as active
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        padding: "3px 10px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 700,
+        background: active
+          ? "var(--rezvix-success-soft, #dcfce7)"
+          : "var(--rezvix-bg-soft, #f1f5f9)",
+        color: active
+          ? "var(--rezvix-success, #16a34a)"
+          : "var(--rezvix-text-soft, #64748b)",
+        border: active
+          ? "1px solid var(--rezvix-success-border, #bbf7d0)"
+          : "1px solid var(--rezvix-border-subtle, #e2e8f0)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: active
+            ? "var(--rezvix-success, #16a34a)"
+            : "var(--rezvix-text-soft, #94a3b8)",
+          flexShrink: 0,
+        }}
+      />
+      {active ? t("Aktif") : t("Pasif")}
+    </span>
+  );
 }
 
+// ── Page component ────────────────────────────────────────────────────────────
 export default function AdminRestaurantsPage() {
   const { t } = useI18n();
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["admin-restaurants"],
-    queryFn: fetchRestaurants
-  });
-  const nav = useNavigate();
+  const navigate = useNavigate();
+
+  // Search input (debounced into `query`)
+  const [searchInput, setSearchInput] = useState("");
+  const [query, setQuery] = useState("");
+
+  // Accumulated rows + cursor pagination state
+  const [rows, setRows] = useState<AdminRestaurantRow[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Track active query to avoid stale appends from previous fetches
+  const activeQueryRef = useRef<string>("");
+
+  // ── Debounce search input → query ────────────────────────────────────────
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQuery(searchInput.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // ── Initial / search-change fetch ───────────────────────────────────────
+  const fetchInitial = useCallback(async (q: string) => {
+    activeQueryRef.current = q;
+    setLoading(true);
+    setError(null);
+    setRows([]);
+    setNextCursor(null);
+    try {
+      const resp = await adminListRestaurants({
+        query: q || undefined,
+        limit: PAGE_LIMIT,
+      });
+      // Guard against stale responses
+      if (activeQueryRef.current !== q) return;
+      setRows(resp.items);
+      setNextCursor(resp.nextCursor);
+    } catch {
+      if (activeQueryRef.current !== q) return;
+      setError(t("Liste çekilemedi"));
+    } finally {
+      if (activeQueryRef.current === q) setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    fetchInitial(query);
+  }, [query, fetchInitial]);
+
+  // ── Load more (append) ───────────────────────────────────────────────────
+  const handleLoadMore = useCallback(async () => {
+    if (!nextCursor || loadingMore) return;
+    const q = query;
+    setLoadingMore(true);
+    try {
+      const resp = await adminListRestaurants({
+        query: q || undefined,
+        limit: PAGE_LIMIT,
+        cursor: nextCursor,
+      });
+      // Guard: if query changed while loading more, discard
+      if (activeQueryRef.current !== q) return;
+      setRows((prev) => [...prev, ...resp.items]);
+      setNextCursor(resp.nextCursor);
+    } catch {
+      // Non-fatal: just stop spinner
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextCursor, loadingMore, query]);
+
+  // ── Columns ──────────────────────────────────────────────────────────────
+  const columns: Column<AdminRestaurantRow>[] = [
+    {
+      key: "name",
+      header: t("Ad"),
+      width: "220px",
+      render: (row) => (
+        <span
+          style={{
+            color: "var(--rezvix-primary, #ff5a32)",
+            fontWeight: 600,
+            fontSize: 13.5,
+          }}
+        >
+          {row.name}
+        </span>
+      ),
+    },
+    {
+      key: "city",
+      header: t("Şehir"),
+      width: "110px",
+      render: (row) => (
+        <span style={{ color: "var(--rezvix-text-main)", fontSize: 13 }}>
+          {row.city ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "address",
+      header: t("Adres"),
+      width: "200px",
+      render: (row) => (
+        <span
+          style={{
+            color: "var(--rezvix-text-main)",
+            fontSize: 13,
+            maxWidth: 200,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            display: "inline-block",
+          }}
+        >
+          {row.address ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "phone",
+      header: t("Telefon"),
+      width: "140px",
+      render: (row) => (
+        <span style={{ color: "var(--rezvix-text-main)", fontSize: 13 }}>
+          {row.phone ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "email",
+      header: t("E-posta"),
+      width: "190px",
+      render: (row) => (
+        <span
+          style={{
+            color: "var(--rezvix-text-main)",
+            fontSize: 13,
+            maxWidth: 190,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            display: "inline-block",
+          }}
+        >
+          {row.email ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "region",
+      header: t("Bölge"),
+      width: "90px",
+      render: (row) => (
+        <span style={{ color: "var(--rezvix-text-main)", fontSize: 13 }}>
+          {row.region ?? "—"}
+        </span>
+      ),
+    },
+    {
+      key: "isActive",
+      header: t("Durum"),
+      width: "100px",
+      align: "center",
+      render: (row) => <StatusBadge isActive={row.isActive} />,
+    },
+  ];
 
   return (
-          <div className="space-y-6 p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{t("Restoranlar")}</h2>
+    <div style={{ padding: 24 }}>
+      {/* ── Header ── */}
+      <AdminPageHeader
+        title={t("Restoranlar")}
+        subtitle={t("Tüm restoranları yönetin")}
+        actions={
           <button
-            onClick={() => nav("/admin/restaurants/new")}
-            className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm"
+            onClick={() => navigate("/admin/restaurants/new")}
+            style={{
+              padding: "9px 18px",
+              borderRadius: 999,
+              border: "none",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 700,
+              background:
+                "linear-gradient(135deg, var(--rezvix-primary), var(--rezvix-primary-strong, #e04520))",
+              color: "#fff",
+              boxShadow:
+                "0 4px 14px rgba(var(--rezvix-primary-rgb, 255 90 50) / 0.35)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              transition: "opacity 0.15s ease, transform 0.1s ease",
+              whiteSpace: "nowrap",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.opacity = "0.88";
+              (e.currentTarget as HTMLButtonElement).style.transform =
+                "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+              (e.currentTarget as HTMLButtonElement).style.transform = "none";
+            }}
           >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
             {t("Restoran Ekle")}
           </button>
+        }
+      />
+
+      {/* ── DataTable with search slot ── */}
+      <DataTable<AdminRestaurantRow>
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => row._id}
+        loading={loading}
+        error={error}
+        emptyText={t("Kayıt yok")}
+        onRowClick={(row) => navigate(`/admin/restaurants/${row._id}`)}
+        search={{
+          value: searchInput,
+          onChange: setSearchInput,
+          placeholder: t("Restoran adı ara..."),
+        }}
+      />
+
+      {/* ── Load more ── */}
+      {nextCursor && !loading && !error && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginTop: 16,
+          }}
+        >
+          <button
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            style={{
+              padding: "9px 28px",
+              borderRadius: 999,
+              border: "1px solid var(--rezvix-border-strong)",
+              background: loadingMore
+                ? "var(--rezvix-bg-soft)"
+                : "var(--rezvix-bg-elevated)",
+              color: loadingMore
+                ? "var(--rezvix-text-soft)"
+                : "var(--rezvix-text-main)",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: loadingMore ? "not-allowed" : "pointer",
+              opacity: loadingMore ? 0.6 : 1,
+              transition: "background 0.15s ease, opacity 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              if (!loadingMore) {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "var(--rezvix-bg-soft)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loadingMore) {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "var(--rezvix-bg-elevated)";
+              }
+            }}
+          >
+            {loadingMore ? t("Yükleniyor…") : t("Daha fazla yükle")}
+          </button>
         </div>
-
-        {isLoading && <div>{t("Yükleniyor…")}</div>}
-        {error && <div className="text-red-600 text-sm">{t("Liste çekilemedi")}</div>}
-
-        <div className="overflow-auto bg-white rounded-2xl shadow-soft">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500">
-                <th className="py-2 px-4">{t("Ad")}</th>
-                <th className="py-2 px-4">{t("Şehir")}</th>
-                <th className="py-2 px-4">{t("Adres")}</th>
-                <th className="py-2 px-4">{t("Telefon")}</th>
-                <th className="py-2 px-4">{t("E-posta")}</th>
-                <th className="py-2 px-4">{t("Bölge")}</th>
-                <th className="py-2 px-4">{t("Durum")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data ?? []).map((r) => (
-                <tr key={r._id} className="border-t">
-                  <td className="py-2 px-4">
-                    <Link to={`/admin/restaurants/${r._id}`} className="text-brand-700 underline">
-                      {r.name}
-                    </Link>
-                  </td>
-                  <td className="py-2 px-4">{r.city || "-"}</td>
-                  <td className="py-2 px-4">{r.address || "-"}</td>
-                  <td className="py-2 px-4">{r.phone || "-"}</td>
-                  <td className="py-2 px-4">{r.email || "-"}</td>
-                  <td className="py-2 px-4">{r.region || "-"}</td>
-     <td className="py-2 px-4">
-      {r.isActive
-        ? <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700">{t("Aktif")}</span>
-        : <span className="inline-flex px-2 py-0.5 text-xs rounded-full bg-rose-50 text-rose-700">{t("Pasif")}</span>}
-    </td>
-                </tr>
-              ))}
-              {(!data || data.length === 0) && (
-                <tr><td className="py-3 px-4 text-gray-500" colSpan={5}>{t("Kayıt yok")}</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <Card>
-          <div className="text-sm text-gray-500">{t("Satıra tıklayarak detaya gidebilirsin.")}</div>
-        </Card>
-      </div>
+      )}
+    </div>
   );
 }
