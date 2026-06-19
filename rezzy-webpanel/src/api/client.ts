@@ -165,7 +165,15 @@ export async function updateMe(patch: {
 // =========================
 // ADMIN — Notifications
 // =========================
-export type AdminSendTargets = "all" | "customers" | "restaurants" | "email";
+export type AdminSendTargets =
+  | "all"
+  | "customers"
+  | "restaurants"
+  | "email"
+  | "market_customers"
+  | "market_owners"
+  | "taxi_drivers"
+  | "taxi_passengers";
 
 export interface AdminSendResponse {
   ok: boolean;
