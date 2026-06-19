@@ -8,6 +8,7 @@ import {
 } from "../../api/adminTaxiMarket";
 import { showToast } from "../../ui/Toast";
 import { useI18n } from "../../i18n";
+import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
 
 const REGIONS = ["TR", "CY", "UK", "US"];
 
@@ -36,6 +37,30 @@ type FormState = {
   commissionRatePct: number; // stored as percent (e.g. 10 for 0.10)
   isActive: boolean;
   tariffs: Record<TariffKey, TaxiTariff>;
+};
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  borderRadius: 8,
+  border: "1px solid var(--rezvix-border-strong)",
+  background: "var(--rezvix-bg-elevated)",
+  color: "var(--rezvix-text-main)",
+  padding: "8px 12px",
+  fontSize: 13,
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+const narrowInputStyle: React.CSSProperties = {
+  width: 112,
+  borderRadius: 8,
+  border: "1px solid var(--rezvix-border-strong)",
+  background: "var(--rezvix-bg-elevated)",
+  color: "var(--rezvix-text-main)",
+  padding: "6px 10px",
+  fontSize: 13,
+  outline: "none",
+  boxSizing: "border-box",
 };
 
 export default function AdminTaxiConfigPage() {
@@ -104,137 +129,233 @@ export default function AdminTaxiConfigPage() {
   };
 
   return (
-          <div className="space-y-6 p-6">
-        <h2 className="text-lg font-semibold">{t("Taksi Tarifeleri")}</h2>
+    <div style={{ padding: 24 }}>
+      <AdminPageHeader
+        title={t("Taksi Tarifeleri")}
+        subtitle={t("Bölgelere göre tarife ve komisyon ayarlarını yönetin")}
+      />
 
-        {/* Region tabs */}
-        <div className="flex gap-2 flex-wrap">
-          {REGIONS.map((r) => (
+      {/* Region tabs */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+        {REGIONS.map((r) => {
+          const isSelected = region === r;
+          return (
             <button
               key={r}
               onClick={() => setRegion(r)}
-              className={`px-4 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
-                region === r
-                  ? "bg-brand-600 text-white border-brand-600"
-                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-              }`}
+              style={{
+                padding: "6px 18px",
+                borderRadius: 8,
+                border: isSelected
+                  ? "1px solid var(--rezvix-primary)"
+                  : "1px solid var(--rezvix-border-strong)",
+                background: isSelected ? "var(--rezvix-primary)" : "var(--rezvix-bg-elevated)",
+                color: isSelected ? "#fff" : "var(--rezvix-text-muted)",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "background 0.15s, color 0.15s",
+              }}
             >
               {r}
               {!data?.configs?.find((c) => c.region === r) && (
-                <span className="ml-1 text-xs text-gray-400">({t("yeni")})</span>
+                <span style={{ marginLeft: 4, fontSize: 11, opacity: 0.7 }}>({t("yeni")})</span>
               )}
             </button>
-          ))}
-        </div>
+          );
+        })}
+      </div>
 
-        {isLoading && <div>{t("Yükleniyor…")}</div>}
+      {isLoading && (
+        <div style={{ color: "var(--rezvix-text-soft)", fontSize: 13 }}>{t("Yükleniyor…")}</div>
+      )}
 
-        {!isLoading && (
-          <div className="bg-white rounded-2xl shadow-soft p-6 space-y-6">
-            {/* General settings */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">
-                  {t("Çağrı Yarıçapı (km)")}
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.5}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  value={form.dispatchRadiusKm}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, dispatchRadiusKm: Number(e.target.value) }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">
-                  {t("Komisyon Oranı (%)")}
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.1}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  value={form.commissionRatePct}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, commissionRatePct: Number(e.target.value) }))
-                  }
-                />
-              </div>
-              <div className="flex items-end pb-0.5">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.isActive}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, isActive: e.target.checked }))
-                    }
-                  />
-                  {t("Aktif")}
-                </label>
-              </div>
-            </div>
-
-            {/* Tariff grid */}
+      {!isLoading && (
+        <div
+          style={{
+            background: "var(--rezvix-bg-elevated)",
+            borderRadius: "var(--rezvix-radius-lg)",
+            border: "1px solid var(--rezvix-border-subtle)",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            padding: 24,
+            display: "flex",
+            flexDirection: "column",
+            gap: 24,
+          }}
+        >
+          {/* General settings */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: 16,
+            }}
+          >
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">{t("Araç Tarifeleri")}</h3>
-              <div className="overflow-auto rounded-xl border">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 border-b">
-                    <tr className="text-left text-gray-500">
-                      <th className="py-2 px-4">{t("Araç Tipi")}</th>
-                      <th className="py-2 px-4">{t("Baz Fiyat (₺)")}</th>
-                      <th className="py-2 px-4">{t("Km Ücreti (₺)")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(["ride", "xl", "lux", "pet"] as TariffKey[]).map((key) => (
-                      <tr key={key} className="border-t">
-                        <td className="py-2 px-4 font-medium">
-                          {t(TARIFF_LABELS[key])}
-                        </td>
-                        <td className="py-2 px-4">
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.5}
-                            className="w-28 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-                            value={form.tariffs[key].base}
-                            onChange={(e) => setTariff(key, "base", Number(e.target.value))}
-                          />
-                        </td>
-                        <td className="py-2 px-4">
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.5}
-                            className="w-28 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-                            value={form.tariffs[key].perKm}
-                            onChange={(e) => setTariff(key, "perKm", Number(e.target.value))}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Save */}
-            <div className="flex justify-end">
-              <button
-                onClick={() => save()}
-                disabled={isPending}
-                className="px-6 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-medium disabled:opacity-60"
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "var(--rezvix-text-muted)",
+                  marginBottom: 6,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}
               >
-                {isPending ? t("Kaydediliyor…") : t("Kaydet")}
-              </button>
+                {t("Çağrı Yarıçapı (km)")}
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={0.5}
+                style={inputStyle}
+                value={form.dispatchRadiusKm}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, dispatchRadiusKm: Number(e.target.value) }))
+                }
+              />
+            </div>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "var(--rezvix-text-muted)",
+                  marginBottom: 6,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                {t("Komisyon Oranı (%)")}
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.1}
+                style={inputStyle}
+                value={form.commissionRatePct}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, commissionRatePct: Number(e.target.value) }))
+                }
+              />
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 2 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", color: "var(--rezvix-text-main)" }}>
+                <input
+                  type="checkbox"
+                  checked={form.isActive}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, isActive: e.target.checked }))
+                  }
+                />
+                {t("Aktif")}
+              </label>
             </div>
           </div>
-        )}
-      </div>
+
+          {/* Tariff grid */}
+          <div>
+            <h3
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: "var(--rezvix-text-muted)",
+                textTransform: "uppercase",
+                letterSpacing: "0.04em",
+                marginBottom: 12,
+                margin: "0 0 12px",
+              }}
+            >
+              {t("Araç Tarifeleri")}
+            </h3>
+            <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid var(--rezvix-border-subtle)" }}>
+              <table style={{ minWidth: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr
+                    style={{
+                      background: "var(--rezvix-bg-soft)",
+                      borderBottom: "1px solid var(--rezvix-border-subtle)",
+                      textAlign: "left",
+                      color: "var(--rezvix-text-soft)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    <th style={{ padding: "10px 16px" }}>{t("Araç Tipi")}</th>
+                    <th style={{ padding: "10px 16px" }}>{t("Baz Fiyat (₺)")}</th>
+                    <th style={{ padding: "10px 16px" }}>{t("Km Ücreti (₺)")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(["ride", "xl", "lux", "pet"] as TariffKey[]).map((key) => (
+                    <tr
+                      key={key}
+                      style={{ borderTop: "1px solid var(--rezvix-border-subtle)" }}
+                    >
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          fontWeight: 600,
+                          color: "var(--rezvix-text-main)",
+                        }}
+                      >
+                        {t(TARIFF_LABELS[key])}
+                      </td>
+                      <td style={{ padding: "10px 16px" }}>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          style={narrowInputStyle}
+                          value={form.tariffs[key].base}
+                          onChange={(e) => setTariff(key, "base", Number(e.target.value))}
+                        />
+                      </td>
+                      <td style={{ padding: "10px 16px" }}>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          style={narrowInputStyle}
+                          value={form.tariffs[key].perKm}
+                          onChange={(e) => setTariff(key, "perKm", Number(e.target.value))}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Save */}
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              onClick={() => save()}
+              disabled={isPending}
+              style={{
+                padding: "9px 24px",
+                borderRadius: 8,
+                border: "none",
+                background: "var(--rezvix-primary)",
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: isPending ? "not-allowed" : "pointer",
+                opacity: isPending ? 0.6 : 1,
+                transition: "opacity 0.15s",
+              }}
+            >
+              {isPending ? t("Kaydediliyor…") : t("Kaydet")}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
