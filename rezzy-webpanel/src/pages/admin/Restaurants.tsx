@@ -80,6 +80,9 @@ export default function AdminRestaurantsPage() {
   }, [searchInput]);
 
   // ── Initial / search-change fetch ───────────────────────────────────────
+  // NOTE: deliberately depends ONLY on `query`. Do not add `t` or other
+  // render-unstable values here — that would recreate the callback every
+  // render and re-fire the effect in an infinite fetch loop.
   const fetchInitial = useCallback(async (q: string) => {
     activeQueryRef.current = q;
     setLoading(true);
@@ -91,17 +94,16 @@ export default function AdminRestaurantsPage() {
         query: q || undefined,
         limit: PAGE_LIMIT,
       });
-      // Guard against stale responses
       if (activeQueryRef.current !== q) return;
       setRows(resp.items);
       setNextCursor(resp.nextCursor);
     } catch {
       if (activeQueryRef.current !== q) return;
-      setError(t("Liste çekilemedi"));
+      setError("Liste çekilemedi");
     } finally {
       if (activeQueryRef.current === q) setLoading(false);
     }
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     fetchInitial(query);
@@ -275,7 +277,7 @@ export default function AdminRestaurantsPage() {
         rows={rows}
         rowKey={(row) => row._id}
         loading={loading}
-        error={error}
+        error={error ? t(error) : null}
         emptyText={t("Kayıt yok")}
         onRowClick={(row) => navigate(`/admin/restaurants/${row._id}`)}
         search={{

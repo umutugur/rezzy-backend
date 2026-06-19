@@ -363,12 +363,14 @@ export default function AdminUsersPage() {
         setNextCursor(resp.nextCursor);
       } catch {
         if (activeKeyRef.current !== key) return;
-        setError(t("Liste çekilemedi"));
+        setError("Liste çekilemedi");
       } finally {
         if (activeKeyRef.current === key) setLoading(false);
       }
     },
-    [makeKey, role, banned, t]
+    // NOTE: do NOT add `t` here — it is render-unstable and would cause an
+    // infinite fetch loop via the effect below. Error text is translated at render.
+    [makeKey, role, banned]
   );
 
   useEffect(() => {
@@ -579,7 +581,7 @@ export default function AdminUsersPage() {
           rows={rows}
           rowKey={(row) => row._id}
           loading={loading}
-          error={error}
+          error={error ? t(error) : null}
           emptyText={t("Kayıt yok")}
           onRowClick={(row) => navigate(`/admin/users/${row._id}`)}
           search={{
