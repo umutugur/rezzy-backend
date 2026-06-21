@@ -3,13 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { MarketSideNav, type MarketNavKey } from "../components/MarketSideNav";
 
 const ROUTE_MAP: Record<MarketNavKey, string> = {
-  orders:   "/market-desktop/orders",
-  products: "/market-desktop/products",
-  reports:  "/market-desktop/reports",
-  settings: "/market-desktop/settings",
+  orders:           "/market-desktop/orders",
+  products:         "/market-desktop/products",
+  "chain-products": "/market-desktop/chain-products",
+  reports:          "/market-desktop/reports",
+  settings:         "/market-desktop/settings",
 };
 
 function resolveActiveKey(pathname: string): MarketNavKey {
+  if (pathname.includes("chain-products")) return "chain-products";
   if (pathname.includes("products")) return "products";
   if (pathname.includes("reports")) return "reports";
   if (pathname.includes("settings")) return "settings";
