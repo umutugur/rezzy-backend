@@ -54,7 +54,12 @@ import MenuManagerPage from "./pages/restaurant/MenuManager";
 // ORG panel
 import OrgDashboardPage from "./pages/org/Dashboard";
 import OrgBranchRequestsPage from "./pages/org/BranchRequests";
-import OrgMenuManagerPage from "./pages/org/OrgMenuManagerPage"; 
+import OrgMenuManagerPage from "./pages/org/OrgMenuManagerPage";
+
+// Market Org (chain owner) panel
+import OrgCatalogPage from "./pages/marketOrg/OrgCatalog";
+import OrgBranchesPage from "./pages/marketOrg/OrgBranches";
+import { MarketOrgLayout } from "./desktop/layouts/MarketOrgLayout";
 
 // Admin layout
 import { AdminDesktopLayout } from "./desktop/layouts/AdminDesktopLayout";
@@ -118,6 +123,17 @@ function hasOrgPanelAccess(user: MeUser | null): boolean {
         o.role === "org_admin" ||
         o.role === "org_finance" ||
         o.role === "org_staff"
+    )
+  );
+}
+
+// Market chain owner panel — checks organizations[] membership (not just top-level role)
+function hasMarketOrgPanelAccess(user: MeUser | null): boolean {
+  if (!user) return false;
+  return (
+    Array.isArray(user.organizations) &&
+    user.organizations.some(
+      (o) => o.role === "org_owner" || o.role === "org_admin"
     )
   );
 }
@@ -320,6 +336,27 @@ function OrgPrivateRoute() {
   return <Outlet />;
 }
 
+// Market Org panel guard — allows org_owner / org_admin membership holders
+function MarketOrgPrivateRoute() {
+  const location = useLocation();
+  const user = authStore.getUser();
+  const token = authStore.getToken();
+
+  if (!token || !user) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (!hasMarketOrgPanelAccess(user)) {
+    if (user.role === "admin") return <Navigate to="/admin" replace />;
+    if (user.role === "market_owner") return <Navigate to="/market-desktop/orders" replace />;
+    if (hasOrgPanelAccess(user)) return <Navigate to="/org" replace />;
+    if (hasRestaurantPanelAccess(user)) return <Navigate to="/restaurant" replace />;
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Outlet />;
+}
+
 // ---- Login Page ----
 function LoginPage() {
   const [email, setEmail] = React.useState("");
@@ -350,9 +387,12 @@ function LoginPage() {
     }
 
     const isOrgUser = hasOrgPanelAccess(u);
+    const isMarketOrgUser = hasMarketOrgPanelAccess(u);
     const isRestaurantUser = hasRestaurantPanelAccess(u);
 
     if (u.role === "admin") return "/admin";
+    // market_owner with org membership → chain catalog panel
+    if (u.role === "market_owner" && isMarketOrgUser) return "/market-org/catalog";
     if (u.role === "market_owner") return "/market-desktop/orders";
     if (isOrgUser) return "/org";
     if (isRestaurantUser) return "/restaurant";
@@ -673,6 +713,26 @@ export default function App() {
       </Route>
       
 
+      {/* Market Org (chain) panel */}
+      <Route element={<MarketOrgPrivateRoute />}>
+        <Route
+          path="/market-org/catalog"
+          element={
+            <MarketOrgLayout>
+              <OrgCatalogPage />
+            </MarketOrgLayout>
+          }
+        />
+        <Route
+          path="/market-org/branches"
+          element={
+            <MarketOrgLayout>
+              <OrgBranchesPage />
+            </MarketOrgLayout>
+          }
+        />
+      </Route>
+
       {/* Restoran alanı + Desktop */}
       <Route element={<PrivateRoute allow={["restaurant", "admin"]} />}>
         <Route
@@ -812,6 +872,8 @@ function RootRedirect() {
   }
 
   if (u.role === "market_owner") {
+    // chain owner with org membership → chain catalog
+    if (hasMarketOrgPanelAccess(u)) return <Navigate to="/market-org/catalog" replace />;
     return <Navigate to="/market-desktop/orders" replace />;
   }
 
