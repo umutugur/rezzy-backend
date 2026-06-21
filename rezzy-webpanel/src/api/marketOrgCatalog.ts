@@ -113,3 +113,30 @@ export async function orgReports(orgId: string, from?: string, to?: string) {
   const { data } = await api.get(`/market/org/${orgId}/reports`, { params: { from, to } });
   return data as OrgReport;
 }
+
+// ─── Chain / Org Profile ──────────────────────────────────────────────────────
+
+export interface OrgProfileData {
+  _id: string;
+  name: string;
+  logoUrl?: string;
+  region?: string;
+  defaultLanguage?: string;
+  description?: string;
+  legalName?: string;
+  restaurants?: any[];
+  members?: any[];
+}
+
+export async function getOrgProfile(orgId: string): Promise<OrgProfileData> {
+  const { data } = await api.get(`/org/organizations/${orgId}`);
+  return data as OrgProfileData;
+}
+
+export async function updateOrgProfile(
+  orgId: string,
+  body: { name?: string; logoUrl?: string; region?: string; defaultLanguage?: string; description?: string }
+): Promise<{ ok: boolean; organization: OrgProfileData }> {
+  const { data } = await api.patch(`/org/organizations/${orgId}`, body);
+  return data;
+}

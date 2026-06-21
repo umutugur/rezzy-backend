@@ -62,6 +62,7 @@ import OrgBranchesPage from "./pages/marketOrg/OrgBranches";
 import OrgBranchDetailPage from "./pages/marketOrg/OrgBranchDetail";
 import MarketOrgDashboardPage from "./pages/marketOrg/OrgDashboard";
 import OrgReportsPage from "./pages/marketOrg/OrgReports";
+import OrgSettingsPage from "./pages/marketOrg/OrgSettings";
 import { MarketOrgLayout } from "./desktop/layouts/MarketOrgLayout";
 
 // Admin layout
@@ -756,6 +757,14 @@ export default function App() {
           element={
             <MarketOrgLayout>
               <OrgReportsPage />
+            </MarketOrgLayout>
+          }
+        />
+        <Route
+          path="/market-org/settings"
+          element={
+            <MarketOrgLayout>
+              <OrgSettingsPage />
             </MarketOrgLayout>
           }
         />
