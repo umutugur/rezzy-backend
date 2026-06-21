@@ -202,19 +202,34 @@ export const updateMyOrganization = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid organization id" });
     }
 
-    const { defaultLanguage } = req.body || {};
-    if (defaultLanguage == null) {
-      return res.status(400).json({ message: "defaultLanguage is required" });
-    }
+    const { defaultLanguage, name, logoUrl, region, description, legalName } = req.body || {};
+    const set = {};
 
-    const lang = normalizeLang(defaultLanguage, null);
-    if (!lang) {
-      return res.status(400).json({ message: "Invalid defaultLanguage" });
+    if (defaultLanguage !== undefined) {
+      const lang = normalizeLang(defaultLanguage, null);
+      if (!lang) {
+        return res.status(400).json({ message: "Invalid defaultLanguage" });
+      }
+      set.defaultLanguage = lang;
+    }
+    if (name !== undefined) {
+      if (!String(name).trim()) {
+        return res.status(400).json({ message: "Name cannot be empty" });
+      }
+      set.name = String(name).trim();
+    }
+    if (logoUrl !== undefined) set.logoUrl = logoUrl ? String(logoUrl) : null;
+    if (region !== undefined) set.region = region ? String(region).trim() : null;
+    if (description !== undefined) set.description = String(description ?? "");
+    if (legalName !== undefined) set.legalName = String(legalName ?? "");
+
+    if (Object.keys(set).length === 0) {
+      return res.status(400).json({ message: "No updatable fields provided" });
     }
 
     const org = await Organization.findByIdAndUpdate(
       oid,
-      { $set: { defaultLanguage: lang } },
+      { $set: set },
       { new: true }
     )
       .select(
