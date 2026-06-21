@@ -1,6 +1,9 @@
 import mongoose from "mongoose";
 import MarketStore from "../models/MarketStore.js";
 import MarketOrder from "../models/MarketOrder.js";
+import MarketProduct from "../models/MarketProduct.js";
+import MarketBranchOverride from "../models/MarketBranchOverride.js";
+import MarketOrgProduct from "../models/MarketOrgProduct.js";
 
 const oid = (v) => (mongoose.Types.ObjectId.isValid(String(v || "").trim()) ? new mongoose.Types.ObjectId(String(v).trim()) : null);
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -121,5 +124,50 @@ export const orgReports = async (req, res, next) => {
       perBranch: (f.perBranch || []).map((b) => ({ storeId: b._id, name: nameById.get(String(b._id)) || "—", orders: b.orders, revenue: round2(b.revenue) })),
       topProducts: (f.topProducts || []).map((p) => ({ title: p._id, qty: p.qty, revenue: round2(p.revenue) })),
     });
+  } catch (e) { next(e); }
+};
+
+const BRANCH_OPS_FIELDS = ["isActive", "deliveryZoneKm", "minOrderAmount", "deliveryFee", "freeDeliveryThreshold", "pickupEnabled"];
+
+// GET /market/org/:organizationId/branches/:storeId
+export const orgBranchDetail = async (req, res, next) => {
+  try {
+    const orgId = oid(req.params.organizationId); const sid = oid(req.params.storeId);
+    if (!orgId || !sid) return next({ status: 400, message: "Geçersiz id" });
+    const store = await MarketStore.findOne({ _id: sid, organization: orgId }).lean();
+    if (!store) return next({ status: 404, message: "Şube bu zincirde bulunamadı" });
+
+    const [orderAgg, productCount, overrides] = await Promise.all([
+      MarketOrder.aggregate([
+        { $match: { store: sid } },
+        { $group: { _id: null, orders: { $sum: 1 },
+          delivered: { $sum: { $cond: [{ $eq: ["$status", "delivered"] }, 1, 0] } },
+          revenue: { $sum: { $cond: [{ $eq: ["$status", "delivered"] }, { $ifNull: ["$total", 0] }, 0] } } } },
+      ]),
+      MarketProduct.countDocuments({ store: sid }),
+      MarketBranchOverride.find({ store: sid }).lean(),
+    ]);
+    const opMap = new Map(overrides.map((o) => [String(o.orgProductId), o]));
+    const ops = await MarketOrgProduct.find({ _id: { $in: overrides.map((o) => o.orgProductId) } }).select("title defaultPrice").lean();
+    const overriddenProducts = ops.map((p) => {
+      const ov = opMap.get(String(p._id));
+      return { orgProductId: p._id, title: p.title, defaultPrice: p.defaultPrice, price: ov.price ?? null, discountPrice: ov.discountPrice ?? null, isAvailable: ov.isAvailable ?? null, hidden: !!ov.hidden };
+    });
+    const s = orderAgg[0] || { orders: 0, delivered: 0, revenue: 0 };
+    res.json({ store, stats: { orders: s.orders, delivered: s.delivered, revenue: round2(s.revenue), productCount, overrideCount: overrides.length }, overriddenProducts });
+  } catch (e) { next(e); }
+};
+
+// PATCH /market/org/:organizationId/branches/:storeId  (operational only — NO commission)
+export const orgUpdateBranch = async (req, res, next) => {
+  try {
+    const orgId = oid(req.params.organizationId); const sid = oid(req.params.storeId);
+    if (!orgId || !sid) return next({ status: 400, message: "Geçersiz id" });
+    const set = {};
+    for (const k of BRANCH_OPS_FIELDS) if (req.body[k] !== undefined) set[k] = req.body[k];
+    if (req.body.workingHours && typeof req.body.workingHours === "object") set.workingHours = req.body.workingHours;
+    const store = await MarketStore.findOneAndUpdate({ _id: sid, organization: orgId }, { $set: set }, { new: true }).lean();
+    if (!store) return next({ status: 404, message: "Şube bu zincirde bulunamadı" });
+    res.json({ store });
   } catch (e) { next(e); }
 };
