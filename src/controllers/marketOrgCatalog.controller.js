@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import MarketOrgProduct from "../models/MarketOrgProduct.js";
 import MarketStore from "../models/MarketStore.js";
 import CoreCategory from "../models/CoreCategory.js";
+import MarketBranchOverride from "../models/MarketBranchOverride.js";
 
 const oid = (v) => (mongoose.Types.ObjectId.isValid(String(v||"").trim()) ? new mongoose.Types.ObjectId(String(v).trim()) : null);
 const FIELDS = ["category","title","description","barcode","unit","defaultPrice","defaultDiscountPrice","imageUrl","order","isActive"];
@@ -20,7 +21,16 @@ export const listOrgProducts = async (req, res, next) => {
       MarketOrgProduct.find(filter).populate("category", "key").sort({ order: 1, createdAt: -1 }).skip((page-1)*limit).limit(limit).lean(),
       MarketOrgProduct.countDocuments(filter),
     ]);
-    res.json({ items, total, page, limit });
+    const ids = items.map((i) => i._id);
+    const counts = ids.length
+      ? await MarketBranchOverride.aggregate([
+          { $match: { orgProductId: { $in: ids } } },
+          { $group: { _id: "$orgProductId", c: { $sum: 1 } } },
+        ])
+      : [];
+    const cmap = new Map(counts.map((c) => [String(c._id), c.c]));
+    const withCounts = items.map((i) => ({ ...i, overrideCount: cmap.get(String(i._id)) || 0 }));
+    res.json({ items: withCounts, total, page, limit });
   } catch (e) { next(e); }
 };
 

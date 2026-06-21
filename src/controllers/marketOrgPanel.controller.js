@@ -127,6 +127,24 @@ export const orgReports = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
+// GET /market/org/:organizationId/products/:id/overrides
+export const orgProductOverrides = async (req, res, next) => {
+  try {
+    const orgId = oid(req.params.organizationId); const pid = oid(req.params.id);
+    if (!orgId || !pid) return next({ status: 400, message: "Geçersiz id" });
+    const prod = await MarketOrgProduct.findOne({ _id: pid, organizationId: orgId }).select("_id").lean();
+    if (!prod) return next({ status: 404, message: "Ürün bulunamadı" });
+    const ovs = await MarketBranchOverride.find({ orgProductId: pid }).lean();
+    const stores = await MarketStore.find({ _id: { $in: ovs.map((o) => o.store) }, organization: orgId }).select("name city").lean();
+    const byId = new Map(stores.map((s) => [String(s._id), s]));
+    const items = ovs.filter((o) => byId.has(String(o.store))).map((o) => {
+      const s = byId.get(String(o.store));
+      return { storeId: o.store, storeName: s.name, city: s.city || null, price: o.price ?? null, discountPrice: o.discountPrice ?? null, isAvailable: o.isAvailable ?? null, hidden: !!o.hidden };
+    });
+    res.json({ items, total: items.length });
+  } catch (e) { next(e); }
+};
+
 const BRANCH_OPS_FIELDS = ["isActive", "deliveryZoneKm", "minOrderAmount", "deliveryFee", "freeDeliveryThreshold", "pickupEnabled"];
 
 // GET /market/org/:organizationId/branches/:storeId
