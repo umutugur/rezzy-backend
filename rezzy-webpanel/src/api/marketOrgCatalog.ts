@@ -12,6 +12,22 @@ export interface OrgProduct {
   order?: number;
   isActive?: boolean;
   category: any;
+  overrideCount?: number;
+}
+
+export interface ProductOverrideRow {
+  storeId: string;
+  storeName: string;
+  city: string | null;
+  price: number | null;
+  discountPrice: number | null;
+  isAvailable: boolean | null;
+  hidden: boolean;
+}
+
+export async function getProductOverrides(orgId: string, productId: string) {
+  const { data } = await api.get(`/market/org/${orgId}/products/${productId}/overrides`);
+  return data as { items: ProductOverrideRow[]; total: number };
 }
 
 export async function listOrgProducts(

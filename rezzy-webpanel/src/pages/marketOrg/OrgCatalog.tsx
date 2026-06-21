@@ -8,7 +8,9 @@ import {
   createOrgProduct,
   updateOrgProduct,
   deleteOrgProduct,
+  getProductOverrides,
   type OrgProduct,
+  type ProductOverrideRow,
 } from "../../api/marketOrgCatalog";
 import { getMarketCategories, uploadMarketImage, type MarketCoreCategory } from "../../api/marketDesktop";
 import { useI18n } from "../../i18n";
@@ -661,6 +663,528 @@ function ProductModal({
   );
 }
 
+// ── Override Drawer ────────────────────────────────────────────────────────────
+
+interface OverrideDrawerProps {
+  open: boolean;
+  product: OrgProduct | null;
+  orgId: string;
+  onClose: () => void;
+  t: (s: string) => string;
+}
+
+function ProductOverridesDrawer({ open, product, orgId, onClose, t }: OverrideDrawerProps) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["product-overrides", orgId, product?._id],
+    queryFn: () => getProductOverrides(orgId, product!._id),
+    enabled: open && !!product,
+  });
+
+  const items: ProductOverrideRow[] = data?.items ?? [];
+
+  if (!open || !product) return null;
+
+  return (
+    <>
+      <style>{`
+        @keyframes drawerSlideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to   { transform: translateX(0);    opacity: 1; }
+        }
+        .override-drawer { animation: drawerSlideIn .26s cubic-bezier(.16,1,.3,1); }
+        .override-row:hover { background: var(--rezvix-bg-soft) !important; }
+        .override-close-btn:hover { background: var(--rezvix-bg-soft) !important; color: var(--rezvix-text-main) !important; }
+      `}</style>
+
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(17,20,40,.38)",
+          backdropFilter: "blur(3px)",
+          WebkitBackdropFilter: "blur(3px)",
+          zIndex: 1100,
+        }}
+      />
+
+      {/* Drawer panel */}
+      <div
+        className="override-drawer"
+        style={{
+          position: "fixed",
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: 520,
+          maxWidth: "100vw",
+          background: "var(--rezvix-bg-elevated)",
+          borderLeft: "1px solid var(--rezvix-border-subtle)",
+          boxShadow: "-24px 0 72px rgba(17,20,40,.22)",
+          zIndex: 1101,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            padding: "20px 24px",
+            borderBottom: "1px solid var(--rezvix-border-subtle)",
+            background: "var(--rezvix-bg-soft)",
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+          }}
+        >
+          {product.imageUrl ? (
+            <img
+              src={product.imageUrl}
+              alt=""
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 12,
+                objectFit: "cover",
+                border: "1px solid var(--rezvix-border-subtle)",
+                flexShrink: 0,
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 12,
+                background:
+                  "radial-gradient(circle at 30% 0%, #f9d58b 0, #f3b36b 28%, #7b2c2c 65%, #2b1010 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontWeight: 800,
+                fontSize: 20,
+                flexShrink: 0,
+              }}
+            >
+              {product.title.charAt(0).toUpperCase()}
+            </div>
+          )}
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3
+              style={{
+                color: "var(--rezvix-text-main)",
+                margin: 0,
+                fontSize: 16,
+                fontWeight: 700,
+                letterSpacing: "-0.01em",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {product.title}
+            </h3>
+            <p
+              style={{
+                color: "var(--rezvix-text-soft)",
+                margin: "3px 0 0",
+                fontSize: 12.5,
+              }}
+            >
+              {t("Şube sapmaları")}
+              {" · "}
+              <span style={{ color: "var(--rezvix-primary)", fontWeight: 600 }}>
+                ₺{product.defaultPrice.toFixed(2)}
+              </span>
+              {" "}
+              {t("zincir fiyatı")}
+            </p>
+          </div>
+
+          <button
+            className="override-close-btn"
+            onClick={onClose}
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 9,
+              border: "1px solid var(--rezvix-border-subtle)",
+              background: "transparent",
+              color: "var(--rezvix-text-soft)",
+              cursor: "pointer",
+              fontSize: 20,
+              lineHeight: "30px",
+              textAlign: "center",
+              flexShrink: 0,
+            }}
+            aria-label={t("Kapat")}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Count summary bar */}
+        <div
+          style={{
+            padding: "12px 24px",
+            borderBottom: "1px solid var(--rezvix-border-subtle)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <span
+            style={{
+              padding: "4px 12px",
+              borderRadius: 999,
+              fontSize: 12,
+              fontWeight: 700,
+              background: "var(--rezvix-primary-soft)",
+              color: "var(--rezvix-primary)",
+              border: "1px solid rgba(123,44,44,.22)",
+            }}
+          >
+            {isLoading ? "…" : items.length} {t("şube")}
+          </span>
+          <span style={{ color: "var(--rezvix-text-soft)", fontSize: 12.5 }}>
+            {t("zincir varsayılanından sapıyor")}
+          </span>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
+          {isLoading ? (
+            /* Loading skeleton */
+            <div style={{ padding: "32px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  style={{
+                    height: 68,
+                    borderRadius: 12,
+                    background: "var(--rezvix-bg-soft)",
+                    opacity: 0.6,
+                  }}
+                />
+              ))}
+            </div>
+          ) : items.length === 0 ? (
+            /* Empty state */
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+                padding: "72px 24px",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: 44, opacity: 0.35 }}>✅</div>
+              <div
+                style={{
+                  color: "var(--rezvix-text-main)",
+                  fontWeight: 700,
+                  fontSize: 15,
+                }}
+              >
+                {t("Tüm şubeler zincir fiyatını kullanıyor")}
+              </div>
+              <div
+                style={{
+                  color: "var(--rezvix-text-muted)",
+                  fontSize: 13,
+                  maxWidth: 300,
+                }}
+              >
+                {t("Bu ürün için hiçbir şube sapması bulunamadı.")}
+              </div>
+            </div>
+          ) : (
+            /* Override rows */
+            items.map((row) => {
+              const hasCustomPrice = row.price !== null;
+              const chainPrice = product.defaultPrice;
+              const chainDiscount = product.defaultDiscountPrice ?? null;
+              const priceDiff =
+                hasCustomPrice && row.price !== null
+                  ? row.price - chainPrice
+                  : null;
+
+              return (
+                <div
+                  key={row.storeId}
+                  className="override-row"
+                  style={{
+                    padding: "14px 24px",
+                    borderBottom: "1px solid var(--rezvix-border-subtle)",
+                    transition: "background .12s ease",
+                    cursor: "default",
+                  }}
+                >
+                  {/* Store name + city */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 9,
+                          background: "var(--rezvix-primary-soft)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 16,
+                          flexShrink: 0,
+                        }}
+                      >
+                        🏪
+                      </div>
+                      <div>
+                        <div
+                          style={{
+                            color: "var(--rezvix-text-main)",
+                            fontWeight: 600,
+                            fontSize: 13.5,
+                          }}
+                        >
+                          {row.storeName}
+                        </div>
+                        {row.city && (
+                          <div
+                            style={{
+                              color: "var(--rezvix-text-soft)",
+                              fontSize: 11.5,
+                              marginTop: 1,
+                            }}
+                          >
+                            {row.city}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Status badges */}
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      {row.isAvailable === false && (
+                        <span
+                          style={{
+                            padding: "3px 9px",
+                            borderRadius: 999,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: "rgba(220,38,38,.10)",
+                            color: "var(--rezvix-danger)",
+                            border: "1px solid rgba(220,38,38,.24)",
+                          }}
+                        >
+                          {t("Stokta yok")}
+                        </span>
+                      )}
+                      {row.hidden && (
+                        <span
+                          style={{
+                            padding: "3px 9px",
+                            borderRadius: 999,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: "rgba(107,114,128,.12)",
+                            color: "var(--rezvix-text-soft)",
+                            border: "1px solid rgba(107,114,128,.24)",
+                          }}
+                        >
+                          {t("Gizli")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Price deviation */}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 16,
+                      paddingLeft: 44,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {hasCustomPrice && row.price !== null ? (
+                      <>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <span
+                            style={{
+                              color: "var(--rezvix-text-soft)",
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.06em",
+                            }}
+                          >
+                            {t("Şube fiyatı")}
+                          </span>
+                          <span
+                            style={{
+                              color: "var(--rezvix-text-main)",
+                              fontSize: 14,
+                              fontWeight: 700,
+                            }}
+                          >
+                            ₺{row.price.toFixed(2)}
+                          </span>
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <span
+                            style={{
+                              color: "var(--rezvix-text-soft)",
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.06em",
+                            }}
+                          >
+                            {t("Zincir fiyatı")}
+                          </span>
+                          <span
+                            style={{
+                              color: "var(--rezvix-text-soft)",
+                              fontSize: 13,
+                              fontWeight: 600,
+                              textDecoration: "line-through",
+                            }}
+                          >
+                            ₺{chainPrice.toFixed(2)}
+                          </span>
+                        </div>
+
+                        {priceDiff !== null && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            <span
+                              style={{
+                                color: "var(--rezvix-text-soft)",
+                                fontSize: 10.5,
+                                fontWeight: 600,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.06em",
+                              }}
+                            >
+                              {t("Fark")}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 700,
+                                color:
+                                  priceDiff > 0
+                                    ? "var(--rezvix-danger)"
+                                    : "var(--rezvix-success)",
+                              }}
+                            >
+                              {priceDiff > 0 ? "+" : ""}
+                              ₺{priceDiff.toFixed(2)}
+                            </span>
+                          </div>
+                        )}
+
+                        {row.discountPrice !== null && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            <span
+                              style={{
+                                color: "var(--rezvix-text-soft)",
+                                fontSize: 10.5,
+                                fontWeight: 600,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.06em",
+                              }}
+                            >
+                              {t("İnd. fiyat")}
+                            </span>
+                            <span
+                              style={{
+                                color: "var(--rezvix-success)",
+                                fontSize: 13,
+                                fontWeight: 700,
+                              }}
+                            >
+                              ₺{row.discountPrice.toFixed(2)}
+                              {chainDiscount !== null && chainDiscount !== row.discountPrice && (
+                                <span
+                                  style={{
+                                    color: "var(--rezvix-text-soft)",
+                                    fontWeight: 400,
+                                    marginLeft: 6,
+                                    textDecoration: "line-through",
+                                    fontSize: 11.5,
+                                  }}
+                                >
+                                  ₺{chainDiscount.toFixed(2)}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span
+                        style={{
+                          color: "var(--rezvix-text-soft)",
+                          fontSize: 12.5,
+                          fontStyle: "italic",
+                        }}
+                      >
+                        {t("Fiyat sapması yok — stok/görünürlük sapması")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            padding: "14px 24px",
+            borderTop: "1px solid var(--rezvix-border-subtle)",
+            background: "var(--rezvix-bg-soft)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+          }}
+        >
+          <button
+            onClick={onClose}
+            style={{
+              padding: "9px 22px",
+              borderRadius: 9,
+              border: "1px solid var(--rezvix-border-strong)",
+              background: "transparent",
+              color: "var(--rezvix-text-muted)",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: 13.5,
+            }}
+          >
+            {t("Kapat")}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function OrgCatalog() {
@@ -676,6 +1200,10 @@ export default function OrgCatalog() {
   const PAGE_SIZE = 20;
 
   const [modal, setModal] = useState<ModalState>({ open: false, product: null });
+  const [overrideDrawer, setOverrideDrawer] = useState<{ open: boolean; product: OrgProduct | null }>({
+    open: false,
+    product: null,
+  });
 
   // Categories
   const { data: catData } = useQuery({
@@ -891,6 +1419,45 @@ export default function OrgCatalog() {
       },
     },
     {
+      key: "overrides",
+      header: t("Sapmalar"),
+      render: (p) =>
+        (p.overrideCount ?? 0) > 0 ? (
+          <button
+            onClick={() => setOverrideDrawer({ open: true, product: p })}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "4px 11px",
+              borderRadius: 999,
+              border: "1px solid rgba(123,44,44,.26)",
+              background: "var(--rezvix-primary-soft)",
+              color: "var(--rezvix-primary)",
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 700,
+              transition: "opacity .12s ease, transform .12s ease",
+              whiteSpace: "nowrap",
+            }}
+            title={t("Şube sapmalarını gör")}
+          >
+            <span style={{ fontSize: 13 }}>⚠️</span>
+            {p.overrideCount} {t("şube")}
+          </button>
+        ) : (
+          <span
+            style={{
+              color: "var(--rezvix-text-soft)",
+              opacity: 0.45,
+              fontSize: 14,
+            }}
+          >
+            —
+          </span>
+        ),
+    },
+    {
       key: "status",
       header: t("Durum"),
       render: (p) => (
@@ -1089,6 +1656,14 @@ export default function OrgCatalog() {
         orgId={orgId}
         categories={categories}
         onClose={closeModal}
+      />
+
+      <ProductOverridesDrawer
+        open={overrideDrawer.open}
+        product={overrideDrawer.product}
+        orgId={orgId}
+        onClose={() => setOverrideDrawer({ open: false, product: null })}
+        t={t}
       />
     </div>
   );
