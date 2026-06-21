@@ -59,6 +59,7 @@ import OrgMenuManagerPage from "./pages/org/OrgMenuManagerPage";
 // Market Org (chain owner) panel
 import OrgCatalogPage from "./pages/marketOrg/OrgCatalog";
 import OrgBranchesPage from "./pages/marketOrg/OrgBranches";
+import OrgBranchDetailPage from "./pages/marketOrg/OrgBranchDetail";
 import MarketOrgDashboardPage from "./pages/marketOrg/OrgDashboard";
 import OrgReportsPage from "./pages/marketOrg/OrgReports";
 import { MarketOrgLayout } from "./desktop/layouts/MarketOrgLayout";
@@ -739,6 +740,14 @@ export default function App() {
           element={
             <MarketOrgLayout>
               <OrgBranchesPage />
+            </MarketOrgLayout>
+          }
+        />
+        <Route
+          path="/market-org/branches/:storeId"
+          element={
+            <MarketOrgLayout>
+              <OrgBranchDetailPage />
             </MarketOrgLayout>
           }
         />

@@ -1,5 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { authStore } from "../../store/auth";
 import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
 import { DataTable, type Column } from "../../desktop/components/admin/DataTable";
@@ -48,6 +49,7 @@ function NoOrgState({ t }: { t: (s: string) => string }) {
 
 export default function OrgBranches() {
   const { t } = useI18n();
+  const navigate = useNavigate();
 
   const orgId = authStore.getUser()?.organizations?.[0]?.id ?? null;
 
@@ -156,6 +158,24 @@ export default function OrgBranches() {
         </span>
       ),
     },
+    {
+      key: "detail",
+      header: "",
+      align: "right" as const,
+      render: () => (
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: "var(--rezvix-primary)",
+            opacity: 0.7,
+            letterSpacing: "0.01em",
+          }}
+        >
+          {t("detay")} →
+        </span>
+      ),
+    },
   ];
 
   if (!orgId) {
@@ -250,6 +270,7 @@ export default function OrgBranches() {
         rowKey={(b) => b._id}
         loading={isLoading}
         emptyText={t("Şube bulunamadı.")}
+        onRowClick={(b) => navigate(`/market-org/branches/${b._id}`)}
       />
     </div>
   );

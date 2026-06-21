@@ -42,6 +42,47 @@ export async function listOrgBranches(orgId: string) {
   return data as { items: Array<{ _id: string; name: string; city?: string; isActive?: boolean }> };
 }
 
+export interface OrgBranchDetail {
+  store: {
+    _id: string;
+    name: string;
+    city?: string;
+    isActive?: boolean;
+    pickupEnabled?: boolean;
+    workingHours?: { open: string; close: string; days?: number[] };
+    deliveryZoneKm?: number;
+    minOrderAmount?: number;
+    deliveryFee?: number;
+    freeDeliveryThreshold?: number | null;
+  };
+  stats: {
+    orders: number;
+    delivered: number;
+    revenue: number;
+    productCount: number;
+    overrideCount: number;
+  };
+  overriddenProducts: Array<{
+    orgProductId: string;
+    title: string;
+    defaultPrice: number;
+    price: number;
+    discountPrice?: number | null;
+    isAvailable?: boolean;
+    hidden?: boolean;
+  }>;
+}
+
+export async function getOrgBranch(orgId: string, storeId: string) {
+  const { data } = await api.get(`/market/org/${orgId}/branches/${storeId}`);
+  return data as OrgBranchDetail;
+}
+
+export async function updateOrgBranch(orgId: string, storeId: string, body: Record<string, unknown>) {
+  const { data } = await api.patch(`/market/org/${orgId}/branches/${storeId}`, body);
+  return data;
+}
+
 export interface OrgReport {
   range: { from: string; to: string };
   kpis: { revenue: number; orders: number; delivered: number; avgBasket: number };
