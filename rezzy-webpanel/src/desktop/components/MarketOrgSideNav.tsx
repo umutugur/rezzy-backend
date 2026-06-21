@@ -2,15 +2,49 @@ import React from "react";
 import { useI18n } from "../../i18n";
 import { authStore } from "../../store/auth";
 
-export type MarketOrgNavKey = "catalog" | "branches";
+export type MarketOrgNavKey = "dashboard" | "catalog" | "branches" | "reports" | "settings";
 
 interface Props {
   active: MarketOrgNavKey;
   onNavigate: (key: MarketOrgNavKey) => void;
 }
 
+interface NavItem {
+  key: MarketOrgNavKey;
+  icon: string;
+  label: string;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
 export const MarketOrgSideNav: React.FC<Props> = ({ active, onNavigate }) => {
   const { t } = useI18n();
+
+  const groups: NavGroup[] = [
+    {
+      label: t("Genel"),
+      items: [
+        { key: "dashboard", icon: "📊", label: t("Genel Bakış") },
+        { key: "catalog", icon: "🏷️", label: t("Ürün Kataloğu") },
+      ],
+    },
+    {
+      label: t("Zincir"),
+      items: [
+        { key: "branches", icon: "🏪", label: t("Şubeler") },
+        { key: "reports", icon: "📈", label: t("Raporlar") },
+      ],
+    },
+    {
+      label: t("Sistem"),
+      items: [
+        { key: "settings", icon: "⚙️", label: t("Ayarlar") },
+      ],
+    },
+  ];
 
   return (
     <aside className="rezvix-sidenav">
@@ -23,39 +57,27 @@ export const MarketOrgSideNav: React.FC<Props> = ({ active, onNavigate }) => {
       </div>
 
       <nav className="rezvix-sidenav__nav">
-        <div>
-          <div className="rezvix-sidenav__group-label">{t("Katalog")}</div>
-          <button
-            type="button"
-            className={
-              "rezvix-sidenav__item" +
-              (active === "catalog" ? " rezvix-sidenav__item--active" : "")
-            }
-            onClick={() => onNavigate("catalog")}
-          >
-            <div className="rezvix-sidenav__icon">🏷️</div>
-            <div className="rezvix-sidenav__label">
-              <span>{t("Ürün Kataloğu")}</span>
-            </div>
-          </button>
-        </div>
-
-        <div style={{ marginTop: 10 }}>
-          <div className="rezvix-sidenav__group-label">{t("Zincir")}</div>
-          <button
-            type="button"
-            className={
-              "rezvix-sidenav__item" +
-              (active === "branches" ? " rezvix-sidenav__item--active" : "")
-            }
-            onClick={() => onNavigate("branches")}
-          >
-            <div className="rezvix-sidenav__icon">🏪</div>
-            <div className="rezvix-sidenav__label">
-              <span>{t("Şubeler")}</span>
-            </div>
-          </button>
-        </div>
+        {groups.map((group, gi) => (
+          <div key={group.label} style={{ marginTop: gi > 0 ? 10 : 0 }}>
+            <div className="rezvix-sidenav__group-label">{group.label}</div>
+            {group.items.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={
+                  "rezvix-sidenav__item" +
+                  (active === item.key ? " rezvix-sidenav__item--active" : "")
+                }
+                onClick={() => onNavigate(item.key)}
+              >
+                <div className="rezvix-sidenav__icon">{item.icon}</div>
+                <div className="rezvix-sidenav__label">
+                  <span>{item.label}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        ))}
       </nav>
 
       <div className="rezvix-sidenav__footer">

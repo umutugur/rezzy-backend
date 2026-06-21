@@ -59,6 +59,8 @@ import OrgMenuManagerPage from "./pages/org/OrgMenuManagerPage";
 // Market Org (chain owner) panel
 import OrgCatalogPage from "./pages/marketOrg/OrgCatalog";
 import OrgBranchesPage from "./pages/marketOrg/OrgBranches";
+import MarketOrgDashboardPage from "./pages/marketOrg/OrgDashboard";
+import OrgReportsPage from "./pages/marketOrg/OrgReports";
 import { MarketOrgLayout } from "./desktop/layouts/MarketOrgLayout";
 
 // Admin layout
@@ -392,8 +394,8 @@ function LoginPage() {
     const isRestaurantUser = hasRestaurantPanelAccess(u);
 
     if (u.role === "admin") return "/admin";
-    // market_owner with org membership → chain catalog panel
-    if (u.role === "market_owner" && isMarketOrgUser) return "/market-org/catalog";
+    // market_owner with org membership → chain dashboard panel
+    if (u.role === "market_owner" && isMarketOrgUser) return "/market-org";
     if (u.role === "market_owner") return "/market-desktop/orders";
     if (isOrgUser) return "/org";
     if (isRestaurantUser) return "/restaurant";
@@ -717,6 +719,14 @@ export default function App() {
       {/* Market Org (chain) panel */}
       <Route element={<MarketOrgPrivateRoute />}>
         <Route
+          path="/market-org"
+          element={
+            <MarketOrgLayout>
+              <MarketOrgDashboardPage />
+            </MarketOrgLayout>
+          }
+        />
+        <Route
           path="/market-org/catalog"
           element={
             <MarketOrgLayout>
@@ -729,6 +739,14 @@ export default function App() {
           element={
             <MarketOrgLayout>
               <OrgBranchesPage />
+            </MarketOrgLayout>
+          }
+        />
+        <Route
+          path="/market-org/reports"
+          element={
+            <MarketOrgLayout>
+              <OrgReportsPage />
             </MarketOrgLayout>
           }
         />
@@ -875,7 +893,7 @@ function RootRedirect() {
 
   if (u.role === "market_owner") {
     // chain owner with org membership → chain catalog
-    if (hasMarketOrgPanelAccess(u)) return <Navigate to="/market-org/catalog" replace />;
+    if (hasMarketOrgPanelAccess(u)) return <Navigate to="/market-org" replace />;
     return <Navigate to="/market-desktop/orders" replace />;
   }
 

@@ -41,3 +41,18 @@ export async function listOrgBranches(orgId: string) {
   const { data } = await api.get(`/market/org/${orgId}/branches`);
   return data as { items: Array<{ _id: string; name: string; city?: string; isActive?: boolean }> };
 }
+
+export interface OrgReport {
+  range: { from: string; to: string };
+  kpis: { revenue: number; orders: number; delivered: number; avgBasket: number };
+  timeseries: { date: string; revenue: number; orders: number }[];
+  byStatus: { status: string; count: number }[];
+  byPayment: { method: string; count: number; revenue: number }[];
+  perBranch: { storeId: string; name: string; orders: number; revenue: number }[];
+  topProducts: { title: string; qty: number; revenue: number }[];
+}
+
+export async function orgReports(orgId: string, from?: string, to?: string) {
+  const { data } = await api.get(`/market/org/${orgId}/reports`, { params: { from, to } });
+  return data as OrgReport;
+}
