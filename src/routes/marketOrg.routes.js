@@ -3,6 +3,7 @@ import { auth } from "../middlewares/auth.js";
 import { requireOrgAccess } from "../middlewares/requireOrgAccess.js";
 import { listOrgProducts, createOrgProduct, updateOrgProduct, deleteOrgProduct, listOrgBranches } from "../controllers/marketOrgCatalog.controller.js";
 import { orgReports, orgBranchDetail, orgUpdateBranch, orgProductOverrides, orgBulkImport, orgExportCsv, orgBulkUpdate } from "../controllers/marketOrgPanel.controller.js";
+import { listImportTemplates, createImportTemplate, updateImportTemplate, deleteImportTemplate } from "../controllers/marketImportTemplate.controller.js";
 
 const r = Router();
 const guard = [auth(), requireOrgAccess(["org_owner", "org_admin"])];
@@ -18,4 +19,8 @@ r.get("/market/org/:organizationId/branches", ...guard, listOrgBranches);
 r.get("/market/org/:organizationId/branches/:storeId", ...guard, orgBranchDetail);
 r.patch("/market/org/:organizationId/branches/:storeId", ...guard, orgUpdateBranch);
 r.get("/market/org/:organizationId/reports", ...guard, orgReports);
+r.get("/market/org/:organizationId/import-templates", ...guard, listImportTemplates);
+r.post("/market/org/:organizationId/import-templates", ...guard, createImportTemplate);
+r.patch("/market/org/:organizationId/import-templates/:id", ...guard, updateImportTemplate);
+r.delete("/market/org/:organizationId/import-templates/:id", ...guard, deleteImportTemplate);
 export default r;
