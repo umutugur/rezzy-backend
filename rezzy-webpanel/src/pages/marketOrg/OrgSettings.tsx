@@ -198,6 +198,114 @@ function LogoUpload({
   );
 }
 
+// ─── Cover image upload section ───────────────────────────────────────────────
+
+function CoverUpload({
+  coverUrl,
+  onUploaded,
+  t,
+}: {
+  coverUrl: string;
+  onUploaded: (url: string) => void;
+  t: (s: string) => string;
+}) {
+  const [uploading, setUploading] = React.useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { url } = await uploadMarketImage(file);
+      onUploaded(url);
+      showToast(t("Kapak görseli yüklendi"), "success");
+    } catch {
+      showToast(t("Kapak görseli yüklenemedi"), "error");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+      {/* Wide 16:9 preview */}
+      <div
+        style={{
+          width: 180,
+          height: 101,
+          borderRadius: 10,
+          border: "1.5px solid var(--rezvix-border-strong)",
+          background: "var(--rezvix-bg-soft)",
+          overflow: "hidden",
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 28,
+          color: "var(--rezvix-text-soft)",
+        }}
+      >
+        {coverUrl ? (
+          <img
+            src={coverUrl}
+            alt="kapak"
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          "🖼️"
+        )}
+      </div>
+
+      {/* Upload button */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+          style={{
+            padding: "8px 16px",
+            borderRadius: 999,
+            border: "1.5px solid var(--rezvix-border-strong)",
+            background: uploading ? "var(--rezvix-bg-soft)" : "var(--rezvix-bg-elevated)",
+            color: uploading ? "var(--rezvix-text-soft)" : "var(--rezvix-text-muted)",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: uploading ? "not-allowed" : "pointer",
+            transition: "all 0.13s",
+          }}
+          onMouseEnter={(e) => {
+            if (!uploading) {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--rezvix-primary)";
+              (e.currentTarget as HTMLButtonElement).style.color = "var(--rezvix-primary)";
+            }
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--rezvix-border-strong)";
+            (e.currentTarget as HTMLButtonElement).style.color = "var(--rezvix-text-muted)";
+          }}
+        >
+          {uploading ? t("Yükleniyor…") : (coverUrl ? t("Kapağı Değiştir") : t("Kapak Yükle"))}
+        </button>
+        <span style={{ fontSize: 11.5, color: "var(--rezvix-text-soft)" }}>
+          {t("PNG, JPG, WebP — maks. 5 MB")}
+        </span>
+        <span style={{ fontSize: 11.5, color: "var(--rezvix-text-soft)" }}>
+          {t("Önerilen oran: 16:9 (örn. 1280×720)")}
+        </span>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          style={{ display: "none" }}
+          onChange={handleFile}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function OrgSettings() {
@@ -215,6 +323,7 @@ export default function OrgSettings() {
   // ── Form state ─────────────────────────────────────────────────────────────
   const [name, setName] = React.useState("");
   const [logoUrl, setLogoUrl] = React.useState("");
+  const [coverUrl, setCoverUrl] = React.useState("");
   const [region, setRegion] = React.useState("");
   const [defaultLanguage, setDefaultLanguage] = React.useState("tr");
   const [description, setDescription] = React.useState("");
@@ -226,6 +335,7 @@ export default function OrgSettings() {
     hydratedRef.current = true;
     setName(data.name ?? "");
     setLogoUrl(data.logoUrl ?? "");
+    setCoverUrl(data.coverUrl ?? "");
     setRegion(data.region ?? "");
     setDefaultLanguage(data.defaultLanguage ?? "tr");
     setDescription(data.description ?? "");
@@ -237,6 +347,7 @@ export default function OrgSettings() {
       updateOrgProfile(orgId!, {
         name: name.trim() || undefined,
         logoUrl: logoUrl || undefined,
+        coverUrl: coverUrl || undefined,
         region: region || undefined,
         defaultLanguage: defaultLanguage || undefined,
         description: description.trim() || undefined,
@@ -310,7 +421,7 @@ export default function OrgSettings() {
         subtitle={t("Organizasyon profili")}
       />
 
-      {/* ── Logo ── */}
+      {/* ── Logo & Kapak ── */}
       <div style={sectionCardSx}>
         <div style={sectionTitleSx}>{t("Marka")}</div>
         <FormField label={t("Logo")}>
@@ -320,6 +431,26 @@ export default function OrgSettings() {
             t={t}
           />
         </FormField>
+        <FormField label={t("Kapak Görseli")}>
+          <CoverUpload
+            coverUrl={coverUrl}
+            onUploaded={(url) => setCoverUrl(url)}
+            t={t}
+          />
+        </FormField>
+        <div
+          style={{
+            marginTop: 4,
+            fontSize: 12,
+            color: "var(--rezvix-text-soft)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span style={{ opacity: 0.7 }}>ℹ️</span>
+          <span>{t("Bu logo ve kapak, kendi görselini yüklememiş şubelerde gösterilir.")}</span>
+        </div>
       </div>
 
       {/* ── Genel bilgiler ── */}

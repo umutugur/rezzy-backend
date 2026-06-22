@@ -467,6 +467,23 @@ export function MarketSettingsPage() {
         {/* ── Section B: Görseller ────────────────────────────────────────── */}
         <div style={sectionCardStyle}>
           <div style={sectionTitleStyle}>🖼️ {t("Görseller")}</div>
+          <div
+            style={{
+              marginBottom: 16,
+              padding: "8px 12px",
+              borderRadius: 8,
+              background: "#f9fafb",
+              border: "1px solid #e5e7eb",
+              fontSize: 12,
+              color: "#6b7280",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span style={{ opacity: 0.8 }}>ℹ️</span>
+            <span>{t("Boş bırakırsanız zincir görseli kullanılır.")}</span>
+          </div>
           <ImageCropField
             label={t("Logo")}
             hint={t("Kare (1:1)")}

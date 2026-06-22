@@ -160,6 +160,7 @@ export interface OrgProfileData {
   _id: string;
   name: string;
   logoUrl?: string;
+  coverUrl?: string;
   region?: string;
   defaultLanguage?: string;
   description?: string;
@@ -175,7 +176,7 @@ export async function getOrgProfile(orgId: string): Promise<OrgProfileData> {
 
 export async function updateOrgProfile(
   orgId: string,
-  body: { name?: string; logoUrl?: string; region?: string; defaultLanguage?: string; description?: string }
+  body: { name?: string; logoUrl?: string; coverUrl?: string; region?: string; defaultLanguage?: string; description?: string }
 ): Promise<{ ok: boolean; organization: OrgProfileData }> {
   const { data } = await api.patch(`/org/organizations/${orgId}`, body);
   return data;
