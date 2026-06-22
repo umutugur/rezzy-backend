@@ -154,6 +154,48 @@ export async function orgReports(orgId: string, from?: string, to?: string) {
   return data as OrgReport;
 }
 
+// ─── Import Templates ─────────────────────────────────────────────────────────
+
+export interface ImportTemplate {
+  _id: string;
+  name: string;
+  columnMap: {
+    title?: string;
+    category?: string;
+    defaultPrice?: string;
+    barcode?: string;
+    unit?: string;
+    defaultDiscountPrice?: string;
+  };
+  categoryMap: Record<string, string>;
+  options: {
+    decimalSeparator: "." | ",";
+    stripCurrency: boolean;
+    unitMap: Record<string, string>;
+  };
+  headerFingerprint: string;
+}
+
+export async function listImportTemplates(orgId: string) {
+  const { data } = await api.get(`/market/org/${orgId}/import-templates`);
+  return data as { items: ImportTemplate[] };
+}
+
+export async function saveImportTemplate(orgId: string, body: Partial<ImportTemplate>) {
+  const { data } = await api.post(`/market/org/${orgId}/import-templates`, body);
+  return data as { item: ImportTemplate };
+}
+
+export async function updateImportTemplate(orgId: string, id: string, body: Partial<ImportTemplate>) {
+  const { data } = await api.patch(`/market/org/${orgId}/import-templates/${id}`, body);
+  return data as { item: ImportTemplate };
+}
+
+export async function deleteImportTemplate(orgId: string, id: string) {
+  const { data } = await api.delete(`/market/org/${orgId}/import-templates/${id}`);
+  return data;
+}
+
 // ─── Chain / Org Profile ──────────────────────────────────────────────────────
 
 export interface OrgProfileData {

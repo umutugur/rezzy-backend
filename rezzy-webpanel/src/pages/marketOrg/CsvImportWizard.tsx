@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   parseCsv,
@@ -7,10 +7,18 @@ import {
   normalizeUnit,
   guessCategoryMatch,
   applyMapping,
+  headerFingerprint,
   type ColumnMap,
   type ImportOptions,
 } from "../../lib/csvImport";
-import { bulkImportProducts } from "../../api/marketOrgCatalog";
+import {
+  bulkImportProducts,
+  listImportTemplates,
+  saveImportTemplate,
+  updateImportTemplate,
+  deleteImportTemplate,
+  type ImportTemplate,
+} from "../../api/marketOrgCatalog";
 import { showToast } from "../../ui/Toast";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -97,6 +105,12 @@ export default function CsvImportWizard({ orgId, categories, onClose, onImported
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileError, setFileError] = useState("");
 
+  // Template state (used in step 1 lower area after parse)
+  const [templates, setTemplates] = useState<ImportTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const fp = React.useMemo(() => (headers.length > 0 ? headerFingerprint(headers) : ""), [headers]);
+
   // Step 2 state
   const [columnMap, setColumnMap] = useState<Partial<ColumnMap>>({});
 
@@ -111,6 +125,81 @@ export default function CsvImportWizard({ orgId, categories, onClose, onImported
   // Step 5 state
   const [importing, setImporting] = useState(false);
   const [errorsOpen, setErrorsOpen] = useState(false);
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+
+  // ── Load templates once headers are available ─────────────────────────────────
+
+  useEffect(() => {
+    if (headers.length === 0) return;
+    setTemplatesLoading(true);
+    listImportTemplates(orgId)
+      .then(({ items }) => {
+        setTemplates(items);
+        // Auto-select fingerprint match
+        const match = items.find((t) => t.headerFingerprint === fp);
+        if (match) {
+          setSelectedTemplateId(match._id);
+          applyTemplate(match);
+        }
+      })
+      .catch(() => {
+        // silently ignore — templates are optional
+      })
+      .finally(() => setTemplatesLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headers.join(","), orgId]);
+
+  const applyTemplate = useCallback((tmpl: ImportTemplate) => {
+    setColumnMap(tmpl.columnMap as Partial<ColumnMap>);
+    setCategoryMap(tmpl.categoryMap ?? {});
+    setDecimalSep(tmpl.options?.decimalSeparator ?? ".");
+    setStripCurrency(tmpl.options?.stripCurrency ?? true);
+    setUnitMap((tmpl.options?.unitMap ?? {}) as Record<string, UnitValue>);
+    setTemplateName(tmpl.name);
+  }, []);
+
+  const clearTemplate = useCallback(() => {
+    setSelectedTemplateId(null);
+    setTemplateName("");
+    // Reset to guessed defaults
+    if (headers.length > 0) {
+      const guess = guessColumnMap(headers);
+      setColumnMap(guess);
+    }
+    setCategoryMap({});
+    setUnitMap({});
+  }, [headers]);
+
+  const handleSelectTemplate = useCallback(
+    (id: string | null) => {
+      if (!id) {
+        clearTemplate();
+        return;
+      }
+      const tmpl = templates.find((t) => t._id === id);
+      if (!tmpl) return;
+      setSelectedTemplateId(id);
+      applyTemplate(tmpl);
+    },
+    [templates, applyTemplate, clearTemplate],
+  );
+
+  const handleDeleteTemplate = useCallback(
+    async (id: string) => {
+      try {
+        await deleteImportTemplate(orgId, id);
+        setTemplates((prev) => prev.filter((t) => t._id !== id));
+        if (selectedTemplateId === id) {
+          clearTemplate();
+        }
+        showToast("Şablon silindi", "success");
+      } catch {
+        showToast("Şablon silinemedi", "error");
+      }
+    },
+    [orgId, selectedTemplateId, clearTemplate],
+  );
 
   // ── Computed ─────────────────────────────────────────────────────────────────
 
@@ -164,6 +253,10 @@ export default function CsvImportWizard({ orgId, categories, onClose, onImported
     if (!file) return;
     e.target.value = "";
     setFileError("");
+    // Reset template selections when loading a new file
+    setSelectedTemplateId(null);
+    setTemplateName("");
+    setTemplates([]);
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
@@ -177,7 +270,7 @@ export default function CsvImportWizard({ orgId, categories, onClose, onImported
       setHeaders(hdrs);
       setFileName(file.name);
 
-      // Auto-guess column map
+      // Auto-guess column map (will be overridden if a matching template is found in useEffect)
       const guess = guessColumnMap(hdrs);
       setColumnMap(guess);
 
@@ -213,6 +306,29 @@ export default function CsvImportWizard({ orgId, categories, onClose, onImported
     try {
       const result = await bulkImportProducts(orgId, mappingResult.rows);
       qc.invalidateQueries({ queryKey: ["org-products", orgId] });
+
+      // ── Save / update template ────────────────────────────────────────────────
+      if (saveAsTemplate && templateName.trim()) {
+        const tmplBody = {
+          name: templateName.trim(),
+          columnMap,
+          categoryMap,
+          options: { decimalSeparator: decimalSep, stripCurrency, unitMap },
+          headerFingerprint: fp,
+        };
+        try {
+          if (selectedTemplateId) {
+            await updateImportTemplate(orgId, selectedTemplateId, tmplBody);
+          } else {
+            await saveImportTemplate(orgId, tmplBody);
+          }
+          showToast("Şablon kaydedildi", "success");
+        } catch {
+          // Don't block import on template save failure
+          showToast("İçe aktarma başarılı, ancak şablon kaydedilemedi", "error");
+        }
+      }
+
       const errMsg =
         result.errors?.length > 0
           ? ` — ${result.errors.length} hata: ${result.errors
@@ -253,7 +369,7 @@ export default function CsvImportWizard({ orgId, categories, onClose, onImported
       setUnitMap(newUnitMap);
     }
     if (step === 2) {
-      // Pre-populate category map with guesses
+      // Pre-populate category map with guesses (only for unmapped values)
       handleGuessCategories();
     }
     setStep((s) => s + 1);
@@ -275,6 +391,10 @@ export default function CsvImportWizard({ orgId, categories, onClose, onImported
         .wiz-close:hover { background: var(--rezvix-bg-soft) !important; color: var(--rezvix-text-main) !important; }
         .drop-zone:hover { border-color: var(--rezvix-primary) !important; background: var(--rezvix-primary-soft) !important; }
         .err-toggle:hover { color: var(--rezvix-text-main) !important; }
+        .tmpl-row:hover { background: var(--rezvix-bg-soft) !important; }
+        .tmpl-del:hover { background: rgba(220,38,38,.12) !important; color: var(--rezvix-danger) !important; }
+        @keyframes tmplIn { from { opacity:0; transform: translateY(8px) } to { opacity:1; transform: none } }
+        .tmpl-panel { animation: tmplIn .22s cubic-bezier(.16,1,.3,1); }
       `}</style>
 
       {/* Backdrop */}
@@ -488,6 +608,13 @@ export default function CsvImportWizard({ orgId, categories, onClose, onImported
                 headers={headers}
                 fileError={fileError}
                 fileName={fileName}
+                // Template panel props
+                templates={templates}
+                templatesLoading={templatesLoading}
+                selectedTemplateId={selectedTemplateId}
+                fp={fp}
+                onSelectTemplate={handleSelectTemplate}
+                onDeleteTemplate={handleDeleteTemplate}
               />
             )}
             {step === 1 && (
@@ -538,21 +665,74 @@ export default function CsvImportWizard({ orgId, categories, onClose, onImported
               padding: "16px 28px",
               borderTop: "1px solid var(--rezvix-border-subtle)",
               background: "var(--rezvix-bg-soft)",
+              gap: 12,
+              flexWrap: "wrap",
             }}
           >
-            {/* Phase 3 placeholder */}
-            <div
-              style={{
-                color: "var(--rezvix-text-soft)",
-                fontSize: 11.5,
-                fontStyle: "italic",
-                opacity: 0.6,
-              }}
-            >
-              {step === 4 ? "Şablon kaydetme yakında" : " "}
-            </div>
+            {/* Save-as-template control (only on preview step) */}
+            {step === 4 ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  flex: 1,
+                  minWidth: 0,
+                  flexWrap: "wrap",
+                }}
+              >
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={saveAsTemplate}
+                    onChange={(e) => setSaveAsTemplate(e.target.checked)}
+                    style={{ accentColor: "var(--rezvix-primary)", width: 14, height: 14 }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: "var(--rezvix-text-muted)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    🗂️ {selectedTemplateId ? "Şablonu güncelle" : "Şablon olarak kaydet"}
+                  </span>
+                </label>
+                {saveAsTemplate && (
+                  <input
+                    className="wizard-input"
+                    type="text"
+                    placeholder="Şablon adı"
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    style={{
+                      padding: "6px 11px",
+                      borderRadius: 7,
+                      border: "1px solid var(--rezvix-border-strong)",
+                      background: "var(--rezvix-bg-elevated)",
+                      color: "var(--rezvix-text-main)",
+                      fontSize: 13,
+                      outline: "none",
+                      minWidth: 160,
+                      maxWidth: 220,
+                    }}
+                  />
+                )}
+              </div>
+            ) : (
+              <div style={{ flex: 1 }} />
+            )}
 
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
               {step > 0 && (
                 <button
                   className="step-btn"
@@ -652,6 +832,12 @@ function Step1Upload({
   headers,
   fileError,
   fileName,
+  templates,
+  templatesLoading,
+  selectedTemplateId,
+  fp,
+  onSelectTemplate,
+  onDeleteTemplate,
 }: {
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -659,7 +845,15 @@ function Step1Upload({
   headers: string[];
   fileError: string;
   fileName: string;
+  templates: ImportTemplate[];
+  templatesLoading: boolean;
+  selectedTemplateId: string | null;
+  fp: string;
+  onSelectTemplate: (id: string | null) => void;
+  onDeleteTemplate: (id: string) => void;
 }) {
+  const suggestedTemplate = templates.find((t) => t.headerFingerprint === fp);
+
   return (
     <div>
       <p
@@ -815,7 +1009,64 @@ function Step1Upload({
         </div>
       )}
 
-      {/* Phase 3 placeholder */}
+      {/* ── Template panel — only shown after file parse ── */}
+      {csvRows.length > 0 && (
+        <TemplatePanel
+          templates={templates}
+          loading={templatesLoading}
+          selectedId={selectedTemplateId}
+          suggestedTemplate={suggestedTemplate ?? null}
+          onSelect={onSelectTemplate}
+          onDelete={onDeleteTemplate}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Template Panel ─────────────────────────────────────────────────────────────
+
+function TemplatePanel({
+  templates,
+  loading,
+  selectedId,
+  suggestedTemplate,
+  onSelect,
+  onDelete,
+}: {
+  templates: ImportTemplate[];
+  loading: boolean;
+  selectedId: string | null;
+  suggestedTemplate: ImportTemplate | null;
+  onSelect: (id: string | null) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          marginTop: 20,
+          padding: "14px 16px",
+          borderRadius: 12,
+          background: "var(--rezvix-bg-soft)",
+          border: "1px solid var(--rezvix-border-subtle)",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          color: "var(--rezvix-text-soft)",
+          fontSize: 13,
+        }}
+      >
+        <span style={{ opacity: 0.7, fontSize: 16 }}>🗂️</span>
+        <span>Kayıtlı şablonlar yükleniyor…</span>
+      </div>
+    );
+  }
+
+  if (templates.length === 0) {
+    return (
       <div
         style={{
           marginTop: 20,
@@ -832,10 +1083,306 @@ function Step1Upload({
       >
         <span style={{ fontSize: 16, opacity: 0.6 }}>🗂️</span>
         <span>
-          <strong>Şablon seçimi</strong> — Kayıtlı sütun eşlemelerini kullanma
-          özelliği yakında eklenecek.
+          Henüz kayıtlı şablon yok. İlk içe aktarmanın ardından şablon
+          oluşturabilirsiniz.
         </span>
       </div>
+    );
+  }
+
+  return (
+    <div
+      className="tmpl-panel"
+      style={{
+        marginTop: 20,
+        borderRadius: 14,
+        border: "1px solid var(--rezvix-border-subtle)",
+        overflow: "hidden",
+      }}
+    >
+      {/* Panel header */}
+      <div
+        style={{
+          padding: "12px 16px",
+          background: "var(--rezvix-bg-soft)",
+          borderBottom: "1px solid var(--rezvix-border-subtle)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 15 }}>🗂️</span>
+          <span
+            style={{
+              fontSize: 12.5,
+              fontWeight: 700,
+              color: "var(--rezvix-text-main)",
+            }}
+          >
+            Kayıtlı Şablonlar
+          </span>
+          <span
+            style={{
+              padding: "2px 8px",
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 700,
+              background: "var(--rezvix-bg-elevated)",
+              color: "var(--rezvix-text-soft)",
+              border: "1px solid var(--rezvix-border-subtle)",
+            }}
+          >
+            {templates.length}
+          </span>
+        </div>
+        {selectedId && (
+          <button
+            onClick={() => onSelect(null)}
+            style={{
+              padding: "4px 11px",
+              borderRadius: 7,
+              border: "1px solid var(--rezvix-border-strong)",
+              background: "transparent",
+              color: "var(--rezvix-text-soft)",
+              fontSize: 11.5,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Sıfırdan Eşle
+          </button>
+        )}
+      </div>
+
+      {/* Suggested banner */}
+      {suggestedTemplate && selectedId === suggestedTemplate._id && (
+        <div
+          style={{
+            padding: "10px 16px",
+            background: "rgba(22,163,74,.08)",
+            borderBottom: "1px solid rgba(22,163,74,.18)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 12.5,
+            color: "var(--rezvix-success)",
+            fontWeight: 600,
+          }}
+        >
+          <span>✨</span>
+          <span>
+            Önerilen şablon: <strong>{suggestedTemplate.name}</strong> — bu dosya daha önce bu şablonla içe aktarıldı.
+          </span>
+        </div>
+      )}
+
+      {suggestedTemplate && selectedId === null && (
+        <div
+          style={{
+            padding: "10px 16px",
+            background: "rgba(243,179,107,.08)",
+            borderBottom: "1px solid rgba(243,179,107,.22)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 14 }}>✨</span>
+            <div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--rezvix-text-main)" }}>
+                Önerilen şablon bulundu
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--rezvix-text-soft)" }}>
+                <strong style={{ color: "var(--rezvix-text-muted)" }}>{suggestedTemplate.name}</strong> bu dosyanın sütun yapısıyla eşleşiyor
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => onSelect(suggestedTemplate._id)}
+            style={{
+              padding: "6px 14px",
+              borderRadius: 8,
+              border: "none",
+              background: "linear-gradient(135deg, var(--rezvix-primary), var(--rezvix-primary-strong))",
+              color: "#fff",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            Uygula
+          </button>
+        </div>
+      )}
+
+      {/* Template list */}
+      <div style={{ maxHeight: 220, overflowY: "auto" }}>
+        {templates.map((tmpl, i) => {
+          const isSelected = selectedId === tmpl._id;
+          const isSuggested = tmpl.headerFingerprint === suggestedTemplate?.headerFingerprint;
+          return (
+            <div
+              key={tmpl._id}
+              className="tmpl-row"
+              onClick={() => onSelect(tmpl._id)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "11px 16px",
+                borderBottom:
+                  i < templates.length - 1
+                    ? "1px solid var(--rezvix-border-subtle)"
+                    : "none",
+                cursor: "pointer",
+                background: isSelected ? "rgba(123,44,44,.07)" : "transparent",
+                transition: "background .1s ease",
+                gap: 10,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: "50%",
+                    border: isSelected
+                      ? "none"
+                      : "2px solid var(--rezvix-border-strong)",
+                    background: isSelected
+                      ? "var(--rezvix-primary)"
+                      : "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    fontSize: 10,
+                    color: "#fff",
+                    fontWeight: 800,
+                    transition: "all .15s ease",
+                  }}
+                >
+                  {isSelected ? "✓" : ""}
+                </div>
+                <span
+                  style={{
+                    fontSize: 13,
+                    fontWeight: isSelected ? 700 : 500,
+                    color: isSelected ? "var(--rezvix-text-main)" : "var(--rezvix-text-muted)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    transition: "color .15s ease",
+                  }}
+                >
+                  {tmpl.name}
+                </span>
+                {isSuggested && (
+                  <span
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: 999,
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      background: "rgba(22,163,74,.12)",
+                      color: "var(--rezvix-success)",
+                      border: "1px solid rgba(22,163,74,.26)",
+                      flexShrink: 0,
+                    }}
+                  >
+                    Önerilen
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                {confirmDelete === tmpl._id ? (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(tmpl._id);
+                        setConfirmDelete(null);
+                      }}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 7,
+                        border: "none",
+                        background: "rgba(220,38,38,.18)",
+                        color: "var(--rezvix-danger)",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Sil
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDelete(null);
+                      }}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 7,
+                        border: "1px solid var(--rezvix-border-strong)",
+                        background: "transparent",
+                        color: "var(--rezvix-text-soft)",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      İptal
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="tmpl-del"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmDelete(tmpl._id);
+                    }}
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: 7,
+                      border: "1px solid var(--rezvix-border-subtle)",
+                      background: "transparent",
+                      color: "var(--rezvix-text-soft)",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "background .12s ease, color .12s ease",
+                    }}
+                  >
+                    Sil
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {selectedId === null && templates.length > 0 && !suggestedTemplate && (
+        <div
+          style={{
+            padding: "9px 16px",
+            background: "var(--rezvix-bg-soft)",
+            borderTop: "1px solid var(--rezvix-border-subtle)",
+            color: "var(--rezvix-text-soft)",
+            fontSize: 11.5,
+            fontStyle: "italic",
+          }}
+        >
+          Şablon seçilmedi — otomatik tahmin kullanılacak
+        </div>
+      )}
     </div>
   );
 }
