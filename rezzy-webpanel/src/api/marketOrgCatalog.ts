@@ -53,6 +53,46 @@ export async function deleteOrgProduct(orgId: string, id: string) {
   return data;
 }
 
+export async function bulkImportProducts(
+  orgId: string,
+  rows: Array<{
+    title: string;
+    category: string;
+    barcode?: string;
+    unit?: string;
+    defaultPrice?: number;
+    defaultDiscountPrice?: number;
+  }>
+) {
+  const { data } = await api.post(`/market/org/${orgId}/products/bulk-import`, { rows });
+  return data as { created: number; updated: number; errors: { row: number; message: string }[] };
+}
+
+export async function bulkUpdateProducts(
+  orgId: string,
+  body: {
+    productIds?: string[];
+    category?: string;
+    op: "price" | "active";
+    value: any;
+  }
+) {
+  const { data } = await api.post(`/market/org/${orgId}/products/bulk-update`, body);
+  return data as { matched: number; modified: number };
+}
+
+export async function exportProductsCsv(orgId: string): Promise<void> {
+  const res = await api.get(`/market/org/${orgId}/products/export`, { responseType: "blob" });
+  const url = window.URL.createObjectURL(new Blob([res.data], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "katalog.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export async function listOrgBranches(orgId: string) {
   const { data } = await api.get(`/market/org/${orgId}/branches`);
   return data as { items: Array<{ _id: string; name: string; city?: string; isActive?: boolean }> };
