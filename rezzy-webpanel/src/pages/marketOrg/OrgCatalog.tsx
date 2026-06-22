@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { authStore } from "../../store/auth";
 import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
@@ -9,7 +9,6 @@ import {
   updateOrgProduct,
   deleteOrgProduct,
   getProductOverrides,
-  bulkImportProducts,
   bulkUpdateProducts,
   exportProductsCsv,
   type OrgProduct,
@@ -18,7 +17,7 @@ import {
 import { getMarketCategories, uploadMarketImage, type MarketCoreCategory } from "../../api/marketDesktop";
 import { useI18n } from "../../i18n";
 import { showToast } from "../../ui/Toast";
-import { parseCsv } from "../../lib/csvImport";
+import CsvImportWizard from "./CsvImportWizard";
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
@@ -53,20 +52,6 @@ const sectionLabel: React.CSSProperties = {
   alignItems: "center",
   gap: 8,
 };
-
-// Map raw CSV row to import payload
-function mapCsvRowToImport(row: Record<string, string>) {
-  return {
-    title: row["title"] ?? row["ürün adı"] ?? row["name"] ?? "",
-    category: row["category"] ?? row["kategori"] ?? "",
-    barcode: row["barcode"] ?? row["barkod"] ?? "",
-    unit: row["unit"] ?? row["birim"] ?? "piece",
-    defaultPrice: row["defaultprice"] !== undefined ? Number(row["defaultprice"]) :
-      row["varsayılan fiyat"] !== undefined ? Number(row["varsayılan fiyat"]) : 0,
-    defaultDiscountPrice: row["defaultdiscountprice"] !== undefined ? Number(row["defaultdiscountprice"]) :
-      row["indirimli fiyat"] !== undefined ? Number(row["indirimli fiyat"]) : undefined,
-  };
-}
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 
@@ -1196,319 +1181,7 @@ function ProductOverridesDrawer({ open, product, orgId, onClose, t }: OverrideDr
   );
 }
 
-// ── CSV Import Preview Modal ──────────────────────────────────────────────────
-
-interface ImportPreviewState {
-  open: boolean;
-  rows: ReturnType<typeof mapCsvRowToImport>[];
-}
-
-function CsvImportModal({
-  preview,
-  orgId,
-  onClose,
-  t,
-}: {
-  preview: ImportPreviewState;
-  orgId: string;
-  onClose: () => void;
-  t: (s: string) => string;
-}) {
-  const qc = useQueryClient();
-  const [importing, setImporting] = useState(false);
-
-  if (!preview.open) return null;
-
-  const handleImport = async () => {
-    setImporting(true);
-    try {
-      const result = await bulkImportProducts(orgId, preview.rows);
-      qc.invalidateQueries({ queryKey: ["org-products", orgId] });
-      const errMsg = result.errors.length > 0
-        ? ` — ${result.errors.length} ${t("hata")}: ${result.errors.slice(0, 2).map((e) => `Satır ${e.row}: ${e.message}`).join("; ")}`
-        : "";
-      showToast(
-        `${result.created} ${t("eklendi")}, ${result.updated} ${t("güncellendi")}${errMsg}`,
-        result.errors.length > 0 ? "error" : "success"
-      );
-      onClose();
-    } catch {
-      showToast(t("İçe aktarma başarısız"), "error");
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  const PREVIEW_COUNT = 5;
-  const previewRows = preview.rows.slice(0, PREVIEW_COUNT);
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(17,20,40,.52)",
-        backdropFilter: "blur(6px)",
-        WebkitBackdropFilter: "blur(6px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1200,
-        padding: "24px 20px",
-      }}
-    >
-      <style>{`
-        @keyframes csvModalIn { from { opacity: 0; transform: scale(.96) translateY(8px) } to { opacity: 1; transform: none } }
-        .csv-modal { animation: csvModalIn .2s cubic-bezier(.16,1,.3,1); }
-        .csv-row-hover:hover { background: var(--rezvix-bg-soft) !important; }
-      `}</style>
-
-      <div
-        className="csv-modal"
-        style={{
-          background: "var(--rezvix-bg-elevated)",
-          borderRadius: 18,
-          width: 680,
-          maxWidth: "100%",
-          maxHeight: "80vh",
-          display: "flex",
-          flexDirection: "column",
-          border: "1px solid var(--rezvix-border-subtle)",
-          boxShadow: "0 32px 80px rgba(17,20,40,.32)",
-          overflow: "hidden",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            padding: "20px 24px",
-            borderBottom: "1px solid var(--rezvix-border-subtle)",
-            background: "var(--rezvix-bg-soft)",
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 11,
-              background: "linear-gradient(135deg, #22c55e20, #16a34a20)",
-              border: "1px solid rgba(22,163,74,.24)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 18,
-              flexShrink: 0,
-            }}
-          >
-            📂
-          </div>
-          <div style={{ flex: 1 }}>
-            <h3
-              style={{
-                color: "var(--rezvix-text-main)",
-                margin: 0,
-                fontSize: 17,
-                fontWeight: 700,
-              }}
-            >
-              {t("CSV İçe Aktarma")}
-            </h3>
-            <p style={{ color: "var(--rezvix-text-soft)", margin: "2px 0 0", fontSize: 12.5 }}>
-              <span
-                style={{
-                  color: "var(--rezvix-success)",
-                  fontWeight: 700,
-                }}
-              >
-                {preview.rows.length}
-              </span>{" "}
-              {t("satır bulundu — içe aktarılsın mı?")}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              border: "1px solid var(--rezvix-border-subtle)",
-              background: "transparent",
-              color: "var(--rezvix-text-soft)",
-              cursor: "pointer",
-              fontSize: 18,
-              lineHeight: "28px",
-              textAlign: "center",
-              flexShrink: 0,
-            }}
-          >
-            ×
-          </button>
-        </div>
-
-        {/* Preview table */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }}>
-          <p
-            style={{
-              color: "var(--rezvix-text-soft)",
-              fontSize: 12,
-              margin: "0 0 12px",
-              fontWeight: 600,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-            }}
-          >
-            {t("Önizleme")} ({Math.min(PREVIEW_COUNT, preview.rows.length)} / {preview.rows.length})
-          </p>
-
-          <div
-            style={{
-              borderRadius: 12,
-              border: "1px solid var(--rezvix-border-subtle)",
-              overflow: "hidden",
-            }}
-          >
-            {/* Table head */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 120px 100px 80px 90px",
-                padding: "8px 14px",
-                background: "var(--rezvix-bg-soft)",
-                borderBottom: "1px solid var(--rezvix-border-subtle)",
-                gap: 8,
-              }}
-            >
-              {["Ürün Adı", "Kategori", "Barkod", "Birim", "Fiyat"].map((h) => (
-                <span
-                  key={h}
-                  style={{
-                    color: "var(--rezvix-text-soft)",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    letterSpacing: "0.05em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {t(h)}
-                </span>
-              ))}
-            </div>
-
-            {/* Rows */}
-            {previewRows.map((row, idx) => (
-              <div
-                key={idx}
-                className="csv-row-hover"
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 120px 100px 80px 90px",
-                  padding: "10px 14px",
-                  borderBottom: idx < previewRows.length - 1 ? "1px solid var(--rezvix-border-subtle)" : "none",
-                  gap: 8,
-                  transition: "background .1s ease",
-                }}
-              >
-                <span
-                  style={{
-                    color: "var(--rezvix-text-main)",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {row.title || <span style={{ color: "var(--rezvix-danger)", fontStyle: "italic" }}>—</span>}
-                </span>
-                <span style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}>{row.category || "—"}</span>
-                <span
-                  style={{
-                    color: "var(--rezvix-text-soft)",
-                    fontSize: 11.5,
-                    fontFamily: "ui-monospace, monospace",
-                  }}
-                >
-                  {row.barcode || "—"}
-                </span>
-                <span style={{ color: "var(--rezvix-text-soft)", fontSize: 12 }}>{row.unit}</span>
-                <span style={{ color: "var(--rezvix-success)", fontSize: 13, fontWeight: 700 }}>
-                  {row.defaultPrice ? `₺${row.defaultPrice}` : "—"}
-                </span>
-              </div>
-            ))}
-
-            {preview.rows.length > PREVIEW_COUNT && (
-              <div
-                style={{
-                  padding: "10px 14px",
-                  background: "var(--rezvix-bg-soft)",
-                  color: "var(--rezvix-text-soft)",
-                  fontSize: 12,
-                  fontStyle: "italic",
-                }}
-              >
-                {t("... ve")} {preview.rows.length - PREVIEW_COUNT} {t("satır daha")}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div
-          style={{
-            padding: "16px 24px",
-            borderTop: "1px solid var(--rezvix-border-subtle)",
-            background: "var(--rezvix-bg-soft)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            gap: 10,
-          }}
-        >
-          <button
-            onClick={onClose}
-            disabled={importing}
-            style={{
-              padding: "9px 20px",
-              borderRadius: 9,
-              border: "1px solid var(--rezvix-border-strong)",
-              background: "transparent",
-              color: "var(--rezvix-text-muted)",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: 13.5,
-            }}
-          >
-            {t("Vazgeç")}
-          </button>
-          <button
-            onClick={handleImport}
-            disabled={importing || preview.rows.length === 0}
-            style={{
-              padding: "9px 24px",
-              borderRadius: 9,
-              border: "none",
-              background: importing
-                ? "var(--rezvix-bg-soft)"
-                : "linear-gradient(135deg, #16a34a, #15803d)",
-              color: importing ? "var(--rezvix-text-soft)" : "#fff",
-              cursor: importing ? "not-allowed" : "pointer",
-              fontWeight: 700,
-              fontSize: 13.5,
-              boxShadow: importing ? "none" : "0 4px 14px rgba(22,163,74,.30)",
-              transition: "opacity .12s ease",
-            }}
-          >
-            {importing ? t("İçe Aktarılıyor…") : `${t("İçe Aktar")} (${preview.rows.length})`}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ── (CsvImportModal removed — replaced by CsvImportWizard) ──────────────────
 
 // ── Bulk Price Modal ───────────────────────────────────────────────────────────
 
@@ -1778,8 +1451,6 @@ function BulkPriceModal({
 export default function OrgCatalog() {
   const { t } = useI18n();
   const qc = useQueryClient();
-  const csvInputRef = useRef<HTMLInputElement>(null);
-
   const orgId = authStore.getUser()?.organizations?.[0]?.id ?? null;
 
   const [search, setSearch] = useState("");
@@ -1796,7 +1467,7 @@ export default function OrgCatalog() {
   // ── Bulk selection state ──────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exportLoading, setExportLoading] = useState(false);
-  const [importPreview, setImportPreview] = useState<ImportPreviewState>({ open: false, rows: [] });
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [bulkPriceOpen, setBulkPriceOpen] = useState(false);
 
   // Categories
@@ -1806,6 +1477,12 @@ export default function OrgCatalog() {
     enabled: !!orgId,
   });
   const categories: MarketCoreCategory[] = catData?.items ?? [];
+  // Normalized categories for wizard (title derived from i18n.tr.title, fallback to key)
+  const normalizedCategories = categories.map((cat) => ({
+    _id: cat._id,
+    key: cat.key,
+    title: cat.i18n?.tr?.title ?? cat.key,
+  }));
 
   // Products
   const { data, isLoading } = useQuery({
@@ -1864,26 +1541,6 @@ export default function OrgCatalog() {
     } finally {
       setExportLoading(false);
     }
-  };
-
-  // ── Import handler ────────────────────────────────────────────────────────
-  const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    // Reset so the same file can be re-selected
-    e.target.value = "";
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const parsed = parseCsv(text);
-      const rows = parsed.map(mapCsvRowToImport).filter((r) => r.title);
-      if (rows.length === 0) {
-        showToast(t("CSV dosyasında geçerli satır bulunamadı"), "error");
-        return;
-      }
-      setImportPreview({ open: true, rows });
-    };
-    reader.readAsText(file, "utf-8");
   };
 
   // ── Checkbox helpers ──────────────────────────────────────────────────────
@@ -2294,15 +1951,6 @@ export default function OrgCatalog() {
         .bulk-bar { animation: bulkBarIn .18s cubic-bezier(.16,1,.3,1); }
       `}</style>
 
-      {/* Hidden CSV file input */}
-      <input
-        ref={csvInputRef}
-        type="file"
-        accept=".csv"
-        style={{ display: "none" }}
-        onChange={handleCsvFileChange}
-      />
-
       <AdminPageHeader
         title={t("Ürün Kataloğu")}
         subtitle={t("Zincir genelinde geçerli master ürün listesi")}
@@ -2395,7 +2043,7 @@ export default function OrgCatalog() {
         {/* CSV Import */}
         <button
           className="toolbar-btn"
-          onClick={() => csvInputRef.current?.click()}
+          onClick={() => setWizardOpen(true)}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -2653,12 +2301,16 @@ export default function OrgCatalog() {
         t={t}
       />
 
-      <CsvImportModal
-        preview={importPreview}
-        orgId={orgId}
-        onClose={() => setImportPreview({ open: false, rows: [] })}
-        t={t}
-      />
+      {wizardOpen && (
+        <CsvImportWizard
+          orgId={orgId}
+          categories={normalizedCategories}
+          onClose={() => setWizardOpen(false)}
+          onImported={() => {
+            qc.invalidateQueries({ queryKey: ["org-products", orgId] });
+          }}
+        />
+      )}
 
       <BulkPriceModal
         open={bulkPriceOpen}
