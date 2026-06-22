@@ -13,6 +13,8 @@ import { haversineMeters } from "../utils/haversine.js";
 import { computeUnitPrice } from "../utils/marketUnitPrice.js";
 import { effectivePrice, discountPercent, lowest30 } from "../utils/marketPricing.js";
 import { resolveStoreCatalog, resolveOrgProductForOrder } from "../services/marketCatalogResolve.service.js";
+import Organization from "../models/Organization.js";
+import { resolveStoreImages } from "../utils/storeImages.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
@@ -105,6 +107,18 @@ export const listNearbyStores = async (req, res, next) => {
       ]);
     }
 
+    const orgIds = [...new Set(stores.filter((s) => s.organization).map((s) => String(s.organization)))];
+    if (orgIds.length) {
+      const orgs = await Organization.find({ _id: { $in: orgIds } }).select("logoUrl coverUrl").lean();
+      const orgMap = new Map(orgs.map((o) => [String(o._id), o]));
+      for (const s of stores) {
+        const org = s.organization ? orgMap.get(String(s.organization)) : null;
+        const img = resolveStoreImages(s, org);
+        s.logo = img.logo;
+        s.photos = img.photos;
+      }
+    }
+
     res.json({
       items: stores,
       total: Number(total),
@@ -128,6 +142,13 @@ export const getStoreDetail = async (req, res, next) => {
 
     const store = await MarketStore.findOne({ _id: id, isActive: true }).lean();
     if (!store) return next({ status: 404, message: "Market bulunamadı" });
+
+    if (store.organization) {
+      const orgArr = await Organization.find({ _id: store.organization }).select("logoUrl coverUrl").lean();
+      const img = resolveStoreImages(store, orgArr[0] || null);
+      store.logo = img.logo;
+      store.photos = img.photos;
+    }
 
     res.json(store);
   } catch (e) {

@@ -146,7 +146,7 @@ export const getMyOrganizationDetail = async (req, res, next) => {
 
     const org = await Organization.findById(oid)
       .select(
-        "_id name legalName logoUrl region defaultLanguage description taxNumber taxOffice createdAt updatedAt"
+        "_id name legalName logoUrl coverUrl region defaultLanguage description taxNumber taxOffice createdAt updatedAt"
       )
       .lean();
 
@@ -202,7 +202,7 @@ export const updateMyOrganization = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid organization id" });
     }
 
-    const { defaultLanguage, name, logoUrl, region, description, legalName } = req.body || {};
+    const { defaultLanguage, name, logoUrl, coverUrl, region, description, legalName } = req.body || {};
     const set = {};
 
     if (defaultLanguage !== undefined) {
@@ -219,6 +219,7 @@ export const updateMyOrganization = async (req, res, next) => {
       set.name = String(name).trim();
     }
     if (logoUrl !== undefined) set.logoUrl = logoUrl ? String(logoUrl) : null;
+    if (coverUrl !== undefined) set.coverUrl = coverUrl ? String(coverUrl) : null;
     if (region !== undefined) set.region = region ? String(region).trim() : null;
     if (description !== undefined) set.description = String(description ?? "");
     if (legalName !== undefined) set.legalName = String(legalName ?? "");
@@ -233,7 +234,7 @@ export const updateMyOrganization = async (req, res, next) => {
       { new: true }
     )
       .select(
-        "_id name legalName logoUrl region defaultLanguage description taxNumber taxOffice createdAt updatedAt"
+        "_id name legalName logoUrl coverUrl region defaultLanguage description taxNumber taxOffice createdAt updatedAt"
       )
       .lean();
 
