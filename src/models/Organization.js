@@ -19,6 +19,12 @@ const OrganizationSchema = new mongoose.Schema(
       type: String,
     },
 
+    // Marka kapak/banner görseli (chain seviyesinde, şubeler miras alır)
+    coverUrl: {
+      type: String,
+      default: null,
+    },
+
     // Ana bölge / ülke (örn. "TR", "CY", "UK")
     region: {
       type: String,
