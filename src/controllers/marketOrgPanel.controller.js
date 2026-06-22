@@ -4,6 +4,7 @@ import MarketOrder from "../models/MarketOrder.js";
 import MarketProduct from "../models/MarketProduct.js";
 import MarketBranchOverride from "../models/MarketBranchOverride.js";
 import MarketOrgProduct from "../models/MarketOrgProduct.js";
+import CoreCategory from "../models/CoreCategory.js";
 
 const oid = (v) => (mongoose.Types.ObjectId.isValid(String(v || "").trim()) ? new mongoose.Types.ObjectId(String(v).trim()) : null);
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -173,6 +174,93 @@ export const orgBranchDetail = async (req, res, next) => {
     });
     const s = orderAgg[0] || { orders: 0, delivered: 0, revenue: 0 };
     res.json({ store, stats: { orders: s.orders, delivered: s.delivered, revenue: round2(s.revenue), productCount, overrideCount: overrides.length }, overriddenProducts });
+  } catch (e) { next(e); }
+};
+
+async function resolveCategoryId(cat) {
+  if (!cat) return null;
+  const asId = oid(cat);
+  if (asId) { const byId = await CoreCategory.exists({ _id: asId }); if (byId) return asId; }
+  const byKey = await CoreCategory.findOne({ key: String(cat).trim() }).select("_id").lean();
+  return byKey?._id || null;
+}
+
+// POST /market/org/:organizationId/products/bulk-import  body { rows:[{title,category,barcode,unit,defaultPrice,defaultDiscountPrice}] }
+export const orgBulkImport = async (req, res, next) => {
+  try {
+    const orgId = oid(req.params.organizationId);
+    if (!orgId) return next({ status: 400, message: "Geçersiz organizasyon id" });
+    const rows = Array.isArray(req.body.rows) ? req.body.rows.slice(0, 2000) : [];
+    let created = 0, updated = 0; const errors = [];
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i] || {};
+      try {
+        if (!r.title || r.defaultPrice == null || r.defaultPrice === "") { errors.push({ row: i + 1, message: "title ve defaultPrice zorunlu" }); continue; }
+        const catId = await resolveCategoryId(r.category);
+        if (!catId) { errors.push({ row: i + 1, message: "Geçersiz kategori" }); continue; }
+        const unit = ["kg","piece","litre","pack"].includes(r.unit) ? r.unit : "piece";
+        const doc = { organizationId: orgId, title: String(r.title).trim(), category: catId,
+          barcode: r.barcode ? String(r.barcode).trim() : "", unit,
+          defaultPrice: Number(r.defaultPrice),
+          defaultDiscountPrice: (r.defaultDiscountPrice != null && r.defaultDiscountPrice !== "") ? Number(r.defaultDiscountPrice) : null };
+        if (Number.isNaN(doc.defaultPrice)) { errors.push({ row: i + 1, message: "Geçersiz fiyat" }); continue; }
+        if (doc.barcode) {
+          const existing = await MarketOrgProduct.findOne({ organizationId: orgId, barcode: doc.barcode }).select("_id").lean();
+          if (existing) { await MarketOrgProduct.updateOne({ _id: existing._id }, { $set: doc }); updated++; continue; }
+        }
+        await MarketOrgProduct.create(doc); created++;
+      } catch (e) { errors.push({ row: i + 1, message: e.message || "Hata" }); }
+    }
+    res.json({ created, updated, errors });
+  } catch (e) { next(e); }
+};
+
+// GET /market/org/:organizationId/products/export  -> text/csv
+export const orgExportCsv = async (req, res, next) => {
+  try {
+    const orgId = oid(req.params.organizationId);
+    if (!orgId) return next({ status: 400, message: "Geçersiz organizasyon id" });
+    const items = await MarketOrgProduct.find({ organizationId: orgId }).populate("category", "key").sort({ order: 1 }).lean();
+    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const header = ["title","category","barcode","unit","defaultPrice","defaultDiscountPrice","isActive"];
+    const lines = [header.join(",")];
+    for (const p of items) lines.push([p.title, p.category?.key || "", p.barcode || "", p.unit, p.defaultPrice, p.defaultDiscountPrice ?? "", p.isActive].map(esc).join(","));
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="catalog.csv"');
+    res.send("﻿" + lines.join("\n"));
+  } catch (e) { next(e); }
+};
+
+// POST /market/org/:organizationId/products/bulk-update  body { productIds?:[], category?:id, op:"price"|"active", value }
+export const orgBulkUpdate = async (req, res, next) => {
+  try {
+    const orgId = oid(req.params.organizationId);
+    if (!orgId) return next({ status: 400, message: "Geçersiz organizasyon id" });
+    const { productIds, category, op, value } = req.body || {};
+    const filter = { organizationId: orgId };
+    if (Array.isArray(productIds) && productIds.length) filter._id = { $in: productIds.map(oid).filter(Boolean) };
+    else if (category) filter.category = oid(category);
+    else return next({ status: 400, message: "productIds veya category gerekli" });
+
+    if (op === "active") {
+      const r = await MarketOrgProduct.updateMany(filter, { $set: { isActive: !!value } });
+      return res.json({ matched: r.matchedCount, modified: r.modifiedCount });
+    }
+    if (op === "price" && value && typeof value === "object") {
+      if (value.mode === "set") {
+        const amt = Number(value.amount);
+        if (Number.isNaN(amt) || amt < 0) return next({ status: 400, message: "Geçersiz fiyat" });
+        const r = await MarketOrgProduct.updateMany(filter, { $set: { defaultPrice: amt } });
+        return res.json({ matched: r.matchedCount, modified: r.modifiedCount });
+      }
+      if (value.mode === "percent") {
+        const pct = Number(value.amount);
+        if (Number.isNaN(pct)) return next({ status: 400, message: "Geçersiz yüzde" });
+        const r = await MarketOrgProduct.updateMany(filter, [ { $set: { defaultPrice: { $round: [{ $multiply: ["$defaultPrice", 1 + pct / 100] }, 2] } } } ]);
+        return res.json({ matched: r.matchedCount, modified: r.modifiedCount });
+      }
+    }
+    return next({ status: 400, message: "Geçersiz işlem" });
   } catch (e) { next(e); }
 };
 
