@@ -6,6 +6,7 @@ import {
   getStoreDetail,
   getProductDetail,
   listStoreProducts,
+  listStoreCategories,
   createOrder,
   listMyOrders,
   getOrderDetail,
@@ -34,6 +35,7 @@ r.get("/market/stores/:id", getStoreDetail);
 // Marketteki ürünler
 r.get("/market/search", searchProducts);
 r.get("/market/stores/:id/products", listStoreProducts);
+r.get("/market/stores/:id/categories", listStoreCategories);
 
 // Koleksiyonlar (banner/ana sayfa için ürün grupları)
 r.get("/market/collections", listMarketCollections);

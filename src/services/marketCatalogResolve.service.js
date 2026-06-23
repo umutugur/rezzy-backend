@@ -2,6 +2,28 @@ import MarketStore from "../models/MarketStore.js";
 import MarketProduct from "../models/MarketProduct.js";
 import MarketOrgProduct from "../models/MarketOrgProduct.js";
 import MarketBranchOverride from "../models/MarketBranchOverride.js";
+import CoreCategory from "../models/CoreCategory.js";
+
+/**
+ * Resolved katalog öğelerinin `category` alanını (çıplak ObjectId) i18n'li
+ * CoreCategory dokümanıyla doldurur. Hem org hem local öğeler için.
+ * Pure değil (CoreCategory okur); öğeleri yerinde günceller, aynı diziyi döner.
+ */
+export async function populateItemCategories(items) {
+  const ids = [
+    ...new Set(items.map((p) => p.category).filter(Boolean).map(String)),
+  ];
+  if (!ids.length) return items;
+  const cats = await CoreCategory.find({ _id: { $in: ids } })
+    .select("key i18n order")
+    .lean();
+  const byId = new Map(cats.map((c) => [String(c._id), c]));
+  for (const p of items) {
+    const cid = p.category ? String(p.category) : null;
+    if (cid && byId.has(cid)) p.category = byId.get(cid);
+  }
+  return items;
+}
 
 /**
  * Pure merge: org product (+ optional branch override) -> a MarketProduct-shaped
@@ -45,7 +67,7 @@ export async function resolveStoreCatalog(storeOrId) {
   const local = await MarketProduct.find({ store: store._id, isActive: true }).lean();
   const localItems = local.map((p) => ({ ...p, source: "product" }));
 
-  if (!store.organization) return localItems;
+  if (!store.organization) return populateItemCategories(localItems);
 
   const [orgProducts, overrides] = await Promise.all([
     MarketOrgProduct.find({ organizationId: store.organization, isActive: true }).sort({ order: 1 }).lean(),
@@ -59,7 +81,7 @@ export async function resolveStoreCatalog(storeOrId) {
     if (ov?.hidden) continue;
     orgItems.push(mergeOrgProduct(op, ov));
   }
-  return [...orgItems, ...localItems];
+  return populateItemCategories([...orgItems, ...localItems]);
 }
 
 /** Resolve one org product for a store, for order pricing. null if not in org / hidden / inactive. */

@@ -157,26 +157,50 @@ export const getStoreDetail = async (req, res, next) => {
 };
 
 /**
- * GET /api/market/products/:id
+ * GET /api/market/products/:id?storeId=
  * Public. Ürün + birim fiyat + ilgili ürünler (aynı mağaza/kategori, max 8).
+ * Local MarketProduct bulunamazsa ve storeId verilirse, zincir (org) kataloğundan
+ * resolve edilir — böylece CSV ile içe aktarılan org ürünlerinin detayı da açılır.
  */
 export const getProductDetail = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const { storeId } = req.query;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return next({ status: 400, message: "Geçersiz ürün id" });
     }
 
-    const product = await MarketProduct.findOne({ _id: id, isActive: true })
+    let product = await MarketProduct.findOne({ _id: id, isActive: true })
       .populate("category")
       .lean();
+
+    // Org-katalog ürünü: local kayıt yoksa ve storeId geçerliyse mağaza kataloğundan çöz
+    let catalog = null;
+    if (!product && storeId && mongoose.Types.ObjectId.isValid(storeId)) {
+      catalog = await resolveStoreCatalog(storeId);
+      product = catalog.find((p) => String(p._id) === String(id)) || null;
+    }
     if (!product) return next({ status: 404, message: "Ürün bulunamadı" });
 
     const unitPrice = computeUnitPrice(product.price, product.netQuantity, product.netUnit);
 
     const categoryId = product.category?._id ?? product.category ?? null;
     let related = [];
-    if (categoryId) {
+    if (catalog) {
+      // Org ürün: related aynı resolved katalogdan (aynı kategori, self hariç; eksikse doldur)
+      const catStr = categoryId ? String(categoryId) : null;
+      related = catalog.filter(
+        (p) =>
+          String(p._id) !== String(product._id) &&
+          catStr &&
+          String(p.category?._id ?? p.category) === catStr,
+      ).slice(0, 8);
+      if (related.length < 8) {
+        const exclude = new Set([String(product._id), ...related.map((r) => String(r._id))]);
+        const fill = catalog.filter((p) => !exclude.has(String(p._id))).slice(0, 8 - related.length);
+        related = related.concat(fill);
+      }
+    } else if (categoryId) {
       related = await MarketProduct.find({
         store: product.store,
         category: categoryId,
@@ -185,17 +209,17 @@ export const getProductDetail = async (req, res, next) => {
       })
         .limit(8)
         .lean();
-    }
-    if (related.length < 8) {
-      const excludeIds = [product._id, ...related.map((r) => r._id)];
-      const fill = await MarketProduct.find({
-        store: product.store,
-        isActive: true,
-        _id: { $nin: excludeIds },
-      })
-        .limit(8 - related.length)
-        .lean();
-      related = related.concat(fill);
+      if (related.length < 8) {
+        const excludeIds = [product._id, ...related.map((r) => r._id)];
+        const fill = await MarketProduct.find({
+          store: product.store,
+          isActive: true,
+          _id: { $nin: excludeIds },
+        })
+          .limit(8 - related.length)
+          .lean();
+        related = related.concat(fill);
+      }
     }
 
     product.effectivePrice = effectivePrice(product);
@@ -266,6 +290,55 @@ export const listStoreProducts = async (req, res, next) => {
       return out;
     });
     res.json({ items: itemsOut, total, page: pg, limit: lim });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * Pure: resolved katalog öğelerinden farklı kategorileri (i18n + adet) çıkarır.
+ * category populated ({ _id, key, i18n }) ise onu kullanır; çıplak id ise sadece id/count.
+ * order'a, ardından title'a göre sıralı döner.
+ */
+export function groupCatalogCategories(items) {
+  const map = new Map();
+  for (const p of items) {
+    const c = p.category;
+    if (!c) continue;
+    const id = String(c._id ?? c);
+    const existing = map.get(id);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      map.set(id, {
+        _id: id,
+        key: c.key ?? null,
+        i18n: c.i18n ?? null,
+        order: typeof c.order === "number" ? c.order : 9999,
+        count: 1,
+      });
+    }
+  }
+  return [...map.values()].sort(
+    (a, b) =>
+      a.order - b.order ||
+      (a.i18n?.tr?.title ?? "").localeCompare(b.i18n?.tr?.title ?? ""),
+  );
+}
+
+/**
+ * GET /api/market/stores/:id/categories
+ * Mağaza kataloğundaki tüm kategoriler (i18n + ürün adedi). Kategori tab'ları için —
+ * sayfalı ürün listesinden bağımsız, tam liste döner.
+ */
+export const listStoreCategories = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return next({ status: 400, message: "Geçersiz market id" });
+    }
+    const all = await resolveStoreCatalog(id);
+    res.json({ items: groupCatalogCategories(all) });
   } catch (e) {
     next(e);
   }
