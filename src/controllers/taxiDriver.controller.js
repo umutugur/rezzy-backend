@@ -164,7 +164,11 @@ export async function respondToRide(req, res, next) {
       _io.to("passengers:map").emit("driver:went_offline", { driverId: driver._id });
     }
 
-    return res.json({ message: "Yolculuk kabul edildi", ride });
+    // Yolcuya dönecek yanıta sürücü bilgisini (photoUrl dahil) ekle
+    const rideWithDriver = await TaxiRide.findById(ride._id)
+      .populate({ path: "driver", populate: { path: "user", select: "name phone" } });
+
+    return res.json({ message: "Yolculuk kabul edildi", ride: rideWithDriver ?? ride });
   } catch (err) {
     next(err);
   }

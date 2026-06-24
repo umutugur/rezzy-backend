@@ -301,10 +301,36 @@ export async function emitNewRideRequest(io, ride, nearbyDriverIds) {
  * @param {Object} ride - TaxiRide belgesi
  */
 export async function emitRideStatusChange(io, ride) {
+  // Sürücü bilgisini yolcu için populate et (photoUrl dahil)
+  let driverPayload = ride.driver ?? null;
+  if (ride.driver) {
+    try {
+      const driverDoc = await TaxiDriver.findById(ride.driver)
+        .populate("user", "name phone")
+        .lean();
+      if (driverDoc) {
+        driverPayload = {
+          _id: driverDoc._id,
+          photoUrl: driverDoc.photoUrl || "",
+          rating: driverDoc.rating,
+          vehiclePlate: driverDoc.vehiclePlate,
+          vehicleBrand: driverDoc.vehicleBrand,
+          vehicleModel: driverDoc.vehicleModel,
+          vehicleColor: driverDoc.vehicleColor,
+          type: driverDoc.type,
+          name: driverDoc.user?.name ?? "",
+          phone: driverDoc.user?.phone ?? "",
+        };
+      }
+    } catch (err) {
+      console.error("[emitRideStatusChange] driver populate hata:", err.message);
+    }
+  }
+
   io.to(`ride:${ride._id}`).emit("ride:status_change", {
     rideId: ride._id,
     status: ride.status,
-    driver: ride.driver,
+    driver: driverPayload,
     updatedAt: Date.now(),
   });
 
