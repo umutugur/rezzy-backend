@@ -74,6 +74,17 @@ import {
   adminDeleteCollection,
 } from "../controllers/marketCollection.controller.js";
 import {
+  listRequirements,
+  createRequirement,
+  updateRequirement,
+  deleteRequirement,
+  listApplications,
+  getApplication,
+  reviewDocument,
+  approveApplication,
+  rejectApplication,
+} from "../controllers/adminDriverApplication.controller.js";
+import {
   listStores,
   getStore,
   searchProducts,
@@ -306,5 +317,18 @@ r.get("/market/collections", auth(), allow("admin"), adminListCollections);
 r.post("/market/collections", auth(), allow("admin"), adminCreateCollection);
 r.patch("/market/collections/:id", auth(), allow("admin"), adminUpdateCollection);
 r.delete("/market/collections/:id", auth(), allow("admin"), adminDeleteCollection);
+
+// ---- Driver Doc Requirements ----
+r.get("/driver-doc-requirements", auth(), allow("admin"), listRequirements);
+r.post("/driver-doc-requirements", auth(), allow("admin"), createRequirement);
+r.put("/driver-doc-requirements/:id", auth(), allow("admin"), updateRequirement);
+r.delete("/driver-doc-requirements/:id", auth(), allow("admin"), deleteRequirement);
+
+// ---- Driver Applications (Admin) ----
+r.get("/driver-applications", auth(), allow("admin"), listApplications);
+r.get("/driver-applications/:id", auth(), allow("admin"), getApplication);
+r.patch("/driver-applications/:id/documents/:key", auth(), allow("admin"), reviewDocument);
+r.patch("/driver-applications/:id/approve", auth(), allow("admin"), approveApplication);
+r.patch("/driver-applications/:id/reject", auth(), allow("admin"), rejectApplication);
 
 export default r;
