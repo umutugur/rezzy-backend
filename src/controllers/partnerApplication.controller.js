@@ -1,39 +1,59 @@
-import DriverDocRequirement from "../models/DriverDocRequirement.js";
-import DriverApplication from "../models/DriverApplication.js";
-import { isSubmittable, resetRejectedToPending } from "../utils/driverApplication.logic.js";
+import ApplicationDocRequirement from "../models/ApplicationDocRequirement.js";
+import PartnerApplication from "../models/PartnerApplication.js";
+import { isSubmittable, resetRejectedToPending } from "../utils/partnerApplication.logic.js";
+import { isValidAppType, hasRequiredPayload } from "../config/partnerTypes.js";
 
 const norm = (c) => String(c || "").toUpperCase().trim();
 
-// GET /api/taxi/driver/requirements?country=
+// GET /api/partner/requirements?appType=&country=
 export const getRequirements = async (req, res, next) => {
   try {
+    const { appType } = req.query;
     const country = norm(req.query.country);
+    if (!isValidAppType(appType)) return next({ status: 400, message: "Geçersiz appType" });
     if (!country) return next({ status: 400, message: "country zorunlu" });
-    const items = await DriverDocRequirement.find({ countryCode: country, isActive: true })
-      .sort({ order: 1, key: 1 }).lean();
+    const items = await ApplicationDocRequirement.find({
+      appType,
+      countryCode: country,
+      isActive: true,
+    }).sort({ order: 1, key: 1 }).lean();
     res.json({ items });
   } catch (e) { next(e); }
 };
 
-// GET /api/taxi/driver/application/me
+// GET /api/partner/application/me
 export const getMyApplication = async (req, res, next) => {
   try {
-    const app = await DriverApplication.findOne({ user: req.user.id }).lean();
+    const app = await PartnerApplication.findOne({ user: req.user.id }).lean();
     res.json({ application: app || null });
   } catch (e) { next(e); }
 };
 
-// POST /api/taxi/driver/application
+// POST /api/partner/application
 export const submitApplication = async (req, res, next) => {
   try {
     const userId = req.user.id;
+    const { appType, payload, selfieUrl, documents: rawDocs } = req.body;
     const countryCode = norm(req.body.countryCode);
+
+    if (!isValidAppType(appType)) return next({ status: 400, message: "Geçersiz appType" });
     if (!countryCode) return next({ status: 400, message: "countryCode zorunlu" });
 
-    const reqs = await DriverDocRequirement.find({ countryCode, isActive: true }).lean();
+    // One-per-user / mutually exclusive appType check
+    const existing = await PartnerApplication.findOne({ user: userId }).lean();
+    if (existing && existing.appType !== appType) {
+      return next({ status: 409, message: "Zaten farklı türde bir başvurun var" });
+    }
+
+    // Fetch requirements for (appType, countryCode)
+    const reqs = await ApplicationDocRequirement.find({
+      appType,
+      countryCode,
+      isActive: true,
+    }).lean();
     const allowed = new Set(reqs.map((r) => r.key));
 
-    const documents = (req.body.documents || [])
+    const documents = (rawDocs || [])
       .filter((d) => allowed.has(d.requirementKey))
       .map((d) => ({
         requirementKey: d.requirementKey,
@@ -46,17 +66,24 @@ export const submitApplication = async (req, res, next) => {
 
     const draft = {
       user: userId,
+      appType,
       countryCode,
-      vehicle: req.body.vehicle || {},
-      selfieUrl: req.body.selfieUrl || "",
+      payload: payload || {},
+      selfieUrl: selfieUrl || "",
       documents,
     };
 
-    if (!isSubmittable(draft, reqs)) {
-      return next({ status: 400, message: "Tüm zorunlu belgeler ve selfie gerekli" });
+    // Validate payload completeness
+    if (!hasRequiredPayload(appType, draft.payload)) {
+      return next({ status: 400, message: "Zorunlu işletme/araç bilgileri eksik" });
     }
 
-    const app = await DriverApplication.findOneAndUpdate(
+    // Validate document completeness
+    if (!isSubmittable({ selfieUrl: draft.selfieUrl, documents: draft.documents }, reqs)) {
+      return next({ status: 400, message: "Tüm zorunlu belgeler ve fotoğraf gerekli" });
+    }
+
+    const app = await PartnerApplication.findOneAndUpdate(
       { user: userId },
       { $set: { ...draft, status: "pending", reviewedBy: null, reviewedAt: null, rejectReason: null } },
       { new: true, upsert: true }
@@ -65,10 +92,10 @@ export const submitApplication = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-// PUT /api/taxi/driver/application/resubmit
+// PUT /api/partner/application/resubmit
 export const resubmitApplication = async (req, res, next) => {
   try {
-    const app = await DriverApplication.findOne({ user: req.user.id });
+    const app = await PartnerApplication.findOne({ user: req.user.id });
     if (!app) return next({ status: 404, message: "Başvuru bulunamadı" });
 
     const incoming = new Map((req.body.documents || []).map((d) => [d.requirementKey, d]));

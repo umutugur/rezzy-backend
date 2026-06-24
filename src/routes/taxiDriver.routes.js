@@ -1,7 +1,7 @@
 // src/routes/taxiDriver.routes.js
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
-import { getRequirements, getMyApplication, submitApplication, resubmitApplication } from "../controllers/driverApplication.controller.js";
+import { getRequirements, getMyApplication, submitApplication, resubmitApplication } from "../controllers/partnerApplication.controller.js";
 import {
   registerDriver,
   toggleStatus,
@@ -23,10 +23,16 @@ import {
 
 const router = Router();
 
-// Sürücü başvuru gereksinimleri ve başvuru
-router.get("/taxi/driver/requirements", auth(), getRequirements);
+// Generic partner routes
+router.get("/partner/requirements", auth(), getRequirements);
+router.get("/partner/application/me", auth(), getMyApplication);
+router.post("/partner/application", auth(), submitApplication);
+router.put("/partner/application/resubmit", auth(), resubmitApplication);
+
+// Aliases for older mobile builds (force appType=driver)
+router.get("/taxi/driver/requirements", auth(), (req, res, next) => { req.query.appType = "driver"; return getRequirements(req, res, next); });
 router.get("/taxi/driver/application/me", auth(), getMyApplication);
-router.post("/taxi/driver/application", auth(), submitApplication);
+router.post("/taxi/driver/application", auth(), (req, res, next) => { req.body.appType = "driver"; return submitApplication(req, res, next); });
 router.put("/taxi/driver/application/resubmit", auth(), resubmitApplication);
 
 // Sürücü kaydı

@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import DriverDocRequirement from "../models/DriverDocRequirement.js";
+import ApplicationDocRequirement from "../models/ApplicationDocRequirement.js";
 import { connectDB } from "../config/db.js";
 dotenv.config();
 
@@ -20,13 +20,13 @@ const KKTC = [
 async function run() {
   await connectDB();
   for (const r of KKTC) {
-    await DriverDocRequirement.updateOne(
-      { countryCode: "KKTC", key: r.key },
-      { $set: { countryCode: "KKTC", required: r.required !== false, isActive: true, ...r } },
+    await ApplicationDocRequirement.updateOne(
+      { appType: "driver", countryCode: "KKTC", key: r.key },
+      { $set: { appType: "driver", countryCode: "KKTC", required: r.required !== false, isActive: true, ...r } },
       { upsert: true }
     );
   }
-  console.log(`[seed-driver-docs] KKTC ok (${KKTC.length})`);
+  console.log(`[seed-partner-docs] KKTC driver ok (${KKTC.length})`);
   await mongoose.disconnect();
 }
 run().catch((e) => { console.error(e); process.exit(1); });

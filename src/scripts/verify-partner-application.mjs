@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { requiredKeys, isSubmittable, isApprovable, resetRejectedToPending } from "../utils/driverApplication.logic.js";
+import { requiredKeys, isSubmittable, isApprovable, resetRejectedToPending } from "../utils/partnerApplication.logic.js";
 
 const reqs = [
   { key: "driving_license", required: true, file: true },
@@ -25,4 +25,4 @@ assert.equal(after[0].status, "verified");
 assert.equal(after[1].status, "pending");
 assert.equal(after[1].rejectReason, null);
 
-console.log("ok: driverApplication.logic (4 groups)");
+console.log("ok: partnerApplication.logic (4 groups)");

@@ -83,7 +83,7 @@ import {
   reviewDocument,
   approveApplication,
   rejectApplication,
-} from "../controllers/adminDriverApplication.controller.js";
+} from "../controllers/adminPartnerApplication.controller.js";
 import {
   listStores,
   getStore,
