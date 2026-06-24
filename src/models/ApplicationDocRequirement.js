@@ -1,9 +1,8 @@
 import mongoose from "mongoose";
-
 const I18N = { tr: String, en: String, ru: String, el: String };
-
-const DriverDocRequirementSchema = new mongoose.Schema(
+const ApplicationDocRequirementSchema = new mongoose.Schema(
   {
+    appType: { type: String, enum: ["driver", "market", "restaurant"], required: true, index: true },
     countryCode: { type: String, required: true, uppercase: true, trim: true, index: true },
     key: { type: String, required: true, trim: true },
     i18n: { type: { ...I18N }, default: {} },
@@ -17,7 +16,6 @@ const DriverDocRequirementSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-DriverDocRequirementSchema.index({ countryCode: 1, key: 1 }, { unique: true });
-DriverDocRequirementSchema.index({ countryCode: 1, order: 1 });
-
-export default mongoose.model("DriverDocRequirement", DriverDocRequirementSchema);
+ApplicationDocRequirementSchema.index({ appType: 1, countryCode: 1, key: 1 }, { unique: true });
+ApplicationDocRequirementSchema.index({ appType: 1, countryCode: 1, order: 1 });
+export default mongoose.model("ApplicationDocRequirement", ApplicationDocRequirementSchema);
