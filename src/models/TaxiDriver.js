@@ -48,6 +48,8 @@ const TaxiDriverSchema = new mongoose.Schema(
     // Belge / onay durumu
     isApproved: { type: Boolean, default: false },
     licenseNumber: { type: String, trim: true },
+    // Yolcuya görünen sürücü fotoğrafı (başvuru selfie'sinden kopyalanır)
+    photoUrl: { type: String, default: "" },
     rejectionReason: { type: String, default: null },
 
     // Aktif yolculuk referansı
