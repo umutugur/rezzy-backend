@@ -4,6 +4,7 @@ import { useI18n } from "../../i18n";
 import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
 import { FormField } from "../../desktop/components/admin/FormField";
 import {
+  AppType,
   DriverDocRequirement,
   DriverDocRequirementInput,
   I18n,
@@ -16,6 +17,12 @@ import {
 // ─── Style constants ───────────────────────────────────────────────────────────
 const inputCls =
   "w-full rounded-lg border border-[var(--rezvix-border-strong)] bg-[var(--rezvix-bg-elevated)] text-[var(--rezvix-text-main)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--rezvix-primary)] placeholder:text-[var(--rezvix-text-soft)]";
+
+const APP_TYPE_OPTIONS: Array<{ value: AppType; label: string }> = [
+  { value: "driver", label: "Sürücü" },
+  { value: "market", label: "Market" },
+  { value: "restaurant", label: "Restoran" },
+];
 
 const COUNTRY_OPTIONS = [
   { value: "KKTC", label: "KKTC — Kuzey Kıbrıs" },
@@ -118,6 +125,7 @@ function StatusDot({ active, labels }: { active: boolean; labels: [string, strin
 function RequirementDrawer({
   open,
   initial,
+  appType,
   countryCode,
   onClose,
   onSave,
@@ -125,6 +133,7 @@ function RequirementDrawer({
 }: {
   open: boolean;
   initial: DriverDocRequirement | null;
+  appType: AppType;
   countryCode: string;
   onClose: () => void;
   onSave: (body: DriverDocRequirementInput) => void;
@@ -178,6 +187,7 @@ function RequirementDrawer({
       if (n) cleanNumberLabel[key] = n;
     });
     onSave({
+      appType,
       countryCode,
       key: form.key.trim(),
       i18n: cleanI18n,
@@ -225,7 +235,7 @@ function RequirementDrawer({
               {initial ? t("Belgeyi Düzenle") : t("Yeni Belge Gereksinimi")}
             </h3>
             <p style={{ margin: "2px 0 0", fontSize: 12.5, color: "var(--rezvix-text-soft)" }}>
-              {countryCode}
+              {appTypeLabel(appType)} · {countryCode}
             </p>
           </div>
           <button
@@ -343,14 +353,15 @@ function RequirementDrawer({
 export default function DriverDocRequirementsPage() {
   const qc = useQueryClient();
   const { t } = useI18n();
+  const [appType, setAppType] = React.useState<AppType>("driver");
   const [country, setCountry] = React.useState("KKTC");
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<DriverDocRequirement | null>(null);
 
-  const queryKey = ["driver-doc-requirements", country];
+  const queryKey = ["driver-doc-requirements", appType, country];
   const { data, isLoading } = useQuery({
     queryKey,
-    queryFn: () => listDriverDocRequirements(country),
+    queryFn: () => listDriverDocRequirements(appType, country),
   });
   const items = React.useMemo(
     () => [...(data?.items ?? [])].sort((a, b) => a.order - b.order),
@@ -388,8 +399,10 @@ export default function DriverDocRequirementsPage() {
   return (
     <div style={{ padding: "24px 28px", maxWidth: 1200 }}>
       <AdminPageHeader
-        title={t("Sürücü Belge Gereksinimleri")}
-        subtitle={t("Ülke bazında sürücü başvurusunda istenen belgeleri yönetin")}
+        title={t("Belge Gereksinimleri")}
+        subtitle={`${t(appTypeLabel(appType))} · ${t(
+          "Tip ve ülke bazında başvuruda istenen belgeleri yönetin"
+        )}`}
         actions={
           <button onClick={openCreate} style={btnPrimary}>
             + {t("Yeni Belge")}
@@ -397,9 +410,25 @@ export default function DriverDocRequirementsPage() {
         }
       />
 
-      {/* Country selector */}
+      {/* App type + country selector */}
       <div style={{ ...cardStyle, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 240 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 220 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--rezvix-text-muted)" }}>
+            {t("Başvuru Tipi")}
+          </span>
+          <select
+            className={inputCls}
+            value={appType}
+            onChange={(e) => setAppType(e.target.value as AppType)}
+          >
+            {APP_TYPE_OPTIONS.map((a) => (
+              <option key={a.value} value={a.value}>
+                {t(a.label)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 220 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: "var(--rezvix-text-muted)" }}>
             {t("Ülke")}
           </span>
@@ -519,6 +548,7 @@ export default function DriverDocRequirementsPage() {
       <RequirementDrawer
         open={drawerOpen}
         initial={editing}
+        appType={appType}
         countryCode={country}
         onClose={() => {
           setDrawerOpen(false);
@@ -532,6 +562,12 @@ export default function DriverDocRequirementsPage() {
 }
 
 // ─── Small helpers / shared styles ─────────────────────────────────────────────
+function appTypeLabel(appType: AppType): string {
+  return (
+    APP_TYPE_OPTIONS.find((a) => a.value === appType)?.label ?? appType
+  );
+}
+
 function FieldTag({ label }: { label: string }) {
   return (
     <span

@@ -12,7 +12,7 @@ import {
   rejectDriverApplication,
   reviewDriverApplicationDocument,
 } from "../../api/driverApplications";
-import { StatusBadge } from "./DriverApplicationsPage";
+import { StatusBadge, AppTypeBadge } from "./DriverApplicationsPage";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 function i18nLabel(i18n: I18n | undefined, fallback: string): string {
@@ -191,7 +191,12 @@ export default function DriverApplicationDetailPage() {
       <AdminPageHeader
         title={app.user?.name ?? t("Sürücü Başvurusu")}
         subtitle={app.user?.email ?? "—"}
-        actions={<StatusBadge status={app.status} />}
+        actions={
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <AppTypeBadge appType={app.appType} />
+            <StatusBadge status={app.status} />
+          </div>
+        }
       />
 
       {app.status === "rejected" && app.rejectReason && (
@@ -206,15 +211,21 @@ export default function DriverApplicationDetailPage() {
       {/* Vehicle info + selfie */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: 16, marginBottom: 20 }}>
         <div style={cardStyle}>
-          <div style={sectionHeading}>{t("Araç Bilgileri")}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
-            <Info label={t("Plaka")} value={app.vehicle?.plate} mono />
-            <Info label={t("Marka")} value={app.vehicle?.brand} />
-            <Info label={t("Model")} value={app.vehicle?.model} />
-            <Info label={t("Renk")} value={app.vehicle?.color} />
-            <Info label={t("Tip")} value={app.vehicle?.type} />
-            <Info label={t("Ülke")} value={app.countryCode} />
-          </div>
+          {app.appType === "driver" ? (
+            <>
+              <div style={sectionHeading}>{t("Araç Bilgileri")}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+                <Info label={t("Plaka")} value={asStr(app.payload?.plate)} mono />
+                <Info label={t("Marka")} value={asStr(app.payload?.brand)} />
+                <Info label={t("Model")} value={asStr(app.payload?.model)} />
+                <Info label={t("Renk")} value={asStr(app.payload?.color)} />
+                <Info label={t("Tip")} value={asStr(app.payload?.type)} />
+                <Info label={t("Ülke")} value={app.countryCode} />
+              </div>
+            </>
+          ) : (
+            <BusinessInfo app={app} />
+          )}
           <div style={{ marginTop: 14, fontSize: 12, color: "var(--rezvix-text-soft)" }}>
             {t("Oluşturulma")}: {fmtDate(app.createdAt)} · {t("Güncellenme")}: {fmtDate(app.updatedAt)}
           </div>
@@ -389,6 +400,51 @@ export default function DriverApplicationDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Business (market / restaurant) info ───────────────────────────────────────
+function asStr(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  return String(v);
+}
+
+function BusinessInfo({ app }: { app: { payload?: Record<string, any>; countryCode: string } }) {
+  const { t } = useI18n();
+  const p = app.payload ?? {};
+  const coords = Array.isArray(p?.location?.coordinates) ? p.location.coordinates : null;
+  const lng = coords ? Number(coords[0]) : null;
+  const lat = coords ? Number(coords[1]) : null;
+  const hasCoords =
+    lat !== null && lng !== null && !Number.isNaN(lat) && !Number.isNaN(lng);
+  const mapUrl = hasCoords
+    ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
+    : null;
+
+  return (
+    <>
+      <div style={sectionHeading}>{t("İşletme Bilgileri")}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+        <Info label={t("İşletme Adı")} value={asStr(p.businessName)} />
+        <Info label={t("Kategori")} value={asStr(p.category)} />
+        <Info label={t("Telefon")} value={asStr(p.phone)} />
+        <Info label={t("Ülke")} value={app.countryCode} />
+        <Info label={t("Konum")} value={hasCoords ? `${lat}, ${lng}` : "—"} mono />
+      </div>
+      <div style={{ marginTop: 14 }}>
+        <div style={miniLabel}>{t("Adres")}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--rezvix-text-main)" }}>
+          {asStr(p.address) || "—"}
+        </div>
+      </div>
+      {mapUrl && (
+        <div style={{ marginTop: 12 }}>
+          <a href={mapUrl} target="_blank" rel="noreferrer" style={linkStyle}>
+            {t("Haritada aç")}
+          </a>
+        </div>
+      )}
+    </>
   );
 }
 

@@ -3,8 +3,11 @@ import { api } from "./client";
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type I18n = { tr?: string; en?: string; ru?: string; el?: string };
 
+export type AppType = "driver" | "market" | "restaurant";
+
 export type DriverDocRequirement = {
   _id: string;
+  appType: AppType;
   countryCode: string;
   key: string;
   i18n: I18n;
@@ -18,6 +21,7 @@ export type DriverDocRequirement = {
 };
 
 export type DriverDocRequirementInput = {
+  appType: AppType;
   countryCode: string;
   key: string;
   i18n: I18n;
@@ -45,15 +49,10 @@ export type DriverApplicationStatus = "draft" | "pending" | "approved" | "reject
 
 export type DriverApplication = {
   _id: string;
+  appType: AppType;
   user: { _id: string; name: string; email: string } | null;
   countryCode: string;
-  vehicle: {
-    plate: string;
-    brand: string;
-    model: string;
-    color: string;
-    type: string;
-  };
+  payload: Record<string, any>;
   selfieUrl: string;
   documents: AppDoc[];
   status: DriverApplicationStatus;
@@ -77,10 +76,11 @@ export type DriverApplicationDetailResponse = {
 
 // ─── Driver Document Requirements ──────────────────────────────────────────────
 export async function listDriverDocRequirements(
+  appType: AppType,
   country: string
 ): Promise<{ items: DriverDocRequirement[] }> {
   const { data } = await api.get("/admin/driver-doc-requirements", {
-    params: { country },
+    params: { appType, country },
   });
   const items = Array.isArray(data?.items)
     ? data.items
@@ -112,6 +112,7 @@ export async function deleteDriverDocRequirement(id: string) {
 
 // ─── Driver Applications ───────────────────────────────────────────────────────
 export async function listDriverApplications(params?: {
+  appType?: string;
   status?: string;
   q?: string;
   page?: number;
