@@ -1,6 +1,7 @@
 // src/routes/taxiDriver.routes.js
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
+import { getRequirements, getMyApplication, submitApplication, resubmitApplication } from "../controllers/driverApplication.controller.js";
 import {
   registerDriver,
   toggleStatus,
@@ -21,6 +22,12 @@ import {
 } from "../controllers/taxiDriver.controller.js";
 
 const router = Router();
+
+// Sürücü başvuru gereksinimleri ve başvuru
+router.get("/taxi/driver/requirements", auth(), getRequirements);
+router.get("/taxi/driver/application/me", auth(), getMyApplication);
+router.post("/taxi/driver/application", auth(), submitApplication);
+router.put("/taxi/driver/application/resubmit", auth(), resubmitApplication);
 
 // Sürücü kaydı
 router.post("/taxi/driver/register", auth(), registerDriver);

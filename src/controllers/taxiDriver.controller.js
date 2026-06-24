@@ -39,7 +39,7 @@ export async function registerDriver(req, res, next) {
       vehicleColor: vehicleColor.trim(),
       type,
       licenseNumber,
-      isApproved: true,
+      isApproved: false, // başvuru/onay akışı onaylar (otomatik onay kaldırıldı)
     });
 
     return res.status(201).json({ message: "Sürücü kaydı oluşturuldu", driver });
