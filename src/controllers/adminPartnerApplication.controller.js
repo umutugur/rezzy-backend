@@ -3,6 +3,9 @@ import ApplicationDocRequirement from "../models/ApplicationDocRequirement.js";
 import PartnerApplication from "../models/PartnerApplication.js";
 import { isApprovable } from "../utils/partnerApplication.logic.js";
 import { materializeApproval } from "../services/materializeApproval.js";
+import { notifyUser } from "../services/notification.service.js";
+
+const APP_TYPE_LABEL = { driver: "Sürücü", market: "Market", restaurant: "Restoran" };
 
 const norm = (c) => String(c || "").toUpperCase().trim();
 
@@ -124,6 +127,16 @@ export const reviewDocument = async (req, res, next) => {
     doc.status = status;
     doc.rejectReason = status === "rejected" ? (rejectReason || "Belirtilmedi") : null;
     await app.save();
+
+    // Notify applicant when a document is rejected — fire-and-forget
+    if (status === "rejected") {
+      notifyUser(app.user, {
+        title: "Bir belgen reddedildi",
+        body: "Başvurundaki bir belge güncelleme istiyor. Lütfen uygulamayı kontrol et.",
+        type: "partner_document_rejected",
+      }).catch(() => {});
+    }
+
     res.json({ application: app.toObject() });
   } catch (e) { next(e); }
 };
@@ -143,6 +156,14 @@ export const approveApplication = async (req, res, next) => {
     await app.save();
 
     await materializeApproval(app);
+
+    // Notify applicant — fire-and-forget, never blocks the response
+    notifyUser(app.user, {
+      title: "Başvurun onaylandı 🎉",
+      body: `${APP_TYPE_LABEL[app.appType] || "Ortak"} başvurun onaylandı. Paneline erişmeye başlayabilirsin.`,
+      type: "partner_application_approved",
+    }).catch(() => {});
+
     res.json({ application: app.toObject() });
   } catch (e) { next(e); }
 };
@@ -155,6 +176,14 @@ export const rejectApplication = async (req, res, next) => {
       { new: true }
     ).lean();
     if (!app) return next({ status: 404, message: "Başvuru bulunamadı" });
+
+    // Notify applicant — fire-and-forget, never blocks the response
+    notifyUser(app.user, {
+      title: "Başvurun reddedildi",
+      body: `${APP_TYPE_LABEL[app.appType] || "Ortak"} başvurun reddedildi. Detaylar için uygulamayı kontrol et.`,
+      type: "partner_application_rejected",
+    }).catch(() => {});
+
     res.json({ application: app });
   } catch (e) { next(e); }
 };

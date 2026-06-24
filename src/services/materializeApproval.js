@@ -88,10 +88,32 @@ export async function materializeApproval(app) {
         // all other fields have schema defaults or are optional
       });
     }
-    await User.updateOne(
-      { _id: userId, role: { $ne: "restaurant" } },
-      { $set: { role: "restaurant" } }
-    );
+
+    // Grant panel access: set legacy restaurantId + add location_manager membership.
+    // Idempotent: only adds the membership if it isn't already present.
+    const user = await User.findById(userId).select("role restaurantId restaurantMemberships").exec();
+    if (user) {
+      user.role = "restaurant";
+      user.restaurantId = r._id;
+
+      if (!Array.isArray(user.restaurantMemberships)) {
+        user.restaurantMemberships = [];
+      }
+      const alreadyMember = user.restaurantMemberships.some(
+        (m) => String(m.restaurant) === String(r._id)
+      );
+      if (!alreadyMember) {
+        user.restaurantMemberships.push({ restaurant: r._id, role: "location_manager" });
+      }
+      await user.save();
+    } else {
+      // Fallback if user somehow not found
+      await User.updateOne(
+        { _id: userId },
+        { $set: { role: "restaurant", restaurantId: r._id } }
+      );
+    }
+
     return { kind: "restaurant", id: r._id };
   }
 
