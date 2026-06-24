@@ -12,6 +12,8 @@ export type AdminNavKey =
   | "taxi-drivers"
   | "taxi-rides"
   | "taxi-config"
+  | "driver-applications"
+  | "driver-doc-requirements"
   | "delivery-orders"
   | "banners"
   | "notifications"
@@ -64,9 +66,16 @@ export const AdminSideNav: React.FC<Props> = ({ active, onNavigate }) => {
     {
       label: t("Taksi"),
       items: [
-        { key: "taxi-drivers", icon: "🚗", label: t("Sürücü Başvuruları") },
+        { key: "taxi-drivers", icon: "🚗", label: t("Taksi Sürücüleri") },
         { key: "taxi-rides", icon: "🛣️", label: t("Taksi Yolculukları") },
         { key: "taxi-config", icon: "💰", label: t("Taksi Tarifeleri") },
+      ],
+    },
+    {
+      label: t("Sürücü Başvuruları"),
+      items: [
+        { key: "driver-applications", icon: "📋", label: t("Başvurular") },
+        { key: "driver-doc-requirements", icon: "📄", label: t("Belge Gereksinimleri") },
       ],
     },
     {
