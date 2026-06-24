@@ -5,7 +5,8 @@ import { connectDB } from "../config/db.js";
 dotenv.config();
 
 const L = (tr, en) => ({ tr, en, ru: en, el: en });
-const KKTC = [
+
+const DRIVER = [
   { key: "id_card",              order: 10, file: true, number: true,  numberLabel: L("Kimlik No","ID No"),          i18n: L("Kimlik Kartı","ID Card") },
   { key: "driving_license",      order: 20, file: true, number: true,  expiry: true, numberLabel: L("Ehliyet No","Licence No"), i18n: L("Sürücü Ehliyeti","Driving Licence") },
   { key: "psv_permit",           order: 30, file: true, number: true,  expiry: true, numberLabel: L("İzin No","Permit No"),     i18n: L("Umumi Hizmet (PSV) İzni","PSV Permit") },
@@ -17,16 +18,42 @@ const KKTC = [
   { key: "health_report",        order: 90, file: true, expiry: true, required: false, i18n: L("Sağlık Raporu","Health Report") },
 ];
 
+const MARKET = [
+  { key: "trade_license",    order: 10, file: true, number: true, numberLabel: L("Ruhsat No","Licence No"), i18n: L("İşletme/Ticaret Ruhsatı","Trade Licence") },
+  { key: "tax_registration", order: 20, file: true, number: true, numberLabel: L("Vergi No","Tax No"),      i18n: L("Vergi Kaydı","Tax Registration") },
+  { key: "owner_id",         order: 30, file: true, number: true, numberLabel: L("Kimlik No","ID No"),      i18n: L("Sahip Kimliği","Owner ID") },
+  { key: "hygiene_permit",   order: 40, file: true, expiry: true,                                           i18n: L("Hijyen/Sağlık İzni","Hygiene Permit") },
+  { key: "storefront_photo", order: 50, file: true,                                                         i18n: L("Mağaza Ön Cephe Fotoğrafı","Storefront Photo") },
+];
+
+const RESTAURANT = [
+  { key: "trade_license",    order: 10, file: true, number: true, numberLabel: L("Ruhsat No","Licence No"), i18n: L("İşletme/Ticaret Ruhsatı","Trade Licence") },
+  { key: "tax_registration", order: 20, file: true, number: true, numberLabel: L("Vergi No","Tax No"),      i18n: L("Vergi Kaydı","Tax Registration") },
+  { key: "owner_id",         order: 30, file: true, number: true, numberLabel: L("Kimlik No","ID No"),      i18n: L("Sahip Kimliği","Owner ID") },
+  { key: "food_safety_cert", order: 40, file: true, expiry: true,                                           i18n: L("Gıda Güvenliği Sertifikası","Food Safety Certificate") },
+  { key: "premises_photo",   order: 50, file: true,                                                         i18n: L("İşletme Fotoğrafı","Premises Photo") },
+];
+
+const GROUPS = [
+  { appType: "driver",     rows: DRIVER },
+  { appType: "market",     rows: MARKET },
+  { appType: "restaurant", rows: RESTAURANT },
+];
+
 async function run() {
   await connectDB();
-  for (const r of KKTC) {
-    await ApplicationDocRequirement.updateOne(
-      { appType: "driver", countryCode: "KKTC", key: r.key },
-      { $set: { appType: "driver", countryCode: "KKTC", required: r.required !== false, isActive: true, ...r } },
-      { upsert: true }
-    );
+  const counts = {};
+  for (const { appType, rows } of GROUPS) {
+    for (const r of rows) {
+      await ApplicationDocRequirement.updateOne(
+        { appType, countryCode: "KKTC", key: r.key },
+        { $set: { appType, countryCode: "KKTC", required: r.required !== false, isActive: true, ...r } },
+        { upsert: true }
+      );
+    }
+    counts[appType] = rows.length;
   }
-  console.log(`[seed-partner-docs] KKTC driver ok (${KKTC.length})`);
+  console.log(`[seed-partner-docs] KKTC ok — driver=${counts.driver} market=${counts.market} restaurant=${counts.restaurant}`);
   await mongoose.disconnect();
 }
 run().catch((e) => { console.error(e); process.exit(1); });
