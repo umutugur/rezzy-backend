@@ -40,6 +40,9 @@ import AdminTaxiRidesPage from "./pages/admin/AdminTaxiRides";
 import AdminTaxiDriversPage from "./pages/admin/AdminTaxiDrivers";
 import AdminDeliveryOrdersPage from "./pages/admin/AdminDeliveryOrders";
 import AdminTaxiConfigPage from "./pages/admin/AdminTaxiConfig";
+import DriverDocRequirementsPage from "./pages/admin/DriverDocRequirementsPage";
+import DriverApplicationsPage from "./pages/admin/DriverApplicationsPage";
+import DriverApplicationDetailPage from "./pages/admin/DriverApplicationDetailPage";
 
 import RestaurantDashboardPage from "./pages/restaurant/Dashboard";
 import RestaurantReservationsPage from "./pages/restaurant/Reservations";
@@ -684,6 +687,30 @@ export default function App() {
           element={
             <AdminPage>
               <AdminTaxiConfigPage />
+            </AdminPage>
+          }
+        />
+        <Route
+          path="/admin/driver-doc-requirements"
+          element={
+            <AdminPage>
+              <DriverDocRequirementsPage />
+            </AdminPage>
+          }
+        />
+        <Route
+          path="/admin/driver-applications"
+          element={
+            <AdminPage>
+              <DriverApplicationsPage />
+            </AdminPage>
+          }
+        />
+        <Route
+          path="/admin/driver-applications/:id"
+          element={
+            <AdminPage>
+              <DriverApplicationDetailPage />
             </AdminPage>
           }
         />

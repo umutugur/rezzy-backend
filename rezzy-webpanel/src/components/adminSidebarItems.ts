@@ -11,7 +11,9 @@ export const ADMIN_SIDEBAR_ITEMS = [
   { to: "/admin/delivery/orders", label: "🛵 Paket Servis Siparişleri" },
   { to: "/admin/market/orders", label: "🛒 Market Siparişleri" },
   { to: "/admin/market/collections", label: "🛒 Market Koleksiyonları" },
-  { to: "/admin/taxi/drivers", label: "🚕 Sürücü Başvuruları" },
+  { to: "/admin/taxi/drivers", label: "🚕 Taksi Sürücüleri" },
   { to: "/admin/taxi/rides", label: "🗺️ Taksi Yolculukları" },
   { to: "/admin/taxi/config", label: "⚙️ Taksi Tarifeleri" },
+  { to: "/admin/driver-applications", label: "📋 Sürücü Başvuruları" },
+  { to: "/admin/driver-doc-requirements", label: "📄 Belge Gereksinimleri" },
 ];
