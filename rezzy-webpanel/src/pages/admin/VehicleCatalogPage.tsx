@@ -103,7 +103,7 @@ function NameCell({
 export default function VehicleCatalogPage() {
   const qc = useQueryClient();
   const { t } = useI18n();
-  const [country, setCountry] = React.useState("CY");
+  const [country, setCountry] = React.useState("KKTC");
   const [selectedMake, setSelectedMake] = React.useState<string | null>(null);
 
   // Inline edit state

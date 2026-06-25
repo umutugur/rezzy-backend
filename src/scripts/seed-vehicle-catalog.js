@@ -4,7 +4,7 @@ import { connectDB } from "../config/db.js";
 import VehicleMake from "../models/VehicleMake.js";
 import VehicleModel from "../models/VehicleModel.js";
 
-const COUNTRY = "CY";
+const COUNTRY = "KKTC";
 
 const CATALOG = {
   "Toyota": ["Corolla", "Yaris", "Auris", "Avensis", "RAV4", "Hilux", "C-HR", "Camry"],
