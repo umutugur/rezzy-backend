@@ -25,13 +25,32 @@ import {
 
 const router = Router();
 
-// Generic dosya yükleme (partner başvuru selfie + belgeleri Cloudinary'ye)
-// Mobil `uploadToCloud` bu uca multipart `file` alanıyla POST eder, { url } döner.
-router.post("/uploads", auth(), imageUpload.single("file"), async (req, res, next) => {
+// Generic dosya yükleme (partner başvuru selfie + belgeleri Cloudinary'ye).
+// İKİ giriş biçimi destekler:
+//   1) multipart/form-data, `file` alanı  (webpanel / klasik akış)
+//   2) JSON { file: "data:image/jpeg;base64,..." }  (iOS'ta dosya-URI streaming
+//      sorununu tamamen atlatan güvenilir mobil yol)
+// Her iki durumda da { url } döner.
+const maybeMultipart = (req, res, next) => {
+  if ((req.headers["content-type"] || "").includes("multipart/form-data")) {
+    return imageUpload.single("file")(req, res, next);
+  }
+  next();
+};
+router.post("/uploads", auth(), maybeMultipart, async (req, res, next) => {
   try {
-    if (!req.file?.buffer) return next({ status: 400, message: "Dosya gerekli" });
-    const result = await uploadBufferToCloudinary(req.file.buffer, {
-      folder: process.env.CLOUDINARY_FOLDER_PARTNER || "rezvix/partner",
+    const PARTNER_FOLDER = process.env.CLOUDINARY_FOLDER_PARTNER || "rezvix/partner";
+    let buffer = req.file?.buffer;
+
+    // Base64 / data-URI gövdesi
+    if (!buffer && typeof req.body?.file === "string") {
+      const raw = req.body.file.includes(",") ? req.body.file.split(",").pop() : req.body.file;
+      try { buffer = Buffer.from(raw, "base64"); } catch { buffer = null; }
+    }
+    if (!buffer || !buffer.length) return next({ status: 400, message: "Dosya gerekli" });
+
+    const result = await uploadBufferToCloudinary(buffer, {
+      folder: PARTNER_FOLDER,
       resource_type: "image",
     });
     res.json({ url: result.secure_url });
