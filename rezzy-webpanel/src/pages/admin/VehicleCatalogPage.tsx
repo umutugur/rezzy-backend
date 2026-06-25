@@ -131,15 +131,22 @@ export default function VehicleCatalogPage() {
     [makesData?.items]
   );
 
-  const modelsKey = ["vehicle-models", country, selectedMake];
+  // Modeller backend'de marka İSMİ ile saklanır; selectedMake bir _id tutar.
+  // API çağrıları için seçili markanın ismini türet.
+  const selectedMakeName = React.useMemo(
+    () => makes.find((m) => m._id === selectedMake)?.name ?? null,
+    [makes, selectedMake]
+  );
+
+  const modelsKey = ["vehicle-models", country, selectedMakeName];
   const {
     data: modelsData,
     isLoading: modelsLoading,
     isError: modelsError,
   } = useQuery({
     queryKey: modelsKey,
-    queryFn: () => listModels(country, selectedMake as string),
-    enabled: !!selectedMake,
+    queryFn: () => listModels(country, selectedMakeName as string),
+    enabled: !!selectedMakeName,
   });
   const models = React.useMemo(
     () => [...(modelsData?.items ?? [])].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
@@ -156,7 +163,7 @@ export default function VehicleCatalogPage() {
   // ── Make mutations ──
   const invalidateMakes = () => qc.invalidateQueries({ queryKey: makesKey });
   const invalidateModels = () =>
-    qc.invalidateQueries({ queryKey: ["vehicle-models", country, selectedMake] });
+    qc.invalidateQueries({ queryKey: ["vehicle-models", country, selectedMakeName] });
 
   const createMakeMut = useMutation({
     mutationFn: (name: string) =>
@@ -189,7 +196,7 @@ export default function VehicleCatalogPage() {
     mutationFn: (name: string) =>
       createModel({
         countryCode: country,
-        make: selectedMake as string,
+        make: selectedMakeName as string,
         name,
         order: models.length,
       }),
@@ -205,7 +212,7 @@ export default function VehicleCatalogPage() {
       for (const name of names) {
         await createModel({
           countryCode: country,
-          make: selectedMake as string,
+          make: selectedMakeName as string,
           name,
           order: order++,
         });
