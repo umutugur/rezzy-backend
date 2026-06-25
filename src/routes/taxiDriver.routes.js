@@ -2,6 +2,8 @@
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
 import { getRequirements, getMyApplication, submitApplication, resubmitApplication } from "../controllers/partnerApplication.controller.js";
+import { imageUpload } from "../utils/multer.js";
+import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import {
   registerDriver,
   toggleStatus,
@@ -22,6 +24,19 @@ import {
 } from "../controllers/taxiDriver.controller.js";
 
 const router = Router();
+
+// Generic dosya yükleme (partner başvuru selfie + belgeleri Cloudinary'ye)
+// Mobil `uploadToCloud` bu uca multipart `file` alanıyla POST eder, { url } döner.
+router.post("/uploads", auth(), imageUpload.single("file"), async (req, res, next) => {
+  try {
+    if (!req.file?.buffer) return next({ status: 400, message: "Dosya gerekli" });
+    const result = await uploadBufferToCloudinary(req.file.buffer, {
+      folder: process.env.CLOUDINARY_FOLDER_PARTNER || "rezvix/partner",
+      resource_type: "image",
+    });
+    res.json({ url: result.secure_url });
+  } catch (e) { next(e); }
+});
 
 // Generic partner routes
 router.get("/partner/requirements", auth(), getRequirements);
