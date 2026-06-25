@@ -76,28 +76,53 @@ export async function searchPlaces(query, location = null) {
   }
 }
 
+// OSRM (Open Source Routing Machine) — ücretsiz, key gerektirmez, gerçek yol rotası.
+// Üretimde kendi OSRM'inizi host edebilir veya OPENROUTESERVICE'e geçebilirsiniz;
+// public demo sunucusu düşük hacim için yeterlidir (rate limit'li).
+const OSRM_BASE = process.env.OSRM_BASE_URL || "https://router.project-osrm.org";
+
+/** Haversine tahmini — OSRM ulaşılamazsa yedek. */
+function haversineEstimate(origin, destination) {
+  const straightKm = haversineKm(origin.lat, origin.lng, destination.lat, destination.lng);
+  const roadFactor = straightKm < 5 ? 1.4 : straightKm < 20 ? 1.35 : 1.25;
+  const distanceKm = Math.round(straightKm * roadFactor * 100) / 100;
+  const avgSpeedKmh = 28;
+  const durationMin = Math.max(3, Math.ceil((distanceKm / avgSpeedKmh) * 60));
+  return {
+    distanceKm,
+    durationMin,
+    geometry: [
+      { lat: origin.lat, lng: origin.lng },
+      { lat: destination.lat, lng: destination.lng },
+    ],
+  };
+}
+
 /**
- * İki koordinat arasındaki tahmini yol mesafesi ve süresi.
- * Haversine düz-hat mesafesi × 1.35 (yol katsayısı) ile tahmin edilir.
- * Ortalama şehir içi hız: 30 km/h
+ * İki koordinat arasındaki GERÇEK yol mesafesi, süresi ve rota geometrisi.
+ * OSRM ile sokaklardan en kısa sürücü rotası hesaplanır (Uber/BiTaksi tarzı).
+ * Başarısız olursa Haversine tahminine düşer.
+ * @returns {{ distanceKm:number, durationMin:number, geometry:{lat:number,lng:number}[] }}
  */
 export async function getRouteInfo(origin, destination) {
   try {
-    const straightKm = haversineKm(
-      origin.lat,
-      origin.lng,
-      destination.lat,
-      destination.lng
-    );
-    // Yol katsayısı: şehir içi 1.35, uzun mesafe için biraz daha az
-    const roadFactor = straightKm < 5 ? 1.4 : straightKm < 20 ? 1.35 : 1.25;
-    const distanceKm = Math.round(straightKm * roadFactor * 100) / 100;
-    const avgSpeedKmh = 28; // şehir içi ortalama
-    const durationMin = Math.max(3, Math.ceil((distanceKm / avgSpeedKmh) * 60));
-    return { distanceKm, durationMin };
+    const url =
+      `${OSRM_BASE}/route/v1/driving/` +
+      `${origin.lng},${origin.lat};${destination.lng},${destination.lat}` +
+      `?overview=full&geometries=geojson`;
+    const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+    if (!res.ok) throw new Error(`OSRM ${res.status}`);
+    const data = await res.json();
+    const route = data?.routes?.[0];
+    if (!route) throw new Error("OSRM rota bulunamadı");
+
+    const distanceKm = Math.round((route.distance / 1000) * 100) / 100;
+    const durationMin = Math.max(3, Math.ceil(route.duration / 60));
+    const geometry = (route.geometry?.coordinates || []).map(([lng, lat]) => ({ lat, lng }));
+    return { distanceKm, durationMin, geometry: geometry.length ? geometry : haversineEstimate(origin, destination).geometry };
   } catch (err) {
-    console.error("[places] getRouteInfo hata:", err.message);
-    return { distanceKm: 0, durationMin: 0 };
+    console.error("[places] OSRM hata, Haversine yedeğine düşülüyor:", err.message);
+    return haversineEstimate(origin, destination);
   }
 }
 

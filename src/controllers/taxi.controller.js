@@ -48,14 +48,14 @@ export async function estimateFare(req, res, next) {
       lng: dropoff.coordinates[0],
     };
 
-    const { distanceKm, durationMin } = await getRouteInfo(origin, destination);
+    const { distanceKm, durationMin, geometry } = await getRouteInfo(origin, destination);
 
     // Region-aware fare (falls back to hardcoded tariffs when no DB config exists)
     const passengerUser = await User.findById(req.user.id).select("region").lean();
     const region = normalizeRegion(req.body?.region) ?? passengerUser?.region ?? null;
     const fare = await estimateFareForRegion(region, vehicleType, distanceKm);
 
-    return res.json({ fare, distanceKm, durationMin, vehicleType });
+    return res.json({ fare, distanceKm, durationMin, vehicleType, geometry });
   } catch (err) {
     next(err);
   }
