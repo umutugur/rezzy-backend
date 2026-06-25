@@ -30,7 +30,7 @@ export async function populateItemCategories(items) {
  * resolved item. discountPrice precedence: override wins if the field is present
  * (including 0); otherwise the org default applies.
  */
-export function mergeOrgProduct(orgProduct, override) {
+export function mergeOrgProduct(orgProduct, override, storeId) {
   const o = override || {};
   const price = o.price != null ? Number(o.price) : Number(orgProduct.defaultPrice);
   const discountPrice =
@@ -42,6 +42,9 @@ export function mergeOrgProduct(orgProduct, override) {
     source: "org",
     orgProductId: orgProduct._id,
     _id: orgProduct._id,
+    // Görüntülenen mağazanın id'si — yerel ürünlerle aynı şekilde mobil sepetin
+    // ürünü mağazaya gruplaması için gerekli (zincir market sepete-ekleme düzeltmesi).
+    ...(storeId != null ? { store: storeId } : {}),
     title: orgProduct.title,
     description: orgProduct.description || "",
     barcode: orgProduct.barcode || "",
@@ -79,7 +82,7 @@ export async function resolveStoreCatalog(storeOrId) {
   for (const op of orgProducts) {
     const ov = ovByProduct.get(String(op._id));
     if (ov?.hidden) continue;
-    orgItems.push(mergeOrgProduct(op, ov));
+    orgItems.push(mergeOrgProduct(op, ov, store._id));
   }
   return populateItemCategories([...orgItems, ...localItems]);
 }
@@ -92,5 +95,5 @@ export async function resolveOrgProductForOrder(storeId, orgProductId) {
   if (!op) return null;
   const ov = await MarketBranchOverride.findOne({ store: storeId, orgProductId }).lean();
   if (ov?.hidden) return null;
-  return mergeOrgProduct(op, ov);
+  return mergeOrgProduct(op, ov, storeId);
 }

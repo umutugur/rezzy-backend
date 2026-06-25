@@ -37,4 +37,9 @@ assert.equal(r.discountPrice, 42);
 r = mergeOrgProduct({ ...org, defaultDiscountPrice: 42 }, { discountPrice: 0 });
 assert.equal(r.discountPrice, 0);
 
-console.log("ok: marketCatalogResolve merge (6 cases)");
+// 7) org item carries the viewing store's id (so the mobile cart can group it
+//    like a local product — fixes chain-market add-to-cart)
+r = mergeOrgProduct(org, null, "store-123");
+assert.equal(String(r.store), "store-123", "org item must carry store id");
+
+console.log("ok: marketCatalogResolve merge (7 cases)");
