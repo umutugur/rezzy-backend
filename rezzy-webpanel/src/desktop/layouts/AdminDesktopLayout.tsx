@@ -14,6 +14,7 @@ const ROUTE_MAP: Record<AdminNavKey, string> = {
   "taxi-config":        "/admin/taxi/config",
   "driver-applications":     "/admin/driver-applications",
   "driver-doc-requirements": "/admin/driver-doc-requirements",
+  "vehicle-catalog":    "/admin/vehicle-catalog",
   "delivery-orders":    "/admin/delivery/orders",
   banners:              "/admin/banners",
   notifications:        "/admin/notifications",
@@ -47,6 +48,7 @@ function resolveActiveKey(pathname: string): AdminNavKey {
   // Sürücü başvuru sistemi
   if (pathname.startsWith("/admin/driver-doc-requirements")) return "driver-doc-requirements";
   if (pathname.startsWith("/admin/driver-applications"))     return "driver-applications";
+  if (pathname.startsWith("/admin/vehicle-catalog"))         return "vehicle-catalog";
 
   // Top-level admin routes
   if (pathname.startsWith("/admin/organizations"))      return "organizations";
