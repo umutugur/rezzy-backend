@@ -78,8 +78,10 @@ export const submitApplication = async (req, res, next) => {
       return next({ status: 400, message: "Zorunlu işletme/araç bilgileri eksik" });
     }
 
-    // Validate document completeness
-    if (!isSubmittable({ selfieUrl: draft.selfieUrl, documents: draft.documents }, reqs)) {
+    // Validate document completeness.
+    // Selfie is only required for driver applications; market/restaurant skip it.
+    const selfieForCheck = appType === "driver" ? draft.selfieUrl : "present";
+    if (!isSubmittable({ selfieUrl: selfieForCheck, documents: draft.documents }, reqs)) {
       return next({ status: 400, message: "Tüm zorunlu belgeler ve fotoğraf gerekli" });
     }
 
