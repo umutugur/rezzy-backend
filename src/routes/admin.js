@@ -91,6 +91,10 @@ import {
   createStore,
   updateStore,
 } from "../controllers/adminMarket.controller.js";
+import {
+  adminListMakes, adminCreateMake, adminUpdateMake, adminDeleteMake,
+  adminListModels, adminCreateModel, adminUpdateModel, adminDeleteModel,
+} from "../controllers/adminVehicleCatalog.controller.js";
 import multer from "multer";
 
 const upload = multer({
@@ -323,6 +327,16 @@ r.get("/driver-doc-requirements", auth(), allow("admin"), listRequirements);
 r.post("/driver-doc-requirements", auth(), allow("admin"), createRequirement);
 r.put("/driver-doc-requirements/:id", auth(), allow("admin"), updateRequirement);
 r.delete("/driver-doc-requirements/:id", auth(), allow("admin"), deleteRequirement);
+
+// ---- Vehicle Catalog (Makes + Models) ----
+r.get("/vehicle-makes", auth(), allow("admin"), adminListMakes);
+r.post("/vehicle-makes", auth(), allow("admin"), adminCreateMake);
+r.put("/vehicle-makes/:id", auth(), allow("admin"), adminUpdateMake);
+r.delete("/vehicle-makes/:id", auth(), allow("admin"), adminDeleteMake);
+r.get("/vehicle-models", auth(), allow("admin"), adminListModels);
+r.post("/vehicle-models", auth(), allow("admin"), adminCreateModel);
+r.put("/vehicle-models/:id", auth(), allow("admin"), adminUpdateModel);
+r.delete("/vehicle-models/:id", auth(), allow("admin"), adminDeleteModel);
 
 // ---- Driver Applications (Admin) ----
 r.get("/driver-applications", auth(), allow("admin"), listApplications);

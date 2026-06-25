@@ -43,6 +43,7 @@ import marketOrgRoutes from "./routes/marketOrg.routes.js";
 import taxiRoutes from "./routes/taxi.routes.js";
 import taxiDriverRoutes from "./routes/taxiDriver.routes.js";
 import reviewRoutes from "./routes/review.routes.js";
+import vehicleCatalogRoutes from "./routes/vehicleCatalog.routes.js";
 
 dotenv.config();
 const app = express();
@@ -139,6 +140,9 @@ app.use("/api", taxiDriverRoutes);
 
 // Reviews modülü
 app.use("/api", reviewRoutes);
+
+// Vehicle catalog (public makes/models endpoints)
+app.use("/api", vehicleCatalogRoutes);
 
 // 404 & error aynı kalsın
 app.use((req, res) => res.status(404).json({ message: "Not found" }));
