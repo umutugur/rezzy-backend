@@ -32,6 +32,69 @@ const USER_POPULATE = [
 
 const googleClient = new OAuth2Client();
 
+const GOOGLE_ISSUERS = ["accounts.google.com", "https://accounts.google.com"];
+
+/**
+ * Google ID token doğrulama — dayanıklı (resilient) sürüm.
+ *
+ * Normalde `googleClient.verifyIdToken` Google'ın imza sertifikalarını
+ * `www.googleapis.com/oauth2/v1/certs` adresinden çeker. Render free tier'ın
+ * PAYLAŞIMLI çıkış IP'si zaman zaman Google tarafından bu uç noktada 403 ile
+ * engellenir → "Failed to retrieve verification certificates". Bu durumda
+ * kod tamamen sağlamdır; sunucu sadece public key'leri çekemiyordur.
+ *
+ * Fallback: sertifika çekimi başarısız olursa token'ı Google'ın `tokeninfo`
+ * uç noktasıyla (farklı host/yol: oauth2.googleapis.com) doğrularız ve
+ * audience/issuer/expiry kontrollerini manuel yaparız.
+ */
+async function verifyGoogleIdToken(idToken) {
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: GOOGLE_AUDIENCES,
+    });
+    return ticket.getPayload();
+  } catch (e) {
+    const certFetchFailed =
+      e?.message?.includes("verification certificates") ||
+      e?.message?.includes("oauth2/v1/certs") ||
+      e?.code === 403 ||
+      e?.status === 403 ||
+      e?.code === "ECONNRESET" ||
+      e?.code === "ETIMEDOUT" ||
+      e?.code === "ENOTFOUND";
+
+    // Audience/imza gibi gerçek doğrulama hatalarını olduğu gibi fırlat.
+    if (!certFetchFailed) throw e;
+
+    // ── Fallback: tokeninfo ile doğrula ──────────────────────────────────
+    const resp = await fetch(
+      "https://oauth2.googleapis.com/tokeninfo?id_token=" +
+        encodeURIComponent(idToken),
+    );
+    if (!resp.ok) {
+      // tokeninfo geçersiz token'a 400 döner → token sahte/expired.
+      throw { status: 401, message: "Google token doğrulanamadı" };
+    }
+    const payload = await resp.json();
+
+    // Manuel güvenlik kontrolleri (verifyIdToken'ın yaptıklarının dengi).
+    if (!GOOGLE_AUDIENCES.includes(payload.aud)) {
+      throw { message: "Wrong recipient (audience)" };
+    }
+    if (!GOOGLE_ISSUERS.includes(payload.iss)) {
+      throw { status: 401, message: "Geçersiz Google issuer" };
+    }
+    if (Number(payload.exp) * 1000 < Date.now()) {
+      throw { status: 401, message: "Google token süresi dolmuş" };
+    }
+    if (payload.email && payload.email_verified === "false") {
+      throw { status: 401, message: "Google e-postası doğrulanmamış" };
+    }
+    return payload;
+  }
+}
+
 /* ========== TOKENS ========== */
 // .env ÖNERİ: ACCESS_EXPIRES=2h, REFRESH_EXPIRES=30d
 const ACCESS_EXPIRES = process.env.JWT_EXPIRES || "2h";
@@ -375,11 +438,7 @@ export const googleLogin = async (req, res, next) => {
         message: "Sunucuda Google client ID tanımlı değil",
       });
 
-    const ticket = await googleClient.verifyIdToken({
-      idToken,
-      audience: GOOGLE_AUDIENCES,
-    });
-    const payload = ticket.getPayload();
+    const payload = await verifyGoogleIdToken(idToken);
 
     const sub = payload.sub;
     const email = payload.email;
