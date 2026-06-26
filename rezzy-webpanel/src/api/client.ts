@@ -1750,6 +1750,81 @@ export async function orgCreateBranchRequest(input: {
     request: OrgBranchRequest;
   };
 }
+
+// =========================
+// ADMIN — Branch Requests (restaurant + market)
+// =========================
+
+export type AdminBranchRequestType = "restaurant" | "market";
+
+export interface AdminBranchRequest {
+  _id: string;
+  status: "pending" | "approved" | "rejected";
+  type: AdminBranchRequestType;
+  organization?: {
+    id: string | null;
+    name?: string | null;
+    region?: string | null;
+  } | null;
+  requestedBy?: {
+    id: string | null;
+    name?: string | null;
+    email?: string | null;
+  } | null;
+  restaurant?: {
+    id: string | null;
+    name?: string | null;
+  } | null;
+  marketStoreId?: string | null;
+  payload: {
+    // restaurant fields
+    name?: string;
+    region?: string;
+    city?: string | null;
+    address?: string | null;
+    phone?: string | null;
+    priceRange?: string;
+    businessType?: string;
+    openingHours?: any[];
+    description?: string | null;
+    // market fields
+    category?: string | null;
+    location?: {
+      type?: string;
+      coordinates?: [number, number]; // [lng, lat]
+    } | null;
+  };
+  notes?: string | null;
+  createdAt?: string;
+  resolvedAt?: string | null;
+  rejectReason?: string | null;
+}
+
+export async function adminListBranchRequests(params?: {
+  status?: string;
+  type?: AdminBranchRequestType;
+  organizationId?: string;
+  cursor?: string;
+  limit?: number;
+}): Promise<{ items: AdminBranchRequest[]; nextCursor?: string }> {
+  const { data } = await api.get("/admin/branch-requests", { params });
+  const items = Array.isArray(data?.items) ? data.items : [];
+  const nextCursor =
+    typeof data?.nextCursor === "string" ? data.nextCursor : undefined;
+  return { items, nextCursor };
+}
+
+export async function adminApproveBranchRequest(id: string) {
+  const { data } = await api.post(`/admin/branch-requests/${id}/approve`);
+  return data;
+}
+
+export async function adminRejectBranchRequest(id: string, reason?: string) {
+  const { data } = await api.post(`/admin/branch-requests/${id}/reject`, {
+    reason: reason || undefined,
+  });
+  return data;
+}
 // =========================
 // ORG — Menu (Org-level master menü)
 // =========================

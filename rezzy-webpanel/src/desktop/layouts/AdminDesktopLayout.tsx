@@ -5,6 +5,7 @@ import { AdminSideNav, type AdminNavKey } from "../components/AdminSideNav";
 const ROUTE_MAP: Record<AdminNavKey, string> = {
   dashboard:            "/admin",
   organizations:        "/admin/organizations",
+  "branch-requests":    "/admin/branch-requests",
   restaurants:          "/admin/restaurants",
   markets:              "/admin/market/stores",
   "market-orders":      "/admin/market/orders",
@@ -51,6 +52,7 @@ function resolveActiveKey(pathname: string): AdminNavKey {
   if (pathname.startsWith("/admin/vehicle-catalog"))         return "vehicle-catalog";
 
   // Top-level admin routes
+  if (pathname.startsWith("/admin/branch-requests"))    return "branch-requests";
   if (pathname.startsWith("/admin/organizations"))      return "organizations";
   if (pathname.startsWith("/admin/restaurants"))        return "restaurants";
   if (pathname.startsWith("/admin/banners"))            return "banners";

@@ -5,6 +5,7 @@ import { authStore } from "../../store/auth";
 export type AdminNavKey =
   | "dashboard"
   | "organizations"
+  | "branch-requests"
   | "restaurants"
   | "markets"
   | "market-orders"
@@ -48,6 +49,7 @@ export const AdminSideNav: React.FC<Props> = ({ active, onNavigate }) => {
       items: [
         { key: "dashboard", icon: "🏠", label: t("Dashboard") },
         { key: "organizations", icon: "🏢", label: t("Zincirler / Organizasyonlar") },
+        { key: "branch-requests", icon: "📨", label: t("Şube Talepleri") },
       ],
     },
     {

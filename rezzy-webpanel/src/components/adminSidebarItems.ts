@@ -3,6 +3,7 @@ export const ADMIN_SIDEBAR_ITEMS = [
   { to: "/admin/banners", label: "Bannerlar" },
   { to: "/admin/commissions", label: "Komisyonlar" },
   { to: "/admin/organizations", label: "Organizasyonlar" },
+  { to: "/admin/branch-requests", label: "Şube Talepleri" },
   { to: "/admin/restaurants", label: "Restoranlar" },
   { to: "/admin/users", label: "Kullanıcılar" },
   { to: "/admin/reservations", label: "Rezervasyonlar" },

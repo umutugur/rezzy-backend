@@ -30,6 +30,7 @@ import AdminCommissionsPage from "./pages/admin/commissions";
 import AdminRestaurantCreatePage from "./pages/admin/RestaurantCreate";
 import AdminOrganizationsPage from "./pages/admin/Organizations";
 import AdminOrganizationDetailPage from "./pages/admin/OrganizationDetail";
+import AdminBranchRequestsPage from "./pages/admin/BranchRequests";
 import AdminBannersPage from "./pages/admin/Banners";
 import AdminMarketOrdersPage from "./pages/admin/AdminMarketOrders";
 import AdminMarketCollectionsPage from "./pages/admin/AdminMarketCollections";
@@ -552,6 +553,14 @@ export default function App() {
           element={
             <AdminPage>
               <AdminOrganizationDetailPage />
+            </AdminPage>
+          }
+        />
+        <Route
+          path="/admin/branch-requests"
+          element={
+            <AdminPage>
+              <AdminBranchRequestsPage />
             </AdminPage>
           }
         />
