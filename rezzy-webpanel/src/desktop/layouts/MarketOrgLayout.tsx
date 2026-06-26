@@ -6,6 +6,7 @@ const ROUTE_MAP: Record<MarketOrgNavKey, string> = {
   dashboard: "/market-org",
   catalog: "/market-org/catalog",
   branches: "/market-org/branches",
+  "branch-requests": "/market-org/branch-requests",
   reports: "/market-org/reports",
   settings: "/market-org/settings",
 };
@@ -17,6 +18,7 @@ function resolveActiveKey(pathname: string): MarketOrgNavKey {
   // Longest-match wins among the rest
   const candidates: Array<{ key: MarketOrgNavKey; path: string }> = [
     { key: "catalog", path: "/market-org/catalog" },
+    { key: "branch-requests", path: "/market-org/branch-requests" },
     { key: "branches", path: "/market-org/branches" },
     { key: "reports", path: "/market-org/reports" },
     { key: "settings", path: "/market-org/settings" },

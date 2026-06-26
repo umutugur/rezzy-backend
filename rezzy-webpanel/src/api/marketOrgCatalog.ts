@@ -196,6 +196,50 @@ export async function deleteImportTemplate(orgId: string, id: string) {
   return data;
 }
 
+// ─── Branch Requests (Yeni Şube Talebi) ──────────────────────────────────────
+
+export type MarketBranchRequest = {
+  _id: string;
+  status: "pending" | "approved" | "rejected";
+  payload: {
+    name: string;
+    category: string;
+    address: string;
+    city?: string | null;
+    phone?: string | null;
+    location?: { coordinates: [number, number] };
+  };
+  marketStoreId?: string;
+  rejectReason?: string;
+  createdAt: string;
+};
+
+export async function createMarketBranchRequest(
+  orgId: string,
+  body: {
+    name: string;
+    category: string;
+    address: string;
+    city?: string;
+    phone?: string;
+    location: { type: "Point"; coordinates: [number, number] };
+    notes?: string;
+  },
+): Promise<MarketBranchRequest> {
+  const { data } = await api.post(`/market/org/${orgId}/branch-requests`, body);
+  return data.request as MarketBranchRequest;
+}
+
+export async function listMarketBranchRequests(
+  orgId: string,
+  status?: string,
+): Promise<MarketBranchRequest[]> {
+  const { data } = await api.get(`/market/org/${orgId}/branch-requests`, {
+    params: status ? { status } : undefined,
+  });
+  return data.items as MarketBranchRequest[];
+}
+
 // ─── Chain / Org Profile ──────────────────────────────────────────────────────
 
 export interface OrgProfileData {
