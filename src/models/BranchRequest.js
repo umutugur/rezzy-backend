@@ -17,6 +17,14 @@ const BranchRequestSchema = new mongoose.Schema(
       index: true,
     },
 
+    type: {
+      type: String,
+      enum: ["restaurant", "market"],
+      default: "restaurant",
+      required: true,
+      index: true,
+    },
+
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],
@@ -39,6 +47,11 @@ const BranchRequestSchema = new mongoose.Schema(
     restaurantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Restaurant",
+    },
+
+    marketStoreId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MarketStore",
     },
 
     // Talebi çözen admin bilgisi
