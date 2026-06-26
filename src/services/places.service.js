@@ -41,37 +41,53 @@ function haversineKm(lat1, lng1, lat2, lng2) {
  * Metin araması → adres önerileri listesi.
  * Nominatim /search endpoint'ini kullanır.
  */
+// Photon (komoot) — ücretsiz, key yok, autocomplete için tasarlanmış; Nominatim'in
+// 429 rate-limit sorununu yaşamaz. Konum bias'ı destekler.
+const PHOTON_BASE = process.env.PHOTON_BASE_URL || "https://photon.komoot.io";
+
+/** Photon feature -> okunabilir adres metni */
+function photonLabel(p = {}) {
+  const parts = [
+    [p.name, p.housenumber].filter(Boolean).join(" "),
+    p.street && !p.name ? [p.street, p.housenumber].filter(Boolean).join(" ") : p.street,
+    p.district,
+    p.city || p.town || p.village,
+    p.state,
+    p.country,
+  ].filter(Boolean);
+  // tekrarları temizle
+  return [...new Set(parts)].join(", ");
+}
+
 export async function searchPlaces(query, location = null) {
   if (!query || query.trim().length < 2) return [];
 
   try {
-    const params = new URLSearchParams({
-      q: query.trim(),
-      format: "json",
-      limit: "6",
-      addressdetails: "0",
-    });
-
-    // Eğer mevcut konum varsa o bölgeye bias ekle (ama dışarısını da ara)
+    const params = new URLSearchParams({ q: query.trim(), limit: "6" });
     if (location?.lat && location?.lng) {
-      const d = 0.45; // ~50 km viewbox
-      params.set(
-        "viewbox",
-        `${location.lng - d},${location.lat + d},${location.lng + d},${location.lat - d}`
-      );
-      params.set("bounded", "0");
+      params.set("lat", String(location.lat));
+      params.set("lon", String(location.lng));
     }
+    const res = await fetch(`${PHOTON_BASE}/api/?${params}`, {
+      headers: { "User-Agent": USER_AGENT, "Accept-Language": "tr,en;q=0.9" },
+    });
+    if (!res.ok) throw new Error(`Photon ${res.status}`);
+    const data = await res.json();
 
-    const data = await nominatimFetch(`/search?${params}`);
-
-    return data.map((r) => ({
-      placeId: String(r.place_id),
-      address: r.display_name,
-      lat: parseFloat(r.lat),
-      lng: parseFloat(r.lon),
-    }));
+    return (data.features || [])
+      .map((f) => {
+        const [lng, lat] = f.geometry?.coordinates || [];
+        if (lat == null || lng == null) return null;
+        return {
+          placeId: String(f.properties?.osm_id ?? `${lat},${lng}`),
+          address: photonLabel(f.properties) || query.trim(),
+          lat,
+          lng,
+        };
+      })
+      .filter(Boolean);
   } catch (err) {
-    console.error("[places] searchPlaces hata:", err.message);
+    console.error("[places] searchPlaces (Photon) hata:", err.message);
     return [];
   }
 }
