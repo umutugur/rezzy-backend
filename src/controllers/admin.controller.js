@@ -2225,6 +2225,8 @@ export const listBranchRequestsAdmin = async (req, res, next) => {
       q.requestedBy = uid;
     }
 
+    if (req.query.type === "restaurant" || req.query.type === "market") q.type = req.query.type;
+
     if (cursor) {
       q._id = { $lt: cursor };
     }
@@ -2260,9 +2262,11 @@ export const listBranchRequestsAdmin = async (req, res, next) => {
             name: r.restaurantId.name,
           }
         : null,
+      type: r.type || "restaurant",
       payload: r.payload,
       notes: r.notes || null,
       rejectReason: r.rejectReason || null,
+      marketStoreId: r.marketStoreId || null,
       createdAt: r.createdAt,
       resolvedAt: r.resolvedAt || null,
     }));
@@ -2294,6 +2298,50 @@ export const approveBranchRequestAdmin = async (req, res, next) => {
     if (!user) {
       return res.status(400).json({ message: "Requested user not found" });
     }
+
+    // ── MARKET branch: create a MarketStore under the organization ──
+    if (br.type === "market") {
+      const p = br.payload || {};
+      let store;
+      if (br.marketStoreId) {
+        store = await MarketStore.findById(br.marketStoreId).lean();
+      }
+      if (!store) {
+        const created = await MarketStore.create({
+          owner: user._id,
+          organization: br.organizationId,
+          name: p.name,
+          category: p.category,
+          address: p.address || "",
+          city: p.city || "",
+          location:
+            p.location?.coordinates?.length === 2 ? p.location : undefined,
+          isActive: true,
+        });
+        store = created.toObject();
+        br.marketStoreId = created._id;
+      }
+      // grant market_owner unless the user is already an owner-type/admin role
+      if (!["admin", "market_owner"].includes(user.role)) {
+        user.role = "market_owner";
+        await user.save();
+      }
+      br.status = "approved";
+      br.resolvedAt = new Date();
+      br.resolvedBy = toObjectId(req.user?.id || req.user?._id) || undefined;
+      br.rejectReason = undefined;
+      await br.save();
+      return res.json({
+        ok: true,
+        request: {
+          _id: br._id, type: br.type, status: br.status,
+          organizationId: br.organizationId, requestedBy: br.requestedBy,
+          marketStoreId: br.marketStoreId, resolvedAt: br.resolvedAt, resolvedBy: br.resolvedBy,
+        },
+        marketStore: { _id: store._id, name: store.name, category: store.category, organization: store.organization },
+      });
+    }
+    // ── RESTAURANT branch (existing) continues below ──
 
     const payload = br.payload || {};
     const region = payload.region || org.region || "TR";
