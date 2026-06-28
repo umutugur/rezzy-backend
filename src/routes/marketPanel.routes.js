@@ -19,6 +19,7 @@ import {
   listMyOrgProducts,
   upsertBranchOverride,
 } from "../controllers/marketPanel.controller.js";
+import { listEligibleCampaigns, joinCampaign, leaveCampaign } from "../controllers/marketCampaign.controller.js";
 
 const r = Router();
 
@@ -111,5 +112,10 @@ r.get("/market/panel/reports", auth(), allow("market_owner", "admin"), getReport
 // Zincir kataloğu — şube override
 r.get("/market/panel/org-products", auth(), allow("market_owner", "admin"), listMyOrgProducts);
 r.put("/market/panel/org-products/:orgProductId/override", auth(), allow("market_owner", "admin"), upsertBranchOverride);
+
+// Kampanyalar (opt-in)
+r.get("/market/panel/campaigns", auth(), allow("market_owner", "admin"), listEligibleCampaigns);
+r.post("/market/panel/campaigns/:campaignId/join", auth(), allow("market_owner", "admin"), joinCampaign);
+r.post("/market/panel/campaigns/:campaignId/leave", auth(), allow("market_owner", "admin"), leaveCampaign);
 
 export default r;
