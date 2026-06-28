@@ -38,6 +38,13 @@ const TaxiRideSchema = new mongoose.Schema(
     distanceKm: { type: Number, default: 0 },
     durationMin: { type: Number, default: 0 },
     fare: { type: Number, default: 0 },
+    grossFare: { type: Number, default: 0 },
+    couponCampaign: { type: mongoose.Schema.Types.ObjectId, ref: "Campaign", default: null },
+    discount: { type: Number, default: 0, min: 0 },
+    platformContribution: { type: Number, default: 0, min: 0 },
+    businessContribution: { type: Number, default: 0, min: 0 },
+    driverEarning: { type: Number, default: 0 },
+    commission: { type: Number, default: 0, min: 0 },
 
     // Durum
     status: {

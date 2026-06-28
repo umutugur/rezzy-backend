@@ -83,6 +83,10 @@ const MarketOrderSchema = new mongoose.Schema(
     subtotal: { type: Number, required: true, min: 0 },
     deliveryFee: { type: Number, default: 0, min: 0 },
     discount: { type: Number, default: 0, min: 0 },
+    couponCampaign: { type: mongoose.Schema.Types.ObjectId, ref: "Campaign", default: null },
+    platformContribution: { type: Number, default: 0, min: 0 },
+    businessContribution: { type: Number, default: 0, min: 0 },
+    commission: { type: Number, default: 0, min: 0 },
     total: { type: Number, required: true, min: 0 },
 
     note: { type: String, default: "" },
