@@ -18,6 +18,7 @@ export type AdminNavKey =
   | "vehicle-catalog"
   | "delivery-orders"
   | "banners"
+  | "campaigns"
   | "notifications"
   | "commissions"
   | "users"
@@ -92,6 +93,7 @@ export const AdminSideNav: React.FC<Props> = ({ active, onNavigate }) => {
       label: t("Pazarlama"),
       items: [
         { key: "banners", icon: "🖼️", label: t("Bannerlar") },
+        { key: "campaigns", icon: "🎟️", label: t("Kampanyalar") },
         { key: "notifications", icon: "🔔", label: t("Bildirim Gönder") },
         { key: "commissions", icon: "📊", label: t("Komisyonlar") },
       ],
