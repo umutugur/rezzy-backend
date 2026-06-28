@@ -95,6 +95,7 @@ import {
   adminListMakes, adminCreateMake, adminUpdateMake, adminDeleteMake,
   adminListModels, adminCreateModel, adminUpdateModel, adminDeleteModel,
 } from "../controllers/adminVehicleCatalog.controller.js";
+import { listCampaigns, getCampaign, createCampaign, updateCampaign, deleteCampaign, listParticipations } from "../controllers/adminCampaign.controller.js";
 import multer from "multer";
 
 const upload = multer({
@@ -344,5 +345,13 @@ r.get("/driver-applications/:id", auth(), allow("admin"), getApplication);
 r.patch("/driver-applications/:id/documents/:key", auth(), allow("admin"), reviewDocument);
 r.patch("/driver-applications/:id/approve", auth(), allow("admin"), approveApplication);
 r.patch("/driver-applications/:id/reject", auth(), allow("admin"), rejectApplication);
+
+// ---- Promotion campaigns ----
+r.get("/campaigns", auth(), allow("admin"), listCampaigns);
+r.get("/campaigns/:id", auth(), allow("admin"), getCampaign);
+r.post("/campaigns", auth(), allow("admin"), createCampaign);
+r.put("/campaigns/:id", auth(), allow("admin"), updateCampaign);
+r.delete("/campaigns/:id", auth(), allow("admin"), deleteCampaign);
+r.get("/campaigns/:id/participations", auth(), allow("admin"), listParticipations);
 
 export default r;
