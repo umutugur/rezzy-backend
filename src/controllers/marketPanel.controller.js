@@ -10,6 +10,7 @@ import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import { resolveStoreCatalog } from "../services/marketCatalogResolve.service.js";
 import MarketBranchOverride from "../models/MarketBranchOverride.js";
 import MarketOrgProduct from "../models/MarketOrgProduct.js";
+import { reverseRedemptionForOrder } from "../services/promotionsService.js";
 
 const toObjectId = (id) => {
   try {
@@ -125,6 +126,7 @@ export const updateOrderStatus = async (req, res, next) => {
       order.cancelledBy = "store";
     }
     await order.save();
+    if (status === "cancelled") await reverseRedemptionForOrder(order._id);
 
     // Push notification — best-effort (müşteriyi bilgilendir)
     const STATUS_NOTIF_KEY = {

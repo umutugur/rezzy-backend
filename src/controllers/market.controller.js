@@ -18,7 +18,7 @@ import { resolveStoreImages } from "../utils/storeImages.js";
 import Campaign from "../models/Campaign.js";
 import CouponRedemption from "../models/CouponRedemption.js";
 import UserCoupon from "../models/UserCoupon.js";
-import { evaluateForOrder, regionOf } from "../services/promotionsService.js";
+import { evaluateForOrder, regionOf, reverseRedemptionForOrder } from "../services/promotionsService.js";
 import { computeCommission } from "../services/promotionEngine.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -859,6 +859,8 @@ export const cancelOrder = async (req, res, next) => {
     order.cancelReason = "customer_request";
     order.cancelledBy = "customer";
     await order.save();
+
+    await reverseRedemptionForOrder(order._id);
 
     // Best-effort: market sahibine bildirim
     if (order.store) {
