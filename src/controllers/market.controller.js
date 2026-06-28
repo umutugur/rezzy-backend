@@ -15,6 +15,11 @@ import { effectivePrice, discountPercent, lowest30 } from "../utils/marketPricin
 import { resolveStoreCatalog, resolveOrgProductForOrder } from "../services/marketCatalogResolve.service.js";
 import Organization from "../models/Organization.js";
 import { resolveStoreImages } from "../utils/storeImages.js";
+import Campaign from "../models/Campaign.js";
+import CouponRedemption from "../models/CouponRedemption.js";
+import UserCoupon from "../models/UserCoupon.js";
+import { evaluateForOrder, regionOf } from "../services/promotionsService.js";
+import { computeCommission } from "../services/promotionEngine.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
@@ -624,7 +629,26 @@ export const createOrder = async (req, res, next) => {
       });
     }
 
-    const total = +(subtotal + deliveryFee).toFixed(2);
+    // ── Coupon (Phase 2) ──────────────────────────────────────────────────
+    let discount = 0, platformContribution = 0, businessContribution = 0, couponCampaign = null, commission = 0;
+    const couponCampaignId = req.body?.couponCampaignId;
+    commission = computeCommission(subtotal, store.commissionRate ?? 0.05);
+    if (couponCampaignId) {
+      const campaign = await Campaign.findById(couponCampaignId);
+      const held = campaign ? await UserCoupon.findOne({ user: userId, campaign: campaign._id, status: "active" }) : null;
+      if (campaign && held) {
+        const r = await evaluateForOrder({
+          campaign, user: userId, base: subtotal, deliveryFee,
+          surface: "market", region: regionOf(req), paymentMethod,
+          storeId, storeCategory: store.category, organizationId: store.organization || null,
+        });
+        if (r.eligible) {
+          discount = r.discount; platformContribution = r.platformContribution; businessContribution = r.businessContribution;
+          couponCampaign = campaign._id;
+        }
+      }
+    }
+    const total = +(subtotal + deliveryFee - discount).toFixed(2);
 
     const safePaymentMethod = ["cash", "card", "online"].includes(paymentMethod) ? paymentMethod : "cash";
 
@@ -636,7 +660,11 @@ export const createOrder = async (req, res, next) => {
       deliveryAddress: deliveryAddressId ? toObjectId(deliveryAddressId) : null,
       subtotal,
       deliveryFee,
-      discount: 0,
+      discount,
+      couponCampaign,
+      platformContribution,
+      businessContribution,
+      commission,
       total,
       note,
       paymentMethod: safePaymentMethod,
@@ -645,6 +673,25 @@ export const createOrder = async (req, res, next) => {
 
     // Toplam sipariş sayısını artır (best-effort)
     MarketStore.findByIdAndUpdate(storeId, { $inc: { totalOrders: 1 } }).catch(() => {});
+
+    if (couponCampaign && discount > 0) {
+      const add = (await Campaign.findById(couponCampaign).select("budget").lean()).budget?.basis === "discount" ? discount : platformContribution;
+      await CouponRedemption.create({
+        campaign: couponCampaign, user: toObjectId(userId), surface: "market", orderRef: order._id,
+        store: toObjectId(storeId), organization: store.organization || null,
+        gross: subtotal, discount, platformContribution, businessContribution, commission,
+        paymentMethod: safePaymentMethod, region: regionOf(req), status: "applied",
+      });
+      await Campaign.updateOne({ _id: couponCampaign }, { $inc: { "budget.spent": add } });
+      const uc = await UserCoupon.findOneAndUpdate(
+        { user: toObjectId(userId), campaign: couponCampaign },
+        { $inc: { usedCount: 1 } }, { new: true }
+      );
+      if (uc) {
+        const camp = await Campaign.findById(couponCampaign).select("usageLimit").lean();
+        if (uc.usedCount >= (camp?.usageLimit?.perUser ?? 1)) await UserCoupon.updateOne({ _id: uc._id }, { $set: { status: "used" } });
+      }
+    }
 
     // ─── Online ödeme: Stripe PaymentIntent oluştur ──────────────────────────
     if (safePaymentMethod === "online") {
