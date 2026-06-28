@@ -6,6 +6,7 @@ const ROUTE_MAP: Record<MarketNavKey, string> = {
   orders:           "/market-desktop/orders",
   products:         "/market-desktop/products",
   "chain-products": "/market-desktop/chain-products",
+  campaigns:        "/market-desktop/campaigns",
   reports:          "/market-desktop/reports",
   settings:         "/market-desktop/settings",
 };
@@ -13,6 +14,7 @@ const ROUTE_MAP: Record<MarketNavKey, string> = {
 function resolveActiveKey(pathname: string): MarketNavKey {
   if (pathname.includes("chain-products")) return "chain-products";
   if (pathname.includes("products")) return "products";
+  if (pathname.includes("campaigns")) return "campaigns";
   if (pathname.includes("reports")) return "reports";
   if (pathname.includes("settings")) return "settings";
   return "orders";

@@ -1,0 +1,53 @@
+import { api } from "./client";
+
+// ---- Types ----
+
+export type CampaignDiscountKind = "percent" | "fixed" | "free_delivery" | "fixed_price";
+
+export interface CampaignDiscount {
+  kind: CampaignDiscountKind;
+  value?: number;
+  maxDiscount?: number | null;
+}
+
+export interface CampaignConditions {
+  minSubtotal?: number;
+  scope?: string;
+  [key: string]: unknown;
+}
+
+export interface Campaign {
+  _id: string;
+  title: string;
+  description?: string;
+  image?: string | null;
+  discount: CampaignDiscount;
+  conditions?: CampaignConditions;
+  validFrom?: string | null;
+  validTo?: string | null;
+  funding?: { platformSharePct?: number };
+  usageLimit?: number | null;
+  budget?: number | null;
+}
+
+export interface MarketEligibleCampaign {
+  campaign: Campaign;
+  joined: boolean;
+}
+
+// ---- API functions ----
+
+export async function listEligible(): Promise<MarketEligibleCampaign[]> {
+  const { data } = await api.get("/market/panel/campaigns");
+  return (data?.items ?? []) as MarketEligibleCampaign[];
+}
+
+export async function join(campaignId: string): Promise<{ ok: boolean; joined: boolean }> {
+  const { data } = await api.post(`/market/panel/campaigns/${campaignId}/join`);
+  return data as { ok: boolean; joined: boolean };
+}
+
+export async function leave(campaignId: string): Promise<{ ok: boolean; joined: boolean }> {
+  const { data } = await api.post(`/market/panel/campaigns/${campaignId}/leave`);
+  return data as { ok: boolean; joined: boolean };
+}
