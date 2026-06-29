@@ -9,6 +9,8 @@ import DeliveryPaymentAttempt from "../models/DeliveryPaymentAttempt.js";
 import DeliveryOrder from "../models/DeliveryOrder.js";
 import MarketOrder from "../models/MarketOrder.js";
 import TaxiRide from "../models/TaxiRide.js";
+import Restaurant from "../models/Restaurant.js";
+import { recordDeliveryRedemption } from "./deliveryOrders.controller.js";
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -121,6 +123,13 @@ export const stripeWebhook = async (req, res) => {
               deliveryFee: attempt.deliveryFee,
               total: attempt.total,
 
+              // ── Coupon snapshot carried from the attempt (Phase 5) ──
+              discount: attempt.discount || 0,
+              couponCampaign: attempt.couponCampaign || null,
+              platformContribution: attempt.platformContribution || 0,
+              businessContribution: attempt.businessContribution || 0,
+              commission: attempt.commission || 0,
+
               commissionRate,
               commissionAmount,
 
@@ -133,6 +142,26 @@ export const stripeWebhook = async (req, res) => {
             });
 
             attempt.deliveryOrderId = order._id;
+
+            // ── Consume the coupon at materialization (NOT at checkout) ──
+            if (order.couponCampaign && order.discount > 0) {
+              try {
+                const r = await Restaurant.findById(order.restaurantId).select("organizationId region").lean();
+                await recordDeliveryRedemption(
+                  { ...order.toObject(), organizationId: r?.organizationId || null },
+                  {
+                    couponCampaign: order.couponCampaign,
+                    discount: order.discount,
+                    platformContribution: order.platformContribution,
+                    businessContribution: order.businessContribution,
+                    commission: order.commission,
+                  },
+                  { region: String(r?.region || "").toUpperCase() }
+                );
+              } catch (err) {
+                console.error("[StripeWebhook] delivery coupon redemption failed:", err?.message || err);
+              }
+            }
           }
 
           await attempt.save();

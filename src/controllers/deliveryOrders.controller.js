@@ -10,6 +10,90 @@ import User from "../models/User.js";
 import { resolveZoneForRestaurant } from "../utils/deliveryZoneResolver.js";
 import { buildItemsWithModifiersOrThrow } from "../services/modifierPricing.service.js";
 
+import Campaign from "../models/Campaign.js";
+import UserCoupon from "../models/UserCoupon.js";
+import CouponRedemption from "../models/CouponRedemption.js";
+import { evaluateForOrder, regionOf } from "../services/promotionsService.js";
+import { computeCommission } from "../services/promotionEngine.js";
+
+/**
+ * Resolve a coupon for a delivery order (restaurant surface).
+ * surface = "restaurant", base = subtotal, store = restaurantId.
+ * Returns financial fields; does NOT consume the coupon.
+ */
+export async function resolveDeliveryCoupon(req, { restaurant, subtotal, deliveryFee, paymentMethod }) {
+  const commission = computeCommission(subtotal, restaurant?.commissionRate ?? 0);
+  const out = { discount: 0, platformContribution: 0, businessContribution: 0, couponCampaign: null, commission };
+  const id = req.body?.couponCampaignId;
+  if (id) {
+    const campaign = await Campaign.findById(id);
+    const held = campaign
+      ? await UserCoupon.findOne({ user: req.user.id, campaign: campaign._id, status: "active" })
+      : null;
+    if (campaign && held) {
+      const r = await evaluateForOrder({
+        campaign,
+        user: req.user.id,
+        base: subtotal,
+        deliveryFee,
+        surface: "restaurant",
+        region: regionOf(req),
+        paymentMethod,
+        storeId: String(restaurant._id),
+        storeCategory: restaurant.businessType,
+        organizationId: restaurant.organizationId || null,
+      });
+      if (r.eligible) {
+        out.discount = r.discount;
+        out.platformContribution = r.platformContribution;
+        out.businessContribution = r.businessContribution;
+        out.couponCampaign = campaign._id;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Record a coupon redemption for a materialized delivery order:
+ * CouponRedemption{surface:"restaurant"} + atomic Campaign.budget.spent $inc
+ * + UserCoupon.usedCount $inc (+ flip to "used" at perUser cap).
+ * `c` = { couponCampaign, discount, platformContribution, businessContribution, commission }
+ */
+export async function recordDeliveryRedemption(order, c, { region } = {}) {
+  if (!c?.couponCampaign || !(c.discount > 0)) return;
+  const campSel = await Campaign.findById(c.couponCampaign).select("budget").lean();
+  const add = campSel?.budget?.basis === "discount" ? c.discount : c.platformContribution;
+  await CouponRedemption.create({
+    campaign: c.couponCampaign,
+    user: order.userId,
+    surface: "restaurant",
+    orderRef: order._id,
+    store: order.restaurantId,
+    organization: order.organizationId || null,
+    gross: order.subtotal,
+    discount: c.discount,
+    platformContribution: c.platformContribution,
+    businessContribution: c.businessContribution,
+    commission: c.commission,
+    paymentMethod: order.paymentMethod,
+    region: region || "",
+    status: "applied",
+  });
+  await Campaign.updateOne({ _id: c.couponCampaign }, { $inc: { "budget.spent": add } });
+  const uc = await UserCoupon.findOneAndUpdate(
+    { user: order.userId, campaign: c.couponCampaign },
+    { $inc: { usedCount: 1 } },
+    { new: true }
+  );
+  if (uc) {
+    const camp = await Campaign.findById(c.couponCampaign).select("usageLimit").lean();
+    if (uc.usedCount >= (camp?.usageLimit?.perUser ?? 1)) {
+      await UserCoupon.updateOne({ _id: uc._id }, { $set: { status: "used" } });
+    }
+  }
+}
+
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: "2024-06-20" }) : null;
 
@@ -72,7 +156,7 @@ async function buildCustomerSnapshot({ userId, reqUser }) {
 async function buildDeliveryPricingOrThrow({ userId, restaurantId, addressId, items, hexId }) {
   const rid = String(restaurantId);
 
-  const r = await Restaurant.findById(rid).select("isActive status region delivery organizationId").lean();
+  const r = await Restaurant.findById(rid).select("isActive status region delivery organizationId businessType commissionRate").lean();
   if (!r) throw { status: 404, code: "RESTAURANT_NOT_FOUND", message: "Restoran bulunamadı." };
 
   if (!r.isActive || String(r.status || "active") !== "active") {
@@ -188,8 +272,17 @@ export async function checkoutDeliveryOrder(req, res, next) {
 
     const cust = await buildCustomerSnapshot({ userId, reqUser: req.user });
 
+    // ── Coupon (Phase 5) ── snapshot only; redemption is created at materialization (webhook)
+    const coupon = await resolveDeliveryCoupon(req, {
+      restaurant: pricing.restaurant,
+      subtotal: pricing.subtotal,
+      deliveryFee: pricing.deliveryFee,
+      paymentMethod: "card",
+    });
+    const total = +(pricing.subtotal + pricing.deliveryFee - coupon.discount).toFixed(2);
+
     const pi = await stripe.paymentIntents.create({
-      amount: Math.round(pricing.total * 100),
+      amount: Math.round(total * 100),
       currency: String(pricing.currency || "TRY").toLowerCase(),
       automatic_payment_methods: { enabled: true },
       metadata: {
@@ -221,7 +314,13 @@ export async function checkoutDeliveryOrder(req, res, next) {
 
       subtotal: pricing.subtotal,
       deliveryFee: pricing.deliveryFee,
-      total: pricing.total,
+      total,
+
+      discount: coupon.discount,
+      couponCampaign: coupon.couponCampaign,
+      platformContribution: coupon.platformContribution,
+      businessContribution: coupon.businessContribution,
+      commission: coupon.commission,
 
       paymentMethod: "card",
       stripePaymentIntentId: pi.id,
@@ -235,14 +334,15 @@ export async function checkoutDeliveryOrder(req, res, next) {
       payment: {
         paymentIntentId: pi.id,
         clientSecret: pi.client_secret,
-        amount: pricing.total,
+        amount: total,
         currency: pricing.currency,
       },
       pricing: {
         subtotal: pricing.subtotal,
         minOrderAmount: pricing.minOrderAmount,
         deliveryFee: pricing.deliveryFee,
-        total: pricing.total,
+        discount: coupon.discount,
+        total,
         zoneId: pricing.zone.id,
       },
     });
@@ -278,6 +378,15 @@ export async function createDeliveryOrderCOD(req, res, next) {
     const commissionRate = 0;
     const commissionAmount = 0;
 
+    // ── Coupon (Phase 5) ──
+    const coupon = await resolveDeliveryCoupon(req, {
+      restaurant: pricing.restaurant,
+      subtotal: pricing.subtotal,
+      deliveryFee: pricing.deliveryFee,
+      paymentMethod: String(paymentMethod),
+    });
+    const total = +(pricing.subtotal + pricing.deliveryFee - coupon.discount).toFixed(2);
+
     const doc = await DeliveryOrder.create({
       restaurantId: rid,
       userId: new mongoose.Types.ObjectId(String(userId)),
@@ -298,7 +407,13 @@ export async function createDeliveryOrderCOD(req, res, next) {
 
       subtotal: pricing.subtotal,
       deliveryFee: pricing.deliveryFee,
-      total: pricing.total,
+      total,
+
+      discount: coupon.discount,
+      couponCampaign: coupon.couponCampaign,
+      platformContribution: coupon.platformContribution,
+      businessContribution: coupon.businessContribution,
+      commission: coupon.commission,
 
       commissionRate,
       commissionAmount,
@@ -310,6 +425,12 @@ export async function createDeliveryOrderCOD(req, res, next) {
       status: "new",
     });
 
+    await recordDeliveryRedemption(
+      { ...doc.toObject(), organizationId: pricing.restaurant?.organizationId || null },
+      coupon,
+      { region: regionOf(req) }
+    );
+
     return res.status(201).json({
       ok: true,
       order: doc,
@@ -317,7 +438,8 @@ export async function createDeliveryOrderCOD(req, res, next) {
         subtotal: pricing.subtotal,
         minOrderAmount: pricing.minOrderAmount,
         deliveryFee: pricing.deliveryFee,
-        total: pricing.total,
+        discount: coupon.discount,
+        total,
         zoneId: pricing.zone.id,
       },
     });

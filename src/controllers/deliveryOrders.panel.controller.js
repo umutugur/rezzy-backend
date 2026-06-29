@@ -2,6 +2,7 @@
 import mongoose from "mongoose";
 import DeliveryOrder from "../models/DeliveryOrder.js";
 import Restaurant from "../models/Restaurant.js";
+import { reverseRedemptionForOrder } from "../services/promotionsService.js";
 
 function mustObjectId(v, code, message) {
   if (!mongoose.Types.ObjectId.isValid(String(v))) throw { status: 400, code, message };
@@ -155,6 +156,9 @@ export async function panelCancelDeliveryOrder(req, res, next) {
       { _id: orderId, restaurantId: rid },
       { $set: { status: "cancelled", cancelledAt: new Date(), cancelledBy: "restaurant" } }
     );
+
+    // ── Reverse coupon redemption (Phase 5) ──
+    await reverseRedemptionForOrder(o._id);
 
     return res.json({ ok: true });
   } catch (e) {
