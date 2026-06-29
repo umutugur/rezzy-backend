@@ -15,11 +15,13 @@ const oid = (v) => { try { return new mongoose.Types.ObjectId(String(v)); } catc
 export const getWallet = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const surface = req.query.surface || "market";
+    const surface = req.query.surface || null; // null = tüm yüzeyler
     const region = (req.query.region || regionOf(req) || "").toUpperCase();
     const now = new Date();
 
-    await grantFirstOrderCoupons(userId, surface, region).catch(() => {});
+    // İlk-sipariş kuponlarını ilgili yüzey(ler) için lazy ata.
+    const surfacesForGrant = surface ? [surface] : ["market", "restaurant", "taxi"];
+    for (const s of surfacesForGrant) await grantFirstOrderCoupons(userId, s, region).catch(() => {});
 
     // expire stale coupons (lazy)
     const held = await UserCoupon.find({ user: userId }).lean();
@@ -33,7 +35,7 @@ export const getWallet = async (req, res, next) => {
 
     const mine = held
       .map((h) => ({ h, c: campById.get(String(h.campaign)) }))
-      .filter((x) => x.c && x.c.surface === surface && x.c.region === region)
+      .filter((x) => x.c && x.c.region === region && (!surface || x.c.surface === surface))
       .map(({ h, c }) => ({
         userCouponId: h._id, campaign: c, status: expiredIds.find((e) => String(e) === String(h._id)) ? "expired" : h.status,
         remaining: c.usageLimit?.showRemaining && c.usageLimit?.total != null ? Math.max(0, c.usageLimit.total - 0) : null,
@@ -41,9 +43,11 @@ export const getWallet = async (req, res, next) => {
 
     // collectible public campaigns for region/surface not already held
     const heldSet = new Set(held.map((h) => String(h.campaign)));
+    // Herkese açık (public) kampanyalar toplanabilir kabul edilir (collectible flag'ine bakılmaz).
     const collectible = await Campaign.find({
-      surface, region, isActive: true, "audience.kind": "public", "audience.collectible": true,
+      region, isActive: true, "audience.kind": "public",
       validFrom: { $lte: now }, validTo: { $gte: now },
+      ...(surface ? { surface } : {}),
     }).lean();
     const toCollect = collectible.filter((c) => !heldSet.has(String(c._id)));
 
