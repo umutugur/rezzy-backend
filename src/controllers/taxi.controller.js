@@ -220,36 +220,10 @@ export async function createRide(req, res, next) {
 
     const nearbyDriverIds = nearbyDrivers.map((d) => d._id.toString());
 
-    // Record coupon redemption after successful ride creation
-    if (couponCampaign && discount > 0) {
-      const camp = await Campaign.findById(couponCampaign).select("budget usageLimit").lean();
-      const add = camp?.budget?.basis === "discount" ? discount : platformContribution;
-      await CouponRedemption.create({
-        campaign: couponCampaign,
-        user: passengerId,
-        surface: "taxi",
-        orderRef: ride._id,
-        store: null,
-        organization: null,
-        gross: fare,
-        discount,
-        platformContribution,
-        businessContribution,
-        commission: 0,
-        paymentMethod: safePaymentMethod,
-        region,
-        status: "applied",
-      });
-      await Campaign.updateOne({ _id: couponCampaign }, { $inc: { "budget.spent": add } });
-      const uc = await UserCoupon.findOneAndUpdate(
-        { user: passengerId, campaign: couponCampaign },
-        { $inc: { usedCount: 1 } },
-        { new: true },
-      );
-      if (uc && uc.usedCount >= (camp?.usageLimit?.perUser ?? 1)) {
-        await UserCoupon.updateOne({ _id: uc._id }, { $set: { status: "used" } });
-      }
-    }
+    // NOTE: The coupon redemption (budget.spent + UserCoupon consumption) is NOT
+    // recorded here. The discount is computed and stored on the ride above, but the
+    // coupon is only *consumed* when the trip completes (see completeRide). This way
+    // a cancelled / abandoned / Stripe-failed ride never burns a single-use coupon.
 
     // Socket event: yakın sürücülere bildir
     if (_io && nearbyDriverIds.length > 0) {

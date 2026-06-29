@@ -4,6 +4,7 @@ import TaxiRide from "../models/TaxiRide.js";
 import TaxiRegionConfig from "../models/TaxiRegionConfig.js";
 import { clearTaxiConfigCache } from "../services/taxiPricing.service.js";
 import { emitRideStatusChange } from "../sockets/taxi.socket.js";
+import { recordRedemptionForOrder } from "../services/promotionsService.js";
 import dayjs from "dayjs";
 
 let _io = null;
@@ -197,12 +198,36 @@ export async function completeRide(req, res, next) {
     ride.paymentStatus = "paid";
     await ride.save();
 
-    // Sürücü istatistiklerini güncelle
+    // Kupon ancak yolculuk gerçekten tamamlandığında "kullanılmış" sayılır:
+    // bütçe ve kullanıcı kuponu burada düşülür (idempotent). İptal/başarısız
+    // yolculuklar kuponu yakmaz.
+    if (ride.couponCampaign && ride.discount > 0) {
+      try {
+        await recordRedemptionForOrder({
+          campaign: ride.couponCampaign,
+          user: ride.passenger,
+          surface: "taxi",
+          orderRef: ride._id,
+          gross: ride.grossFare ?? ride.fare,
+          discount: ride.discount,
+          platformContribution: ride.platformContribution ?? 0,
+          businessContribution: ride.businessContribution ?? 0,
+          paymentMethod: ride.paymentMethod,
+          region: ride.region,
+        });
+      } catch (e) {
+        console.error("[completeRide] coupon redemption error:", e.message);
+      }
+    }
+
+    // Sürücü istatistiklerini güncelle. Sürücü brüt ücreti hak eder (kupon
+    // indirimini platform karşılar) — indirimli müşteri ücreti değil.
+    const driverEarned = ride.driverEarning ?? ride.grossFare ?? ride.fare;
     driver.isAvailable = true;
     driver.activeRide = null;
     driver.totalRides += 1;
-    driver.todayEarnings += ride.fare;
-    driver.totalEarnings += ride.fare;
+    driver.todayEarnings += driverEarned;
+    driver.totalEarnings += driverEarned;
     await driver.save();
 
     if (_io) await emitRideStatusChange(_io, ride);
