@@ -118,4 +118,7 @@ r.get("/market/panel/campaigns", auth(), allow("market_owner", "admin"), listEli
 r.post("/market/panel/campaigns/:campaignId/join", auth(), allow("market_owner", "admin"), joinCampaign);
 r.post("/market/panel/campaigns/:campaignId/leave", auth(), allow("market_owner", "admin"), leaveCampaign);
 
+import { businessStatement } from "../controllers/promoReports.controller.js";
+r.get("/market/panel/promo-statement", auth(), allow("market_owner", "admin"), businessStatement);
+
 export default r;

@@ -354,4 +354,8 @@ r.put("/campaigns/:id", auth(), allow("admin"), updateCampaign);
 r.delete("/campaigns/:id", auth(), allow("admin"), deleteCampaign);
 r.get("/campaigns/:id/participations", auth(), allow("admin"), listParticipations);
 
+import { adminReport, adminSettlement } from "../controllers/promoReports.controller.js";
+r.get("/promotions/report", auth(), allow("admin"), adminReport);
+r.get("/promotions/settlement", auth(), allow("admin"), adminSettlement);
+
 export default r;
