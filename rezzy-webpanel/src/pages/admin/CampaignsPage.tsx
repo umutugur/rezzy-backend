@@ -129,7 +129,7 @@ function emptyDraft(): CampaignInput {
     description: "",
     image: "",
     surface: "market",
-    region: "TR",
+    region: "CY",
     discount: { kind: "percent", value: 0, maxDiscount: null },
     conditions: {
       minSubtotal: 0,

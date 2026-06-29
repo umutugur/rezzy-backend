@@ -99,10 +99,13 @@ export const updateCampaign = async (req, res, next) => {
     const out = normalizeBody(req.body || {});
     const err = validate(out);
     if (err) return next({ status: 400, message: err });
-    // budget.spent is system-maintained → never overwrite it
+    // budget.spent is system-maintained → never overwrite it.
+    // Strip the `budget` object from the spread so $set has no conflict
+    // between the full `budget` path and the dotted `budget.cap`/`budget.basis`.
+    const { budget, ...rest } = out;
     const doc = await Campaign.findByIdAndUpdate(
       req.params.id,
-      { $set: { ...out, "budget.cap": out.budget.cap, "budget.basis": out.budget.basis } },
+      { $set: { ...rest, "budget.cap": budget.cap, "budget.basis": budget.basis } },
       { new: true }
     ).lean();
     if (!doc) return next({ status: 404, message: "Kampanya bulunamadı" });
