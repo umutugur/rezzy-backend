@@ -6,6 +6,8 @@ import MarketStore from "../models/MarketStore.js";
 import CouponRedemption from "../models/CouponRedemption.js";
 import { evaluateCoupon, computeDiscount } from "../services/promotionEngine.js";
 import { regionOf, isStoreActiveForCampaign, getUsage } from "../services/promotionsService.js";
+import { grantFirstOrderCoupons } from "../services/targetedCoupons.service.js";
+import { notifyUser } from "../services/notification.service.js";
 
 const oid = (v) => { try { return new mongoose.Types.ObjectId(String(v)); } catch { return null; } };
 
@@ -16,6 +18,8 @@ export const getWallet = async (req, res, next) => {
     const surface = req.query.surface || "market";
     const region = (req.query.region || regionOf(req) || "").toUpperCase();
     const now = new Date();
+
+    await grantFirstOrderCoupons(userId, surface, region).catch(() => {});
 
     // expire stale coupons (lazy)
     const held = await UserCoupon.find({ user: userId }).lean();
@@ -60,6 +64,13 @@ export const collectCoupon = async (req, res, next) => {
     const existing = await UserCoupon.findOne({ user: userId, campaign: campaignId });
     if (existing) return res.json({ item: existing });
     const doc = await UserCoupon.create({ user: userId, campaign: campaignId, source: "collected" });
+    await notifyUser(userId, {
+      title: "🎟️ Kupon eklendi",
+      body: `${c.title} cüzdanına eklendi.`,
+      data: { type: "coupon_collected", campaignId: String(c._id) },
+      key: `coupon_collect_${userId}_${c._id}`,
+      type: "coupon_collected",
+    }).catch(() => {});
     res.json({ item: doc.toObject() });
   } catch (e) { next(e); }
 };
