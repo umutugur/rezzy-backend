@@ -686,20 +686,37 @@ export default function CampaignsPage() {
               />
             </FormField>
 
-            <FormField label={t("Görsel")} required hint={t("PNG/JPG yükleyin")}>
+            <FormField label={t("Görsel")} required hint={t("Kare (1:1) · 600×600 px önerilir")}>
               <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                 {draft.image ? (
-                  <img
-                    src={draft.image}
-                    alt="campaign"
-                    style={{
-                      width: 96,
-                      height: 54,
-                      objectFit: "cover",
-                      borderRadius: 8,
-                      border: "1px solid var(--rezvix-border-subtle)",
-                    }}
-                  />
+                  <div style={{ position: "relative", width: 72, height: 72, flexShrink: 0 }}>
+                    <img
+                      src={draft.image}
+                      alt="campaign"
+                      style={{
+                        width: 72,
+                        height: 72,
+                        objectFit: "cover",
+                        borderRadius: 12,
+                        border: "1px solid var(--rezvix-border-subtle)",
+                        display: "block",
+                      }}
+                    />
+                    {/* mobildeki kategori rozetinin yeri (sol üst) */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 5,
+                        left: 5,
+                        width: 18,
+                        height: 18,
+                        borderRadius: 5,
+                        background: "rgba(17,24,39,0.55)",
+                        border: "1px solid rgba(255,255,255,0.6)",
+                      }}
+                      title={t("Mobilde bu köşede kategori rozeti görünür")}
+                    />
+                  </div>
                 ) : null}
                 <input
                   type="file"
@@ -731,6 +748,55 @@ export default function CampaignsPage() {
                     {t("Yükleniyor…")}
                   </span>
                 )}
+              </div>
+
+              {/* ── Görsel kılavuzu ─────────────────────────────────────────── */}
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  background: "var(--rezvix-surface-subtle, rgba(34,197,94,0.06))",
+                  border: "1px solid var(--rezvix-border-subtle)",
+                  fontSize: 12.5,
+                  lineHeight: 1.55,
+                  color: "var(--rezvix-text-soft)",
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 700,
+                    color: "var(--rezvix-text)",
+                    marginBottom: 6,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  🎟️ {t("Görsel kılavuzu")}
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 3 }}>
+                  <li>
+                    <b>{t("Oran")}:</b> {t("Kare (1:1). Mobilde kupon kartında dikeyce kırpılır.")}
+                  </li>
+                  <li>
+                    <b>{t("Önerilen ölçü")}:</b> 600×600 px ({t("en az")} 300×300 px)
+                  </li>
+                  <li>
+                    <b>{t("Biçim / boyut")}:</b> JPG {t("veya")} PNG · {t("maks.")} ~500 KB
+                  </li>
+                  <li>
+                    <b>{t("Kırpma")}:</b>{" "}
+                    {t("Görsel alana ortalanarak doldurulur (cover); kenarlardan bir miktar kırpılabilir. Önemli içeriği ortada tut.")}
+                  </li>
+                  <li>
+                    <b>{t("Güvenli alan")}:</b>{" "}
+                    {t("Sol üst köşede kategori rozeti (market/restoran/taksi) görünür — bu köşeye logo veya yazı koyma.")}
+                  </li>
+                  <li>
+                    <b>{t("Kenar boşluğu")}:</b> {t("Yazı ve logoları kenarlardan ~%10 içeride tut.")}
+                  </li>
+                </ul>
               </div>
             </FormField>
 
