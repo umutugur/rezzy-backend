@@ -33,6 +33,7 @@ import AdminOrganizationDetailPage from "./pages/admin/OrganizationDetail";
 import AdminBranchRequestsPage from "./pages/admin/BranchRequests";
 import AdminBannersPage from "./pages/admin/Banners";
 import AdminCampaignsPage from "./pages/admin/CampaignsPage";
+import PromoReportPage from "./pages/admin/PromoReportPage";
 import AdminMarketOrdersPage from "./pages/admin/AdminMarketOrders";
 import AdminMarketCollectionsPage from "./pages/admin/AdminMarketCollections";
 import AdminMarketsPage from "./pages/admin/Markets";
@@ -580,6 +581,14 @@ export default function App() {
           element={
             <AdminPage>
               <AdminCommissionsPage />
+            </AdminPage>
+          }
+        />
+        <Route
+          path="/admin/promotions/report"
+          element={
+            <AdminPage>
+              <PromoReportPage />
             </AdminPage>
           }
         />

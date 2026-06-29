@@ -21,6 +21,7 @@ const ROUTE_MAP: Record<AdminNavKey, string> = {
   campaigns:            "/admin/campaigns",
   notifications:        "/admin/notifications",
   commissions:          "/admin/commissions",
+  "promo-reports":      "/admin/promotions/report",
   users:                "/admin/users",
   reservations:         "/admin/reservations",
   moderation:           "/admin/moderation",
@@ -59,6 +60,7 @@ function resolveActiveKey(pathname: string): AdminNavKey {
   if (pathname.startsWith("/admin/banners"))            return "banners";
   if (pathname.startsWith("/admin/campaigns"))          return "campaigns";
   if (pathname.startsWith("/admin/notifications"))      return "notifications";
+  if (pathname.startsWith("/admin/promotions/report"))  return "promo-reports";
   if (pathname.startsWith("/admin/commissions"))        return "commissions";
   if (pathname.startsWith("/admin/users"))              return "users";
   if (pathname.startsWith("/admin/reservations"))       return "reservations";
