@@ -90,6 +90,7 @@ import { MarketChainProductsPage } from "./desktop/pages/MarketChainProductsPage
 import { MarketCampaignsPage } from "./desktop/pages/MarketCampaignsPage";
 import { MarketSettingsPage } from "./desktop/pages/MarketSettingsPage";
 import { MarketReportsPage } from "./desktop/pages/MarketReportsPage";
+import { MarketStatementPage } from "./desktop/pages/MarketStatementPage";
 
 // ---- Helpers ----
 
@@ -961,6 +962,7 @@ export default function App() {
       <Route path="/market-desktop/products" element={<MarketProductsPage />} />
       <Route path="/market-desktop/chain-products" element={<MarketChainProductsPage />} />
       <Route path="/market-desktop/campaigns" element={<MarketCampaignsPage />} />
+      <Route path="/market-desktop/promo-statement" element={<MarketStatementPage />} />
       <Route path="/market-desktop/reports" element={<MarketReportsPage />} />
       <Route path="/market-desktop/settings" element={<MarketSettingsPage />} />
 

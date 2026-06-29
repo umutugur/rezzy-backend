@@ -35,6 +35,16 @@ export interface MarketEligibleCampaign {
   joined: boolean;
 }
 
+export interface MarketStatement {
+  store: { id: string; name: string };
+  gross: number;
+  commission: number;
+  businessContribution: number;
+  platformContribution: number;
+  netEntitlement: number;
+  count: number;
+}
+
 // ---- API functions ----
 
 export async function listEligible(): Promise<MarketEligibleCampaign[]> {
@@ -50,4 +60,9 @@ export async function join(campaignId: string): Promise<{ ok: boolean; joined: b
 export async function leave(campaignId: string): Promise<{ ok: boolean; joined: boolean }> {
   const { data } = await api.post(`/market/panel/campaigns/${campaignId}/leave`);
   return data as { ok: boolean; joined: boolean };
+}
+
+export async function getStatement(params: { from?: string; to?: string }): Promise<MarketStatement> {
+  const { data } = await api.get("/market/panel/promo-statement", { params });
+  return data as MarketStatement;
 }
