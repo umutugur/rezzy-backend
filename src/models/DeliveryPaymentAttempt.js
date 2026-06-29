@@ -62,6 +62,13 @@ const DeliveryPaymentAttemptSchema = new mongoose.Schema(
     deliveryFee: { type: Number, min: 0, default: 0 },
     total: { type: Number, min: 0, default: 0 },
 
+    // ── Coupon / Promotion snapshot (Phase 5, online path) ──
+    couponCampaign: { type: mongoose.Schema.Types.ObjectId, ref: "Campaign", default: null },
+    discount: { type: Number, default: 0, min: 0 },
+    platformContribution: { type: Number, default: 0, min: 0 },
+    businessContribution: { type: Number, default: 0, min: 0 },
+    commission: { type: Number, default: 0, min: 0 },
+
     paymentMethod: { type: String, enum: ["card"], required: true },
     stripePaymentIntentId: { type: String, required: true, index: true },
 

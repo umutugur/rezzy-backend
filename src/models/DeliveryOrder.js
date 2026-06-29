@@ -77,6 +77,13 @@ const DeliveryOrderSchema = new mongoose.Schema(
     deliveryFee: { type: Number, min: 0, default: 0 },
     total: { type: Number, min: 0, default: 0 },
 
+    // ── Coupon / Promotion (Phase 5) ──
+    couponCampaign: { type: mongoose.Schema.Types.ObjectId, ref: "Campaign", default: null },
+    discount: { type: Number, default: 0, min: 0 },
+    platformContribution: { type: Number, default: 0, min: 0 },
+    businessContribution: { type: Number, default: 0, min: 0 },
+    commission: { type: Number, default: 0, min: 0 },
+
     commissionRate: { type: Number, min: 0, max: 1, default: 0 },
     commissionAmount: { type: Number, min: 0, default: 0 },
 
