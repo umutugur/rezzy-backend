@@ -15,6 +15,11 @@ import {
   notifyOrderReadyForTable,
 } from "../controllers/restaurant.panel.controller.js";
 import { getRestaurantReportsOverview } from "../controllers/restaurant.reports.controller.js";
+import {
+  listEligibleCampaigns,
+  joinCampaign,
+  leaveCampaign,
+} from "../controllers/restaurantCampaign.controller.js";
 
 const r = Router();
 
@@ -109,6 +114,26 @@ r.get(
   auth(),
   allowLocationManagerOrAdmin("rid"),
   getRestaurantReportsOverview
+);
+
+// 🎟️ Kampanyalar (coupon opt-in) — restaurant-scoped
+r.get(
+  "/:rid/campaigns",
+  auth(),
+  allowLocationManagerOrAdmin("rid"),
+  listEligibleCampaigns
+);
+r.post(
+  "/:rid/campaigns/:campaignId/join",
+  auth(),
+  allowLocationManagerOrAdmin("rid"),
+  joinCampaign
+);
+r.post(
+  "/:rid/campaigns/:campaignId/leave",
+  auth(),
+  allowLocationManagerOrAdmin("rid"),
+  leaveCampaign
 );
 
 export default r;
