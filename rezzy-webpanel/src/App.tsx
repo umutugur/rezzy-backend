@@ -83,6 +83,7 @@ import { RezvixOrdersPage } from "./desktop/pages/RezvixOrdersPage";
 import { ReportsPage } from "./desktop/pages/ReportsPage";
 import { SettingsPage } from "./desktop/pages/SettingsPage";
 import { DesktopMenuManagerPage } from "./desktop/pages/DesktopMenuManagerPage";
+import { RestaurantCampaignsPage } from "./desktop/pages/RestaurantCampaignsPage";
 import { DeliveryOrdersPage } from "./desktop/pages/DeliveryOrdersPage";
 import { MarketOrdersPage } from "./desktop/pages/MarketOrdersPage";
 import { MarketProductsPage } from "./desktop/pages/MarketProductsPage";
@@ -953,6 +954,7 @@ export default function App() {
         <Route path="/restaurant-desktop/reports" element={<ReportsPage />} />
         <Route path="/restaurant-desktop/settings" element={<SettingsPage />} />
         <Route path="/restaurant-desktop/menu" element={<DesktopMenuManagerPage />} />
+        <Route path="/restaurant-desktop/campaigns" element={<RestaurantCampaignsPage />} />
         <Route path="/restaurant-desktop/delivery" element={<DeliveryOrdersPage />} />
 
       </Route>
