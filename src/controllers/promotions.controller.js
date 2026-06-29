@@ -84,6 +84,43 @@ export const getApplicable = async (req, res, next) => {
     const base = Number(req.query.subtotal) || 0;
     const deliveryFee = Number(req.query.deliveryFee) || 0;
     const paymentMethod = req.query.paymentMethod || "cash";
+
+    // ── Taxi branch (no store) ──────────────────────────────────────────────
+    if (surface === "taxi") {
+      const vehicleType = req.query.vehicleType || "";
+      const held = await UserCoupon.find({ user: userId, status: "active" }).lean();
+      const camps = await Campaign.find({
+        _id: { $in: held.map((h) => h.campaign) },
+        surface: "taxi",
+        region,
+        isActive: true,
+      }).lean();
+      const now = new Date();
+      const out = [];
+      for (const c of camps) {
+        const { userUsageCount, totalUsageCount } = await getUsage(c._id, userId);
+        const r = evaluateCoupon({
+          campaign: c,
+          base,
+          deliveryFee: 0,
+          surface: "taxi",
+          region,
+          paymentMethod,
+          storeId: null,
+          storeCategory: vehicleType,
+          organizationId: null,
+          isStoreActiveForCampaign: true,
+          now,
+          userUsageCount,
+          totalUsageCount,
+        });
+        if (r.eligible) out.push({ campaign: c, discount: r.discount });
+      }
+      out.sort((a, b) => b.discount - a.discount);
+      return res.json({ items: out });
+    }
+
+    // ── Market / restaurant branch (store required) ─────────────────────────
     const storeId = oid(req.query.storeId);
     if (!storeId) return res.json({ items: [] });
     const store = await MarketStore.findById(storeId).select("category organization").lean();

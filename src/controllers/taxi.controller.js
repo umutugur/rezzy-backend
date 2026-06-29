@@ -7,6 +7,10 @@ import User from "../models/User.js";
 import { getRouteInfo, searchPlaces, geocodeAddress } from "../services/places.service.js";
 import { emitNewRideRequest, emitRideStatusChange } from "../sockets/taxi.socket.js";
 import { sendExpoPush } from "../utils/expoPush.js";
+import Campaign from "../models/Campaign.js";
+import UserCoupon from "../models/UserCoupon.js";
+import CouponRedemption from "../models/CouponRedemption.js";
+import { evaluateForOrder, reverseRedemptionForOrder } from "../services/promotionsService.js";
 
 const KNOWN_REGIONS = new Set(["TR", "CY", "UK", "US"]);
 function normalizeRegion(value) {
@@ -55,7 +59,39 @@ export async function estimateFare(req, res, next) {
     const region = normalizeRegion(req.body?.region) ?? passengerUser?.region ?? null;
     const fare = await estimateFareForRegion(region, vehicleType, distanceKm);
 
-    return res.json({ fare, distanceKm, durationMin, vehicleType, geometry });
+    let discount = 0;
+    const couponCampaignId = req.body?.couponCampaignId;
+    if (couponCampaignId) {
+      const campaign = await Campaign.findById(couponCampaignId);
+      const held = campaign
+        ? await UserCoupon.findOne({ user: req.user.id, campaign: campaign._id, status: "active" })
+        : null;
+      if (campaign && held) {
+        const r = await evaluateForOrder({
+          campaign,
+          user: req.user.id,
+          base: fare,
+          deliveryFee: 0,
+          surface: "taxi",
+          region,
+          paymentMethod: req.body?.paymentMethod || "online",
+          storeId: null,
+          storeCategory: vehicleType,
+          organizationId: null,
+        });
+        if (r.eligible) discount = r.discount;
+      }
+    }
+
+    return res.json({
+      fare: +(fare - discount).toFixed(2),
+      grossFare: fare,
+      discount,
+      distanceKm,
+      durationMin,
+      vehicleType,
+      geometry,
+    });
   } catch (err) {
     next(err);
   }
@@ -98,6 +134,36 @@ export async function createRide(req, res, next) {
 
     const safePaymentMethod = ["cash", "card", "online"].includes(paymentMethod) ? paymentMethod : "cash";
 
+    let discount = 0, platformContribution = 0, businessContribution = 0, couponCampaign = null;
+    const couponCampaignId = req.body?.couponCampaignId;
+    if (couponCampaignId) {
+      const campaign = await Campaign.findById(couponCampaignId);
+      const held = campaign
+        ? await UserCoupon.findOne({ user: passengerId, campaign: campaign._id, status: "active" })
+        : null;
+      if (campaign && held) {
+        const r = await evaluateForOrder({
+          campaign,
+          user: passengerId,
+          base: fare,
+          deliveryFee: 0,
+          surface: "taxi",
+          region,
+          paymentMethod: safePaymentMethod,
+          storeId: null,
+          storeCategory: vehicleType,
+          organizationId: null,
+        });
+        if (r.eligible) {
+          discount = r.discount;
+          platformContribution = r.platformContribution;
+          businessContribution = r.businessContribution;
+          couponCampaign = campaign._id;
+        }
+      }
+    }
+    const customerFare = +(fare - discount).toFixed(2);
+
     const ride = await TaxiRide.create({
       passenger: passengerId,
       pickup: {
@@ -111,7 +177,13 @@ export async function createRide(req, res, next) {
       vehicleType,
       distanceKm,
       durationMin,
-      fare,
+      fare: customerFare,
+      grossFare: fare,
+      discount,
+      platformContribution,
+      businessContribution,
+      couponCampaign,
+      driverEarning: fare,
       region,
       paymentMethod: safePaymentMethod,
       status: "searching",
@@ -147,6 +219,37 @@ export async function createRide(req, res, next) {
       .limit(10);
 
     const nearbyDriverIds = nearbyDrivers.map((d) => d._id.toString());
+
+    // Record coupon redemption after successful ride creation
+    if (couponCampaign && discount > 0) {
+      const camp = await Campaign.findById(couponCampaign).select("budget usageLimit").lean();
+      const add = camp?.budget?.basis === "discount" ? discount : platformContribution;
+      await CouponRedemption.create({
+        campaign: couponCampaign,
+        user: passengerId,
+        surface: "taxi",
+        orderRef: ride._id,
+        store: null,
+        organization: null,
+        gross: fare,
+        discount,
+        platformContribution,
+        businessContribution,
+        commission: 0,
+        paymentMethod: safePaymentMethod,
+        region,
+        status: "applied",
+      });
+      await Campaign.updateOne({ _id: couponCampaign }, { $inc: { "budget.spent": add } });
+      const uc = await UserCoupon.findOneAndUpdate(
+        { user: passengerId, campaign: couponCampaign },
+        { $inc: { usedCount: 1 } },
+        { new: true },
+      );
+      if (uc && uc.usedCount >= (camp?.usageLimit?.perUser ?? 1)) {
+        await UserCoupon.updateOne({ _id: uc._id }, { $set: { status: "used" } });
+      }
+    }
 
     // Socket event: yakın sürücülere bildir
     if (_io && nearbyDriverIds.length > 0) {
@@ -185,7 +288,7 @@ export async function createRide(req, res, next) {
 
       try {
         const pi = await stripe.paymentIntents.create({
-          amount: Math.round(fare * 100),
+          amount: Math.round(customerFare * 100),
           currency: "try",
           automatic_payment_methods: { enabled: true },
           metadata: {
@@ -205,7 +308,7 @@ export async function createRide(req, res, next) {
           payment: {
             paymentIntentId: pi.id,
             clientSecret: pi.client_secret,
-            amount: fare,
+            amount: customerFare,
             currency: "TRY",
           },
         });
@@ -282,6 +385,9 @@ export async function cancelRide(req, res, next) {
     ride.cancelledBy = "passenger";
     ride.cancelReason = reason ?? "Yolcu tarafından iptal edildi";
     await ride.save();
+
+    // Reverse any coupon redemption
+    await reverseRedemptionForOrder(ride._id);
 
     // Sürücü varsa müsait yap
     if (ride.driver) {
