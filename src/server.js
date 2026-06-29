@@ -26,6 +26,16 @@ try {
 } catch (_) {
   // opsiyonel
 }
+try {
+  await import("./jobs/winbackCoupons.job.js");
+} catch (_) {
+  // opsiyonel
+}
+try {
+  await import("./jobs/couponExpiry.job.js");
+} catch (_) {
+  // opsiyonel
+}
 
 const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI;
 if (!MONGO_URI) {
