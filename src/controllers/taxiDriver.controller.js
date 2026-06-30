@@ -2,7 +2,8 @@
 import TaxiDriver from "../models/TaxiDriver.js";
 import TaxiRide from "../models/TaxiRide.js";
 import TaxiRegionConfig from "../models/TaxiRegionConfig.js";
-import { clearTaxiConfigCache } from "../services/taxiPricing.service.js";
+import User from "../models/User.js";
+import { clearTaxiConfigCache, getVehicleTypes } from "../services/taxiPricing.service.js";
 import { emitRideStatusChange } from "../sockets/taxi.socket.js";
 import { recordRedemptionForOrder } from "../services/promotionsService.js";
 import dayjs from "dayjs";
@@ -16,10 +17,18 @@ export function setSocketIo(io) {
 export async function registerDriver(req, res, next) {
   try {
     const userId = req.user.id;
-    const { vehiclePlate, vehicleBrand, vehicleModel, vehicleColor, type = "sedan", licenseNumber } = req.body;
+    const { vehiclePlate, vehicleBrand, vehicleModel, vehicleColor, vehicleType, acceptsPets = false, licenseNumber, region: bodyRegion } = req.body;
 
     if (!vehiclePlate || !vehicleBrand || !vehicleModel || !vehicleColor) {
       return res.status(400).json({ message: "Araç bilgileri eksik (plate, brand, model, color)" });
+    }
+
+    const user = await User.findById(userId).select("region").lean();
+    const region = String(bodyRegion || user?.region || "").toUpperCase();
+    const types = await getVehicleTypes(region);
+    const key = String(vehicleType || "").toLowerCase();
+    if (!types.find((t) => t.key === key)) {
+      return res.status(400).json({ message: "Geçersiz araç tipi" });
     }
 
     const existing = await TaxiDriver.findOne({ user: userId });
@@ -38,7 +47,8 @@ export async function registerDriver(req, res, next) {
       vehicleBrand: vehicleBrand.trim(),
       vehicleModel: vehicleModel.trim(),
       vehicleColor: vehicleColor.trim(),
-      type,
+      vehicleType: key,
+      acceptsPets: acceptsPets === true,
       licenseNumber,
       isApproved: false, // başvuru/onay akışı onaylar (otomatik onay kaldırıldı)
     });
