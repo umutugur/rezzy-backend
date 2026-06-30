@@ -62,12 +62,24 @@ async function getRegionConfig(region) {
 
 export function clearTaxiConfigCache() { _cache.clear(); }
 
-/** Returns tariff {base, perKm} for region+vehicleType, falling back to hardcoded TARIFF. */
-export async function getTariff(region, vehicleType) {
+/** Active vehicle types for a region (sorted by order). Empty array if none. */
+export async function getVehicleTypes(region) {
   const cfg = await getRegionConfig(region);
-  const t = cfg?.tariffs?.[vehicleType];
-  if (t && typeof t.base === "number" && typeof t.perKm === "number") return t;
-  return TARIFF[vehicleType] ?? TARIFF.ride;
+  const list = Array.isArray(cfg?.vehicleTypes) ? cfg.vehicleTypes.filter((t) => t.isActive) : [];
+  return list.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+/** Is the night tariff active for a region right now (or at `when`)? */
+export async function isNightNow(region, when = new Date()) {
+  const cfg = await getRegionConfig(region);
+  if (!cfg?.nightTariff?.enabled) return false;
+  return isWithinWindow(when, cfg.timezone, cfg.nightTariff.start, cfg.nightTariff.end);
+}
+
+/** Pet add-on config for a region. */
+export async function getPetAddon(region) {
+  const cfg = await getRegionConfig(region);
+  return { enabled: !!cfg?.petAddon?.enabled, surcharge: Number(cfg?.petAddon?.surcharge) || 0 };
 }
 
 /** Dispatch radius in meters for region (fallback 5000). */
@@ -114,11 +126,32 @@ export function estimateAllTypes(distanceKm) {
   return result;
 }
 
-/** Region-aware fare estimate. Falls back to hardcoded tariffs when no DB config exists. */
-export async function estimateFareForRegion(region, vehicleType, distanceKm) {
-  const t = await getTariff(region, vehicleType);
-  const km = Math.max(0, Number(distanceKm));
-  return Math.round((t.base + km * t.perKm) * 100) / 100;
+/**
+ * Region-aware fare. Resolves day/night by the region's local time and adds the
+ * pet surcharge when requested. Falls back to hardcoded TARIFF for unknown types.
+ * @returns {Promise<{ fare:number, isNight:boolean }>}
+ */
+export async function estimateFareForRegion(region, vehicleTypeKey, distanceKm, opts = {}) {
+  const { when = new Date(), petRequested = false } = opts;
+  const cfg = await getRegionConfig(region);
+  const key = String(vehicleTypeKey || "").toLowerCase();
+  const type = cfg?.vehicleTypes?.find((t) => t.key === key && t.isActive);
+
+  const night = !!cfg?.nightTariff?.enabled &&
+    isWithinWindow(when, cfg?.timezone, cfg?.nightTariff?.start, cfg?.nightTariff?.end);
+
+  let base, perKm;
+  if (type) {
+    base = night ? (type.nightBase ?? type.base) : type.base;
+    perKm = night ? (type.nightPerKm ?? type.perKm) : type.perKm;
+  } else {
+    const fb = TARIFF[key] ?? TARIFF.ride;
+    base = fb.base; perKm = fb.perKm;
+  }
+
+  let fare = fareFor(base, perKm, distanceKm);
+  if (petRequested && cfg?.petAddon?.enabled) fare = Math.round((fare + (Number(cfg.petAddon.surcharge) || 0)) * 100) / 100;
+  return { fare, isNight: night };
 }
 
 export { TARIFF };
