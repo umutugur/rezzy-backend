@@ -2,7 +2,7 @@
 import Stripe from "stripe";
 import TaxiRide from "../models/TaxiRide.js";
 import TaxiDriver from "../models/TaxiDriver.js";
-import { calculateFare, estimateFareForRegion, getDispatchRadiusM } from "../services/taxiPricing.service.js";
+import { calculateFare, estimateFareForRegion, getDispatchRadiusM, getVehicleTypes, isNightNow, getPetAddon } from "../services/taxiPricing.service.js";
 import User from "../models/User.js";
 import { getRouteInfo, searchPlaces, geocodeAddress } from "../services/places.service.js";
 import { emitNewRideRequest, emitRideStatusChange } from "../sockets/taxi.socket.js";
@@ -95,6 +95,29 @@ export async function estimateFare(req, res, next) {
   } catch (err) {
     next(err);
   }
+}
+
+// ─── GET /api/taxi/vehicle-types ─────────────────────────────────────────────
+export async function getVehicleTypesHandler(req, res, next) {
+  try {
+    const region =
+      normalizeRegion(req.headers?.["x-region"]) ??
+      (await User.findById(req.user.id).select("region").lean())?.region ??
+      null;
+    const [types, nightActiveNow, petAddon] = await Promise.all([
+      getVehicleTypes(region),
+      isNightNow(region),
+      getPetAddon(region),
+    ]);
+    res.json({
+      types: types.map((t) => ({
+        key: t.key, name: t.name, icon: t.icon, capacity: t.capacity ?? null,
+        description: t.description ?? "", base: t.base, perKm: t.perKm,
+      })),
+      nightActiveNow,
+      petAddon,
+    });
+  } catch (err) { next(err); }
 }
 
 // ─── POST /api/taxi/rides ─────────────────────────────────────────────────────

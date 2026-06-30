@@ -11,6 +11,7 @@ import {
   searchPlacesHandler,
   geocodeAddressHandler,
   rateRide,
+  getVehicleTypesHandler,
 } from "../controllers/taxi.controller.js";
 
 const router = Router();
@@ -20,6 +21,9 @@ router.get("/taxi/places/search", auth(false), searchPlacesHandler);
 
 // Adres geocoding (auth opsiyonel)
 router.get("/taxi/places/geocode", auth(false), geocodeAddressHandler);
+
+// Araç tipleri (bölge bazlı)
+router.get("/taxi/vehicle-types", auth(), getVehicleTypesHandler);
 
 // Ücret tahmini
 router.post("/taxi/estimate", auth(), estimateFare);
