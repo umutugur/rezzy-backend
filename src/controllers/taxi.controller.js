@@ -155,7 +155,8 @@ export async function createRide(req, res, next) {
     // Region-aware fare (falls back to hardcoded tariffs when no DB config exists)
     const passengerUser = await User.findById(passengerId).select("region").lean();
     const region = normalizeRegion(req.body?.region) ?? passengerUser?.region ?? null;
-    const fare = await estimateFareForRegion(region, vehicleType, distanceKm);
+    const petRequested = req.body?.petRequested === true;
+    const { fare, isNight } = await estimateFareForRegion(region, vehicleType, distanceKm, { petRequested });
 
     const safePaymentMethod = ["cash", "card", "online"].includes(paymentMethod) ? paymentMethod : "cash";
 
@@ -200,6 +201,8 @@ export async function createRide(req, res, next) {
         coordinates: dropoff.coordinates ?? [0, 0],
       },
       vehicleType,
+      petRequested,
+      isNight,
       distanceKm,
       durationMin,
       fare: customerFare,
@@ -217,19 +220,13 @@ export async function createRide(req, res, next) {
     // Pickup'a yakın online ve müsait sürücüleri bul
     const dispatchRadiusM = await getDispatchRadiusM(region);
 
-    const vehicleTypeMap = {
-      ride: "sedan",
-      xl: "van",
-      lux: "luxury",
-      pet: "pet",
-    };
-
     const nearbyDrivers = await TaxiDriver.find({
       isOnline: true,
       isAvailable: true,
       isApproved: true,
       lastSeenAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) },
-      type: vehicleTypeMap[vehicleType] ?? "sedan",
+      vehicleType: vehicleType,
+      ...(petRequested ? { acceptsPets: true } : {}),
       location: {
         $near: {
           $geometry: {
