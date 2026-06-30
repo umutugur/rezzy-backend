@@ -9,12 +9,28 @@ export async function adminGetDeliveryOrders(params?: {
 }
 
 // ── Taxi config ───────────────────────────────────────────────────────────────
-export type TaxiTariff = { base: number; perKm: number };
+export type VehicleType = {
+  key: string;
+  name: string;
+  icon: string;
+  capacity: number | null;
+  description: string;
+  order: number;
+  isActive: boolean;
+  base: number;
+  perKm: number;
+  nightBase: number | null;
+  nightPerKm: number | null;
+};
+
 export type TaxiRegionConfig = {
   region: string;
   dispatchRadiusKm: number;
   commissionRate: number;
-  tariffs: { ride: TaxiTariff; xl: TaxiTariff; lux: TaxiTariff; pet: TaxiTariff };
+  vehicleTypes: VehicleType[];
+  nightTariff: { enabled: boolean; start: string; end: string };
+  petAddon: { enabled: boolean; surcharge: number };
+  timezone: string;
   isActive: boolean;
 };
 
@@ -23,7 +39,10 @@ export async function adminGetTaxiConfigs(): Promise<{ configs: TaxiRegionConfig
   return data as { configs: TaxiRegionConfig[] };
 }
 
-export async function adminUpsertTaxiConfig(region: string, body: Partial<TaxiRegionConfig>) {
+export async function adminUpsertTaxiConfig(
+  region: string,
+  body: Partial<Omit<TaxiRegionConfig, "region">> & { region?: string }
+) {
   const { data } = await api.put(`/admin/taxi/config/${region}`, body);
   return data;
 }

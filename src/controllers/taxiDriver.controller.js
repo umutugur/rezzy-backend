@@ -476,12 +476,16 @@ export async function adminUpsertTaxiConfig(req, res, next) {
     if (req.user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
     const region = String(req.params.region || "").toUpperCase();
     if (!region) return res.status(400).json({ message: "region required" });
-    const { dispatchRadiusKm, commissionRate, tariffs, isActive } = req.body || {};
+    const { dispatchRadiusKm, commissionRate, tariffs, isActive, vehicleTypes, nightTariff, petAddon, timezone } = req.body || {};
     const update = {};
     if (dispatchRadiusKm != null) update.dispatchRadiusKm = Number(dispatchRadiusKm);
     if (commissionRate != null) update.commissionRate = Number(commissionRate);
     if (tariffs != null) update.tariffs = tariffs;
     if (isActive != null) update.isActive = !!isActive;
+    if (vehicleTypes != null) update.vehicleTypes = vehicleTypes;
+    if (nightTariff != null) update.nightTariff = nightTariff;
+    if (petAddon != null) update.petAddon = petAddon;
+    if (timezone != null) update.timezone = timezone;
     const config = await TaxiRegionConfig.findOneAndUpdate(
       { region },
       { $set: update, $setOnInsert: { region } },
