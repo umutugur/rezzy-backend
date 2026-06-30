@@ -27,9 +27,10 @@ const TaxiRideSchema = new mongoose.Schema(
 
     vehicleType: {
       type: String,
-      enum: ["ride", "xl", "lux", "pet"],
       default: "ride",
     },
+    petRequested: { type: Boolean, default: false },
+    isNight: { type: Boolean, default: false },
 
     // Bölge (fiyatlandırma ve komisyon raporlama için)
     region: { type: String, default: null },

@@ -24,12 +24,9 @@ const TaxiDriverSchema = new mongoose.Schema(
     vehicleModel: { type: String, required: true, trim: true },
     vehicleColor: { type: String, required: true, trim: true },
 
-    // Araç tipi
-    type: {
-      type: String,
-      enum: ["sedan", "van", "luxury", "pet"],
-      default: "sedan",
-    },
+    // Araç tipi (bölge config'indeki vehicleTypes[].key)
+    vehicleType: { type: String, default: "", trim: true, lowercase: true },
+    acceptsPets: { type: Boolean, default: false },
 
     // Durum
     isOnline: { type: Boolean, default: false },
