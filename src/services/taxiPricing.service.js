@@ -1,6 +1,39 @@
 // src/services/taxiPricing.service.js
 import TaxiRegionConfig from "../models/TaxiRegionConfig.js";
 
+export function hhmmToMinutes(hhmm) {
+  const [h, m] = String(hhmm || "").split(":").map((n) => parseInt(n, 10));
+  if (Number.isNaN(h) || Number.isNaN(m)) return NaN;
+  return h * 60 + m;
+}
+
+/** Local "HH:MM" for a Date in an IANA timezone (00-23 hours). */
+export function localHHMM(date, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(date);
+  const hh = parts.find((p) => p.type === "hour")?.value ?? "00";
+  const mm = parts.find((p) => p.type === "minute")?.value ?? "00";
+  return `${hh}:${mm}`;
+}
+
+/** Is `date` (evaluated in `timeZone`) within [start, end)? Handles windows crossing midnight. */
+export function isWithinWindow(date, timeZone, start, end) {
+  const s = hhmmToMinutes(start), e = hhmmToMinutes(end);
+  if (Number.isNaN(s) || Number.isNaN(e) || s === e) return false;
+  let cur;
+  try { cur = hhmmToMinutes(localHHMM(date, timeZone || "UTC")); }
+  catch { cur = hhmmToMinutes(localHHMM(date, "UTC")); }
+  if (Number.isNaN(cur)) return false;
+  return s < e ? (cur >= s && cur < e) : (cur >= s || cur < e);
+}
+
+/** Linear fare: base + max(0,km)*perKm, rounded to 2 decimals. */
+export function fareFor(base, perKm, km) {
+  const k = Math.max(0, Number(km) || 0);
+  return Math.round((Number(base) + k * Number(perKm)) * 100) / 100;
+}
+
 /**
  * Araç tipine göre tarife tablosu (TRY cinsinden)
  * base: Biniş ücreti
