@@ -57,7 +57,8 @@ export async function estimateFare(req, res, next) {
     // Region-aware fare (falls back to hardcoded tariffs when no DB config exists)
     const passengerUser = await User.findById(req.user.id).select("region").lean();
     const region = normalizeRegion(req.body?.region) ?? passengerUser?.region ?? null;
-    const fare = await estimateFareForRegion(region, vehicleType, distanceKm);
+    const petRequested = req.body?.petRequested === true;
+    const { fare, isNight } = await estimateFareForRegion(region, vehicleType, distanceKm, { petRequested });
 
     let discount = 0;
     const couponCampaignId = req.body?.couponCampaignId;
@@ -90,6 +91,7 @@ export async function estimateFare(req, res, next) {
       distanceKm,
       durationMin,
       vehicleType,
+      isNight,
       geometry,
     });
   } catch (err) {
