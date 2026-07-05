@@ -1,11 +1,8 @@
 import mongoose from "mongoose";
 import Campaign from "../models/Campaign.js";
 import CampaignParticipation from "../models/CampaignParticipation.js";
-import MarketStore from "../models/MarketStore.js";
+import { resolvePanelStore } from "../services/panelStoreAccess.service.js";
 
-async function ownerStore(userId) {
-  return MarketStore.findOne({ owner: userId }).select("_id category organization").lean();
-}
 function storeMatchesScope(c, store) {
   switch (c.conditions.scope) {
     case "platform": return true;
@@ -19,8 +16,9 @@ function storeMatchesScope(c, store) {
 /** GET /market/panel/campaigns — campaigns this store is eligible for (requiresOptIn) + join status */
 export const listEligibleCampaigns = async (req, res, next) => {
   try {
-    const store = await ownerStore(req.user.id);
-    if (!store) return next({ status: 404, message: "Mağaza bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
     const region = String(req.headers?.["x-region"] || req.user?.region || "").toUpperCase();
     const now = new Date();
     const q = { surface: "market", isActive: true, requiresOptIn: true, validTo: { $gte: now } };
@@ -36,8 +34,12 @@ export const listEligibleCampaigns = async (req, res, next) => {
 /** POST /market/panel/campaigns/:campaignId/join */
 export const joinCampaign = async (req, res, next) => {
   try {
-    const store = await ownerStore(req.user.id);
-    if (!store) return next({ status: 404, message: "Mağaza bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store, access } = r;
+    if (access !== "owner" && req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Bu işlem yalnızca mağaza sahibine açık" });
+    }
     const campaign = await Campaign.findById(req.params.campaignId).lean();
     if (!campaign || campaign.surface !== "market") return next({ status: 404, message: "Kampanya bulunamadı" });
     if (!storeMatchesScope(campaign, store)) return next({ status: 403, message: "Bu kampanya mağazanız için uygun değil" });
@@ -56,8 +58,12 @@ export const joinCampaign = async (req, res, next) => {
 /** POST /market/panel/campaigns/:campaignId/leave */
 export const leaveCampaign = async (req, res, next) => {
   try {
-    const store = await ownerStore(req.user.id);
-    if (!store) return next({ status: 404, message: "Mağaza bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store, access } = r;
+    if (access !== "owner" && req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Bu işlem yalnızca mağaza sahibine açık" });
+    }
     await CampaignParticipation.findOneAndUpdate(
       { campaign: req.params.campaignId, store: store._id },
       { $set: { status: "left" } }

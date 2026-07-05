@@ -3,6 +3,7 @@ import CouponRedemption from "../models/CouponRedemption.js";
 import TaxiRide from "../models/TaxiRide.js";
 import Campaign from "../models/Campaign.js";
 import MarketStore from "../models/MarketStore.js";
+import { resolvePanelStore } from "../services/panelStoreAccess.service.js";
 
 const oid = (v) => { try { return new mongoose.Types.ObjectId(String(v)); } catch { return null; } };
 function range(req) {
@@ -85,8 +86,12 @@ export const adminSettlement = async (req, res, next) => {
 /** GET /market/panel/promo-statement — the owner's own store statement */
 export const businessStatement = async (req, res, next) => {
   try {
-    const store = await MarketStore.findOne({ owner: req.user.id }).select("_id name").lean();
-    if (!store) return next({ status: 404, message: "Mağaza bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store, access } = r;
+    if (access !== "owner" && req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Bu işlem yalnızca mağaza sahibine açık" });
+    }
     const { from, to } = range(req);
     const arr = await CouponRedemption.aggregate([
       { $match: { store: store._id, status: "applied", createdAt: { $gte: from, $lte: to } } },

@@ -12,7 +12,8 @@ import MarketBranchOverride from "../models/MarketBranchOverride.js";
 import MarketOrgProduct from "../models/MarketOrgProduct.js";
 import { reverseRedemptionForOrder } from "../services/promotionsService.js";
 import User from "../models/User.js";
-import { buildAccessSet, pickStore } from "../services/panelStoreAccess.js";
+import { resolvePanelStore } from "../services/panelStoreAccess.service.js";
+import { buildAccessSet } from "../services/panelStoreAccess.js";
 
 const toObjectId = (id) => {
   try {
@@ -23,27 +24,6 @@ const toObjectId = (id) => {
     return null;
   }
 };
-
-/**
- * Kullanıcının panel mağazasını çözer: owner ∪ marketMemberships.
- * storeId verilirse erişim doğrulanır; birden çok mağaza + storeId yoksa 400 STORE_CHOICE_REQUIRED.
- * @returns {{ store, access: "owner"|"manager" }} — throw yerine null/err objesi ile akış (aşağıdaki kullanım).
- */
-async function resolvePanelStore(reqUser, storeId) {
-  const uid = toObjectId(reqUser?.id);
-  if (!uid) return { error: { status: 401, message: "Yetkisiz" } };
-  const [owned, userDoc] = await Promise.all([
-    MarketStore.find({ owner: uid }).select("_id").lean(),
-    User.findById(uid).select("marketMemberships").lean(),
-  ]);
-  const set = buildAccessSet(owned, userDoc?.marketMemberships);
-  const picked = pickStore(set, storeId);
-  if (picked === null) return { error: { status: 403, message: "Bu mağazaya erişiminiz yok" } };
-  if (picked === undefined) return { error: { status: 400, code: "STORE_CHOICE_REQUIRED", message: "Birden fazla mağaza — storeId gönderin" } };
-  const store = await MarketStore.findById(picked.storeId).lean();
-  if (!store) return { error: { status: 404, message: "Mağaza bulunamadı" } };
-  return { store, access: picked.access };
-}
 
 /** GET /market/panel/my-stores — panelde erişilebilir mağazalar */
 export const listMyPanelStores = async (req, res, next) => {
