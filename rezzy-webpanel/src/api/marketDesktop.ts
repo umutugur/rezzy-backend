@@ -1,6 +1,20 @@
 import { api } from "./client";
+import { withStore } from "./panelStore";
 
 // ---- Types ----
+
+export interface MyPanelStore {
+  _id: string;
+  name: string;
+  city?: string;
+  isActive: boolean;
+  access: "owner" | "manager";
+}
+
+export async function fetchMyPanelStores(): Promise<MyPanelStore[]> {
+  const { data } = await api.get("/market/panel/my-stores");
+  return Array.isArray(data?.items) ? data.items : [];
+}
 
 export type MarketOrderStatus =
   | "pending"
@@ -62,7 +76,7 @@ export async function marketGetOrders(params?: {
   page?: number;
   limit?: number;
 }): Promise<{ items: MarketOrder[]; total: number; page: number }> {
-  const { data } = await api.get("/market/panel/orders", { params });
+  const { data } = await api.get("/market/panel/orders", { params: withStore(params) });
   return data;
 }
 
@@ -71,7 +85,7 @@ export async function marketUpdateOrderStatus(
   status: MarketOrderStatus,
   reason?: string,
 ): Promise<MarketOrder> {
-  const { data } = await api.patch(`/market/panel/orders/${id}/status`, { status, ...(reason ? { reason } : {}) });
+  const { data } = await api.patch(`/market/panel/orders/${id}/status`, withStore({ status, ...(reason ? { reason } : {}) }));
   return data.order ?? data;
 }
 
@@ -79,7 +93,7 @@ export async function marketGetProducts(params?: {
   page?: number;
   limit?: number;
 }): Promise<{ items: PanelProduct[]; total: number }> {
-  const { data } = await api.get("/market/panel/products", { params });
+  const { data } = await api.get("/market/panel/products", { params: withStore(params) });
   return data;
 }
 
@@ -87,7 +101,7 @@ export async function marketCreateProduct(
   payload: Pick<PanelProduct, "title" | "price" | "unit" | "stock"> &
     Partial<Pick<PanelProduct, "description" | "brand" | "attributes" | "netQuantity" | "netUnit" | "discountPrice">>,
 ): Promise<PanelProduct> {
-  const { data } = await api.post("/market/panel/products", payload);
+  const { data } = await api.post("/market/panel/products", withStore(payload));
   return data;
 }
 
@@ -95,12 +109,12 @@ export async function marketUpdateProduct(
   id: string,
   payload: Partial<Pick<PanelProduct, "title" | "price" | "unit" | "stock" | "description" | "isActive" | "brand" | "attributes" | "netQuantity" | "netUnit" | "discountPrice">>,
 ): Promise<PanelProduct> {
-  const { data } = await api.patch(`/market/panel/products/${id}`, payload);
+  const { data } = await api.patch(`/market/panel/products/${id}`, withStore(payload));
   return data;
 }
 
 export async function marketDeleteProduct(id: string): Promise<void> {
-  await api.delete(`/market/panel/products/${id}`);
+  await api.delete(`/market/panel/products/${id}`, { data: withStore() });
 }
 
 // ---- Market Categories (CoreCategory) ----
@@ -122,7 +136,7 @@ export async function getMarketCategories(): Promise<{ items: MarketCoreCategory
 export async function uploadMarketImage(file: File): Promise<{ url: string }> {
   const form = new FormData();
   form.append("file", file);
-  const { data } = await api.post("/market/panel/upload", form);
+  const { data } = await api.post("/market/panel/upload", form, { params: withStore() });
   return data as { url: string };
 }
 
@@ -141,7 +155,7 @@ export async function getProductImageSuggestions(params: {
   brand?: string;
   limit?: number;
 }): Promise<{ items: ProductImageSuggestion[] }> {
-  const { data } = await api.get("/market/panel/product-image-suggestions", { params });
+  const { data } = await api.get("/market/panel/product-image-suggestions", { params: withStore(params) });
   return data as { items: ProductImageSuggestion[] };
 }
 
@@ -173,14 +187,14 @@ export interface MarketStoreSettings {
 }
 
 export async function marketGetMyStore(): Promise<MarketStoreSettings> {
-  const { data } = await api.get("/market/panel/store");
+  const { data } = await api.get("/market/panel/store", { params: withStore() });
   return data;
 }
 
 export async function marketUpdateMyStore(
   payload: Partial<MarketStoreSettings>,
 ): Promise<MarketStoreSettings> {
-  const { data } = await api.patch("/market/panel/store", payload);
+  const { data } = await api.patch("/market/panel/store", withStore(payload));
   return data;
 }
 
@@ -201,6 +215,6 @@ export interface MarketReport {
 }
 
 export async function marketGetReports(from?: string, to?: string): Promise<MarketReport> {
-  const { data } = await api.get("/market/panel/reports", { params: { from, to } });
+  const { data } = await api.get("/market/panel/reports", { params: withStore({ from, to }) });
   return data as MarketReport;
 }

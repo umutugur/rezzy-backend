@@ -1,4 +1,5 @@
 import { api } from "./client";
+import { withStore } from "./panelStore";
 
 export interface BranchOrgProduct {
   _id: string;
@@ -20,7 +21,7 @@ export interface BranchOrgProduct {
 }
 
 export async function listMyOrgProducts(params: { q?: string }) {
-  const { data } = await api.get(`/market/panel/org-products`, { params });
+  const { data } = await api.get(`/market/panel/org-products`, { params: withStore(params) });
   return data as { items: BranchOrgProduct[]; organization: string | null };
 }
 
@@ -35,7 +36,7 @@ export async function upsertOverride(
 ) {
   const { data } = await api.put(
     `/market/panel/org-products/${orgProductId}/override`,
-    body
+    withStore(body)
   );
   return data;
 }

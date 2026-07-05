@@ -8,9 +8,10 @@ interface Props {
   active: MarketNavKey;
   onNavigate: (key: MarketNavKey) => void;
   alerts?: { orders?: boolean };
+  hideSettings?: boolean;
 }
 
-export const MarketSideNav: React.FC<Props> = ({ active, onNavigate, alerts }) => {
+export const MarketSideNav: React.FC<Props> = ({ active, onNavigate, alerts, hideSettings }) => {
   const { t } = useI18n();
   return (
     <aside className="rezvix-sidenav">
@@ -116,22 +117,24 @@ export const MarketSideNav: React.FC<Props> = ({ active, onNavigate, alerts }) =
             </div>
           </button>
         </div>
-        <div style={{ marginTop: 10 }}>
-          <div className="rezvix-sidenav__group-label">{t("Sistem")}</div>
-          <button
-            type="button"
-            className={
-              "rezvix-sidenav__item" +
-              (active === "settings" ? " rezvix-sidenav__item--active" : "")
-            }
-            onClick={() => onNavigate("settings")}
-          >
-            <div className="rezvix-sidenav__icon">⚙️</div>
-            <div className="rezvix-sidenav__label">
-              <span>{t("Ayarlar")}</span>
-            </div>
-          </button>
-        </div>
+        {!hideSettings && (
+          <div style={{ marginTop: 10 }}>
+            <div className="rezvix-sidenav__group-label">{t("Sistem")}</div>
+            <button
+              type="button"
+              className={
+                "rezvix-sidenav__item" +
+                (active === "settings" ? " rezvix-sidenav__item--active" : "")
+              }
+              onClick={() => onNavigate("settings")}
+            >
+              <div className="rezvix-sidenav__icon">⚙️</div>
+              <div className="rezvix-sidenav__label">
+                <span>{t("Ayarlar")}</span>
+              </div>
+            </button>
+          </div>
+        )}
       </nav>
       <div className="rezvix-sidenav__footer">
         <div className="rezvix-sidenav__footer-title">{t("Market Paneli")}</div>

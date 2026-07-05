@@ -1,4 +1,5 @@
 import { api } from "./client";
+import { withStore } from "./panelStore";
 
 // ---- Types ----
 
@@ -48,21 +49,21 @@ export interface MarketStatement {
 // ---- API functions ----
 
 export async function listEligible(): Promise<MarketEligibleCampaign[]> {
-  const { data } = await api.get("/market/panel/campaigns");
+  const { data } = await api.get("/market/panel/campaigns", { params: withStore() });
   return (data?.items ?? []) as MarketEligibleCampaign[];
 }
 
 export async function join(campaignId: string): Promise<{ ok: boolean; joined: boolean }> {
-  const { data } = await api.post(`/market/panel/campaigns/${campaignId}/join`);
+  const { data } = await api.post(`/market/panel/campaigns/${campaignId}/join`, withStore());
   return data as { ok: boolean; joined: boolean };
 }
 
 export async function leave(campaignId: string): Promise<{ ok: boolean; joined: boolean }> {
-  const { data } = await api.post(`/market/panel/campaigns/${campaignId}/leave`);
+  const { data } = await api.post(`/market/panel/campaigns/${campaignId}/leave`, withStore());
   return data as { ok: boolean; joined: boolean };
 }
 
 export async function getStatement(params: { from?: string; to?: string }): Promise<MarketStatement> {
-  const { data } = await api.get("/market/panel/promo-statement", { params });
+  const { data } = await api.get("/market/panel/promo-statement", { params: withStore(params) });
   return data as MarketStatement;
 }
