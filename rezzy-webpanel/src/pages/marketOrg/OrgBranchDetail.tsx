@@ -4,10 +4,16 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { authStore } from "../../store/auth";
 import { getOrgBranch, updateOrgBranch } from "../../api/marketOrgCatalog";
+import {
+  listStoreManagers,
+  addStoreManager,
+  removeStoreManager,
+} from "../../api/branchManagers";
 import { showToast } from "../../ui/Toast";
 import { useI18n } from "../../i18n";
 import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
 import { FormField } from "../../desktop/components/admin/FormField";
+import { ManagersSection } from "../../desktop/components/ManagersSection";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -520,6 +526,16 @@ export default function OrgBranchDetail() {
           </div>
         )}
       </div>
+
+      {/* ── Şube yöneticileri ── */}
+      {orgId && storeId && (
+        <ManagersSection
+          queryKey={["store-managers", orgId, storeId]}
+          listManagers={() => listStoreManagers(orgId, storeId)}
+          addManager={(body) => addStoreManager(orgId, storeId, body)}
+          removeManager={(userId) => removeStoreManager(orgId, storeId, userId)}
+        />
+      )}
 
       {/* ── Operasyonel ayarlar ── */}
       <div style={sectionCardSx}>

@@ -12,7 +12,13 @@ import {
   orgGetTopRestaurants,
   orgGetRestaurantSummary,
 } from "../../api/orgAnalytics";
-import { orgUpdateMyOrganization } from "../../api/client";
+import { orgUpdateMyOrganization, orgListMyOrganizationRestaurants } from "../../api/client";
+import {
+  listRestaurantManagers,
+  addRestaurantManager,
+  removeRestaurantManager,
+} from "../../api/branchManagers";
+import { ManagersSection } from "../../desktop/components/ManagersSection";
 
 import { getCurrencySymbolForRegion } from "../../utils/currency";
 import { DEFAULT_LANGUAGE, LANG_OPTIONS } from "../../utils/languages";
@@ -247,6 +253,87 @@ function Drawer({
         <div className="p-4 overflow-auto h-[calc(100%-57px)]">{children}</div>
       </div>
     </div>
+  );
+}
+
+/* ---------------- Restaurants + managers ---------------- */
+function OrgRestaurantsCard({
+  orgId,
+  t,
+}: {
+  orgId: string;
+  t: (key: string, options?: any) => string;
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["org-restaurants", orgId],
+    queryFn: () => orgListMyOrganizationRestaurants(orgId, { limit: 100 }),
+    enabled: !!orgId,
+  });
+
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const restaurants: any[] = data?.items ?? [];
+
+  if (!orgId) return null;
+
+  return (
+    <Card title={t("Restoranlar")}>
+      {isLoading ? (
+        <div className="text-sm text-gray-500">{t("Yükleniyor...")}</div>
+      ) : restaurants.length === 0 ? (
+        <div className="text-sm text-gray-500">
+          {t("Bu organizasyona bağlı restoran bulunamadı.")}
+        </div>
+      ) : (
+        <div className="overflow-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-gray-500">
+                <th className="py-2 px-4">{t("Ad")}</th>
+                <th className="py-2 px-4">{t("Şehir")}</th>
+                <th className="py-2 px-4 text-right">{t("İşlemler")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {restaurants.map((r: any) => {
+                const rid = String(r._id ?? r.id);
+                const isOpen = expandedId === rid;
+                return (
+                  <React.Fragment key={rid}>
+                    <tr className="border-t">
+                      <td className="py-2 px-4">{r.name}</td>
+                      <td className="py-2 px-4">{r.city || "-"}</td>
+                      <td className="py-2 px-4 text-right">
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-3 py-1.5 text-xs rounded bg-gray-100 hover:bg-gray-200"
+                          onClick={() => setExpandedId(isOpen ? null : rid)}
+                        >
+                          {isOpen ? t("Kapat") : t("Yöneticiler")}
+                        </button>
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={3} className="px-4 pb-4">
+                          <ManagersSection
+                            queryKey={["restaurant-managers", orgId, rid]}
+                            listManagers={() => listRestaurantManagers(orgId, rid)}
+                            addManager={(body) => addRestaurantManager(orgId, rid, body)}
+                            removeManager={(userId) =>
+                              removeRestaurantManager(orgId, rid, userId)
+                            }
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -587,6 +674,9 @@ export default function OrgDashboardPage() {
             {t("ekranından iletebilirsiniz.")}
           </p>
         </Card>
+
+        {/* Restaurants + managers */}
+        {selectedOrgId && <OrgRestaurantsCard orgId={selectedOrgId} t={t} />}
 
         {/* Reports */}
         <Card
