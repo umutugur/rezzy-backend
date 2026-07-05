@@ -11,6 +11,8 @@ import { resolveStoreCatalog } from "../services/marketCatalogResolve.service.js
 import MarketBranchOverride from "../models/MarketBranchOverride.js";
 import MarketOrgProduct from "../models/MarketOrgProduct.js";
 import { reverseRedemptionForOrder } from "../services/promotionsService.js";
+import User from "../models/User.js";
+import { buildAccessSet, pickStore } from "../services/panelStoreAccess.js";
 
 const toObjectId = (id) => {
   try {
@@ -22,11 +24,44 @@ const toObjectId = (id) => {
   }
 };
 
-/** Kullanıcının sahip olduğu market store'u bul */
-const findOwnerStore = async (userId) => {
-  const oid = toObjectId(userId);
-  if (!oid) return null;
-  return MarketStore.findOne({ owner: oid }).lean();
+/**
+ * Kullanıcının panel mağazasını çözer: owner ∪ marketMemberships.
+ * storeId verilirse erişim doğrulanır; birden çok mağaza + storeId yoksa 400 STORE_CHOICE_REQUIRED.
+ * @returns {{ store, access: "owner"|"manager" }} — throw yerine null/err objesi ile akış (aşağıdaki kullanım).
+ */
+async function resolvePanelStore(reqUser, storeId) {
+  const uid = toObjectId(reqUser?.id);
+  if (!uid) return { error: { status: 401, message: "Yetkisiz" } };
+  const [owned, userDoc] = await Promise.all([
+    MarketStore.find({ owner: uid }).select("_id").lean(),
+    User.findById(uid).select("marketMemberships").lean(),
+  ]);
+  const set = buildAccessSet(owned, userDoc?.marketMemberships);
+  const picked = pickStore(set, storeId);
+  if (picked === null) return { error: { status: 403, message: "Bu mağazaya erişiminiz yok" } };
+  if (picked === undefined) return { error: { status: 400, code: "STORE_CHOICE_REQUIRED", message: "Birden fazla mağaza — storeId gönderin" } };
+  const store = await MarketStore.findById(picked.storeId).lean();
+  if (!store) return { error: { status: 404, message: "Mağaza bulunamadı" } };
+  return { store, access: picked.access };
+}
+
+/** GET /market/panel/my-stores — panelde erişilebilir mağazalar */
+export const listMyPanelStores = async (req, res, next) => {
+  try {
+    const uid = toObjectId(req.user?.id);
+    const [owned, userDoc] = await Promise.all([
+      MarketStore.find({ owner: uid }).select("_id name city isActive").lean(),
+      User.findById(uid).select("marketMemberships").lean(),
+    ]);
+    const memberIds = (userDoc?.marketMemberships || []).map((m) => m.store);
+    const memberStores = memberIds.length
+      ? await MarketStore.find({ _id: { $in: memberIds } }).select("_id name city isActive").lean()
+      : [];
+    const set = buildAccessSet(owned, userDoc?.marketMemberships);
+    const byId = new Map([...owned, ...memberStores].map((s) => [String(s._id), s]));
+    const items = [...byId.values()].map((s) => ({ ...s, access: set.get(String(s._id)) }));
+    res.json({ items });
+  } catch (e) { next(e); }
 };
 
 // Satış birimi enum'una güvenli normalize — geçersiz/eski etiketler "piece"e düşer
@@ -58,9 +93,9 @@ function sanitizeAttributes(input) {
  */
 export const listPanelOrders = async (req, res, next) => {
   try {
-    const userId = req.user?.id;
-    const store = await findOwnerStore(userId);
-    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
 
     const { status, page = 1, limit = 30 } = req.query;
     const filter = { store: store._id };
@@ -92,7 +127,6 @@ export const listPanelOrders = async (req, res, next) => {
  */
 export const updateOrderStatus = async (req, res, next) => {
   try {
-    const userId = req.user?.id;
     const { id } = req.params;
     const { status, reason } = req.body || {};
 
@@ -112,8 +146,9 @@ export const updateOrderStatus = async (req, res, next) => {
       return next({ status: 400, message: `Geçersiz status. Olası değerler: ${validStatuses.join(", ")}` });
     }
 
-    const store = await findOwnerStore(userId);
-    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
 
     const order = await MarketOrder.findOne({ _id: id, store: store._id });
     if (!order) return next({ status: 404, message: "Sipariş bulunamadı" });
@@ -182,8 +217,9 @@ export const updateOrderStatus = async (req, res, next) => {
  */
 export const getMyStore = async (req, res, next) => {
   try {
-    const store = await findOwnerStore(req.user?.id);
-    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
     res.json(store);
   } catch (e) {
     next(e);
@@ -199,12 +235,15 @@ export const getMyStore = async (req, res, next) => {
  */
 export const updateMyStore = async (req, res, next) => {
   try {
-    const userId = req.user?.id;
-    const oid = toObjectId(userId);
-    if (!oid) return next({ status: 401, message: "Unauthorized" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { access } = r;
+    if (access !== "owner" && req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Bu işlem yalnızca mağaza sahibine açık" });
+    }
 
     // lean() kullanmadan gerçek document çek (save için)
-    const store = await MarketStore.findOne({ owner: oid });
+    const store = await MarketStore.findById(r.store._id);
     if (!store) return next({ status: 404, message: "Market bulunamadı" });
 
     const ALLOWED = [
@@ -313,9 +352,9 @@ export const updateMyStore = async (req, res, next) => {
  */
 export const listPanelProducts = async (req, res, next) => {
   try {
-    const userId = req.user?.id;
-    const store = await findOwnerStore(userId);
-    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
 
     const { category, isActive, page = 1, limit = 40 } = req.query;
 
@@ -352,9 +391,9 @@ export const listPanelProducts = async (req, res, next) => {
  */
 export const createProduct = async (req, res, next) => {
   try {
-    const userId = req.user?.id;
-    const store = await findOwnerStore(userId);
-    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
 
     const { title, description, price, unit, stock, photos, category, barcode,
       brand, attributes, netQuantity, netUnit, discountPrice } = req.body || {};
@@ -412,15 +451,15 @@ export const createProduct = async (req, res, next) => {
  */
 export const updateProduct = async (req, res, next) => {
   try {
-    const userId = req.user?.id;
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return next({ status: 400, message: "Geçersiz ürün id" });
     }
 
-    const store = await findOwnerStore(userId);
-    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
 
     const product = await MarketProduct.findOne({ _id: id, store: store._id });
     if (!product) return next({ status: 404, message: "Ürün bulunamadı" });
@@ -497,15 +536,15 @@ export const updateProduct = async (req, res, next) => {
  */
 export const deleteProduct = async (req, res, next) => {
   try {
-    const userId = req.user?.id;
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return next({ status: 400, message: "Geçersiz ürün id" });
     }
 
-    const store = await findOwnerStore(userId);
-    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
 
     const product = await MarketProduct.findOne({ _id: id, store: store._id });
     if (!product) return next({ status: 404, message: "Ürün bulunamadı" });
@@ -526,9 +565,9 @@ export const deleteProduct = async (req, res, next) => {
  */
 export const listOrgStores = async (req, res, next) => {
   try {
-    const userId = req.user?.id;
-    const store = await findOwnerStore(userId);
-    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
 
     if (!store.organization) {
       return res.json({ stores: [] });
@@ -605,8 +644,9 @@ export const productImageSuggestions = async (req, res, next) => {
 // GET /market/panel/org-products?q=
 export const listMyOrgProducts = async (req, res, next) => {
   try {
-    const store = await findOwnerStore(req.user?.id);
-    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
     if (!store.organization) return res.json({ items: [], organization: null });
     const resolved = await resolveStoreCatalog(store);
     const overrides = await MarketBranchOverride.find({ store: store._id }).lean();
@@ -629,8 +669,9 @@ export const listMyOrgProducts = async (req, res, next) => {
 // PUT /market/panel/org-products/:orgProductId/override  body {price?,discountPrice?,isAvailable?,hidden?} | {} clears
 export const upsertBranchOverride = async (req, res, next) => {
   try {
-    const store = await findOwnerStore(req.user?.id);
-    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
     if (!store.organization) return next({ status: 400, message: "Bu market bir zincire bağlı değil" });
     const orgProductId = req.params.orgProductId;
     const op = await MarketOrgProduct.findOne({ _id: orgProductId, organizationId: store.organization }).lean();
@@ -660,8 +701,9 @@ export const upsertBranchOverride = async (req, res, next) => {
 /** GET /api/market/panel/reports?from=&to= — mağaza satış/sipariş raporu (gelir = delivered) */
 export const getReports = async (req, res, next) => {
   try {
-    const store = await findOwnerStore(req.user?.id);
-    if (!store) return next({ status: 404, message: "Market bulunamadı" });
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
 
     const now = new Date();
     const to = req.query.to ? new Date(req.query.to) : now;

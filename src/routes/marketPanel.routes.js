@@ -18,6 +18,7 @@ import {
   getReports,
   listMyOrgProducts,
   upsertBranchOverride,
+  listMyPanelStores,
 } from "../controllers/marketPanel.controller.js";
 import { listEligibleCampaigns, joinCampaign, leaveCampaign } from "../controllers/marketCampaign.controller.js";
 
@@ -26,6 +27,9 @@ const r = Router();
 // ---------------------------------------------------------------------------
 // Market Sahibi Paneli — JWT + market_owner veya admin rolü zorunlu
 // ---------------------------------------------------------------------------
+
+// Panelde erişilebilir mağazalar (owner ∪ membership) — parametrik route'lardan ÖNCE
+r.get("/market/panel/my-stores", auth(), listMyPanelStores);
 
 // Gelen siparişler
 r.get(
