@@ -1,7 +1,7 @@
 // src/routes/marketPanel.routes.js
 import { Router } from "express";
 import { auth } from "../middlewares/auth.js";
-import { allow } from "../middlewares/roles.js";
+import { allowMarketPanel } from "../middlewares/allowMarketPanel.js";
 import { imageUpload } from "../utils/multer.js";
 import {
   listPanelOrders,
@@ -35,7 +35,7 @@ r.get("/market/panel/my-stores", auth(), listMyPanelStores);
 r.get(
   "/market/panel/orders",
   auth(),
-  allow("market_owner", "admin"),
+  allowMarketPanel(),
   listPanelOrders
 );
 
@@ -43,7 +43,7 @@ r.get(
 r.patch(
   "/market/panel/orders/:id/status",
   auth(),
-  allow("market_owner", "admin"),
+  allowMarketPanel(),
   updateOrderStatus
 );
 
@@ -51,7 +51,7 @@ r.patch(
 r.get(
   "/market/panel/store",
   auth(),
-  allow("market_owner", "admin"),
+  allowMarketPanel(),
   getMyStore
 );
 
@@ -59,7 +59,7 @@ r.get(
 r.patch(
   "/market/panel/store",
   auth(),
-  allow("market_owner", "admin"),
+  allowMarketPanel(),
   updateMyStore
 );
 
@@ -67,7 +67,7 @@ r.patch(
 r.get(
   "/market/panel/products",
   auth(),
-  allow("market_owner", "admin"),
+  allowMarketPanel(),
   listPanelProducts
 );
 
@@ -75,7 +75,7 @@ r.get(
 r.post(
   "/market/panel/products",
   auth(),
-  allow("market_owner", "admin"),
+  allowMarketPanel(),
   createProduct
 );
 
@@ -83,13 +83,13 @@ r.post(
 r.patch(
   "/market/panel/products/:id",
   auth(),
-  allow("market_owner", "admin"),
+  allowMarketPanel(),
   updateProduct
 );
 r.put(
   "/market/panel/products/:id",
   auth(),
-  allow("market_owner", "admin"),
+  allowMarketPanel(),
   updateProduct
 );
 
@@ -97,7 +97,7 @@ r.put(
 r.delete(
   "/market/panel/products/:id",
   auth(),
-  allow("market_owner", "admin"),
+  allowMarketPanel(),
   deleteProduct
 );
 
@@ -105,24 +105,24 @@ r.delete(
 r.get("/market/panel/org/stores", auth(), listOrgStores);
 
 // Görsel yükleme
-r.post("/market/panel/upload", auth(), allow("market_owner", "admin"), imageUpload.single("file"), uploadPanelImage);
+r.post("/market/panel/upload", auth(), allowMarketPanel(), imageUpload.single("file"), uploadPanelImage);
 
 // Cross-store ürün görseli önerileri
-r.get("/market/panel/product-image-suggestions", auth(), allow("market_owner", "admin"), productImageSuggestions);
+r.get("/market/panel/product-image-suggestions", auth(), allowMarketPanel(), productImageSuggestions);
 
 // Satış / sipariş raporları
-r.get("/market/panel/reports", auth(), allow("market_owner", "admin"), getReports);
+r.get("/market/panel/reports", auth(), allowMarketPanel(), getReports);
 
 // Zincir kataloğu — şube override
-r.get("/market/panel/org-products", auth(), allow("market_owner", "admin"), listMyOrgProducts);
-r.put("/market/panel/org-products/:orgProductId/override", auth(), allow("market_owner", "admin"), upsertBranchOverride);
+r.get("/market/panel/org-products", auth(), allowMarketPanel(), listMyOrgProducts);
+r.put("/market/panel/org-products/:orgProductId/override", auth(), allowMarketPanel(), upsertBranchOverride);
 
 // Kampanyalar (opt-in)
-r.get("/market/panel/campaigns", auth(), allow("market_owner", "admin"), listEligibleCampaigns);
-r.post("/market/panel/campaigns/:campaignId/join", auth(), allow("market_owner", "admin"), joinCampaign);
-r.post("/market/panel/campaigns/:campaignId/leave", auth(), allow("market_owner", "admin"), leaveCampaign);
+r.get("/market/panel/campaigns", auth(), allowMarketPanel(), listEligibleCampaigns);
+r.post("/market/panel/campaigns/:campaignId/join", auth(), allowMarketPanel(), joinCampaign);
+r.post("/market/panel/campaigns/:campaignId/leave", auth(), allowMarketPanel(), leaveCampaign);
 
 import { businessStatement } from "../controllers/promoReports.controller.js";
-r.get("/market/panel/promo-statement", auth(), allow("market_owner", "admin"), businessStatement);
+r.get("/market/panel/promo-statement", auth(), allowMarketPanel(), businessStatement);
 
 export default r;
