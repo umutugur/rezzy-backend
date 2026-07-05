@@ -587,7 +587,7 @@ export const getOrganizationDetail = async (req, res, next) => {
         userId: u._id,
         name: u.name,
         email: u.email,
-        role: rel?.role || "org_staff",
+        role: rel?.role || null,
       };
     });
 

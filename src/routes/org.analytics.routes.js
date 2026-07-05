@@ -12,9 +12,9 @@ import {
 const r = express.Router();
 
 // Org scope
-r.get("/organizations/:organizationId/summary", auth(true), requireOrgAccess(), orgSummary);
-r.get("/organizations/:organizationId/timeseries", auth(true), requireOrgAccess(), orgTimeseries);
-r.get("/organizations/:organizationId/top-restaurants", auth(true), requireOrgAccess(), orgTopRestaurants);
+r.get("/organizations/:organizationId/summary", auth(true), requireOrgAccess(["org_owner", "org_admin", "org_finance"]), orgSummary);
+r.get("/organizations/:organizationId/timeseries", auth(true), requireOrgAccess(["org_owner", "org_admin", "org_finance"]), orgTimeseries);
+r.get("/organizations/:organizationId/top-restaurants", auth(true), requireOrgAccess(["org_owner", "org_admin", "org_finance"]), orgTopRestaurants);
 
 // Restaurant scope (şimdilik auth yeterli; istersen restaurantId -> orgId check’i de ekleriz)
 r.get("/restaurants/:restaurantId/summary", auth(true), restaurantSummary);
