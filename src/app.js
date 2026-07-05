@@ -30,6 +30,7 @@ import addressRoutes from "./routes/address.js";
 import deliveryRoutes from "./routes/delivery.js";
 import bannersRoutes from "./routes/banners.routes.js";
 import adminBannersRoutes from "./routes/admin.banners.routes.js";
+import serviceCategoriesRoutes from "./routes/serviceCategories.routes.js";
 
 // ✅ NEW: Delivery panel routes (desktop delivery orders)
 import deliveryPanelRoutes from "./routes/deliveryOrders.panel.routes.js";
@@ -129,6 +130,9 @@ app.use("/api/delivery", deliveryRoutes);
 //Banner
 app.use("/api", bannersRoutes);
 app.use("/api/admin", adminBannersRoutes);
+
+// Service Categories (market + delivery home chips)
+app.use("/api", serviceCategoriesRoutes);
 
 // Market modülü
 app.use("/api", marketRoutes);
