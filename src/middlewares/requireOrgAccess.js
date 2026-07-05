@@ -4,8 +4,12 @@
  * JWT payload shape (sende):
  * req.user.organizations: [{ organization: "<id>", role: "org_owner" | "org_admin" | "org_staff" | ... }]
  */
-export function requireOrgAccess(allowedRoles = ["org_owner", "org_admin", "org_staff"]) {
+export function requireOrgAccess(allowedRoles = ["org_owner", "org_admin"]) {
   return (req, res, next) => {
+    if (req.user?.role === "admin") {
+      req.orgMembership = { role: "admin" };
+      return next();
+    }
     const orgId = String(req.params.organizationId || "");
     const memberships = Array.isArray(req.user?.organizations) ? req.user.organizations : [];
 

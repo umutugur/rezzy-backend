@@ -5,6 +5,7 @@ import { listOrgProducts, createOrgProduct, updateOrgProduct, deleteOrgProduct, 
 import { orgReports, orgBranchDetail, orgUpdateBranch, orgProductOverrides, orgBulkImport, orgExportCsv, orgBulkUpdate } from "../controllers/marketOrgPanel.controller.js";
 import { listImportTemplates, createImportTemplate, updateImportTemplate, deleteImportTemplate } from "../controllers/marketImportTemplate.controller.js";
 import { createMarketBranchRequest, listMarketBranchRequests } from "../controllers/marketBranchRequest.controller.js";
+import { listStoreManagers, addStoreManager, removeStoreManager } from "../controllers/branchManagers.controller.js";
 
 const r = Router();
 const guard = [auth(), requireOrgAccess(["org_owner", "org_admin"])];
@@ -26,4 +27,9 @@ r.patch("/market/org/:organizationId/import-templates/:id", ...guard, updateImpo
 r.delete("/market/org/:organizationId/import-templates/:id", ...guard, deleteImportTemplate);
 r.post("/market/org/:organizationId/branch-requests", ...guard, createMarketBranchRequest);
 r.get("/market/org/:organizationId/branch-requests", ...guard, listMarketBranchRequests);
+
+r.get("/market/org/:organizationId/branches/:storeId/managers", ...guard, listStoreManagers);
+r.post("/market/org/:organizationId/branches/:storeId/managers", ...guard, addStoreManager);
+r.delete("/market/org/:organizationId/branches/:storeId/managers/:userId", ...guard, removeStoreManager);
+
 export default r;
