@@ -2,6 +2,7 @@
 import Restaurant from "../models/Restaurant.js";
 import UserAddress from "../models/UserAddress.js";
 import { resolveZoneForRestaurant } from "../utils/deliveryZoneResolver.js";
+import { restaurantIdsForCategory } from "../services/deliveryCategoryMatch.js";
 
 const EARTH_RADIUS_M = 6378137;
 const DEFAULT_MAX_RADIUS_M = 20000;
@@ -27,7 +28,7 @@ export const listDeliveryRestaurants = async (req, res, next) => {
   try {
     assertAuth(req);
     const userId = req.user.id;
-    const { addressId, lat, lng } = req.query;
+    const { addressId, lat, lng, categoryKey } = req.query;
 
     let userCoords;
     let addrMeta = null;
@@ -56,7 +57,7 @@ export const listDeliveryRestaurants = async (req, res, next) => {
     const maxRad = maxRadius / EARTH_RADIUS_M;
 
     // 1) Konuma göre aday havuz (hex için de buna ihtiyacın var)
-    const candidates = await Restaurant.find({
+    let candidates = await Restaurant.find({
       isActive: true,
       status: "active",
       "delivery.enabled": true,
@@ -64,6 +65,15 @@ export const listDeliveryRestaurants = async (req, res, next) => {
     })
       .select("name city address phone email logoUrl photos rating priceRange businessType location delivery")
       .lean();
+
+    // 1b) Kategori çipi filtresi (isim/tür + menü taraması, 60sn cache)
+    if (categoryKey) {
+      const region = String(req.headers?.["x-region"] || "").toUpperCase();
+      const idSet = await restaurantIdsForCategory(region, categoryKey);
+      if (idSet) {
+        candidates = candidates.filter((r) => idSet.has(String(r._id)));
+      }
+    }
 
     // 2) Hex zone resolve ile filtrele
     const items = [];
