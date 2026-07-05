@@ -66,12 +66,19 @@ export async function materializeApproval(app) {
 
   // ── RESTAURANT ────────────────────────────────────────────────────────────
   if (app.appType === "restaurant") {
-    // Restaurant.organizationId is required — upsert a minimal org for this owner
-    let org = await Organization.findOne({ name: p.businessName, region: { $exists: false } })
+    // Restaurant.organizationId is required — upsert a minimal org for this owner.
+    // Region başvurunun ülkesinden gelir; eski region'sız org'lar da eşleşsin diye
+    // isim bazlı arama iki şekli de kapsar.
+    const orgRegion = String(app.countryCode || "").trim().toUpperCase() || null;
+    const orgName = p.businessName || "Restaurant";
+    let org = await Organization.findOne({
+      name: orgName,
+      ...(orgRegion ? { $or: [{ region: orgRegion }, { region: { $exists: false } }] } : { region: { $exists: false } }),
+    })
       .select("_id")
       .lean();
     if (!org) {
-      org = await Organization.create({ name: p.businessName || "Restaurant" });
+      org = await Organization.create({ name: orgName, ...(orgRegion ? { region: orgRegion } : {}) });
     }
 
     // Idempotent: find existing restaurant owned by this user
@@ -90,9 +97,12 @@ export async function materializeApproval(app) {
       });
     }
 
-    // Grant panel access: set legacy restaurantId + add location_manager membership.
-    // Idempotent: only adds the membership if it isn't already present.
-    const user = await User.findById(userId).select("role restaurantId restaurantMemberships").exec();
+    // Grant panel access: set legacy restaurantId + add location_manager membership
+    // + org_owner membership on the auto-created org (admin akışıyla tutarlı;
+    // org sahipsiz kalmasın). Idempotent.
+    const user = await User.findById(userId)
+      .select("role restaurantId restaurantMemberships organizations")
+      .exec();
     if (user) {
       user.role = "restaurant";
       user.restaurantId = r._id;
@@ -106,12 +116,26 @@ export async function materializeApproval(app) {
       if (!alreadyMember) {
         user.restaurantMemberships.push({ restaurant: r._id, role: "location_manager" });
       }
+
+      if (!Array.isArray(user.organizations)) {
+        user.organizations = [];
+      }
+      const alreadyOrg = user.organizations.some(
+        (m) => String(m.organization) === String(org._id)
+      );
+      if (!alreadyOrg) {
+        user.organizations.push({ organization: org._id, role: "org_owner" });
+      }
+
       await user.save();
     } else {
       // Fallback if user somehow not found
       await User.updateOne(
         { _id: userId },
-        { $set: { role: "restaurant", restaurantId: r._id } }
+        {
+          $set: { role: "restaurant", restaurantId: r._id },
+          $addToSet: { organizations: { organization: org._id, role: "org_owner" } },
+        }
       );
     }
 

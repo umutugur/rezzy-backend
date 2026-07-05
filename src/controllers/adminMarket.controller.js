@@ -156,6 +156,13 @@ export const createStore = async (req, res, next) => {
       });
       await u.save();
       ownerId = u._id;
+    } else {
+      // Mevcut kullanıcı owner seçildiyse panel erişimi için rolü yükselt
+      // (admin/market_owner ise dokunma — allowMarketPanel rol veya üyelik ister).
+      await User.updateOne(
+        { _id: ownerId, role: { $nin: ["admin", "market_owner"] } },
+        { $set: { role: "market_owner" } }
+      );
     }
     // 2) organization: attach existing or create new chain
     let orgId = organization ? toObjectId(organization) : null;

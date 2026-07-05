@@ -2368,11 +2368,13 @@ export const approveBranchRequestAdmin = async (req, res, next) => {
       isActive: true,
     });
 
-    // ✅ Kullanıcıyı organizasyon & şubeyle ilişkilendir
+    // ✅ Kullanıcıyı organizasyon & şubeyle ilişkilendir.
+    // Legacy restaurantId yalnızca BOŞSA doldurulur — her şube onayında
+    // sahibin varsayılan restoranı sessizce en son şubeye kaymasın.
     await assignMemberships(user._id, {
       restaurantId: restaurantDoc._id,
       restaurantRole: "location_manager",
-      setLegacyRestaurantId: true,
+      setLegacyRestaurantId: !user.restaurantId,
     });
 
     // Branch request'i güncelle
