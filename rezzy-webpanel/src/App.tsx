@@ -36,6 +36,7 @@ import AdminCampaignsPage from "./pages/admin/CampaignsPage";
 import PromoReportPage from "./pages/admin/PromoReportPage";
 import AdminMarketOrdersPage from "./pages/admin/AdminMarketOrders";
 import AdminMarketCollectionsPage from "./pages/admin/AdminMarketCollections";
+import ServiceCategoriesPage from "./pages/admin/ServiceCategoriesPage";
 import AdminMarketsPage from "./pages/admin/Markets";
 import AdminMarketDetailPage from "./pages/admin/MarketDetail";
 import AdminMarketCreatePage from "./pages/admin/MarketCreate";
@@ -687,6 +688,14 @@ export default function App() {
           element={
             <AdminPage>
               <AdminMarketCollectionsPage />
+            </AdminPage>
+          }
+        />
+        <Route
+          path="/admin/service-categories"
+          element={
+            <AdminPage>
+              <ServiceCategoriesPage />
             </AdminPage>
           }
         />

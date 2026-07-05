@@ -10,6 +10,7 @@ export type AdminNavKey =
   | "markets"
   | "market-orders"
   | "market-collections"
+  | "service-categories"
   | "taxi-drivers"
   | "taxi-rides"
   | "taxi-config"
@@ -66,6 +67,7 @@ export const AdminSideNav: React.FC<Props> = ({ active, onNavigate }) => {
         { key: "markets", icon: "🛒", label: t("Marketler") },
         { key: "market-orders", icon: "📦", label: t("Market Siparişleri") },
         { key: "market-collections", icon: "🗂️", label: t("Market Koleksiyonları") },
+        { key: "service-categories", icon: "🏷️", label: t("Kategoriler") },
       ],
     },
     {

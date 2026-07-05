@@ -10,6 +10,7 @@ const ROUTE_MAP: Record<AdminNavKey, string> = {
   markets:              "/admin/market/stores",
   "market-orders":      "/admin/market/orders",
   "market-collections": "/admin/market/collections",
+  "service-categories": "/admin/service-categories",
   "taxi-drivers":       "/admin/taxi/drivers",
   "taxi-rides":         "/admin/taxi/rides",
   "taxi-config":        "/admin/taxi/config",
@@ -33,6 +34,7 @@ function resolveActiveKey(pathname: string): AdminNavKey {
   // Market sub-routes (must come before generic /admin/market check)
   if (pathname.startsWith("/admin/market/orders"))      return "market-orders";
   if (pathname.startsWith("/admin/market/collections")) return "market-collections";
+  if (pathname.startsWith("/admin/service-categories")) return "service-categories";
   if (pathname.startsWith("/admin/market/stores"))      return "markets";
   // Fallback for bare /admin/market
   if (pathname.startsWith("/admin/market"))             return "markets";
