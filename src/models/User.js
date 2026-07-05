@@ -47,6 +47,20 @@ const RestaurantMembershipSchema = new mongoose.Schema({
   },
 }, { _id: false });
 
+// ✅ Multi-location: kullanıcı -> market store membership (şube yöneticisi)
+const MarketMembershipSchema = new mongoose.Schema({
+  store: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "MarketStore",
+    required: true,
+  },
+  role: {
+    type: String,
+    enum: ["location_manager"],
+    required: true,
+  },
+}, { _id: false });
+
 const UserSchema = new mongoose.Schema({
   name:   { type: String, required: true },
   email:  { type: String, unique: true, sparse: true },
@@ -68,6 +82,9 @@ const UserSchema = new mongoose.Schema({
     type: [RestaurantMembershipSchema],
     default: [],
   },
+
+  // ✅ Multi-location (market store) memberships
+  marketMemberships: { type: [MarketMembershipSchema], default: [] },
 
   // Risk & no-show
   noShowCount: { type: Number, default: 0 },

@@ -19,7 +19,7 @@ const GOOGLE_AUDIENCES = [
 
 
 const BASE_USER_SELECT =
-  "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt organizations restaurantMemberships";
+  "_id name email phone role restaurantId avatarUrl notificationPrefs providers noShowCount riskScore preferredRegion preferredLanguage createdAt updatedAt organizations restaurantMemberships marketMemberships";
 
 const USER_POPULATE = [
   { path: "restaurantId", select: "_id name preferredLanguage" },
@@ -27,6 +27,10 @@ const USER_POPULATE = [
   {
     path: "restaurantMemberships.restaurant",
     select: "_id name organizationId status preferredLanguage",
+  },
+  {
+    path: "marketMemberships.store",
+    select: "_id name",
   },
 ];
 
@@ -161,6 +165,13 @@ function signAccessToken(uOrPayload) {
           .filter(Boolean)
       : [];
 
+    // 🔹 marketMemberships → { store: <id>, role }
+    const marketMemberships = Array.isArray(uOrPayload.marketMemberships)
+      ? uOrPayload.marketMemberships
+          .map((m) => ({ store: String(m.store?._id ?? m.store ?? ""), role: String(m.role ?? "") }))
+          .filter((m) => m.store && m.role)
+      : [];
+
     const p = {
       id: uOrPayload._id.toString(),
       role: uOrPayload.role,
@@ -168,6 +179,7 @@ function signAccessToken(uOrPayload) {
       restaurantId,
       organizations,
       restaurantMemberships,
+      marketMemberships,
     };
 
     return jwt.sign(p, ACCESS_SECRET, { expiresIn: ACCESS_EXPIRES });
@@ -287,6 +299,33 @@ if (Array.isArray(u.organizations)) {
     });
   }
 
+  // 🔹 marketMemberships[] → { id, name, role }
+  let marketMemberships = [];
+  if (Array.isArray(u.marketMemberships)) {
+    marketMemberships = u.marketMemberships.map((entry) => {
+      const role = entry?.role ?? null;
+
+      let storeId = null;
+      let storeName = null;
+
+      const store = entry?.store;
+      if (store) {
+        if (store._id) {
+          storeId = store._id.toString();
+          storeName = store.name || null;
+        } else {
+          storeId = store.toString?.() || null;
+        }
+      }
+
+      return {
+        id: storeId,
+        name: storeName,
+        role,
+      };
+    });
+  }
+
   return {
     id: u._id?.toString?.() ?? null,
     name: u.name,
@@ -316,6 +355,7 @@ if (Array.isArray(u.organizations)) {
     // 🔹 Yeni multi-organization alanları
     organizations,
     restaurantMemberships,
+    marketMemberships,
   };
 }
 
@@ -702,7 +742,7 @@ export const refresh = async (req, res, next) => {
 
     // kullanıcı silinmiş olabilir
     const u = await User.findById(payload.id).select(
-      "_id role name restaurantId organizations restaurantMemberships"
+      "_id role name restaurantId organizations restaurantMemberships marketMemberships"
     );
     if (!u)
       return res.status(401).json({ message: "Unauthorized" });
