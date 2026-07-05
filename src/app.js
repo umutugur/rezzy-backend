@@ -31,6 +31,7 @@ import deliveryRoutes from "./routes/delivery.js";
 import bannersRoutes from "./routes/banners.routes.js";
 import adminBannersRoutes from "./routes/admin.banners.routes.js";
 import serviceCategoriesRoutes from "./routes/serviceCategories.routes.js";
+import adminServiceCategoriesRoutes from "./routes/admin.serviceCategories.routes.js";
 
 // ✅ NEW: Delivery panel routes (desktop delivery orders)
 import deliveryPanelRoutes from "./routes/deliveryOrders.panel.routes.js";
@@ -133,6 +134,7 @@ app.use("/api/admin", adminBannersRoutes);
 
 // Service Categories (market + delivery home chips)
 app.use("/api", serviceCategoriesRoutes);
+app.use("/api/admin", adminServiceCategoriesRoutes);
 
 // Market modülü
 app.use("/api", marketRoutes);
