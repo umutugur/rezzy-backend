@@ -5,6 +5,11 @@ export type Role = "customer" | "restaurant" | "admin" | "guest" | "market_owner
 export type OrgMembershipRole = "org_owner" | "org_admin" | "org_finance";
 export type RestaurantMembershipRole = "location_manager" | "staff";
 
+export type MarketMembership = {
+  store: string;
+  role: string;
+};
+
 export type OrgMembership = {
   id: string | null;
   name: string | null;
@@ -41,6 +46,7 @@ export type MeUser = {
   // ✅ Multi-organization
   organizations?: OrgMembership[];
   restaurantMemberships?: RestaurantMembership[];
+  marketMemberships?: MarketMembership[];
 };
 
 const TOKEN_KEY = "rezvix_token";
@@ -182,6 +188,21 @@ function sanitizeUser(u: any): MeUser {
     }
   );
 
+  // marketMemberships[] → { store, role } (şube yöneticisi üyelikleri)
+  const marketMembershipsRaw = Array.isArray(u?.marketMemberships)
+    ? u.marketMemberships
+    : [];
+  const marketMemberships: MarketMembership[] = marketMembershipsRaw
+    .map((entry: any) => {
+      const store =
+        extractObjectId(entry?.store) ||
+        (typeof entry?.store === "string" ? entry.store : null);
+      const role = entry?.role ?? null;
+      if (!store || !role) return null;
+      return { store: String(store), role: String(role) };
+    })
+    .filter(Boolean) as MarketMembership[];
+
   // ✅ region (user seviyesinde zorunlu alan)
   // Öncelik: user.region → populated restaurant.region → org entry region (organizations[0])
   // Not: organizations[] sanitize aşamasında region normalize ediliyor.
@@ -212,6 +233,7 @@ function sanitizeUser(u: any): MeUser {
     avatarUrl: u.avatarUrl ?? null,
     organizations,
     restaurantMemberships,
+    marketMemberships,
   };
 }
 

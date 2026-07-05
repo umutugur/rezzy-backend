@@ -138,9 +138,17 @@ function hasOrgPanelAccess(user: MeUser | null): boolean {
       (o) =>
         o.role === "org_owner" ||
         o.role === "org_admin" ||
-        o.role === "org_finance" ||
-        o.role === "org_staff"
+        o.role === "org_finance"
     )
+  );
+}
+
+// Market panel access — market_owner OR branch manager membership (marketMemberships[])
+function hasMarketPanelAccess(user: MeUser | null): boolean {
+  if (!user) return false;
+  if (user.role === "market_owner") return true;
+  return (
+    Array.isArray(user.marketMemberships) && user.marketMemberships.length > 0
   );
 }
 
@@ -365,7 +373,7 @@ function MarketOrgPrivateRoute() {
 
   if (!hasMarketOrgPanelAccess(user)) {
     if (user.role === "admin") return <Navigate to="/admin" replace />;
-    if (user.role === "market_owner") return <Navigate to="/market-desktop/orders" replace />;
+    if (hasMarketPanelAccess(user)) return <Navigate to="/market-desktop/orders" replace />;
     if (hasOrgPanelAccess(user)) return <Navigate to="/org" replace />;
     if (hasRestaurantPanelAccess(user)) return <Navigate to="/restaurant" replace />;
     return <Navigate to="/login" replace />;
@@ -406,11 +414,12 @@ function LoginPage() {
     const isOrgUser = hasOrgPanelAccess(u);
     const isMarketOrgUser = hasMarketOrgPanelAccess(u);
     const isRestaurantUser = hasRestaurantPanelAccess(u);
+    const isMarketPanelUser = hasMarketPanelAccess(u);
 
     if (u.role === "admin") return "/admin";
     // market_owner with org membership → chain dashboard panel
     if (u.role === "market_owner" && isMarketOrgUser) return "/market-org";
-    if (u.role === "market_owner") return "/market-desktop/orders";
+    if (isMarketPanelUser) return "/market-desktop/orders";
     if (isOrgUser) return "/org";
     if (isRestaurantUser) return "/restaurant";
 
@@ -996,7 +1005,7 @@ function RootRedirect() {
     return <Navigate to="/admin" replace />;
   }
 
-  if (u.role === "market_owner") {
+  if (hasMarketPanelAccess(u)) {
     // chain owner with org membership → chain catalog
     if (hasMarketOrgPanelAccess(u)) return <Navigate to="/market-org" replace />;
     return <Navigate to="/market-desktop/orders" replace />;
