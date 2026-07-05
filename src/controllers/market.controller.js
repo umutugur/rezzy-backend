@@ -47,6 +47,7 @@ export const listNearbyStores = async (req, res, next) => {
       lng,
       radius = 10,
       category,
+      categoryKey,
       pickup,
       page = 1,
       limit = 20,
@@ -56,6 +57,31 @@ export const listNearbyStores = async (req, res, next) => {
 
     if (category) filter.category = category;
     if (String(pickup) === "1") filter.pickupEnabled = { $ne: false };
+
+    if (categoryKey) {
+      const ServiceCategory = (await import("../models/ServiceCategory.js")).default;
+      const chip = await ServiceCategory.findOne({
+        surface: "market",
+        key: String(categoryKey).toLowerCase(),
+        isActive: true,
+      }).lean();
+      if (chip?.storeCategory) {
+        filter.category = chip.storeCategory;
+      } else if (chip?.coreCategoryId) {
+        const MarketOrgProduct = (await import("../models/MarketOrgProduct.js")).default;
+        const [storeIds, orgIds] = await Promise.all([
+          MarketProduct.distinct("store", { category: chip.coreCategoryId, isActive: true }),
+          MarketOrgProduct.distinct("organizationId", { category: chip.coreCategoryId, isActive: true }),
+        ]);
+        // Chain org products: an org-level product in the category matches ALL of that org's stores (v1 rule).
+        if (orgIds.length) {
+          filter.$or = [{ _id: { $in: storeIds } }, { organization: { $in: orgIds } }];
+        } else {
+          filter._id = { $in: storeIds };
+        }
+      }
+      // chip yoksa ya da filtresizse: ekstra filtre yok
+    }
 
     let stores;
     let total;
