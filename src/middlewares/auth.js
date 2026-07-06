@@ -31,6 +31,7 @@ export function auth(required = true) {
 
       const orgs = Array.isArray(payload.organizations) ? payload.organizations : [];
       const rms = Array.isArray(payload.restaurantMemberships) ? payload.restaurantMemberships : [];
+      const mms = Array.isArray(payload.marketMemberships) ? payload.marketMemberships : [];
 
       req.user = {
         id: toIdString(payload.id || payload._id),
@@ -48,6 +49,11 @@ export function auth(required = true) {
           restaurant: toIdString(m?.restaurantId || m?.restaurant || m?.id),
           // restaurantId gibi legacy alanlar varsa da normalize et
           restaurantId: toIdString(m?.restaurantId),
+        })),
+
+        marketMemberships: mms.map((m) => ({
+          ...m,
+          store: toIdString(m?.store || m?.id),
         })),
       };
 
