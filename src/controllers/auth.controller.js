@@ -320,6 +320,7 @@ if (Array.isArray(u.organizations)) {
 
       return {
         id: storeId,
+        store: storeId, // webpanel/mobil { store, role } bekler — eşleşme alanı
         name: storeName,
         role,
       };

@@ -194,9 +194,12 @@ function sanitizeUser(u: any): MeUser {
     : [];
   const marketMemberships: MarketMembership[] = marketMembershipsRaw
     .map((entry: any) => {
+      // Backend login yanıtı { id, name, role } şeklinde de dönebilir (populate edilmiş
+      // görünüm) — store yoksa id'ye düş.
       const store =
         extractObjectId(entry?.store) ||
-        (typeof entry?.store === "string" ? entry.store : null);
+        (typeof entry?.store === "string" ? entry.store : null) ||
+        (typeof entry?.id === "string" ? entry.id : null);
       const role = entry?.role ?? null;
       if (!store || !role) return null;
       return { store: String(store), role: String(role) };
