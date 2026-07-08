@@ -458,6 +458,11 @@ export const createOrder = async (req, res, next) => {
       paymentMethod = "cash",
     } = req.body || {};
 
+    const OOS = ["substitute", "remove", "call"];
+    const outOfStockPreference = OOS.includes(req.body.outOfStockPreference)
+      ? req.body.outOfStockPreference
+      : "call";
+
     const userId = req.user?.id;
     if (!userId) return next({ status: 401, message: "Unauthorized" });
 
@@ -697,6 +702,7 @@ export const createOrder = async (req, res, next) => {
       commission,
       total,
       note,
+      outOfStockPreference,
       paymentMethod: safePaymentMethod,
       paymentStatus: safePaymentMethod === "online" ? "pending" : "pending",
     });
