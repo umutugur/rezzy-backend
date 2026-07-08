@@ -8,12 +8,14 @@ import {
   AdminCoreCategory,
   ServiceSurface,
   ServiceCategoryInput,
+  CoreCategoryInput,
   adminListServiceCategories,
   adminCreateServiceCategory,
   adminUpdateServiceCategory,
   adminDeleteServiceCategory,
   adminListCoreCategories,
   adminCreateCoreCategory,
+  adminUpdateCoreCategory,
 } from "../../api/serviceCategories";
 import { uploadImage } from "../../api/campaigns";
 
@@ -172,6 +174,49 @@ export default function ServiceCategoriesPage() {
   // inline core-category creator
   const [newCoreTitle, setNewCoreTitle] = React.useState("");
   const [creatingCore, setCreatingCore] = React.useState(false);
+
+  // ── Core-category (ürün kategorisi) parent yönetimi ──
+  const [coreManagerOpen, setCoreManagerOpen] = React.useState(false);
+  const [coreNewTitle, setCoreNewTitle] = React.useState("");
+  const [coreNewParentId, setCoreNewParentId] = React.useState<string>("");
+  const [coreManagerError, setCoreManagerError] = React.useState<string | null>(null);
+
+  const topLevelCoreCategories = React.useMemo(
+    () => coreCategories.filter((c) => !c.parentId),
+    [coreCategories]
+  );
+
+  const updateCoreParentMut = useMutation({
+    mutationFn: async ({ id, parentId }: { id: string; parentId: string | null }) =>
+      adminUpdateCoreCategory(id, { parentId } as Partial<CoreCategoryInput>),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["admin-core-categories"] });
+      setCoreManagerError(null);
+    },
+    onError: (e: any) => {
+      setCoreManagerError(e?.response?.data?.message || e?.message || t("Güncellenemedi"));
+    },
+  });
+
+  const createCoreWithParentMut = useMutation({
+    mutationFn: async () =>
+      adminCreateCoreCategory({
+        i18n: { tr: { title: coreNewTitle.trim() } },
+        businessTypes: ["market"],
+        parentId: coreNewParentId || null,
+      }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["admin-core-categories"] });
+      setCoreNewTitle("");
+      setCoreNewParentId("");
+      setCoreManagerError(null);
+    },
+    onError: (e: any) => {
+      setCoreManagerError(
+        e?.response?.data?.message || e?.message || t("Ürün kategorisi oluşturulamadı")
+      );
+    },
+  });
 
   const openCreate = () => {
     setEditingId(null);
@@ -342,6 +387,17 @@ export default function ServiceCategoriesPage() {
             >
               ↺ {t("Yenile")}
             </button>
+            {surface === "market" && (
+              <button
+                style={ghostBtn}
+                onClick={() => {
+                  setCoreManagerError(null);
+                  setCoreManagerOpen(true);
+                }}
+              >
+                🗂️ {t("Ürün Kategorilerini Yönet")}
+              </button>
+            )}
             <button style={primaryBtn} onClick={openCreate}>
               + {t("Yeni Kategori")}
             </button>
@@ -788,6 +844,7 @@ export default function ServiceCategoriesPage() {
                     <option value="">{t("Seçin")}</option>
                     {coreCategories.map((cc) => (
                       <option key={cc._id} value={cc._id}>
+                        {cc.parentId ? "  ↳ " : ""}
                         {cc.i18n?.tr?.title ?? cc.key}
                         {!cc.isActive ? ` (${t("pasif")})` : ""}
                       </option>
@@ -890,6 +947,153 @@ export default function ServiceCategoriesPage() {
                 : editingId
                 ? t("Güncelle")
                 : t("Oluştur")}
+            </button>
+          </div>
+        </Drawer>
+      )}
+
+      {/* ── Ürün Kategorileri (CoreCategory) — 2 seviyeli üst/alt yönetimi ── */}
+      {coreManagerOpen && (
+        <Drawer
+          title={t("Ürün Kategorilerini Yönet")}
+          onClose={() => setCoreManagerOpen(false)}
+        >
+          <Section title={t("Yeni Ürün Kategorisi")}>
+            <FormField label={t("Ad (TR)")}>
+              <input
+                className={inputCls}
+                value={coreNewTitle}
+                onChange={(e) => setCoreNewTitle(e.target.value)}
+                placeholder={t("ör. Kahvaltılık")}
+              />
+            </FormField>
+            <FormField label={t("Üst Kategori")} hint={t("Boş bırakılırsa ana kategori olarak oluşturulur")}>
+              <select
+                className={inputCls}
+                value={coreNewParentId}
+                onChange={(e) => setCoreNewParentId(e.target.value)}
+              >
+                <option value="">{t("— (Ana kategori)")}</option>
+                {topLevelCoreCategories.map((c) => (
+                  <option key={c._id} value={c._id}>
+                    {c.i18n?.tr?.title ?? c.key}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <button
+              type="button"
+              style={{
+                ...primaryBtn,
+                opacity: createCoreWithParentMut.isPending || !coreNewTitle.trim() ? 0.6 : 1,
+                cursor: createCoreWithParentMut.isPending ? "not-allowed" : "pointer",
+              }}
+              disabled={createCoreWithParentMut.isPending || !coreNewTitle.trim()}
+              onClick={() => createCoreWithParentMut.mutate()}
+            >
+              {createCoreWithParentMut.isPending ? t("Ekleniyor…") : `+ ${t("Ekle")}`}
+            </button>
+          </Section>
+
+          <Section title={t("Mevcut Kategoriler")}>
+            {coreManagerError && (
+              <div style={{ color: "var(--rezvix-danger)", fontSize: 12.5, marginBottom: 10 }}>
+                {coreManagerError}
+              </div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {topLevelCoreCategories.map((parent) => {
+                const kids = coreCategories.filter((c) => c.parentId === parent._id);
+                return (
+                  <div
+                    key={parent._id}
+                    style={{
+                      border: "1px solid var(--rezvix-border-subtle)",
+                      borderRadius: 10,
+                      padding: "10px 14px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                      }}
+                    >
+                      <span style={{ fontWeight: 700, color: "var(--rezvix-text-main)", fontSize: 13.5 }}>
+                        {parent.i18n?.tr?.title ?? parent.key}
+                        {!parent.isActive ? ` (${t("pasif")})` : ""}
+                      </span>
+                      <span style={{ color: "var(--rezvix-text-soft)", fontSize: 11.5 }}>
+                        {t("Ana kategori")}
+                      </span>
+                    </div>
+
+                    {kids.length > 0 && (
+                      <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                        {kids.map((kid) => (
+                          <div
+                            key={kid._id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 8,
+                              paddingLeft: 14,
+                              borderLeft: "2px solid var(--rezvix-border-subtle)",
+                            }}
+                          >
+                            <span style={{ color: "var(--rezvix-text-main)", fontSize: 13 }}>
+                              ↳ {kid.i18n?.tr?.title ?? kid.key}
+                              {!kid.isActive ? ` (${t("pasif")})` : ""}
+                            </span>
+                            <select
+                              className={inputCls}
+                              style={{ width: 200, padding: "5px 10px", fontSize: 12.5 }}
+                              value={kid.parentId ?? ""}
+                              disabled={updateCoreParentMut.isPending}
+                              onChange={(e) => {
+                                const newParentId = e.target.value || null;
+                                updateCoreParentMut.mutate({ id: kid._id, parentId: newParentId });
+                              }}
+                            >
+                              <option value="">{t("— (Ana kategori yap)")}</option>
+                              {topLevelCoreCategories
+                                .filter((p) => p._id !== kid._id)
+                                .map((p) => (
+                                  <option key={p._id} value={p._id}>
+                                    {p.i18n?.tr?.title ?? p.key}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {topLevelCoreCategories.length === 0 && (
+                <div style={{ color: "var(--rezvix-text-soft)", fontSize: 13, textAlign: "center", padding: "20px 0" }}>
+                  {t("Henüz ürün kategorisi yok")}
+                </div>
+              )}
+            </div>
+          </Section>
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              paddingTop: 12,
+              borderTop: "1px solid var(--rezvix-border-subtle)",
+              marginTop: 8,
+            }}
+          >
+            <button style={ghostBtn} onClick={() => setCoreManagerOpen(false)}>
+              {t("Kapat")}
             </button>
           </div>
         </Drawer>

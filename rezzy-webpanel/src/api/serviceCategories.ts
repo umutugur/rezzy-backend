@@ -56,6 +56,7 @@ export interface AdminCoreCategory {
   businessTypes: string[];
   order: number;
   isActive: boolean;
+  parentId?: string | null;
 }
 
 export interface CoreCategoryInput {
@@ -69,6 +70,7 @@ export interface CoreCategoryInput {
   businessTypes: string[];
   order?: number;
   isActive?: boolean;
+  parentId?: string | null;
 }
 
 export async function adminListServiceCategories(
