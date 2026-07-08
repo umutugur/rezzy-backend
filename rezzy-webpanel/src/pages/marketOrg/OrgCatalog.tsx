@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { authStore } from "../../store/auth";
 import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
-import { DataTable, type Column } from "../../desktop/components/admin/DataTable";
+import { DataTable, DataTableRow, type Column } from "../../desktop/components/admin/DataTable";
 import {
   listOrgProducts,
   createOrgProduct,
@@ -11,6 +11,7 @@ import {
   getProductOverrides,
   bulkUpdateProducts,
   exportProductsCsv,
+  orgBulkPrice,
   type OrgProduct,
   type ProductOverrideRow,
 } from "../../api/marketOrgCatalog";
@@ -18,6 +19,7 @@ import { getMarketCategories, uploadMarketImage, type MarketCoreCategory } from 
 import { useI18n } from "../../i18n";
 import { showToast } from "../../ui/Toast";
 import CsvImportWizard from "./CsvImportWizard";
+import BulkPriceWizard from "./BulkPriceWizard";
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
@@ -1469,6 +1471,7 @@ export default function OrgCatalog() {
   const [exportLoading, setExportLoading] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [bulkPriceOpen, setBulkPriceOpen] = useState(false);
+  const [excelWizardOpen, setExcelWizardOpen] = useState(false);
 
   // Categories
   const { data: catData } = useQuery({
@@ -1499,6 +1502,82 @@ export default function OrgCatalog() {
 
   const products = data?.items ?? [];
   const total = data?.total ?? 0;
+
+  // ── Category grouping (main category → subcategory), collapsible ──────────
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (id: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const isFiltering = search.trim().length > 0 || !!categoryFilter;
+
+  const catIdOf = (p: OrgProduct): string => {
+    const c = p.category;
+    return c && typeof c === "object" ? c._id ?? "" : c ?? "";
+  };
+
+  const groupedSections = React.useMemo(() => {
+    if (isFiltering) return null;
+    if (categories.length === 0) return null;
+
+    const catById = new Map<string, MarketCoreCategory>();
+    for (const cat of categories) catById.set(cat._id, cat);
+
+    const byCat = new Map<string, OrgProduct[]>();
+    for (const p of products) {
+      const cid = catIdOf(p);
+      if (!byCat.has(cid)) byCat.set(cid, []);
+      byCat.get(cid)!.push(p);
+    }
+
+    const parents = categories.filter((c) => !c.parentId);
+    type Section = { id: string; title: string; items: OrgProduct[]; children: Section[] };
+    const sections: Section[] = [];
+    const usedCatIds = new Set<string>();
+
+    for (const parent of parents) {
+      const kids = categories.filter((c) => c.parentId === parent._id);
+      const parentItems = byCat.get(parent._id) ?? [];
+      const childSections: Section[] = [];
+      for (const kid of kids) {
+        usedCatIds.add(kid._id);
+        const kidItems = byCat.get(kid._id) ?? [];
+        if (kidItems.length > 0) {
+          childSections.push({
+            id: kid._id,
+            title: kid.i18n?.tr?.title ?? kid.key,
+            items: kidItems,
+            children: [],
+          });
+        }
+      }
+      usedCatIds.add(parent._id);
+      const totalCount = parentItems.length + childSections.reduce((s, c) => s + c.items.length, 0);
+      if (totalCount > 0) {
+        sections.push({
+          id: parent._id,
+          title: parent.i18n?.tr?.title ?? parent.key,
+          items: parentItems,
+          children: childSections,
+        });
+      }
+    }
+
+    const orphanItems: OrgProduct[] = [];
+    for (const [cid, prods] of byCat.entries()) {
+      if (!cid || !catById.has(cid) || !usedCatIds.has(cid)) orphanItems.push(...prods);
+    }
+    if (orphanItems.length > 0) {
+      sections.push({ id: "__other", title: t("Diğer"), items: orphanItems, children: [] });
+    }
+
+    return sections;
+  }, [isFiltering, categories, products]);
 
   // Delete mutation
   const { mutate: del } = useMutation({
@@ -2065,6 +2144,33 @@ export default function OrgCatalog() {
           {t("CSV İçe Aktar")}
         </button>
 
+        {/* Excel Bulk Price Update */}
+        {orgId && (
+          <button
+            className="toolbar-btn"
+            onClick={() => setExcelWizardOpen(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "7px 14px",
+              borderRadius: 8,
+              border: "1px solid var(--rezvix-border-strong)",
+              background: "var(--rezvix-bg-elevated)",
+              color: "var(--rezvix-text-main)",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              transition: "opacity .12s ease, transform .1s ease",
+              whiteSpace: "nowrap",
+            }}
+            title={t("Excel ile toplu fiyat güncelle")}
+          >
+            <span style={{ fontSize: 14 }}>📊</span>
+            {t("Fiyat Güncelle (Excel)")}
+          </button>
+        )}
+
         {/* Spacer */}
         <div style={{ flex: 1 }} />
 
@@ -2284,6 +2390,89 @@ export default function OrgCatalog() {
           total,
           onPageChange: setPage,
         }}
+        renderBody={
+          groupedSections
+            ? () => {
+                const groupHeaderRow = (id: string, title: string, count: number, depth: 0 | 1) => {
+                  const collapsed = collapsedGroups.has(id);
+                  return (
+                    <tr
+                      key={`group-${id}`}
+                      onClick={() => toggleGroup(id)}
+                      style={{
+                        cursor: "pointer",
+                        background:
+                          depth === 0 ? "var(--rezvix-bg-soft)" : "var(--rezvix-bg-elevated)",
+                        borderBottom: "1px solid var(--rezvix-border-subtle)",
+                      }}
+                    >
+                      <td
+                        colSpan={columns.length}
+                        style={{
+                          padding: depth === 0 ? "10px 14px" : "8px 14px 8px 38px",
+                          fontWeight: 700,
+                          fontSize: depth === 0 ? 13 : 12.5,
+                          color: depth === 0 ? "var(--rezvix-text-main)" : "var(--rezvix-primary)",
+                        }}
+                      >
+                        <span style={{ marginRight: 8, display: "inline-block", width: 10 }}>
+                          {collapsed ? "▸" : "▼"}
+                        </span>
+                        {depth === 0 ? title.toUpperCase() : title}
+                        <span
+                          style={{
+                            marginLeft: 8,
+                            color: "var(--rezvix-text-soft)",
+                            fontWeight: 600,
+                            fontSize: 11.5,
+                          }}
+                        >
+                          ({count})
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                };
+
+                return groupedSections.map((section) => {
+                  const parentCollapsed = collapsedGroups.has(section.id);
+                  const totalCount =
+                    section.items.length + section.children.reduce((s, c) => s + c.items.length, 0);
+                  return (
+                    <React.Fragment key={section.id}>
+                      {groupHeaderRow(section.id, section.title, totalCount, 0)}
+                      {!parentCollapsed &&
+                        section.items.map((p) => (
+                          <DataTableRow
+                            key={p._id}
+                            row={p}
+                            columns={columns}
+                            rowKey={(r) => r._id}
+                            isLast={false}
+                          />
+                        ))}
+                      {!parentCollapsed &&
+                        section.children.map((child) => (
+                          <React.Fragment key={child.id}>
+                            {groupHeaderRow(child.id, child.title, child.items.length, 1)}
+                            {!collapsedGroups.has(child.id) &&
+                              child.items.map((p) => (
+                                <DataTableRow
+                                  key={p._id}
+                                  row={p}
+                                  columns={columns}
+                                  rowKey={(r) => r._id}
+                                  isLast={false}
+                                />
+                              ))}
+                          </React.Fragment>
+                        ))}
+                    </React.Fragment>
+                  );
+                });
+              }
+            : undefined
+        }
       />
 
       <ProductModal
@@ -2322,6 +2511,17 @@ export default function OrgCatalog() {
         }}
         t={t}
       />
+
+      {excelWizardOpen && orgId && (
+        <BulkPriceWizard
+          onClose={() => setExcelWizardOpen(false)}
+          onDone={() => {
+            setExcelWizardOpen(false);
+            qc.invalidateQueries({ queryKey: ["org-products", orgId] });
+          }}
+          submit={(rows, dryRun) => orgBulkPrice(orgId, rows, dryRun)}
+        />
+      )}
     </div>
   );
 }

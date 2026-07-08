@@ -30,9 +30,74 @@ export interface DataTableProps<T> {
     total: number;
     onPageChange: (p: number) => void;
   };
+  /**
+   * When provided, replaces the default `rows.map(...)` body rendering with a
+   * custom set of `<tr>` elements (e.g. grouped rows with section headers).
+   * The header, search bar, loading/empty states, and pagination footer are
+   * unaffected — only the data-row rendering is overridden.
+   */
+  renderBody?: (rows: T[]) => React.ReactNode;
 }
 
 // ── Internal sub-components ──────────────────────────────────────────────────
+
+/**
+ * Renders a single data row exactly like DataTable's default body rendering.
+ * Exported so callers can build custom bodies (e.g. grouped rows) via
+ * `renderBody` while keeping identical row styling/behavior.
+ */
+export function DataTableRow<T>({
+  row,
+  columns,
+  rowKey,
+  onRowClick,
+  isLast,
+}: {
+  row: T;
+  columns: Column<T>[];
+  rowKey: (row: T) => string;
+  onRowClick?: (row: T) => void;
+  isLast?: boolean;
+}): JSX.Element {
+  return (
+    <tr
+      key={rowKey(row)}
+      onClick={onRowClick ? () => onRowClick(row) : undefined}
+      style={{
+        cursor: onRowClick ? "pointer" : "default",
+        borderBottom: isLast ? "none" : "1px solid var(--rezvix-border-subtle)",
+        transition: "background 0.13s ease",
+      }}
+      onMouseEnter={(e) => {
+        if (onRowClick) {
+          (e.currentTarget as HTMLTableRowElement).style.background =
+            "var(--rezvix-bg-soft)";
+        }
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLTableRowElement).style.background = "";
+      }}
+    >
+      {columns.map((col) => (
+        <td
+          key={col.key}
+          style={{
+            padding: "11px 14px",
+            textAlign: col.align ?? "left",
+            width: col.width,
+            verticalAlign: "middle",
+            fontSize: 13.5,
+            color: "var(--rezvix-text-main)",
+          }}
+        >
+          {col.render
+            ? col.render(row)
+            : String((row as Record<string, unknown>)[col.key] ?? "")}
+        </td>
+      ))}
+    </tr>
+  );
+}
 
 function SkeletonRow({ colCount }: { colCount: number }) {
   return (
@@ -68,6 +133,7 @@ export function DataTable<T,>(props: DataTableProps<T>): JSX.Element {
     onRowClick,
     search,
     pagination,
+    renderBody,
   } = props;
 
   const { t } = useI18n();
@@ -273,48 +339,19 @@ export function DataTable<T,>(props: DataTableProps<T>): JSX.Element {
                       </div>
                     </td>
                   </tr>
+                ) : renderBody ? (
+                  renderBody(rows)
                 ) : (
                   // Data rows
                   rows.map((row, rowIdx) => (
-                    <tr
+                    <DataTableRow
                       key={rowKey(row)}
-                      onClick={onRowClick ? () => onRowClick(row) : undefined}
-                      style={{
-                        cursor: onRowClick ? "pointer" : "default",
-                        borderBottom:
-                          rowIdx < rows.length - 1
-                            ? "1px solid var(--rezvix-border-subtle)"
-                            : "none",
-                        transition: "background 0.13s ease",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (onRowClick) {
-                          (e.currentTarget as HTMLTableRowElement).style.background =
-                            "var(--rezvix-bg-soft)";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLTableRowElement).style.background = "";
-                      }}
-                    >
-                      {columns.map((col) => (
-                        <td
-                          key={col.key}
-                          style={{
-                            padding: "11px 14px",
-                            textAlign: col.align ?? "left",
-                            width: col.width,
-                            verticalAlign: "middle",
-                            fontSize: 13.5,
-                            color: "var(--rezvix-text-main)",
-                          }}
-                        >
-                          {col.render
-                            ? col.render(row)
-                            : String((row as Record<string, unknown>)[col.key] ?? "")}
-                        </td>
-                      ))}
-                    </tr>
+                      row={row}
+                      columns={columns}
+                      rowKey={rowKey}
+                      onRowClick={onRowClick}
+                      isLast={rowIdx === rows.length - 1}
+                    />
                   ))
                 )}
               </tbody>
