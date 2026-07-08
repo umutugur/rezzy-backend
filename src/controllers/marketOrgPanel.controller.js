@@ -5,6 +5,7 @@ import MarketProduct from "../models/MarketProduct.js";
 import MarketBranchOverride from "../models/MarketBranchOverride.js";
 import MarketOrgProduct from "../models/MarketOrgProduct.js";
 import CoreCategory from "../models/CoreCategory.js";
+import { parsePriceRows } from "../services/bulkPrice.js";
 
 const oid = (v) => (mongoose.Types.ObjectId.isValid(String(v || "").trim()) ? new mongoose.Types.ObjectId(String(v).trim()) : null);
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -275,5 +276,29 @@ export const orgUpdateBranch = async (req, res, next) => {
     const store = await MarketStore.findOneAndUpdate({ _id: sid, organization: orgId }, { $set: set }, { new: true }).lean();
     if (!store) return next({ status: 404, message: "Şube bu zincirde bulunamadı" });
     res.json({ store });
+  } catch (e) { next(e); }
+};
+
+// POST /market/org/:organizationId/products/bulk-price  body { rows:[{barcode,price}], dryRun?:bool }
+export const orgBulkPrice = async (req, res, next) => {
+  try {
+    const orgId = oid(req.params.organizationId);
+    if (!orgId) return next({ status: 400, message: "Geçersiz organizasyon id" });
+    const rawRows = Array.isArray(req.body.rows) ? req.body.rows.slice(0, 5000) : [];
+    const dryRun = req.body.dryRun === true;
+    const { valid, invalid } = parsePriceRows(rawRows);
+
+    let matched = 0, updated = 0;
+    const notFound = [];
+    for (const row of valid) {
+      const existing = await MarketOrgProduct.findOne({ organizationId: orgId, barcode: row.barcode }).select("_id").lean();
+      if (!existing) { notFound.push(row.barcode); continue; }
+      matched++;
+      if (!dryRun) {
+        await MarketOrgProduct.updateOne({ _id: existing._id }, { $set: { defaultPrice: row.price } });
+        updated++;
+      }
+    }
+    res.json({ dryRun, total: rawRows.length, matched, updated, notFound, invalid });
   } catch (e) { next(e); }
 };
