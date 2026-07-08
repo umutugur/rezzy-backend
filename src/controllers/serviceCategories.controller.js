@@ -19,6 +19,7 @@ export async function listServiceCategories(req, res, next) {
 // ── Admin CRUD ────────────────────────────────────────────────────────────────
 import CoreCategory from "../models/CoreCategory.js";
 import { slugifyKey } from "../services/serviceCategories.helpers.js";
+import { validateParent } from "../services/categoryTree.js";
 
 function validateBody(b) {
   if (!b?.surface || !["market", "delivery"].includes(b.surface)) return "surface market|delivery olmalı";
@@ -92,7 +93,7 @@ export async function adminDeleteServiceCategory(req, res, next) {
 // ── Minimal CoreCategory admin (none existed) ────────────────────────────────
 export async function adminListCoreCategories(req, res, next) {
   try {
-    const items = await CoreCategory.find({}).select("key i18n businessTypes order isActive").sort({ order: 1, key: 1 }).lean();
+    const items = await CoreCategory.find({}).select("key i18n businessTypes order isActive parentId").sort({ order: 1, key: 1 }).lean();
     res.json({ items });
   } catch (e) { next(e); }
 }
@@ -105,9 +106,20 @@ export async function adminCreateCoreCategory(req, res, next) {
     const key = slugifyKey(b.key || trTitle);
     const exists = await CoreCategory.exists({ key });
     if (exists) return res.status(409).json({ message: "Bu key zaten var" });
+
+    let parentId = null;
+    if (b.parentId) {
+      const parent = await CoreCategory.findById(b.parentId).select("_id parentId").lean();
+      if (!parent) return res.status(400).json({ message: "Üst kategori bulunamadı" });
+      const err = validateParent({ _id: null }, parent);
+      if (err) return res.status(400).json({ message: err });
+      parentId = parent._id;
+    }
+
     const mk = (t) => ({ title: t, description: "" });
     const item = await CoreCategory.create({
       key,
+      parentId,
       businessTypes: Array.isArray(b.businessTypes) && b.businessTypes.length ? b.businessTypes : ["market"],
       i18n: {
         tr: mk(trTitle),
@@ -131,6 +143,19 @@ export async function adminUpdateCoreCategory(req, res, next) {
     if (b.order !== undefined) doc.order = Number(b.order) || 0;
     if (b.isActive !== undefined) doc.isActive = !!b.isActive;
     if (Array.isArray(b.businessTypes) && b.businessTypes.length) doc.businessTypes = b.businessTypes;
+
+    if ("parentId" in b) {
+      if (!b.parentId) {
+        doc.parentId = null;
+      } else {
+        const parent = await CoreCategory.findById(b.parentId).select("_id parentId").lean();
+        if (!parent) return res.status(400).json({ message: "Üst kategori bulunamadı" });
+        const err = validateParent({ _id: req.params.id }, parent);
+        if (err) return res.status(400).json({ message: err });
+        doc.parentId = parent._id;
+      }
+    }
+
     await doc.save();
     res.json({ item: doc });
   } catch (e) { next(e); }
