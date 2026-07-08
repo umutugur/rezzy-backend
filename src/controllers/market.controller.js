@@ -13,6 +13,7 @@ import { haversineMeters } from "../utils/haversine.js";
 import { computeUnitPrice } from "../utils/marketUnitPrice.js";
 import { effectivePrice, discountPercent, lowest30 } from "../utils/marketPricing.js";
 import { resolveStoreCatalog, resolveOrgProductForOrder } from "../services/marketCatalogResolve.service.js";
+import { expandCategoryFilter } from "../services/categoryTree.js";
 import Organization from "../models/Organization.js";
 import { resolveStoreImages } from "../utils/storeImages.js";
 import Campaign from "../models/Campaign.js";
@@ -288,14 +289,15 @@ export const listStoreProducts = async (req, res, next) => {
     // Fetch full resolved catalog (org items + local products)
     let all = await resolveStoreCatalog(id);
 
-    // Category filter (match ObjectId string or populated category._id)
+    // Category filter (match ObjectId string or populated category._id).
+    // Ana kategori seçilirse altlarını da kapsar (expandCategoryFilter).
     if (category && mongoose.Types.ObjectId.isValid(category)) {
-      const catStr = String(category);
+      const catIds = await expandCategoryFilter(category);
       all = all.filter((p) => {
         const cat = p.category;
         if (!cat) return false;
-        if (typeof cat === "object") return String(cat._id) === catStr;
-        return String(cat) === catStr;
+        const catStr = typeof cat === "object" ? String(cat._id) : String(cat);
+        return catIds.includes(catStr);
       });
     }
 
