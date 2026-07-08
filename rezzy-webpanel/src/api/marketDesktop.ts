@@ -33,6 +33,8 @@ export interface MarketOrderItem {
   lineTotal: number;
 }
 
+export type OutOfStockPreference = "substitute" | "remove" | "call";
+
 export interface MarketOrder {
   _id: string;
   status: MarketOrderStatus;
@@ -44,6 +46,7 @@ export interface MarketOrder {
   deliveryFee: number;
   total: number;
   note?: string;
+  outOfStockPreference?: OutOfStockPreference;
   paymentMethod: string;
   createdAt: string;
   cancelReason?: string | null;

@@ -6,6 +6,7 @@ import {
   marketUpdateOrderStatus,
   type MarketOrder,
   type MarketOrderStatus,
+  type OutOfStockPreference,
 } from "../../api/marketDesktop";
 import { useI18n } from "../../i18n";
 import { showToast } from "../../ui/Toast";
@@ -49,6 +50,18 @@ const STATUS_LABEL: Record<MarketOrderStatus, string> = {
   ready:     "Hazır",
   delivered: "Teslim Edildi",
   cancelled: "İptal",
+};
+
+const OUT_OF_STOCK_LABEL: Record<OutOfStockPreference, string> = {
+  substitute: "Benzer ürün gönder",
+  remove:     "O ürünü gönderme",
+  call:       "Beni arayın",
+};
+
+const OUT_OF_STOCK_COLOR: Record<OutOfStockPreference, { bg: string; text: string; border: string }> = {
+  substitute: { bg: "rgba(107,155,195,0.14)", text: "#9cc0de", border: "rgba(107,155,195,0.32)" },
+  remove:     { bg: "rgba(212,91,91,0.14)",   text: "#e89a9a", border: "rgba(212,91,91,0.32)" },
+  call:       { bg: "rgba(217,154,61,0.14)",  text: "#e8b56a", border: "rgba(217,154,61,0.32)" },
 };
 
 const CANCEL_REASONS = [
@@ -288,6 +301,26 @@ export function MarketOrdersPage() {
                     {order.note && (
                       <div style={{ color: "var(--rezvix-text-muted)", fontSize: 12, marginTop: 4, fontStyle: "italic" }}>
                         📝 {order.note}
+                      </div>
+                    )}
+                    {order.outOfStockPreference && (
+                      <div style={{ marginTop: 6 }}>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            padding: "3px 10px",
+                            borderRadius: 999,
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            background: OUT_OF_STOCK_COLOR[order.outOfStockPreference].bg,
+                            color: OUT_OF_STOCK_COLOR[order.outOfStockPreference].text,
+                            border: `1px solid ${OUT_OF_STOCK_COLOR[order.outOfStockPreference].border}`,
+                          }}
+                        >
+                          ⚠️ {t("Stokta yoksa")}: {t(OUT_OF_STOCK_LABEL[order.outOfStockPreference])}
+                        </span>
                       </div>
                     )}
                     {order.status === "cancelled" && order.cancelReason && (
