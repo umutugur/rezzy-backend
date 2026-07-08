@@ -652,11 +652,11 @@ function classify(csvCategoryRaw, titleRaw) {
 
   // ── EV YASAM & BAKIM → temizlik vs ev_gerecler ──
   if (csvCat === "EV YASAM & BAKIM") {
-    if (has(title, "DETERJAN", "YUMUSATICI", "ARIEL", "BINGO", "OMO", "PERSIL", "PERWOLL")) {
-      return { main: MAIN_KEYS.TEMIZLIK, sub: "camasir_deterjani" };
-    }
     if (has(title, "BULASIK", "FAIRY", "FINISH", "PARLATICI MAKINE", "PARLATICI", "BULASIK MAKINESI")) {
       return { main: MAIN_KEYS.TEMIZLIK, sub: "bulasik" };
+    }
+    if (has(title, "DETERJAN", "YUMUSATICI", "ARIEL", "BINGO", "OMO", "PERSIL", "PERWOLL")) {
+      return { main: MAIN_KEYS.TEMIZLIK, sub: "camasir_deterjani" };
     }
     if (has(title, "TUVALET KAGIDI", "KAGIT HAVLU", "PECETE", "MENDIL", "HAVLU CEP")) {
       return { main: MAIN_KEYS.TEMIZLIK, sub: "kagit_urunleri" };
@@ -864,6 +864,9 @@ function classify(csvCategoryRaw, titleRaw) {
 
   // ── ATISTIRMALIK alt kırılım (+ CIKOLATA CSV kategorisi de burada işlenir) ──
   if (csvCat === "ATISTIRMALIK" || csvCat === "CIKOLATA") {
+    if (has(title, "KURABIYE", "KURABIY", "COOKIE")) {
+      return { main: MAIN_KEYS.ATISTIRMALIK, sub: "biskuvi_gofret" };
+    }
     if (has(title, "CIPS", "LAYS", "DORITOS", "CHEETOS", "MARETTI CHIPS", "PRINGLES")) {
       return { main: MAIN_KEYS.ATISTIRMALIK, sub: "cips_cerez" };
     }
@@ -967,7 +970,10 @@ function classify(csvCategoryRaw, titleRaw) {
     if (has(title, "PUDING", "MUHALLEBI", "KESKUL", "ASURE", "SUPANGLE", "TAVUKGOGSU", "KAZANDIBI", "KREM SANTI", "TIRILECE", "CREME OLE", "SUTLAC", "TAVUK GOGSU")) {
       return { main: MAIN_KEYS.TATLI_SEKERLEME, sub: "puding_muhallebi" };
     }
-    if (has(title, "KEK KARISIMI", "KURABIYE", "WAFFLE", "PANCAKE", "KREP", "PROFITEROL", "TIRAMISU", "REVANI", "MUFFIN", "IRMIK HELVASI", "KARAMELIZE")) {
+    if (has(title, "KURABIYE", "KURABIY", "COOKIE")) {
+      return { main: MAIN_KEYS.ATISTIRMALIK, sub: "biskuvi_gofret" };
+    }
+    if (has(title, "KEK KARISIMI", "WAFFLE", "PANCAKE", "KREP", "PROFITEROL", "TIRAMISU", "REVANI", "MUFFIN", "IRMIK HELVASI", "KARAMELIZE")) {
       return { main: MAIN_KEYS.TATLI_SEKERLEME, sub: "kek_karisim" };
     }
     if (has(title, "PUDRA SEKERI")) {
@@ -1020,6 +1026,10 @@ function classify(csvCategoryRaw, titleRaw) {
 
   // ── MEYVE VE SEBZE ──
   if (csvCat === "MEYVE VE SEBZE") {
+    // FEAST = dondurulmuş gıda markası (donuk bezelye/patates/çilek vb.)
+    if (has(title, "FEAST", "SUPERFRESH DONUK", "DONDURULMUS")) {
+      return { main: MAIN_KEYS.DONDURULMUS, sub: "dondurulmus_gida" };
+    }
     const FRUITS = ["ANANAS", "ARMUT", "AVAKADO", "CHERRY DOMATES", "ELMA", "ERIK", "HINDISTAN CEVIZI", "LIMON", "MANGO", "MUZ", "PORTAKAL", "BOGURTLEN", "CILEK", "VISNE", "MIXED BERRIES"];
     const VEGGIES = ["BIBER", "DOMATES", "HAVUC", "KABAK", "LAHANA", "MARUL", "MAYDANOZ", "PANCAR", "PATATES", "PATLICAN", "SALATALIK", "SARIMSAK", "SOGAN", "BEZELYE", "BROKOLI", "ISPANAK", "FASULYE", "GARNITUR", "MISIR", "BAKLA", "BAMYA"];
     if (has(title, ...FRUITS)) return { main: MAIN_KEYS.MEYVE_SEBZE, sub: "meyve" };
