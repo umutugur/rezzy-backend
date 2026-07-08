@@ -52,6 +52,7 @@ export function MarketProductsPage() {
   const [suggestions, setSuggestions] = useState<ProductImageSuggestion[]>([]);
   const suggestionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [bulkPriceOpen, setBulkPriceOpen] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   // Load categories
   const { data: categoriesData } = useQuery({
@@ -80,6 +81,75 @@ export function MarketProductsPage() {
   const statTotal = allProducts.length;
   const statActive = allProducts.filter(p => p.isActive).length;
   const statOut = allProducts.filter(p => p.stock === 0).length;
+
+  const isSearching = search.trim().length > 0;
+
+  const catIdOf = (p: PanelProduct): string => {
+    const c = (p as any).category;
+    return typeof c === "string" ? c : c?._id ?? "";
+  };
+
+  // ── Category grouping (parent → children) — only when not searching ──
+  const groupedSections = (() => {
+    if (isSearching) return null;
+    const catsById = new Map(categories.map(c => [c._id, c]));
+    const parents = categories.filter(c => !c.parentId);
+    const childrenOf = (parentId: string) => categories.filter(c => c.parentId === parentId);
+
+    const byCat = new Map<string, PanelProduct[]>();
+    for (const p of products) {
+      const cid = catIdOf(p);
+      if (!byCat.has(cid)) byCat.set(cid, []);
+      byCat.get(cid)!.push(p);
+    }
+
+    type Section = { id: string; title: string; products: PanelProduct[]; children: Section[] };
+    const sections: Section[] = [];
+    const usedCatIds = new Set<string>();
+
+    for (const parent of parents) {
+      const kids = childrenOf(parent._id);
+      const parentProducts = byCat.get(parent._id) ?? [];
+      const childSections: Section[] = [];
+      for (const kid of kids) {
+        const kidProducts = byCat.get(kid._id) ?? [];
+        usedCatIds.add(kid._id);
+        if (kidProducts.length > 0) {
+          childSections.push({ id: kid._id, title: kid.i18n?.tr?.title ?? kid.key, products: kidProducts, children: [] });
+        }
+      }
+      usedCatIds.add(parent._id);
+      const totalCount = parentProducts.length + childSections.reduce((s, c) => s + c.products.length, 0);
+      if (totalCount > 0) {
+        sections.push({
+          id: parent._id,
+          title: parent.i18n?.tr?.title ?? parent.key,
+          products: parentProducts,
+          children: childSections,
+        });
+      }
+    }
+
+    // Products whose category isn't in the known list (or uncategorized)
+    const orphanProducts: PanelProduct[] = [];
+    for (const [cid, prods] of byCat.entries()) {
+      if (!cid || !usedCatIds.has(cid)) orphanProducts.push(...prods);
+    }
+    if (orphanProducts.length > 0) {
+      sections.push({ id: "__other", title: t("Diğer"), products: orphanProducts, children: [] });
+    }
+
+    return sections;
+  })();
+
+  const toggleGroup = (id: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   // Debounced suggestions fetch
   useEffect(() => {
@@ -332,7 +402,8 @@ export function MarketProductsPage() {
                 </tr>
               </thead>
               <tbody>
-                {products.map(p => {
+                {(() => {
+                  const renderRow = (p: PanelProduct) => {
                   const cat = typeof p.category === "object" && p.category ? (p.category.i18n?.tr?.title ?? p.category.key ?? "") : "";
                   const photo = p.photos?.[0] ?? null;
                   const hasDisc = p.discountPrice != null && p.discountPrice < p.price;
@@ -402,7 +473,42 @@ export function MarketProductsPage() {
                       </td>
                     </tr>
                   );
-                })}
+                  };
+
+                  const groupHeaderRow = (id: string, title: string, count: number, depth: 0 | 1) => {
+                    const collapsed = collapsedGroups.has(id);
+                    return (
+                      <tr key={`group-${id}`} onClick={() => toggleGroup(id)} style={{ cursor: "pointer", background: depth === 0 ? "#f3f4fb" : "#f8f9fc", borderBottom: "1px solid #eef0f4" }}>
+                        <td colSpan={6} style={{ padding: depth === 0 ? "10px 16px" : "8px 16px 8px 40px", fontWeight: 700, fontSize: depth === 0 ? 13 : 12.5, color: depth === 0 ? "#1b1c22" : "#4f46e5" }}>
+                          <span style={{ marginRight: 8, display: "inline-block", width: 10 }}>{collapsed ? "▸" : "▾"}</span>
+                          {depth === 0 ? title.toUpperCase() : title}
+                          <span style={{ marginLeft: 8, color: "#9aa1b1", fontWeight: 600, fontSize: 11.5 }}>({count})</span>
+                        </td>
+                      </tr>
+                    );
+                  };
+
+                  if (groupedSections) {
+                    return groupedSections.map(section => {
+                      const parentCollapsed = collapsedGroups.has(section.id);
+                      const totalCount = section.products.length + section.children.reduce((s, c) => s + c.products.length, 0);
+                      return (
+                        <React.Fragment key={section.id}>
+                          {groupHeaderRow(section.id, section.title, totalCount, 0)}
+                          {!parentCollapsed && section.products.map(renderRow)}
+                          {!parentCollapsed && section.children.map(child => (
+                            <React.Fragment key={child.id}>
+                              {groupHeaderRow(child.id, child.title, child.products.length, 1)}
+                              {!collapsedGroups.has(child.id) && child.products.map(renderRow)}
+                            </React.Fragment>
+                          ))}
+                        </React.Fragment>
+                      );
+                    });
+                  }
+
+                  return products.map(renderRow);
+                })()}
               </tbody>
             </table>
           </div>

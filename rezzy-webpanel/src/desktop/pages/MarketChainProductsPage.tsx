@@ -448,6 +448,80 @@ export function MarketChainProductsPage() {
   const organization = data?.organization ?? null;
   const overrideCount = items.filter((i) => i.override !== null).length;
 
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (id: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const isSearching = search.trim().length > 0;
+
+  // ── Category grouping (parent → children), derived from populated category on each item ──
+  const groupedSections = (() => {
+    if (isSearching) return null;
+
+    type CatInfo = { _id: string; title: string; parentId: string | null };
+    const catById = new Map<string, CatInfo>();
+    for (const it of items) {
+      const c = it.category;
+      if (c && typeof c === "object" && c._id) {
+        if (!catById.has(c._id)) {
+          catById.set(c._id, {
+            _id: c._id,
+            title: c.i18n?.tr?.title ?? c.key ?? "",
+            parentId: c.parentId ?? null,
+          });
+        }
+      }
+    }
+
+    const byCat = new Map<string, BranchOrgProduct[]>();
+    const catIdOf = (it: BranchOrgProduct): string => {
+      const c = it.category;
+      return c && typeof c === "object" ? c._id : typeof c === "string" ? c : "";
+    };
+    for (const it of items) {
+      const cid = catIdOf(it);
+      if (!byCat.has(cid)) byCat.set(cid, []);
+      byCat.get(cid)!.push(it);
+    }
+
+    const parents = [...catById.values()].filter((c) => !c.parentId);
+    type Section = { id: string; title: string; items: BranchOrgProduct[]; children: Section[] };
+    const sections: Section[] = [];
+    const usedCatIds = new Set<string>();
+
+    for (const parent of parents) {
+      const kids = [...catById.values()].filter((c) => c.parentId === parent._id);
+      const parentItems = byCat.get(parent._id) ?? [];
+      const childSections: Section[] = [];
+      for (const kid of kids) {
+        usedCatIds.add(kid._id);
+        const kidItems = byCat.get(kid._id) ?? [];
+        if (kidItems.length > 0) childSections.push({ id: kid._id, title: kid.title, items: kidItems, children: [] });
+      }
+      usedCatIds.add(parent._id);
+      const totalCount = parentItems.length + childSections.reduce((s, c) => s + c.items.length, 0);
+      if (totalCount > 0) {
+        sections.push({ id: parent._id, title: parent.title, items: parentItems, children: childSections });
+      }
+    }
+
+    const orphanItems: BranchOrgProduct[] = [];
+    for (const [cid, prods] of byCat.entries()) {
+      if (!cid || !usedCatIds.has(cid)) orphanItems.push(...prods);
+    }
+    if (orphanItems.length > 0) {
+      sections.push({ id: "__other", title: "Diğer", items: orphanItems, children: [] });
+    }
+
+    return sections;
+  })();
+
   return (
     <MarketDesktopLayout>
       <div style={{ padding: 24 }}>
@@ -741,13 +815,71 @@ export function MarketChainProductsPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
-                  <ProductRow
-                    key={item._id}
-                    item={item}
-                    onMutate={handleMutate}
-                  />
-                ))}
+                {(() => {
+                  const groupHeaderRow = (id: string, title: string, count: number, depth: 0 | 1) => {
+                    const collapsed = collapsedGroups.has(id);
+                    return (
+                      <tr
+                        key={`group-${id}`}
+                        onClick={() => toggleGroup(id)}
+                        style={{
+                          cursor: "pointer",
+                          background: depth === 0 ? "#f3f4fb" : "#f8f9fc",
+                          borderBottom: "1px solid #eef0f4",
+                        }}
+                      >
+                        <td
+                          colSpan={7}
+                          style={{
+                            padding: depth === 0 ? "10px 16px" : "8px 16px 8px 40px",
+                            fontWeight: 700,
+                            fontSize: depth === 0 ? 13 : 12.5,
+                            color: depth === 0 ? "#1b1c22" : "#4f46e5",
+                          }}
+                        >
+                          <span style={{ marginRight: 8, display: "inline-block", width: 10 }}>
+                            {collapsed ? "▸" : "▾"}
+                          </span>
+                          {depth === 0 ? title.toUpperCase() : title}
+                          <span style={{ marginLeft: 8, color: "#9aa1b1", fontWeight: 600, fontSize: 11.5 }}>
+                            ({count})
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  };
+
+                  if (groupedSections) {
+                    return groupedSections.map((section) => {
+                      const parentCollapsed = collapsedGroups.has(section.id);
+                      const totalCount =
+                        section.items.length + section.children.reduce((s, c) => s + c.items.length, 0);
+                      return (
+                        <React.Fragment key={section.id}>
+                          {groupHeaderRow(section.id, section.title, totalCount, 0)}
+                          {!parentCollapsed &&
+                            section.items.map((item) => (
+                              <ProductRow key={item._id} item={item} onMutate={handleMutate} />
+                            ))}
+                          {!parentCollapsed &&
+                            section.children.map((child) => (
+                              <React.Fragment key={child.id}>
+                                {groupHeaderRow(child.id, child.title, child.items.length, 1)}
+                                {!collapsedGroups.has(child.id) &&
+                                  child.items.map((item) => (
+                                    <ProductRow key={item._id} item={item} onMutate={handleMutate} />
+                                  ))}
+                              </React.Fragment>
+                            ))}
+                        </React.Fragment>
+                      );
+                    });
+                  }
+
+                  return items.map((item) => (
+                    <ProductRow key={item._id} item={item} onMutate={handleMutate} />
+                  ));
+                })()}
               </tbody>
             </table>
           </div>

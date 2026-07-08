@@ -134,6 +134,7 @@ export interface MarketCoreCategory {
   key: string;
   i18n: Record<string, { title: string }>;
   order: number;
+  parentId?: string | null;
 }
 
 export async function getMarketCategories(): Promise<{ items: MarketCoreCategory[] }> {

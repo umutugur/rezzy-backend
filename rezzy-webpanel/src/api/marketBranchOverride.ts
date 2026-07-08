@@ -1,6 +1,14 @@
 import { api } from "./client";
 import { withStore } from "./panelStore";
 
+export interface BranchOrgProductCategory {
+  _id: string;
+  key: string;
+  i18n?: Record<string, { title?: string }>;
+  order?: number;
+  parentId?: string | null;
+}
+
 export interface BranchOrgProduct {
   _id: string;
   orgProductId: string;
@@ -11,7 +19,7 @@ export interface BranchOrgProduct {
   discountPrice?: number | null;
   isAvailable: boolean;
   imageUrl?: string;
-  category?: any;
+  category?: BranchOrgProductCategory | string | null;
   override: null | {
     price: number | null;
     discountPrice: number | null;
