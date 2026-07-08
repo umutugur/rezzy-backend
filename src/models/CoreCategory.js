@@ -28,6 +28,13 @@ const CoreCategorySchema = new mongoose.Schema(
       index: true,
     },
 
+    parentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CoreCategory",
+      default: null,
+      index: true,
+    },
+
     // Çok dil (hibrit fallback için)
     i18n: {
       tr: { type: I18nSchema, required: true },
