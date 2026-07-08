@@ -90,6 +90,11 @@ const MarketOrderSchema = new mongoose.Schema(
     total: { type: Number, required: true, min: 0 },
 
     note: { type: String, default: "" },
+    outOfStockPreference: {
+      type: String,
+      enum: ["substitute", "remove", "call"],
+      default: "call",
+    },
 
     // Stripe
     stripePaymentIntentId: { type: String, default: null },
