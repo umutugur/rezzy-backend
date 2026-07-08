@@ -9,12 +9,14 @@ import {
   getMarketCategories,
   uploadMarketImage,
   getProductImageSuggestions,
+  panelBulkPrice,
   type PanelProduct,
   type MarketCoreCategory,
   type ProductImageSuggestion,
 } from "../../api/marketDesktop";
 import { useI18n } from "../../i18n";
 import { showToast } from "../../ui/Toast";
+import BulkPriceWizard from "../../pages/marketOrg/BulkPriceWizard";
 
 const emptyForm = { title: "", price: "", stock: "", unit: "piece", description: "", brand: "", netQuantity: "", discountPrice: "", barcode: "" };
 const emptyNetUnit: "L" | "ml" | "kg" | "g" | "piece" | "" = "";
@@ -49,6 +51,7 @@ export function MarketProductsPage() {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [suggestions, setSuggestions] = useState<ProductImageSuggestion[]>([]);
   const suggestionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [bulkPriceOpen, setBulkPriceOpen] = useState(false);
 
   // Load categories
   const { data: categoriesData } = useQuery({
@@ -241,6 +244,16 @@ export function MarketProductsPage() {
                   }}
                 />
               </div>
+              <button
+                onClick={() => setBulkPriceOpen(true)}
+                style={{
+                  padding: "9px 18px", borderRadius: 10, border: "1px solid #cdd0f5",
+                  background: "transparent", color: "#4f46e5", cursor: "pointer",
+                  fontWeight: 700, fontSize: 13.5, whiteSpace: "nowrap",
+                }}
+              >
+                📊 {t("Fiyat Güncelle (Excel)")}
+              </button>
               <button
                 onClick={openAdd}
                 style={{
@@ -773,6 +786,17 @@ export function MarketProductsPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {bulkPriceOpen && (
+          <BulkPriceWizard
+            onClose={() => setBulkPriceOpen(false)}
+            onDone={() => {
+              setBulkPriceOpen(false);
+              qc.invalidateQueries({ queryKey: ["market-products"] });
+            }}
+            submit={(rows, dryRun) => panelBulkPrice(rows, dryRun)}
+          />
         )}
       </div>
     </MarketDesktopLayout>

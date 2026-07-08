@@ -6,7 +6,9 @@ import {
   upsertOverride,
   type BranchOrgProduct,
 } from "../../api/marketBranchOverride";
+import { orgBulkPrice } from "../../api/marketOrgCatalog";
 import { showToast } from "../../ui/Toast";
+import BulkPriceWizard from "../../pages/marketOrg/BulkPriceWizard";
 
 // ── merge helper: changes only the patched field, preserves everything else ──
 function mergedBody(
@@ -408,6 +410,7 @@ function ProductRow({ item, onMutate }: RowProps) {
 export function MarketChainProductsPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [bulkPriceOpen, setBulkPriceOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["my-org-products", search],
@@ -507,36 +510,57 @@ export function MarketChainProductsPage() {
               </p>
             </div>
 
-            {/* Search */}
-            <div style={{ position: "relative" }}>
-              <span
-                style={{
-                  position: "absolute",
-                  left: 11,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "#9aa1b1",
-                  fontSize: 13,
-                  pointerEvents: "none",
-                }}
-              >
-                🔍
-              </span>
-              <input
-                className="mcp-search"
-                placeholder="Ürün veya barkod ara…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{
-                  padding: "9px 14px 9px 32px",
-                  borderRadius: 10,
-                  border: "1px solid #d7dbe6",
-                  background: "#fff",
-                  color: "#1b1c22",
-                  fontSize: 13.5,
-                  width: 250,
-                }}
-              />
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              {organization && (
+                <button
+                  onClick={() => setBulkPriceOpen(true)}
+                  style={{
+                    padding: "9px 16px",
+                    borderRadius: 10,
+                    border: "1px solid #cdd0f5",
+                    background: "transparent",
+                    color: "#4f46e5",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    fontSize: 13.5,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  📊 Fiyat Güncelle (Excel)
+                </button>
+              )}
+
+              {/* Search */}
+              <div style={{ position: "relative" }}>
+                <span
+                  style={{
+                    position: "absolute",
+                    left: 11,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "#9aa1b1",
+                    fontSize: 13,
+                    pointerEvents: "none",
+                  }}
+                >
+                  🔍
+                </span>
+                <input
+                  className="mcp-search"
+                  placeholder="Ürün veya barkod ara…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{
+                    padding: "9px 14px 9px 32px",
+                    borderRadius: 10,
+                    border: "1px solid #d7dbe6",
+                    background: "#fff",
+                    color: "#1b1c22",
+                    fontSize: 13.5,
+                    width: 250,
+                  }}
+                />
+              </div>
             </div>
           </div>
 
@@ -754,6 +778,17 @@ export function MarketChainProductsPage() {
               </span>
             ))}
           </div>
+        )}
+
+        {bulkPriceOpen && organization && (
+          <BulkPriceWizard
+            onClose={() => setBulkPriceOpen(false)}
+            onDone={() => {
+              setBulkPriceOpen(false);
+              qc.invalidateQueries({ queryKey: ["my-org-products"] });
+            }}
+            submit={(rows, dryRun) => orgBulkPrice(organization, rows, dryRun)}
+          />
         )}
       </div>
     </MarketDesktopLayout>
