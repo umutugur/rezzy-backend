@@ -15,9 +15,11 @@ export async function populateItemCategories(items) {
   ];
   if (!ids.length) return items;
   const cats = await CoreCategory.find({ _id: { $in: ids } })
-    .select("key i18n order")
+    .select("key i18n order parentId")
     .lean();
-  const byId = new Map(cats.map((c) => [String(c._id), c]));
+  const byId = new Map(
+    cats.map((c) => [String(c._id), { ...c, parentId: c.parentId ? String(c.parentId) : null }]),
+  );
   for (const p of items) {
     const cid = p.category ? String(p.category) : null;
     if (cid && byId.has(cid)) p.category = byId.get(cid);

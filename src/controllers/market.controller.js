@@ -345,6 +345,7 @@ export function groupCatalogCategories(items) {
         _id: id,
         key: c.key ?? null,
         i18n: c.i18n ?? null,
+        parentId: c.parentId ? String(c.parentId) : null,
         order: typeof c.order === "number" ? c.order : 9999,
         count: 1,
       });
@@ -999,11 +1000,16 @@ export const listMarketCategories = async (req, res, next) => {
       businessTypes: "market",
       isActive: true,
     })
-      .select("key i18n order")
+      .select("key i18n order parentId")
       .sort({ order: 1, key: 1 })
       .lean();
 
-    res.json({ items: categories, total: categories.length });
+    const items = categories.map((c) => ({
+      ...c,
+      parentId: c.parentId ? String(c.parentId) : null,
+    }));
+
+    res.json({ items, total: items.length });
   } catch (e) {
     next(e);
   }
