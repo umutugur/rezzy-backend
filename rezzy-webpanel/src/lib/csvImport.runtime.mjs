@@ -71,6 +71,30 @@ export function guessCategoryMatch(value, categories) {
   return partial ? partial._id : null;
 }
 
+import * as XLSX from "xlsx";
+
+/**
+ * XLSX/CSV ArrayBuffer → { headers:string[], rows:Record<string,string>[] }
+ * Tüm hücreler string (raw:false) → barkodda baştaki sıfır / bilimsel gösterim korunur.
+ */
+export function parseWorkbook(arrayBuffer) {
+  const wb = XLSX.read(arrayBuffer, { type: "array", raw: false });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  if (!ws) return { headers: [], rows: [] };
+  const matrix = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+  if (!matrix.length) return { headers: [], rows: [] };
+  const headers = matrix[0].map((h, i) => (String(h).trim() || `Sütun ${String.fromCharCode(65 + i)}`));
+  const rows = [];
+  for (let i = 1; i < matrix.length; i++) {
+    const arr = matrix[i];
+    if (!arr || arr.every((c) => String(c).trim() === "")) continue;
+    const obj = {};
+    headers.forEach((h, j) => { obj[h] = arr[j] == null ? "" : String(arr[j]); });
+    rows.push(obj);
+  }
+  return { headers, rows };
+}
+
 export function applyMapping(rows, columnMap, categoryMap, options) {
   const out = []; const errors = [];
   rows.forEach((row, i) => {

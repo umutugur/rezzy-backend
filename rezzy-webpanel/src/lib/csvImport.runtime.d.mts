@@ -41,6 +41,12 @@ export interface CategoryLike {
   key?: string;
 }
 
+export interface ParsedWorkbook {
+  headers: string[];
+  rows: Record<string, string>[];
+}
+export declare function parseWorkbook(arrayBuffer: ArrayBuffer): ParsedWorkbook;
+
 export declare function guessColumnMap(headers: string[]): GuessColumnMapResult;
 export declare function normalizePrice(raw: unknown, options?: NormalizePriceOptions): number | null;
 export declare function normalizeUnit(raw: unknown, unitMap?: Record<string, string>): string;
