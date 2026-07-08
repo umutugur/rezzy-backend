@@ -1,5 +1,6 @@
 import { api } from "./client";
 import { withStore } from "./panelStore";
+import type { BulkPriceRow, BulkPriceResult } from "./marketOrgCatalog";
 
 // ---- Types ----
 
@@ -115,6 +116,15 @@ export async function marketUpdateProduct(
 
 export async function marketDeleteProduct(id: string): Promise<void> {
   await api.delete(`/market/panel/products/${id}`, { data: withStore() });
+}
+
+export async function panelBulkPrice(
+  rows: BulkPriceRow[],
+  dryRun: boolean,
+  storeId?: string | null,
+): Promise<BulkPriceResult> {
+  const { data } = await api.post(`/market/panel/bulk-price`, withStore({ rows, dryRun, storeId: storeId ?? undefined }));
+  return data;
 }
 
 // ---- Market Categories (CoreCategory) ----

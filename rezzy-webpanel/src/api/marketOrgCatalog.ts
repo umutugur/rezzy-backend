@@ -81,6 +81,29 @@ export async function bulkUpdateProducts(
   return data as { matched: number; modified: number };
 }
 
+export interface BulkPriceRow {
+  barcode: string;
+  price: number;
+}
+
+export interface BulkPriceResult {
+  dryRun: boolean;
+  total: number;
+  matched: number;
+  updated: number;
+  notFound: string[];
+  invalid: { barcode: string; reason: string }[];
+}
+
+export async function orgBulkPrice(
+  orgId: string,
+  rows: BulkPriceRow[],
+  dryRun: boolean,
+): Promise<BulkPriceResult> {
+  const { data } = await api.post(`/market/org/${orgId}/products/bulk-price`, { rows, dryRun });
+  return data;
+}
+
 export async function exportProductsCsv(orgId: string): Promise<void> {
   const res = await api.get(`/market/org/${orgId}/products/export`, { responseType: "blob" });
   const url = window.URL.createObjectURL(new Blob([res.data], { type: "text/csv" }));
