@@ -70,9 +70,10 @@ export const listNearbyStores = async (req, res, next) => {
         filter.category = chip.storeCategory;
       } else if (chip?.coreCategoryId) {
         const MarketOrgProduct = (await import("../models/MarketOrgProduct.js")).default;
+        const catIds = await expandCategoryFilter(chip.coreCategoryId);
         const [storeIds, orgIds] = await Promise.all([
-          MarketProduct.distinct("store", { category: chip.coreCategoryId, isActive: true }),
-          MarketOrgProduct.distinct("organizationId", { category: chip.coreCategoryId, isActive: true }),
+          MarketProduct.distinct("store", { category: { $in: catIds }, isActive: true }),
+          MarketOrgProduct.distinct("organizationId", { category: { $in: catIds }, isActive: true }),
         ]);
         // Chain org products: an org-level product in the category matches ALL of that org's stores (v1 rule).
         if (orgIds.length) {
