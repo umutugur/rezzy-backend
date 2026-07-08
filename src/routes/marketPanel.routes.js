@@ -19,6 +19,7 @@ import {
   listMyOrgProducts,
   upsertBranchOverride,
   listMyPanelStores,
+  panelBulkPrice,
 } from "../controllers/marketPanel.controller.js";
 import { listEligibleCampaigns, joinCampaign, leaveCampaign } from "../controllers/marketCampaign.controller.js";
 
@@ -99,6 +100,14 @@ r.delete(
   auth(),
   allowMarketPanel(),
   deleteProduct
+);
+
+// Excel/CSV ile toplu fiyat güncelleme (barkod eşleşmesi)
+r.post(
+  "/market/panel/bulk-price",
+  auth(),
+  allowMarketPanel(),
+  panelBulkPrice
 );
 
 // Aynı organizasyona ait şubeler

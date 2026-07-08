@@ -14,6 +14,7 @@ import { reverseRedemptionForOrder } from "../services/promotionsService.js";
 import User from "../models/User.js";
 import { resolvePanelStore } from "../services/panelStoreAccess.service.js";
 import { buildAccessSet } from "../services/panelStoreAccess.js";
+import { parsePriceRows } from "../services/bulkPrice.js";
 
 const toObjectId = (id) => {
   try {
@@ -753,5 +754,31 @@ export const getReports = async (req, res, next) => {
       byType: facet.byType.map((d) => ({ type: d._id || "unknown", count: d.count, revenue: round2(d.revenue) })),
       topProducts: facet.topProducts.map((d) => ({ title: d._id, qty: d.qty, revenue: round2(d.revenue) })),
     });
+  } catch (e) { next(e); }
+};
+
+// POST /market/panel/bulk-price  body { rows:[{barcode,price}], dryRun?:bool, storeId? }
+export const panelBulkPrice = async (req, res, next) => {
+  try {
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
+
+    const rawRows = Array.isArray(req.body.rows) ? req.body.rows.slice(0, 5000) : [];
+    const dryRun = req.body.dryRun === true;
+    const { valid, invalid } = parsePriceRows(rawRows);
+
+    let matched = 0, updated = 0;
+    const notFound = [];
+    for (const row of valid) {
+      const existing = await MarketProduct.findOne({ store: store._id, barcode: row.barcode }).select("_id").lean();
+      if (!existing) { notFound.push(row.barcode); continue; }
+      matched++;
+      if (!dryRun) {
+        await MarketProduct.updateOne({ _id: existing._id }, { $set: { price: row.price } });
+        updated++;
+      }
+    }
+    res.json({ dryRun, total: rawRows.length, matched, updated, notFound, invalid });
   } catch (e) { next(e); }
 };
