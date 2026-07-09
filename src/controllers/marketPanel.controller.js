@@ -7,7 +7,7 @@ import CoreCategory from "../models/CoreCategory.js";
 import { notifyUser } from "../services/notification.service.js";
 import { effectivePrice, recordPriceHistory } from "../utils/marketPricing.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
-import { resolveStoreCatalog } from "../services/marketCatalogResolve.service.js";
+import { mergeOrgProduct, populateItemCategories } from "../services/marketCatalogResolve.service.js";
 import MarketBranchOverride from "../models/MarketBranchOverride.js";
 import MarketOrgProduct from "../models/MarketOrgProduct.js";
 import { reverseRedemptionForOrder } from "../services/promotionsService.js";
@@ -15,6 +15,7 @@ import User from "../models/User.js";
 import { resolvePanelStore } from "../services/panelStoreAccess.service.js";
 import { buildAccessSet } from "../services/panelStoreAccess.js";
 import { parsePriceRows } from "../services/bulkPrice.js";
+import { expandCategoryFilter } from "../services/categoryTree.js";
 
 const toObjectId = (id) => {
   try {
@@ -622,28 +623,103 @@ export const productImageSuggestions = async (req, res, next) => {
 // ZİNCİR KATALOĞU — ŞUBE OVERRIDE
 // ---------------------------------------------------------------------------
 
-// GET /market/panel/org-products?q=
+// GET /market/panel/org-products/categories — kategori başına ürün sayıları (akordeon başlıkları için)
+export const listMyOrgProductCategories = async (req, res, next) => {
+  try {
+    const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
+    if (r.error) return res.status(r.error.status).json(r.error);
+    const { store } = r;
+    if (!store.organization) {
+      return res.json({ categories: [], total: 0, hiddenCount: 0, organization: null });
+    }
+
+    const [groups, hiddenCount] = await Promise.all([
+      MarketOrgProduct.aggregate([
+        { $match: { organizationId: store.organization, isActive: true } },
+        { $group: { _id: "$category", count: { $sum: 1 } } },
+      ]),
+      MarketBranchOverride.countDocuments({ store: store._id, hidden: true }),
+    ]);
+
+    const catIds = groups.map((g) => g._id).filter(Boolean);
+    const cats = catIds.length
+      ? await CoreCategory.find({ _id: { $in: catIds } }).select("key i18n parentId").lean()
+      : [];
+    const catById = new Map(cats.map((c) => [String(c._id), c]));
+
+    const categories = groups.map((g) => {
+      if (!g._id) {
+        return { id: null, key: null, title: null, parentId: null, count: g.count };
+      }
+      const c = catById.get(String(g._id));
+      return {
+        id: String(g._id),
+        key: c?.key ?? null,
+        title: c?.i18n?.tr?.title ?? c?.i18n?.en?.title ?? c?.key ?? null,
+        parentId: c?.parentId ? String(c.parentId) : null,
+        count: g.count,
+      };
+    });
+
+    const total = groups.reduce((sum, g) => sum + g.count, 0);
+    res.json({ categories, total, hiddenCount, organization: store.organization });
+  } catch (e) { next(e); }
+};
+
+// GET /market/panel/org-products?q=&category=&page=&limit=
 export const listMyOrgProducts = async (req, res, next) => {
   try {
     const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
     if (r.error) return res.status(r.error.status).json(r.error);
     const { store } = r;
-    if (!store.organization) return res.json({ items: [], organization: null });
-    const resolved = await resolveStoreCatalog(store);
-    const overrides = await MarketBranchOverride.find({ store: store._id }).lean();
+    if (!store.organization) return res.json({ items: [], total: 0, page: 1, limit: 100, organization: null });
+
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
+
+    const filter = { organizationId: store.organization, isActive: true };
+
+    const categoryParam = req.query.category;
+    if (categoryParam != null && String(categoryParam).trim() !== "") {
+      const ids = await expandCategoryFilter(categoryParam);
+      filter.category = { $in: ids };
+    }
+
+    const q = String(req.query.q || "").trim();
+    if (q) {
+      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      filter.$or = [
+        { title: { $regex: escaped, $options: "i" } },
+        { barcode: q },
+      ];
+    }
+
+    const total = await MarketOrgProduct.countDocuments(filter);
+    const orgProducts = await MarketOrgProduct.find(filter)
+      .sort({ order: 1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+
+    const pageIds = orgProducts.map((p) => p._id);
+    const overrides = pageIds.length
+      ? await MarketBranchOverride.find({ store: store._id, orgProductId: { $in: pageIds } }).lean()
+      : [];
     const ovMap = new Map(overrides.map((o) => [String(o.orgProductId), o]));
-    let items = resolved.filter((it) => it.source === "org").map((it) => {
-      const ov = ovMap.get(String(it.orgProductId));
+
+    let items = orgProducts.map((op) => {
+      const ov = ovMap.get(String(op._id));
+      const merged = mergeOrgProduct(op, ov, store._id);
       return {
-        ...it,
+        ...merged,
         override: ov
           ? { price: ov.price ?? null, discountPrice: ov.discountPrice ?? null, isAvailable: ov.isAvailable ?? null, hidden: !!ov.hidden }
           : null,
       };
     });
-    const q = String(req.query.q || "").trim().toLowerCase();
-    if (q) items = items.filter((it) => it.title.toLowerCase().includes(q) || String(it.barcode || "").includes(q));
-    res.json({ items, organization: store.organization });
+    items = await populateItemCategories(items);
+
+    res.json({ items, total, page, limit, organization: store.organization });
   } catch (e) { next(e); }
 };
 

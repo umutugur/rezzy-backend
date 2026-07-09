@@ -17,6 +17,7 @@ import {
   productImageSuggestions,
   getReports,
   listMyOrgProducts,
+  listMyOrgProductCategories,
   upsertBranchOverride,
   listMyPanelStores,
   panelBulkPrice,
@@ -123,6 +124,7 @@ r.get("/market/panel/product-image-suggestions", auth(), allowMarketPanel(), pro
 r.get("/market/panel/reports", auth(), allowMarketPanel(), getReports);
 
 // Zincir kataloğu — şube override
+r.get("/market/panel/org-products/categories", auth(), allowMarketPanel(), listMyOrgProductCategories);
 r.get("/market/panel/org-products", auth(), allowMarketPanel(), listMyOrgProducts);
 r.put("/market/panel/org-products/:orgProductId/override", auth(), allowMarketPanel(), upsertBranchOverride);
 
