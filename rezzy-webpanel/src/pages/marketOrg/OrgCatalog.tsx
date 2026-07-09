@@ -2045,7 +2045,7 @@ export default function OrgCatalog() {
   const bulkMenuItems = [
     {
       key: "excel-price",
-      label: t("Fiyat Güncelle (Excel)"),
+      label: t("Fiyat Güncelle"),
       icon: "chart" as const,
       onClick: () => setExcelWizardOpen(true),
       title: t("Excel ile toplu fiyat güncelle"),

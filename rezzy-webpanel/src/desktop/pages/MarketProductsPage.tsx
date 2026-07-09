@@ -340,7 +340,7 @@ export function MarketProductsPage() {
                 items={[
                   {
                     key: "excel-price",
-                    label: t("Fiyat Güncelle (Excel)"),
+                    label: t("Fiyat Güncelle"),
                     icon: "chart",
                     onClick: () => setBulkPriceOpen(true),
                     title: t("Excel ile toplu fiyat güncelle"),
