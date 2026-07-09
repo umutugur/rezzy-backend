@@ -2,7 +2,7 @@ import React from "react";
 import { useI18n } from "../../i18n";
 import { authStore } from "../../store/auth";
 
-export type MarketOrgNavKey = "dashboard" | "catalog" | "branches" | "branch-requests" | "reports" | "settings";
+export type MarketOrgNavKey = "dashboard" | "catalog" | "branches" | "branch-requests" | "campaigns" | "reports" | "settings";
 
 interface Props {
   active: MarketOrgNavKey;
@@ -36,6 +36,7 @@ export const MarketOrgSideNav: React.FC<Props> = ({ active, onNavigate }) => {
       items: [
         { key: "branches", icon: "🏪", label: t("Şubeler") },
         { key: "branch-requests", icon: "📨", label: t("Yeni Şube Talebi") },
+        { key: "campaigns", icon: "🎯", label: t("Kampanyalar") },
         { key: "reports", icon: "📈", label: t("Raporlar") },
       ],
     },

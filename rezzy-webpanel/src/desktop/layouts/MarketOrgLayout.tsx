@@ -7,6 +7,7 @@ const ROUTE_MAP: Record<MarketOrgNavKey, string> = {
   catalog: "/market-org/catalog",
   branches: "/market-org/branches",
   "branch-requests": "/market-org/branch-requests",
+  campaigns: "/market-org/campaigns",
   reports: "/market-org/reports",
   settings: "/market-org/settings",
 };
@@ -20,6 +21,7 @@ function resolveActiveKey(pathname: string): MarketOrgNavKey {
     { key: "catalog", path: "/market-org/catalog" },
     { key: "branch-requests", path: "/market-org/branch-requests" },
     { key: "branches", path: "/market-org/branches" },
+    { key: "campaigns", path: "/market-org/campaigns" },
     { key: "reports", path: "/market-org/reports" },
     { key: "settings", path: "/market-org/settings" },
   ];

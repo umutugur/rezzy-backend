@@ -70,6 +70,7 @@ import OrgBranchesPage from "./pages/marketOrg/OrgBranches";
 import MarketOrgBranchRequestsPage from "./pages/marketOrg/OrgBranchRequests";
 import OrgBranchDetailPage from "./pages/marketOrg/OrgBranchDetail";
 import MarketOrgDashboardPage from "./pages/marketOrg/OrgDashboard";
+import OrgCampaignsPage from "./pages/marketOrg/OrgCampaigns";
 import OrgReportsPage from "./pages/marketOrg/OrgReports";
 import OrgSettingsPage from "./pages/marketOrg/OrgSettings";
 import { MarketOrgLayout } from "./desktop/layouts/MarketOrgLayout";
@@ -842,6 +843,14 @@ export default function App() {
           element={
             <MarketOrgLayout>
               <MarketOrgBranchRequestsPage />
+            </MarketOrgLayout>
+          }
+        />
+        <Route
+          path="/market-org/campaigns"
+          element={
+            <MarketOrgLayout>
+              <OrgCampaignsPage />
             </MarketOrgLayout>
           }
         />
