@@ -191,7 +191,9 @@ export const orgBulkImport = async (req, res, next) => {
   try {
     const orgId = oid(req.params.organizationId);
     if (!orgId) return next({ status: 400, message: "Geçersiz organizasyon id" });
-    const rows = Array.isArray(req.body.rows) ? req.body.rows.slice(0, 2000) : [];
+    const allRows = Array.isArray(req.body.rows) ? req.body.rows : [];
+    const rows = allRows.slice(0, 2000);
+    const truncated = allRows.length - rows.length; // 2000 üstü sessizce kaybolmasın
     let created = 0, updated = 0; const errors = [];
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i] || {};
@@ -212,7 +214,7 @@ export const orgBulkImport = async (req, res, next) => {
         await MarketOrgProduct.create(doc); created++;
       } catch (e) { errors.push({ row: i + 1, message: e.message || "Hata" }); }
     }
-    res.json({ created, updated, errors });
+    res.json({ created, updated, errors, truncated });
   } catch (e) { next(e); }
 };
 

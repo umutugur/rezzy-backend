@@ -32,6 +32,7 @@ const CSV = String(flag("csv", "kibris-full.csv")).replace(/^~/, process.env.HOM
 const ORG = String(flag("org", "6a35b44c85b09f8304557aed")); // Dima org
 const APPLY = Boolean(flag("apply", false));
 const REPORT = Boolean(flag("report", false));
+const CREATE_MISSING = Boolean(flag("create-missing", false)); // eşleşmeyen CSV ürünlerini oluştur (yalnızca --apply ile)
 
 // ─────────────────────────────────────────────────────────────
 // CSV parse (RFC-4180, tırnaklı alanlar dahil)
@@ -1089,15 +1090,23 @@ function loadCsv(path) {
   const ci = header.indexOf("kategori");
   const ti = header.indexOf("urun_adi");
   const bi = header.indexOf("barkod");
+  const fi = header.indexOf("fiyat");
+  const di = header.indexOf("indirimli_fiyat");
   if (ci === -1 || ti === -1) {
     throw new Error(`CSV'de 'kategori' ve 'urun_adi' kolonu gerekli (bulundu: ${header.join(",")})`);
   }
+  const num = (v) => {
+    const n = Number(String(v ?? "").trim().replace(",", "."));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
   return rows
     .filter((r) => r.length && (r[ti] || "").trim())
     .map((r) => ({
       kategori: (r[ci] || "").trim(),
       urun_adi: (r[ti] || "").trim(),
       barkod: bi !== -1 ? (r[bi] || "").trim() : "",
+      fiyat: fi !== -1 ? num(r[fi]) : null,
+      indirimli_fiyat: di !== -1 ? num(r[di]) : null,
     }));
 }
 
@@ -1250,7 +1259,7 @@ async function main() {
   console.log(`\n[alt kategoriler] oluşturulan=${createdSubs}, güncellenen=${updatedSubs}`);
 
   // ürünleri barkod / başlık ile eşle ve category set et
-  let matchedByBarcode = 0, matchedByTitle = 0, updated = 0, skipped = 0;
+  let matchedByBarcode = 0, matchedByTitle = 0, updated = 0, skipped = 0, createdProducts = 0;
   const skippedList = [];
 
   for (const a of assignments) {
@@ -1269,6 +1278,19 @@ async function main() {
       if (doc) matchedByTitle++;
     }
     if (!doc) {
+      if (CREATE_MISSING && a.fiyat != null) {
+        await MarketOrgProduct.create({
+          organizationId: orgId,
+          title: a.urun_adi,
+          category: targetId,
+          barcode: a.barkod || "",
+          unit: "piece",
+          defaultPrice: a.fiyat,
+          defaultDiscountPrice: a.indirimli_fiyat,
+        });
+        createdProducts++;
+        continue;
+      }
       skipped++;
       skippedList.push(a.urun_adi);
       continue;
@@ -1279,7 +1301,7 @@ async function main() {
     }
   }
 
-  console.log(`\n[ürünler] barkod eşleşen=${matchedByBarcode}, başlık eşleşen=${matchedByTitle}, güncellenen=${updated}, atlanan(eşleşmeyen)=${skipped}`);
+  console.log(`\n[ürünler] barkod eşleşen=${matchedByBarcode}, başlık eşleşen=${matchedByTitle}, güncellenen=${updated}, oluşturulan=${createdProducts}, atlanan(eşleşmeyen)=${skipped}`);
   if (skippedList.length) {
     console.log(`  atlanan örnekler (ilk 15):`);
     skippedList.slice(0, 15).forEach((t) => console.log(`    - ${t}`));
