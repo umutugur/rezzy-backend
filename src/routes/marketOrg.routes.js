@@ -6,6 +6,7 @@ import { orgReports, orgBranchDetail, orgUpdateBranch, orgProductOverrides, orgB
 import { listImportTemplates, createImportTemplate, updateImportTemplate, deleteImportTemplate } from "../controllers/marketImportTemplate.controller.js";
 import { createMarketBranchRequest, listMarketBranchRequests } from "../controllers/marketBranchRequest.controller.js";
 import { listStoreManagers, addStoreManager, removeStoreManager } from "../controllers/branchManagers.controller.js";
+import { listOrgCampaigns, joinOrgCampaign, leaveOrgCampaign } from "../controllers/marketCampaign.controller.js";
 
 const r = Router();
 const guard = [auth(), requireOrgAccess(["org_owner", "org_admin"])];
@@ -32,5 +33,9 @@ r.get("/market/org/:organizationId/branch-requests", ...guard, listMarketBranchR
 r.get("/market/org/:organizationId/branches/:storeId/managers", ...guard, listStoreManagers);
 r.post("/market/org/:organizationId/branches/:storeId/managers", ...guard, addStoreManager);
 r.delete("/market/org/:organizationId/branches/:storeId/managers/:userId", ...guard, removeStoreManager);
+
+r.get("/market/org/:organizationId/campaigns", ...guard, listOrgCampaigns);
+r.post("/market/org/:organizationId/campaigns/:campaignId/join", ...guard, joinOrgCampaign);
+r.post("/market/org/:organizationId/campaigns/:campaignId/leave", ...guard, leaveOrgCampaign);
 
 export default r;
