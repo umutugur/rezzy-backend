@@ -549,11 +549,11 @@ export function MarketChainProductsPage() {
         <style>{`
           .mcp-row { transition: background .1s ease }
           .mcp-row:hover { background: var(--rezvix-bg-soft) }
-          .mcp-num:focus { border-color: var(--rezvix-primary) !important; box-shadow: 0 0 0 3px var(--rezvix-primary-soft); outline: none }
+          .mcp-num:focus { border-color: #4f46e5 !important; box-shadow: 0 0 0 3px rgba(99,102,241,.14); outline: none }
           .mcp-num::placeholder { color: var(--rezvix-text-soft) }
           .mcp-reset:hover:not(:disabled) { background: rgba(220,38,38,.07) !important; border-color: #f1c4c4 !important }
           .mcp-search { transition: border-color .15s, box-shadow .15s }
-          .mcp-search:focus { border-color: var(--rezvix-primary) !important; box-shadow: 0 0 0 3px var(--rezvix-primary-soft); outline: none }
+          .mcp-search:focus { border-color: #4f46e5 !important; box-shadow: 0 0 0 3px rgba(99,102,241,.14); outline: none }
           .mcp-search::placeholder { color: var(--rezvix-text-soft) }
           @keyframes mcpFadeIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
           .mcp-card { animation: mcpFadeIn .22s cubic-bezier(.16,1,.3,1) }
@@ -579,7 +579,7 @@ export function MarketChainProductsPage() {
                     height: 38,
                     borderRadius: 11,
                     background:
-                      "linear-gradient(135deg, var(--rezvix-primary), var(--rezvix-primary-strong))",
+                      "linear-gradient(135deg, #6366f1, #4f46e5)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -664,8 +664,8 @@ export function MarketChainProductsPage() {
                 {
                   label: "Toplam",
                   value: items.length,
-                  dot: "var(--rezvix-primary)",
-                  text: "var(--rezvix-primary)",
+                  dot: "#4f46e5",
+                  text: "#4f46e5",
                 },
                 {
                   label: "Şube Override",
@@ -913,7 +913,7 @@ export function MarketChainProductsPage() {
               marginTop: 12,
               padding: "10px 16px",
               borderRadius: 9,
-              background: "var(--rezvix-primary-soft)",
+              background: "rgba(99,102,241,.14)",
               border: "1px solid rgba(123,44,44,.12)",
               display: "flex",
               flexWrap: "wrap",
@@ -927,7 +927,7 @@ export function MarketChainProductsPage() {
               ["Sıfırla", "tüm özelleştirmeleri siler"],
             ].map(([k, v]) => (
               <span key={k} style={{ fontSize: 11.5, color: "var(--rezvix-text-muted)" }}>
-                <strong style={{ color: "var(--rezvix-primary)" }}>{k}</strong> — {v}
+                <strong style={{ color: "#4f46e5" }}>{k}</strong> — {v}
               </span>
             ))}
           </div>

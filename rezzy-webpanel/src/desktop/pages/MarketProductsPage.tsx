@@ -351,7 +351,7 @@ export function MarketProductsPage() {
                 onClick={openAdd}
                 style={{
                   padding: "9px 18px", borderRadius: 10, border: "none",
-                  background: "linear-gradient(135deg, var(--rezvix-primary), var(--rezvix-primary-strong))", color: "#fff", cursor: "pointer",
+                  background: "linear-gradient(135deg, #6366f1, #4f46e5)", color: "#fff", cursor: "pointer",
                   fontWeight: 700, fontSize: 13.5, boxShadow: "0 6px 16px rgba(123,44,44,.28)", whiteSpace: "nowrap",
                 }}
               >
@@ -363,7 +363,7 @@ export function MarketProductsPage() {
           {/* Stats */}
           <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
             {[
-              { label: t("Toplam"), value: statTotal, color: "var(--rezvix-primary)", dot: "var(--rezvix-primary)" },
+              { label: t("Toplam"), value: statTotal, color: "#4f46e5", dot: "#4f46e5" },
               { label: t("Aktif"), value: statActive, color: "var(--rezvix-success)", dot: "var(--rezvix-success)" },
               { label: t("Tükenen"), value: statOut, color: "var(--rezvix-danger)", dot: "var(--rezvix-danger)" },
             ].map(s => (
