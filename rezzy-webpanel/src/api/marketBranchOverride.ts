@@ -28,9 +28,48 @@ export interface BranchOrgProduct {
   };
 }
 
-export async function listMyOrgProducts(params: { q?: string }) {
-  const { data } = await api.get(`/market/panel/org-products`, { params: withStore(params) });
-  return data as { items: BranchOrgProduct[]; organization: string | null };
+export interface OrgProductCategoryCount {
+  id: string | null;
+  key: string | null;
+  title: string | null;
+  parentId: string | null;
+  count: number;
+}
+
+export async function listMyOrgProductCategories() {
+  const { data } = await api.get(`/market/panel/org-products/categories`, {
+    params: withStore({}),
+  });
+  return data as {
+    categories: OrgProductCategoryCount[];
+    total: number;
+    hiddenCount: number;
+    organization: string | null;
+  };
+}
+
+export async function listMyOrgProducts(params: {
+  q?: string;
+  category?: string | null;
+  page?: number;
+  limit?: number;
+}) {
+  const { q, category, page, limit } = params;
+  const { data } = await api.get(`/market/panel/org-products`, {
+    params: withStore({
+      q: q || undefined,
+      category: category || undefined,
+      page: page || undefined,
+      limit: limit || undefined,
+    }),
+  });
+  return data as {
+    items: BranchOrgProduct[];
+    total: number;
+    page: number;
+    limit: number;
+    organization: string | null;
+  };
 }
 
 export async function upsertOverride(

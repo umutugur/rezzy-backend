@@ -3,8 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MarketDesktopLayout } from "../layouts/MarketDesktopLayout";
 import {
   listMyOrgProducts,
+  listMyOrgProductCategories,
   upsertOverride,
   type BranchOrgProduct,
+  type OrgProductCategoryCount,
 } from "../../api/marketBranchOverride";
 import { orgBulkPrice } from "../../api/marketOrgCatalog";
 import { showToast } from "../../ui/Toast";
@@ -183,7 +185,13 @@ function ProductRow({ item, onMutate }: RowProps) {
       : "";
 
   return (
-    <tr className="mcp-row" style={{ borderBottom: "1px solid #f0f1f6" }}>
+    <tr
+      className="mcp-row"
+      style={{
+        borderBottom: "1px solid #f0f1f6",
+        opacity: effectiveHidden ? 0.55 : 1,
+      }}
+    >
       {/* Ürün */}
       <td style={{ padding: "11px 16px", minWidth: 220 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
@@ -221,18 +229,37 @@ function ProductRow({ item, onMutate }: RowProps) {
             </div>
           )}
           <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                color: "#1b1c22",
-                fontWeight: 600,
-                fontSize: 13.5,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                maxWidth: 200,
-              }}
-            >
-              {item.title}
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div
+                style={{
+                  color: "#1b1c22",
+                  fontWeight: 600,
+                  fontSize: 13.5,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: 200,
+                }}
+              >
+                {item.title}
+              </div>
+              {effectiveHidden && (
+                <span
+                  style={{
+                    padding: "1px 6px",
+                    borderRadius: 5,
+                    fontSize: 9.5,
+                    fontWeight: 700,
+                    background: "rgba(220,38,38,.1)",
+                    color: "#dc2626",
+                    border: "1px solid rgba(220,38,38,.24)",
+                    letterSpacing: "0.03em",
+                    flexShrink: 0,
+                  }}
+                >
+                  GİZLİ
+                </span>
+              )}
             </div>
             {item.barcode ? (
               <div
@@ -412,17 +439,141 @@ function ProductRow({ item, onMutate }: RowProps) {
   );
 }
 
+const PAGE_SIZE = 100;
+
+// ── one lazily-loaded category group: fetches its own products only once expanded ──
+interface CategoryGroupProps {
+  id: string | null;
+  title: string;
+  count: number;
+  depth: 0 | 1;
+  /** Parent (depth 0) categories with children: the server's `category` filter
+   * matches parent + descendants, so we need to filter down to only direct
+   * matches client-side (children render as their own separate groups). */
+  exactMatchOnly?: boolean;
+  collapsed: boolean;
+  onToggle: () => void;
+  onMutate: (orgProductId: string, body: Record<string, unknown>, label: string) => Promise<void>;
+}
+function CategoryGroup({ id, title, count, depth, exactMatchOnly, collapsed, onToggle, onMutate }: CategoryGroupProps) {
+  const [loadedPages, setLoadedPages] = useState(1);
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ["org-products", id, loadedPages],
+    queryFn: async () => {
+      // fetch all pages up to loadedPages and merge (cheap: pages are cached individually by react-query too,
+      // but we keep a single query per (category, loadedPages) so re-opening a group is instant from cache).
+      const pages = await Promise.all(
+        Array.from({ length: loadedPages }, (_, i) =>
+          listMyOrgProducts({ category: id ?? undefined, page: i + 1, limit: PAGE_SIZE })
+        )
+      );
+      let items = pages.flatMap((p) => p.items);
+      const rawTotal = pages[pages.length - 1]?.total ?? items.length;
+      const rawFetchedCount = items.length;
+      if (exactMatchOnly && id) {
+        items = items.filter((it) => {
+          const c = it.category;
+          return c && typeof c === "object" ? c._id === id : c === id;
+        });
+      }
+      // more server pages remain if the raw (unfiltered) fetch hasn't reached the raw total yet
+      const serverHasMore = rawFetchedCount < rawTotal;
+      return { items, serverHasMore };
+    },
+    enabled: !collapsed,
+    placeholderData: (prev) => prev,
+  });
+
+  const items = data?.items ?? [];
+  const total = count; // authoritative exact-category total, from the categories endpoint
+  const hasMore = data?.serverHasMore ?? false;
+
+  return (
+    <>
+      <CategoryGroupHeaderRow
+        title={title}
+        count={total}
+        collapsed={collapsed}
+        depth={depth}
+        onToggle={onToggle}
+        colSpan={7}
+      />
+      {!collapsed && isLoading && (
+        <tr>
+          <td colSpan={7} style={{ padding: "14px 20px", color: "var(--rezvix-text-soft)", fontSize: 12.5 }}>
+            Yükleniyor…
+          </td>
+        </tr>
+      )}
+      {!collapsed &&
+        !isLoading &&
+        items.map((item) => <ProductRow key={item._id} item={item} onMutate={onMutate} />)}
+      {!collapsed && !isLoading && hasMore && (
+        <tr>
+          <td colSpan={7} style={{ padding: "10px 20px" }}>
+            <button
+              type="button"
+              disabled={isFetching}
+              onClick={() => setLoadedPages((p) => p + 1)}
+              style={{
+                background: "none",
+                border: "1px solid var(--rezvix-border-strong)",
+                borderRadius: 8,
+                padding: "6px 14px",
+                color: "#4f46e5",
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: isFetching ? "not-allowed" : "pointer",
+                opacity: isFetching ? 0.6 : 1,
+              }}
+            >
+              {isFetching ? "Yükleniyor…" : `Daha fazla yükle (kalan ${total - items.length})`}
+            </button>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────
 export function MarketChainProductsPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [bulkPriceOpen, setBulkPriceOpen] = useState(false);
+  const [searchPages, setSearchPages] = useState(1);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["my-org-products", search],
-    queryFn: () => listMyOrgProducts({ q: search || undefined }),
+  const isSearching = search.trim().length > 0;
+
+  // Categories drive the accordion headers + stat badges — cheap, fetched once up front.
+  const { data: catData, isLoading: catLoading } = useQuery({
+    queryKey: ["org-product-categories"],
+    queryFn: () => listMyOrgProductCategories(),
+    enabled: !isSearching,
+  });
+
+  // Search mode: flat, server-paginated list (accordion collapses while searching).
+  const { data: searchData, isLoading: searchLoading, isFetching: searchFetching } = useQuery({
+    queryKey: ["org-products-search", search, searchPages],
+    queryFn: async () => {
+      const pages = await Promise.all(
+        Array.from({ length: searchPages }, (_, i) =>
+          listMyOrgProducts({ q: search, page: i + 1, limit: PAGE_SIZE })
+        )
+      );
+      const items = pages.flatMap((p) => p.items);
+      const total = pages[pages.length - 1]?.total ?? items.length;
+      const organization = pages[pages.length - 1]?.organization ?? null;
+      return { items, total, organization };
+    },
+    enabled: isSearching,
     placeholderData: (prev) => prev,
   });
+
+  React.useEffect(() => {
+    setSearchPages(1);
+  }, [search]);
 
   const { mutateAsync: doUpsert } = useMutation({
     mutationFn: ({
@@ -433,7 +584,9 @@ export function MarketChainProductsPage() {
       body: Record<string, unknown>;
     }) => upsertOverride(orgProductId, body as any),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["my-org-products"] });
+      qc.invalidateQueries({ queryKey: ["org-products"] });
+      qc.invalidateQueries({ queryKey: ["org-products-search"] });
+      qc.invalidateQueries({ queryKey: ["org-product-categories"] });
     },
   });
 
@@ -450,9 +603,17 @@ export function MarketChainProductsPage() {
     }
   };
 
-  const items: BranchOrgProduct[] = data?.items ?? [];
-  const organization = data?.organization ?? null;
-  const overrideCount = items.filter((i) => i.override !== null).length;
+  const organization = isSearching
+    ? searchData?.organization ?? null
+    : catData?.organization ?? null;
+  const isLoading = isSearching ? searchLoading : catLoading;
+
+  const categories: OrgProductCategoryCount[] = catData?.categories ?? [];
+  const totalProducts = catData?.total ?? 0;
+  const hiddenCount = catData?.hiddenCount ?? 0;
+
+  const searchItems: BranchOrgProduct[] = searchData?.items ?? [];
+  const searchTotal = searchData?.total ?? 0;
 
   // Default state: ALL groups collapsed. We track EXPANDED groups explicitly.
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -466,72 +627,40 @@ export function MarketChainProductsPage() {
   };
   const isGroupCollapsed = (id: string) => !expandedGroups.has(id);
 
-  const isSearching = search.trim().length > 0;
-
-  // ── Category grouping (parent → children), derived from populated category on each item ──
-  const groupedSections = (() => {
-    if (isSearching) return null;
-
-    type CatInfo = { _id: string; title: string; parentId: string | null };
-    const catById = new Map<string, CatInfo>();
-    for (const it of items) {
-      const c = it.category;
-      if (c && typeof c === "object" && c._id) {
-        if (!catById.has(c._id)) {
-          catById.set(c._id, {
-            _id: c._id,
-            title: c.i18n?.tr?.title ?? c.key ?? "",
-            parentId: c.parentId ?? null,
-          });
-        }
-      }
-    }
-
-    const byCat = new Map<string, BranchOrgProduct[]>();
-    const catIdOf = (it: BranchOrgProduct): string => {
-      const c = it.category;
-      return c && typeof c === "object" ? c._id : typeof c === "string" ? c : "";
-    };
-    for (const it of items) {
-      const cid = catIdOf(it);
-      if (!byCat.has(cid)) byCat.set(cid, []);
-      byCat.get(cid)!.push(it);
-    }
-
-    const parents = [...catById.values()].filter((c) => !c.parentId);
-    type Section = { id: string; title: string; items: BranchOrgProduct[]; children: Section[] };
+  // ── Category grouping (parent → children) from the lightweight categories endpoint ──
+  const groupedSections = React.useMemo(() => {
+    type Section = { id: string; title: string; count: number; children: Section[] };
     const sections: Section[] = [];
-    const usedCatIds = new Set<string>();
+    const usedIds = new Set<string>();
 
+    const parents = categories.filter((c) => c.id != null && !c.parentId);
     for (const parent of parents) {
-      const kids = [...catById.values()].filter((c) => c.parentId === parent._id);
-      const parentItems = byCat.get(parent._id) ?? [];
-      const childSections: Section[] = [];
-      for (const kid of kids) {
-        usedCatIds.add(kid._id);
-        const kidItems = byCat.get(kid._id) ?? [];
-        if (kidItems.length > 0) childSections.push({ id: kid._id, title: kid.title, items: kidItems, children: [] });
-      }
-      usedCatIds.add(parent._id);
-      const totalCount = parentItems.length + childSections.reduce((s, c) => s + c.items.length, 0);
-      if (totalCount > 0) {
-        sections.push({ id: parent._id, title: parent.title, items: parentItems, children: childSections });
-      }
+      usedIds.add(parent.id as string);
+      const kids = categories.filter((c) => c.id != null && c.parentId === parent.id);
+      const childSections: Section[] = kids.map((kid) => {
+        usedIds.add(kid.id as string);
+        return { id: kid.id as string, title: kid.title ?? kid.key ?? "", count: kid.count, children: [] };
+      });
+      const totalCount = parent.count + childSections.reduce((s, c) => s + c.count, 0);
+      sections.push({
+        id: parent.id as string,
+        title: parent.title ?? parent.key ?? "",
+        count: totalCount,
+        children: childSections,
+      });
     }
 
-    const orphanItems: BranchOrgProduct[] = [];
-    for (const [cid, prods] of byCat.entries()) {
-      if (!cid || !usedCatIds.has(cid)) orphanItems.push(...prods);
-    }
-    if (orphanItems.length > 0) {
-      sections.push({ id: "__other", title: "Diğer", items: orphanItems, children: [] });
+    const otherCount = categories
+      .filter((c) => c.id == null || !usedIds.has(c.id as string))
+      .reduce((s, c) => s + c.count, 0);
+    if (otherCount > 0) {
+      sections.push({ id: "__other", title: "Diğer", count: otherCount, children: [] });
     }
 
     return sections;
-  })();
+  }, [categories]);
 
   const allGroupIds = React.useMemo(() => {
-    if (!groupedSections) return [];
     const ids: string[] = [];
     for (const section of groupedSections) {
       ids.push(section.id);
@@ -646,7 +775,7 @@ export function MarketChainProductsPage() {
                   items={[
                     {
                       key: "excel-price",
-                      label: "Fiyat Güncelle (Excel)",
+                      label: "Fiyat Güncelle",
                       icon: "chart",
                       onClick: () => setBulkPriceOpen(true),
                       title: "Excel ile toplu fiyat güncelle",
@@ -657,31 +786,19 @@ export function MarketChainProductsPage() {
             </div>
           </div>
 
-          {/* Stats row */}
-          {organization !== null && items.length > 0 && (
+          {/* Stats row — cheap aggregates from the categories endpoint only */}
+          {organization !== null && totalProducts > 0 && (
             <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
               {[
                 {
                   label: "Toplam",
-                  value: items.length,
+                  value: totalProducts,
                   dot: "#4f46e5",
                   text: "#4f46e5",
                 },
                 {
-                  label: "Şube Override",
-                  value: overrideCount,
-                  dot: "var(--rezvix-warning)",
-                  text: "var(--rezvix-warning)",
-                },
-                {
-                  label: "Stoğu Yok",
-                  value: items.filter((i) => !(i.override?.isAvailable ?? i.isAvailable)).length,
-                  dot: "var(--rezvix-danger)",
-                  text: "var(--rezvix-danger)",
-                },
-                {
                   label: "Gizli",
-                  value: items.filter((i) => i.override?.hidden).length,
+                  value: hiddenCount,
                   dot: "var(--rezvix-text-soft)",
                   text: "var(--rezvix-text-muted)",
                 },
@@ -772,27 +889,29 @@ export function MarketChainProductsPage() {
           </div>
         )}
 
-        {/* ── Empty search result ── */}
-        {!isLoading && organization !== null && items.length === 0 && (
-          <div
-            style={{
-              color: "var(--rezvix-text-soft)",
-              textAlign: "center",
-              padding: "60px 20px",
-              background: "var(--rezvix-bg-elevated)",
-              borderRadius: 14,
-              border: "1px dashed var(--rezvix-border-subtle)",
-            }}
-          >
-            <div style={{ fontSize: 38, marginBottom: 10, opacity: 0.6 }}>📋</div>
-            <div style={{ fontSize: 15, color: "var(--rezvix-text-muted)" }}>
-              {search ? "Eşleşen ürün yok." : "Zincir kataloğu henüz boş."}
+        {/* ── Empty result ── */}
+        {!isLoading &&
+          organization !== null &&
+          ((isSearching && searchItems.length === 0) || (!isSearching && groupedSections.length === 0)) && (
+            <div
+              style={{
+                color: "var(--rezvix-text-soft)",
+                textAlign: "center",
+                padding: "60px 20px",
+                background: "var(--rezvix-bg-elevated)",
+                borderRadius: 14,
+                border: "1px dashed var(--rezvix-border-subtle)",
+              }}
+            >
+              <div style={{ fontSize: 38, marginBottom: 10, opacity: 0.6 }}>📋</div>
+              <div style={{ fontSize: 15, color: "var(--rezvix-text-muted)" }}>
+                {isSearching ? "Eşleşen ürün yok." : "Zincir kataloğu henüz boş."}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Expand/collapse all — quiet text-link pair, top-right above the table */}
-        {!isLoading && organization !== null && groupedSections && groupedSections.length > 0 && (
+        {!isLoading && !isSearching && organization !== null && groupedSections.length > 0 && (
           <div style={{ marginBottom: 8 }}>
             <ExpandCollapseAll
               allCollapsed={expandedGroups.size === 0}
@@ -805,109 +924,123 @@ export function MarketChainProductsPage() {
         )}
 
         {/* ── Table ── */}
-        {!isLoading && organization !== null && items.length > 0 && (
-          <div
-            className="mcp-card"
-            style={{
-              background: "var(--rezvix-bg-elevated)",
-              borderRadius: 14,
-              border: "1px solid var(--rezvix-border-subtle)",
-              overflow: "hidden",
-              boxShadow: "0 1px 3px rgba(17,20,40,.05)",
-            }}
-          >
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr
-                  style={{
-                    borderBottom: "1px solid var(--rezvix-border-subtle)",
-                    background: "var(--rezvix-bg-soft)",
-                  }}
-                >
-                  {[
-                    { label: "Ürün", align: "left" as const },
-                    { label: "Geçerli Fiyat", align: "center" as const },
-                    { label: "Şube Fiyatı", align: "center" as const },
-                    { label: "İndirim", align: "center" as const },
-                    { label: "Stok", align: "center" as const },
-                    { label: "Gizle", align: "center" as const },
-                    { label: "Override", align: "center" as const },
-                  ].map((h) => (
-                    <th
-                      key={h.label}
-                      style={{
-                        padding: "12px 16px",
-                        color: "var(--rezvix-text-soft)",
-                        fontWeight: 700,
-                        fontSize: 11,
-                        letterSpacing: "0.07em",
-                        textTransform: "uppercase",
-                        textAlign: h.align,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {h.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  if (groupedSections) {
-                    return groupedSections.map((section) => {
-                      const parentCollapsed = isGroupCollapsed(section.id);
-                      const totalCount =
-                        section.items.length + section.children.reduce((s, c) => s + c.items.length, 0);
-                      return (
-                        <React.Fragment key={section.id}>
-                          <CategoryGroupHeaderRow
-                            title={section.title}
-                            count={totalCount}
-                            collapsed={parentCollapsed}
-                            depth={0}
-                            onToggle={() => toggleGroup(section.id)}
-                            colSpan={7}
-                          />
-                          {!parentCollapsed &&
-                            section.items.map((item) => (
-                              <ProductRow key={item._id} item={item} onMutate={handleMutate} />
-                            ))}
-                          {!parentCollapsed &&
-                            section.children.map((child) => {
-                              const childCollapsed = isGroupCollapsed(child.id);
-                              return (
-                                <React.Fragment key={child.id}>
-                                  <CategoryGroupHeaderRow
-                                    title={child.title}
-                                    count={child.items.length}
-                                    collapsed={childCollapsed}
-                                    depth={1}
-                                    onToggle={() => toggleGroup(child.id)}
-                                    colSpan={7}
-                                  />
-                                  {!childCollapsed &&
-                                    child.items.map((item) => (
-                                      <ProductRow key={item._id} item={item} onMutate={handleMutate} />
-                                    ))}
-                                </React.Fragment>
-                              );
-                            })}
-                        </React.Fragment>
-                      );
-                    });
-                  }
+        {!isLoading &&
+          organization !== null &&
+          ((isSearching && searchItems.length > 0) || (!isSearching && groupedSections.length > 0)) && (
+            <div
+              className="mcp-card"
+              style={{
+                background: "var(--rezvix-bg-elevated)",
+                borderRadius: 14,
+                border: "1px solid var(--rezvix-border-subtle)",
+                overflow: "hidden",
+                boxShadow: "0 1px 3px rgba(17,20,40,.05)",
+              }}
+            >
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr
+                    style={{
+                      borderBottom: "1px solid var(--rezvix-border-subtle)",
+                      background: "var(--rezvix-bg-soft)",
+                    }}
+                  >
+                    {[
+                      { label: "Ürün", align: "left" as const },
+                      { label: "Geçerli Fiyat", align: "center" as const },
+                      { label: "Şube Fiyatı", align: "center" as const },
+                      { label: "İndirim", align: "center" as const },
+                      { label: "Stok", align: "center" as const },
+                      { label: "Gizle", align: "center" as const },
+                      { label: "Override", align: "center" as const },
+                    ].map((h) => (
+                      <th
+                        key={h.label}
+                        style={{
+                          padding: "12px 16px",
+                          color: "var(--rezvix-text-soft)",
+                          fontWeight: 700,
+                          fontSize: 11,
+                          letterSpacing: "0.07em",
+                          textTransform: "uppercase",
+                          textAlign: h.align,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {h.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {isSearching
+                    ? searchItems.map((item) => (
+                        <ProductRow key={item._id} item={item} onMutate={handleMutate} />
+                      ))
+                    : groupedSections.map((section) => {
+                        const parentCollapsed = isGroupCollapsed(section.id);
+                        return (
+                          <React.Fragment key={section.id}>
+                            <CategoryGroup
+                              id={section.id === "__other" ? null : section.id}
+                              title={section.title}
+                              count={section.count}
+                              depth={0}
+                              exactMatchOnly={section.children.length > 0}
+                              collapsed={parentCollapsed}
+                              onToggle={() => toggleGroup(section.id)}
+                              onMutate={handleMutate}
+                            />
+                            {!parentCollapsed &&
+                              section.children.map((child) => (
+                                <CategoryGroup
+                                  key={child.id}
+                                  id={child.id}
+                                  title={child.title}
+                                  count={child.count}
+                                  depth={1}
+                                  collapsed={isGroupCollapsed(child.id)}
+                                  onToggle={() => toggleGroup(child.id)}
+                                  onMutate={handleMutate}
+                                />
+                              ))}
+                          </React.Fragment>
+                        );
+                      })}
+                </tbody>
+              </table>
 
-                  return items.map((item) => (
-                    <ProductRow key={item._id} item={item} onMutate={handleMutate} />
-                  ));
-                })()}
-              </tbody>
-            </table>
-          </div>
-        )}
+              {isSearching && searchTotal > searchItems.length && (
+                <div style={{ padding: "12px 16px", textAlign: "center" }}>
+                  <button
+                    type="button"
+                    disabled={searchFetching}
+                    onClick={() => setSearchPages((p) => p + 1)}
+                    style={{
+                      background: "none",
+                      border: "1px solid var(--rezvix-border-strong)",
+                      borderRadius: 8,
+                      padding: "6px 14px",
+                      color: "#4f46e5",
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      cursor: searchFetching ? "not-allowed" : "pointer",
+                      opacity: searchFetching ? 0.6 : 1,
+                    }}
+                  >
+                    {searchFetching
+                      ? "Yükleniyor…"
+                      : `Daha fazla yükle (kalan ${searchTotal - searchItems.length})`}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
         {/* column legend */}
-        {!isLoading && organization !== null && items.length > 0 && (
+        {!isLoading &&
+          organization !== null &&
+          ((isSearching && searchItems.length > 0) || (!isSearching && groupedSections.length > 0)) && (
           <div
             style={{
               marginTop: 12,
@@ -938,7 +1071,9 @@ export function MarketChainProductsPage() {
             onClose={() => setBulkPriceOpen(false)}
             onDone={() => {
               setBulkPriceOpen(false);
-              qc.invalidateQueries({ queryKey: ["my-org-products"] });
+              qc.invalidateQueries({ queryKey: ["org-products"] });
+              qc.invalidateQueries({ queryKey: ["org-products-search"] });
+              qc.invalidateQueries({ queryKey: ["org-product-categories"] });
             }}
             submit={(rows, dryRun) => orgBulkPrice(organization, rows, dryRun)}
           />
