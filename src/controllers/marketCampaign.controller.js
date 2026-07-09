@@ -37,8 +37,9 @@ export const joinCampaign = async (req, res, next) => {
     const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
     if (r.error) return res.status(r.error.status).json(r.error);
     const { store, access } = r;
-    if (access !== "owner" && req.user?.role !== "admin") {
-      return res.status(403).json({ message: "Bu işlem yalnızca mağaza sahibine açık" });
+    // owner + şube yöneticisi (manager) katılabilir — zincir şubelerinin owner'ı org sahibi olduğundan
+    if (access !== "owner" && access !== "manager" && req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Bu işlem için yetkiniz yok" });
     }
     const campaign = await Campaign.findById(req.params.campaignId).lean();
     if (!campaign || campaign.surface !== "market") return next({ status: 404, message: "Kampanya bulunamadı" });
@@ -61,8 +62,8 @@ export const leaveCampaign = async (req, res, next) => {
     const r = await resolvePanelStore(req.user, req.query.storeId || req.body?.storeId);
     if (r.error) return res.status(r.error.status).json(r.error);
     const { store, access } = r;
-    if (access !== "owner" && req.user?.role !== "admin") {
-      return res.status(403).json({ message: "Bu işlem yalnızca mağaza sahibine açık" });
+    if (access !== "owner" && access !== "manager" && req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Bu işlem için yetkiniz yok" });
     }
     await CampaignParticipation.findOneAndUpdate(
       { campaign: req.params.campaignId, store: store._id },
