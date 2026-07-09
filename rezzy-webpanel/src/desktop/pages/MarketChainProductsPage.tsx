@@ -9,6 +9,12 @@ import {
 import { orgBulkPrice } from "../../api/marketOrgCatalog";
 import { showToast } from "../../ui/Toast";
 import BulkPriceWizard from "../../pages/marketOrg/BulkPriceWizard";
+import { BulkActionsMenu } from "../../components/catalog/BulkActionsMenu";
+import {
+  CategoryGroupHeaderRow,
+  ExpandCollapseAll,
+  CATEGORY_GROUP_STYLES,
+} from "../../components/catalog/CategoryGroupHeader";
 
 // ── merge helper: changes only the patched field, preserves everything else ──
 function mergedBody(
@@ -448,15 +454,17 @@ export function MarketChainProductsPage() {
   const organization = data?.organization ?? null;
   const overrideCount = items.filter((i) => i.override !== null).length;
 
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // Default state: ALL groups collapsed. We track EXPANDED groups explicitly.
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (id: string) => {
-    setCollapsedGroups((prev) => {
+    setExpandedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
   };
+  const isGroupCollapsed = (id: string) => !expandedGroups.has(id);
 
   const isSearching = search.trim().length > 0;
 
@@ -522,20 +530,34 @@ export function MarketChainProductsPage() {
     return sections;
   })();
 
+  const allGroupIds = React.useMemo(() => {
+    if (!groupedSections) return [];
+    const ids: string[] = [];
+    for (const section of groupedSections) {
+      ids.push(section.id);
+      for (const child of section.children) ids.push(child.id);
+    }
+    return ids;
+  }, [groupedSections]);
+
+  const expandAllGroups = () => setExpandedGroups(new Set(allGroupIds));
+  const collapseAllGroups = () => setExpandedGroups(new Set());
+
   return (
     <MarketDesktopLayout>
       <div style={{ padding: 24 }}>
         <style>{`
           .mcp-row { transition: background .1s ease }
-          .mcp-row:hover { background: #f7f8fc }
-          .mcp-num:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 3px rgba(99,102,241,.14); outline: none }
-          .mcp-num::placeholder { color: #c3c7d2 }
+          .mcp-row:hover { background: var(--rezvix-bg-soft) }
+          .mcp-num:focus { border-color: var(--rezvix-primary) !important; box-shadow: 0 0 0 3px var(--rezvix-primary-soft); outline: none }
+          .mcp-num::placeholder { color: var(--rezvix-text-soft) }
           .mcp-reset:hover:not(:disabled) { background: rgba(220,38,38,.07) !important; border-color: #f1c4c4 !important }
           .mcp-search { transition: border-color .15s, box-shadow .15s }
-          .mcp-search:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 3px rgba(99,102,241,.14); outline: none }
-          .mcp-search::placeholder { color: #9aa1b1 }
+          .mcp-search:focus { border-color: var(--rezvix-primary) !important; box-shadow: 0 0 0 3px var(--rezvix-primary-soft); outline: none }
+          .mcp-search::placeholder { color: var(--rezvix-text-soft) }
           @keyframes mcpFadeIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
           .mcp-card { animation: mcpFadeIn .22s cubic-bezier(.16,1,.3,1) }
+          ${CATEGORY_GROUP_STYLES}
         `}</style>
 
         {/* ── Header ── */}
@@ -556,12 +578,13 @@ export function MarketChainProductsPage() {
                     width: 38,
                     height: 38,
                     borderRadius: 11,
-                    background: "linear-gradient(135deg,#4f46e5,#6366f1)",
+                    background:
+                      "linear-gradient(135deg, var(--rezvix-primary), var(--rezvix-primary-strong))",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: 18,
-                    boxShadow: "0 4px 14px rgba(79,70,229,.28)",
+                    boxShadow: "0 4px 14px rgba(123,44,44,.28)",
                     flexShrink: 0,
                   }}
                 >
@@ -569,7 +592,7 @@ export function MarketChainProductsPage() {
                 </div>
                 <h2
                   style={{
-                    color: "#1b1c22",
+                    color: "var(--rezvix-text-main)",
                     margin: 0,
                     fontSize: 22,
                     fontWeight: 800,
@@ -579,31 +602,12 @@ export function MarketChainProductsPage() {
                   Zincir Ürünleri
                 </h2>
               </div>
-              <p style={{ color: "#5b6172", margin: "0 0 0 48px", fontSize: 13 }}>
+              <p style={{ color: "var(--rezvix-text-muted)", margin: "0 0 0 48px", fontSize: 13 }}>
                 Zincir kataloğundaki ürünler için bu şubeye özel fiyat/stok ayarı
               </p>
             </div>
 
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              {organization && (
-                <button
-                  onClick={() => setBulkPriceOpen(true)}
-                  style={{
-                    padding: "9px 16px",
-                    borderRadius: 10,
-                    border: "1px solid #cdd0f5",
-                    background: "transparent",
-                    color: "#4f46e5",
-                    cursor: "pointer",
-                    fontWeight: 700,
-                    fontSize: 13.5,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  📊 Fiyat Güncelle (Excel)
-                </button>
-              )}
-
               {/* Search */}
               <div style={{ position: "relative" }}>
                 <span
@@ -612,7 +616,7 @@ export function MarketChainProductsPage() {
                     left: 11,
                     top: "50%",
                     transform: "translateY(-50%)",
-                    color: "#9aa1b1",
+                    color: "var(--rezvix-text-soft)",
                     fontSize: 13,
                     pointerEvents: "none",
                   }}
@@ -627,14 +631,29 @@ export function MarketChainProductsPage() {
                   style={{
                     padding: "9px 14px 9px 32px",
                     borderRadius: 10,
-                    border: "1px solid #d7dbe6",
-                    background: "#fff",
-                    color: "#1b1c22",
+                    border: "1px solid var(--rezvix-border-strong)",
+                    background: "var(--rezvix-bg-elevated)",
+                    color: "var(--rezvix-text-main)",
                     fontSize: 13.5,
                     width: 250,
                   }}
                 />
               </div>
+
+              {organization && (
+                <BulkActionsMenu
+                  label="Toplu İşlemler"
+                  items={[
+                    {
+                      key: "excel-price",
+                      label: "Fiyat Güncelle (Excel)",
+                      icon: "chart",
+                      onClick: () => setBulkPriceOpen(true),
+                      title: "Excel ile toplu fiyat güncelle",
+                    },
+                  ]}
+                />
+              )}
             </div>
           </div>
 
@@ -642,24 +661,29 @@ export function MarketChainProductsPage() {
           {organization !== null && items.length > 0 && (
             <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
               {[
-                { label: "Toplam", value: items.length, dot: "#6366f1", text: "#4f46e5" },
+                {
+                  label: "Toplam",
+                  value: items.length,
+                  dot: "var(--rezvix-primary)",
+                  text: "var(--rezvix-primary)",
+                },
                 {
                   label: "Şube Override",
                   value: overrideCount,
-                  dot: "#d97706",
-                  text: "#b45309",
+                  dot: "var(--rezvix-warning)",
+                  text: "var(--rezvix-warning)",
                 },
                 {
                   label: "Stoğu Yok",
                   value: items.filter((i) => !(i.override?.isAvailable ?? i.isAvailable)).length,
-                  dot: "#ef4444",
-                  text: "#dc2626",
+                  dot: "var(--rezvix-danger)",
+                  text: "var(--rezvix-danger)",
                 },
                 {
                   label: "Gizli",
                   value: items.filter((i) => i.override?.hidden).length,
-                  dot: "#9aa1b1",
-                  text: "#5b6172",
+                  dot: "var(--rezvix-text-soft)",
+                  text: "var(--rezvix-text-muted)",
                 },
               ].map((s) => (
                 <div
@@ -670,8 +694,8 @@ export function MarketChainProductsPage() {
                     gap: 8,
                     padding: "7px 13px",
                     borderRadius: 9,
-                    background: "#fff",
-                    border: "1px solid #e6e8ef",
+                    background: "var(--rezvix-bg-elevated)",
+                    border: "1px solid var(--rezvix-border-subtle)",
                     boxShadow: "0 1px 2px rgba(17,20,40,.04)",
                   }}
                 >
@@ -684,7 +708,7 @@ export function MarketChainProductsPage() {
                       flexShrink: 0,
                     }}
                   />
-                  <span style={{ color: "#5b6172", fontSize: 12.5 }}>{s.label}</span>
+                  <span style={{ color: "var(--rezvix-text-muted)", fontSize: 12.5 }}>{s.label}</span>
                   <span style={{ color: s.text, fontSize: 13.5, fontWeight: 700 }}>
                     {s.value}
                   </span>
@@ -701,16 +725,16 @@ export function MarketChainProductsPage() {
             style={{
               textAlign: "center",
               padding: "64px 24px",
-              background: "#fff",
+              background: "var(--rezvix-bg-elevated)",
               borderRadius: 16,
-              border: "1.5px dashed #e6e8ef",
+              border: "1.5px dashed var(--rezvix-border-subtle)",
               boxShadow: "0 1px 4px rgba(17,20,40,.04)",
             }}
           >
             <div style={{ fontSize: 48, marginBottom: 14, opacity: 0.5 }}>🔗</div>
             <div
               style={{
-                color: "#1b1c22",
+                color: "var(--rezvix-text-main)",
                 fontSize: 17,
                 fontWeight: 700,
                 marginBottom: 8,
@@ -721,7 +745,7 @@ export function MarketChainProductsPage() {
             </div>
             <p
               style={{
-                color: "#5b6172",
+                color: "var(--rezvix-text-muted)",
                 fontSize: 14,
                 maxWidth: 480,
                 margin: "0 auto",
@@ -738,7 +762,7 @@ export function MarketChainProductsPage() {
         {isLoading && (
           <div
             style={{
-              color: "#5b6172",
+              color: "var(--rezvix-text-muted)",
               padding: 48,
               textAlign: "center",
               fontSize: 14,
@@ -752,18 +776,31 @@ export function MarketChainProductsPage() {
         {!isLoading && organization !== null && items.length === 0 && (
           <div
             style={{
-              color: "#9aa1b1",
+              color: "var(--rezvix-text-soft)",
               textAlign: "center",
               padding: "60px 20px",
-              background: "#fff",
+              background: "var(--rezvix-bg-elevated)",
               borderRadius: 14,
-              border: "1px dashed #e6e8ef",
+              border: "1px dashed var(--rezvix-border-subtle)",
             }}
           >
             <div style={{ fontSize: 38, marginBottom: 10, opacity: 0.6 }}>📋</div>
-            <div style={{ fontSize: 15, color: "#5b6172" }}>
+            <div style={{ fontSize: 15, color: "var(--rezvix-text-muted)" }}>
               {search ? "Eşleşen ürün yok." : "Zincir kataloğu henüz boş."}
             </div>
+          </div>
+        )}
+
+        {/* Expand/collapse all — quiet text-link pair, top-right above the table */}
+        {!isLoading && organization !== null && groupedSections && groupedSections.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <ExpandCollapseAll
+              allCollapsed={expandedGroups.size === 0}
+              onExpandAll={expandAllGroups}
+              onCollapseAll={collapseAllGroups}
+              expandLabel="Tümünü aç"
+              collapseLabel="Tümünü kapat"
+            />
           </div>
         )}
 
@@ -772,9 +809,9 @@ export function MarketChainProductsPage() {
           <div
             className="mcp-card"
             style={{
-              background: "#fff",
+              background: "var(--rezvix-bg-elevated)",
               borderRadius: 14,
-              border: "1px solid #e6e8ef",
+              border: "1px solid var(--rezvix-border-subtle)",
               overflow: "hidden",
               boxShadow: "0 1px 3px rgba(17,20,40,.05)",
             }}
@@ -783,8 +820,8 @@ export function MarketChainProductsPage() {
               <thead>
                 <tr
                   style={{
-                    borderBottom: "1px solid #eef0f4",
-                    background: "#f8f9fc",
+                    borderBottom: "1px solid var(--rezvix-border-subtle)",
+                    background: "var(--rezvix-bg-soft)",
                   }}
                 >
                   {[
@@ -800,7 +837,7 @@ export function MarketChainProductsPage() {
                       key={h.label}
                       style={{
                         padding: "12px 16px",
-                        color: "#9aa1b1",
+                        color: "var(--rezvix-text-soft)",
                         fontWeight: 700,
                         fontSize: 11,
                         letterSpacing: "0.07em",
@@ -816,61 +853,45 @@ export function MarketChainProductsPage() {
               </thead>
               <tbody>
                 {(() => {
-                  const groupHeaderRow = (id: string, title: string, count: number, depth: 0 | 1) => {
-                    const collapsed = collapsedGroups.has(id);
-                    return (
-                      <tr
-                        key={`group-${id}`}
-                        onClick={() => toggleGroup(id)}
-                        style={{
-                          cursor: "pointer",
-                          background: depth === 0 ? "#f3f4fb" : "#f8f9fc",
-                          borderBottom: "1px solid #eef0f4",
-                        }}
-                      >
-                        <td
-                          colSpan={7}
-                          style={{
-                            padding: depth === 0 ? "10px 16px" : "8px 16px 8px 40px",
-                            fontWeight: 700,
-                            fontSize: depth === 0 ? 13 : 12.5,
-                            color: depth === 0 ? "#1b1c22" : "#4f46e5",
-                          }}
-                        >
-                          <span style={{ marginRight: 8, display: "inline-block", width: 10 }}>
-                            {collapsed ? "▸" : "▾"}
-                          </span>
-                          {depth === 0 ? title.toUpperCase() : title}
-                          <span style={{ marginLeft: 8, color: "#9aa1b1", fontWeight: 600, fontSize: 11.5 }}>
-                            ({count})
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  };
-
                   if (groupedSections) {
                     return groupedSections.map((section) => {
-                      const parentCollapsed = collapsedGroups.has(section.id);
+                      const parentCollapsed = isGroupCollapsed(section.id);
                       const totalCount =
                         section.items.length + section.children.reduce((s, c) => s + c.items.length, 0);
                       return (
                         <React.Fragment key={section.id}>
-                          {groupHeaderRow(section.id, section.title, totalCount, 0)}
+                          <CategoryGroupHeaderRow
+                            title={section.title}
+                            count={totalCount}
+                            collapsed={parentCollapsed}
+                            depth={0}
+                            onToggle={() => toggleGroup(section.id)}
+                            colSpan={7}
+                          />
                           {!parentCollapsed &&
                             section.items.map((item) => (
                               <ProductRow key={item._id} item={item} onMutate={handleMutate} />
                             ))}
                           {!parentCollapsed &&
-                            section.children.map((child) => (
-                              <React.Fragment key={child.id}>
-                                {groupHeaderRow(child.id, child.title, child.items.length, 1)}
-                                {!collapsedGroups.has(child.id) &&
-                                  child.items.map((item) => (
-                                    <ProductRow key={item._id} item={item} onMutate={handleMutate} />
-                                  ))}
-                              </React.Fragment>
-                            ))}
+                            section.children.map((child) => {
+                              const childCollapsed = isGroupCollapsed(child.id);
+                              return (
+                                <React.Fragment key={child.id}>
+                                  <CategoryGroupHeaderRow
+                                    title={child.title}
+                                    count={child.items.length}
+                                    collapsed={childCollapsed}
+                                    depth={1}
+                                    onToggle={() => toggleGroup(child.id)}
+                                    colSpan={7}
+                                  />
+                                  {!childCollapsed &&
+                                    child.items.map((item) => (
+                                      <ProductRow key={item._id} item={item} onMutate={handleMutate} />
+                                    ))}
+                                </React.Fragment>
+                              );
+                            })}
                         </React.Fragment>
                       );
                     });
@@ -892,8 +913,8 @@ export function MarketChainProductsPage() {
               marginTop: 12,
               padding: "10px 16px",
               borderRadius: 9,
-              background: "rgba(99,102,241,.05)",
-              border: "1px solid rgba(99,102,241,.12)",
+              background: "var(--rezvix-primary-soft)",
+              border: "1px solid rgba(123,44,44,.12)",
               display: "flex",
               flexWrap: "wrap",
               gap: "6px 20px",
@@ -905,8 +926,8 @@ export function MarketChainProductsPage() {
               ["Gizle", "ürünü bu şube katalogunda gizler"],
               ["Sıfırla", "tüm özelleştirmeleri siler"],
             ].map(([k, v]) => (
-              <span key={k} style={{ fontSize: 11.5, color: "#5b6172" }}>
-                <strong style={{ color: "#4f46e5" }}>{k}</strong> — {v}
+              <span key={k} style={{ fontSize: 11.5, color: "var(--rezvix-text-muted)" }}>
+                <strong style={{ color: "var(--rezvix-primary)" }}>{k}</strong> — {v}
               </span>
             ))}
           </div>

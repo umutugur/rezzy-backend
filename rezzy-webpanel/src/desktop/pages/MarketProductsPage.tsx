@@ -17,6 +17,12 @@ import {
 import { useI18n } from "../../i18n";
 import { showToast } from "../../ui/Toast";
 import BulkPriceWizard from "../../pages/marketOrg/BulkPriceWizard";
+import { BulkActionsMenu } from "../../components/catalog/BulkActionsMenu";
+import {
+  CategoryGroupHeaderRow,
+  ExpandCollapseAll,
+  CATEGORY_GROUP_STYLES,
+} from "../../components/catalog/CategoryGroupHeader";
 
 const emptyForm = { title: "", price: "", stock: "", unit: "piece", description: "", brand: "", netQuantity: "", discountPrice: "", barcode: "" };
 const emptyNetUnit: "L" | "ml" | "kg" | "g" | "piece" | "" = "";
@@ -52,7 +58,8 @@ export function MarketProductsPage() {
   const [suggestions, setSuggestions] = useState<ProductImageSuggestion[]>([]);
   const suggestionsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [bulkPriceOpen, setBulkPriceOpen] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // Default state: ALL groups collapsed. We track EXPANDED groups explicitly.
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   // Load categories
   const { data: categoriesData } = useQuery({
@@ -143,13 +150,27 @@ export function MarketProductsPage() {
   })();
 
   const toggleGroup = (id: string) => {
-    setCollapsedGroups(prev => {
+    setExpandedGroups(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
   };
+  const isGroupCollapsed = (id: string) => !expandedGroups.has(id);
+
+  const allGroupIds = React.useMemo(() => {
+    if (!groupedSections) return [];
+    const ids: string[] = [];
+    for (const section of groupedSections) {
+      ids.push(section.id);
+      for (const child of section.children) ids.push(child.id);
+    }
+    return ids;
+  }, [groupedSections]);
+
+  const expandAllGroups = () => setExpandedGroups(new Set(allGroupIds));
+  const collapseAllGroups = () => setExpandedGroups(new Set());
 
   // Debounced suggestions fetch
   useEffect(() => {
@@ -297,39 +318,41 @@ export function MarketProductsPage() {
         <div style={{ marginBottom: 18 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
             <div>
-              <h2 style={{ color: "#1b1c22", margin: 0, fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em" }}>{t("Ürünler")}</h2>
-              <p style={{ color: "#5b6172", margin: "3px 0 0", fontSize: 13 }}>{t("Mağaza ürünlerinizi yönetin")}</p>
+              <h2 style={{ color: "var(--rezvix-text-main)", margin: 0, fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em" }}>{t("Ürünler")}</h2>
+              <p style={{ color: "var(--rezvix-text-muted)", margin: "3px 0 0", fontSize: 13 }}>{t("Mağaza ürünlerinizi yönetin")}</p>
             </div>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
               <div style={{ position: "relative" }}>
-                <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9aa1b1", fontSize: 14, pointerEvents: "none" }}>🔍</span>
+                <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--rezvix-text-soft)", fontSize: 14, pointerEvents: "none" }}>🔍</span>
                 <input
                   className="mp-input"
                   placeholder={t("Ürün veya barkod ara…")}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   style={{
-                    padding: "9px 14px 9px 34px", borderRadius: 10, border: "1px solid #d7dbe6",
-                    background: "#ffffff", color: "#1b1c22", fontSize: 13.5, outline: "none", width: 260,
+                    padding: "9px 14px 9px 34px", borderRadius: 10, border: "1px solid var(--rezvix-border-strong)",
+                    background: "var(--rezvix-bg-elevated)", color: "var(--rezvix-text-main)", fontSize: 13.5, outline: "none", width: 260,
                   }}
                 />
               </div>
-              <button
-                onClick={() => setBulkPriceOpen(true)}
-                style={{
-                  padding: "9px 18px", borderRadius: 10, border: "1px solid #cdd0f5",
-                  background: "transparent", color: "#4f46e5", cursor: "pointer",
-                  fontWeight: 700, fontSize: 13.5, whiteSpace: "nowrap",
-                }}
-              >
-                📊 {t("Fiyat Güncelle (Excel)")}
-              </button>
+              <BulkActionsMenu
+                label={t("Toplu İşlemler")}
+                items={[
+                  {
+                    key: "excel-price",
+                    label: t("Fiyat Güncelle (Excel)"),
+                    icon: "chart",
+                    onClick: () => setBulkPriceOpen(true),
+                    title: t("Excel ile toplu fiyat güncelle"),
+                  },
+                ]}
+              />
               <button
                 onClick={openAdd}
                 style={{
                   padding: "9px 18px", borderRadius: 10, border: "none",
-                  background: "linear-gradient(135deg, #4f46e5, #6366f1)", color: "#fff", cursor: "pointer",
-                  fontWeight: 700, fontSize: 13.5, boxShadow: "0 6px 16px rgba(79,70,229,.28)", whiteSpace: "nowrap",
+                  background: "linear-gradient(135deg, var(--rezvix-primary), var(--rezvix-primary-strong))", color: "#fff", cursor: "pointer",
+                  fontWeight: 700, fontSize: 13.5, boxShadow: "0 6px 16px rgba(123,44,44,.28)", whiteSpace: "nowrap",
                 }}
               >
                 + {t("Ürün Ekle")}
@@ -340,16 +363,16 @@ export function MarketProductsPage() {
           {/* Stats */}
           <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
             {[
-              { label: t("Toplam"), value: statTotal, color: "#4f46e5", dot: "#6366f1" },
-              { label: t("Aktif"), value: statActive, color: "#16a34a", dot: "#22c55e" },
-              { label: t("Tükenen"), value: statOut, color: "#dc2626", dot: "#ef4444" },
+              { label: t("Toplam"), value: statTotal, color: "var(--rezvix-primary)", dot: "var(--rezvix-primary)" },
+              { label: t("Aktif"), value: statActive, color: "var(--rezvix-success)", dot: "var(--rezvix-success)" },
+              { label: t("Tükenen"), value: statOut, color: "var(--rezvix-danger)", dot: "var(--rezvix-danger)" },
             ].map(s => (
               <div key={s.label} style={{
                 display: "flex", alignItems: "center", gap: 8, padding: "8px 14px",
-                borderRadius: 10, background: "#ffffff", border: "1px solid #e6e8ef", boxShadow: "0 1px 2px rgba(17,20,40,.04)",
+                borderRadius: 10, background: "var(--rezvix-bg-elevated)", border: "1px solid var(--rezvix-border-subtle)", boxShadow: "0 1px 2px rgba(17,20,40,.04)",
               }}>
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: s.dot }} />
-                <span style={{ color: "#5b6172", fontSize: 12.5 }}>{s.label}</span>
+                <span style={{ color: "var(--rezvix-text-muted)", fontSize: 12.5 }}>{s.label}</span>
                 <span style={{ color: s.color, fontSize: 14, fontWeight: 700 }}>{s.value}</span>
               </div>
             ))}
@@ -375,27 +398,40 @@ export function MarketProductsPage() {
           .mp-ghost { transition: background .15s ease }
           .mp-ghost:hover { background: rgba(99,102,241,.10) }
           .mp-x:hover { background: #f1f3f9 !important; color: #1b1c22 !important }
+          ${CATEGORY_GROUP_STYLES}
         `}</style>
 
         {isLoading ? (
-          <div style={{ color: "#5b6172", padding: 40, textAlign: "center" }}>{t("Yükleniyor…")}</div>
+          <div style={{ color: "var(--rezvix-text-muted)", padding: 40, textAlign: "center" }}>{t("Yükleniyor…")}</div>
         ) : products.length === 0 ? (
           <div style={{
-            color: "#9aa1b1", textAlign: "center", marginTop: 8, padding: "60px 20px",
-            background: "#ffffff", borderRadius: 16, border: "1px dashed #e6e8ef",
+            color: "var(--rezvix-text-soft)", textAlign: "center", marginTop: 8, padding: "60px 20px",
+            background: "var(--rezvix-bg-elevated)", borderRadius: 16, border: "1px dashed var(--rezvix-border-subtle)",
           }}>
             <div style={{ fontSize: 40, marginBottom: 10, opacity: .7 }}>📦</div>
-            <div style={{ fontSize: 16, color: "#5b6172" }}>
+            <div style={{ fontSize: 16, color: "var(--rezvix-text-muted)" }}>
               {search ? t("Eşleşen ürün yok.") : t("Ürün bulunamadı.")}
             </div>
           </div>
         ) : (
-          <div style={{ background: "#ffffff", borderRadius: 14, border: "1px solid #e6e8ef", overflow: "hidden", boxShadow: "0 1px 2px rgba(17,20,40,.04)" }}>
+          <>
+          {groupedSections && groupedSections.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <ExpandCollapseAll
+                allCollapsed={expandedGroups.size === 0}
+                onExpandAll={expandAllGroups}
+                onCollapseAll={collapseAllGroups}
+                expandLabel={t("Tümünü aç")}
+                collapseLabel={t("Tümünü kapat")}
+              />
+            </div>
+          )}
+          <div style={{ background: "var(--rezvix-bg-elevated)", borderRadius: 14, border: "1px solid var(--rezvix-border-subtle)", overflow: "hidden", boxShadow: "0 1px 2px rgba(17,20,40,.04)" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ borderBottom: "1px solid #eef0f4", background: "#f8f9fc" }}>
+                <tr style={{ borderBottom: "1px solid var(--rezvix-border-subtle)", background: "var(--rezvix-bg-soft)" }}>
                   {[t("Ürün"), t("Kategori"), t("Fiyat"), t("Stok"), t("Durum"), ""].map((h, i) => (
-                    <th key={i} style={{ padding: "13px 16px", color: "#9aa1b1", fontWeight: 700, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", textAlign: (i === 2 || i === 3) ? "center" : "left" }}>
+                    <th key={i} style={{ padding: "13px 16px", color: "var(--rezvix-text-soft)", fontWeight: 700, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", textAlign: (i === 2 || i === 3) ? "center" : "left" }}>
                       {h}
                     </th>
                   ))}
@@ -475,33 +511,37 @@ export function MarketProductsPage() {
                   );
                   };
 
-                  const groupHeaderRow = (id: string, title: string, count: number, depth: 0 | 1) => {
-                    const collapsed = collapsedGroups.has(id);
-                    return (
-                      <tr key={`group-${id}`} onClick={() => toggleGroup(id)} style={{ cursor: "pointer", background: depth === 0 ? "#f3f4fb" : "#f8f9fc", borderBottom: "1px solid #eef0f4" }}>
-                        <td colSpan={6} style={{ padding: depth === 0 ? "10px 16px" : "8px 16px 8px 40px", fontWeight: 700, fontSize: depth === 0 ? 13 : 12.5, color: depth === 0 ? "#1b1c22" : "#4f46e5" }}>
-                          <span style={{ marginRight: 8, display: "inline-block", width: 10 }}>{collapsed ? "▸" : "▾"}</span>
-                          {depth === 0 ? title.toUpperCase() : title}
-                          <span style={{ marginLeft: 8, color: "#9aa1b1", fontWeight: 600, fontSize: 11.5 }}>({count})</span>
-                        </td>
-                      </tr>
-                    );
-                  };
-
                   if (groupedSections) {
                     return groupedSections.map(section => {
-                      const parentCollapsed = collapsedGroups.has(section.id);
+                      const parentCollapsed = isGroupCollapsed(section.id);
                       const totalCount = section.products.length + section.children.reduce((s, c) => s + c.products.length, 0);
                       return (
                         <React.Fragment key={section.id}>
-                          {groupHeaderRow(section.id, section.title, totalCount, 0)}
+                          <CategoryGroupHeaderRow
+                            title={section.title}
+                            count={totalCount}
+                            collapsed={parentCollapsed}
+                            depth={0}
+                            onToggle={() => toggleGroup(section.id)}
+                            colSpan={6}
+                          />
                           {!parentCollapsed && section.products.map(renderRow)}
-                          {!parentCollapsed && section.children.map(child => (
-                            <React.Fragment key={child.id}>
-                              {groupHeaderRow(child.id, child.title, child.products.length, 1)}
-                              {!collapsedGroups.has(child.id) && child.products.map(renderRow)}
-                            </React.Fragment>
-                          ))}
+                          {!parentCollapsed && section.children.map(child => {
+                            const childCollapsed = isGroupCollapsed(child.id);
+                            return (
+                              <React.Fragment key={child.id}>
+                                <CategoryGroupHeaderRow
+                                  title={child.title}
+                                  count={child.products.length}
+                                  collapsed={childCollapsed}
+                                  depth={1}
+                                  onToggle={() => toggleGroup(child.id)}
+                                  colSpan={6}
+                                />
+                                {!childCollapsed && child.products.map(renderRow)}
+                              </React.Fragment>
+                            );
+                          })}
                         </React.Fragment>
                       );
                     });
@@ -512,6 +552,7 @@ export function MarketProductsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         {/* ── Product Modal (light, two-column, sectioned, no-scroll-on-desktop) ── */}

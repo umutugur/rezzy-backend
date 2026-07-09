@@ -20,6 +20,12 @@ import { useI18n } from "../../i18n";
 import { showToast } from "../../ui/Toast";
 import CsvImportWizard from "./CsvImportWizard";
 import BulkPriceWizard from "./BulkPriceWizard";
+import { BulkActionsMenu } from "../../components/catalog/BulkActionsMenu";
+import {
+  CategoryGroupHeaderRow,
+  ExpandCollapseAll,
+  CATEGORY_GROUP_STYLES,
+} from "../../components/catalog/CategoryGroupHeader";
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
@@ -1504,15 +1510,18 @@ export default function OrgCatalog() {
   const total = data?.total ?? 0;
 
   // ── Category grouping (main category → subcategory), collapsible ──────────
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // Default state: ALL groups collapsed (scanning feel on a 2000-product catalog).
+  // We track which groups are explicitly EXPANDED rather than collapsed.
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (id: string) => {
-    setCollapsedGroups((prev) => {
+    setExpandedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
   };
+  const isGroupCollapsed = (id: string) => !expandedGroups.has(id);
 
   const isFiltering = search.trim().length > 0 || !!categoryFilter;
 
@@ -1578,6 +1587,20 @@ export default function OrgCatalog() {
 
     return sections;
   }, [isFiltering, categories, products]);
+
+  // All group ids (parent + child) — used for "expand all / collapse all".
+  const allGroupIds = React.useMemo(() => {
+    if (!groupedSections) return [];
+    const ids: string[] = [];
+    for (const section of groupedSections) {
+      ids.push(section.id);
+      for (const child of section.children) ids.push(child.id);
+    }
+    return ids;
+  }, [groupedSections]);
+
+  const expandAllGroups = () => setExpandedGroups(new Set(allGroupIds));
+  const collapseAllGroups = () => setExpandedGroups(new Set());
 
   // Delete mutation
   const { mutate: del } = useMutation({
@@ -2019,6 +2042,30 @@ export default function OrgCatalog() {
 
   const selectedCount = selectedIds.size;
 
+  const bulkMenuItems = [
+    {
+      key: "excel-price",
+      label: t("Fiyat Güncelle (Excel)"),
+      icon: "chart" as const,
+      onClick: () => setExcelWizardOpen(true),
+      title: t("Excel ile toplu fiyat güncelle"),
+    },
+    {
+      key: "csv-import",
+      label: t("CSV İçe Aktar"),
+      icon: "arrow-up" as const,
+      onClick: () => setWizardOpen(true),
+      title: t("CSV dosyasından ürün içe aktar (barkod upsert)"),
+    },
+    {
+      key: "csv-export",
+      label: exportLoading ? t("İndiriliyor…") : t("CSV Dışa Aktar"),
+      icon: "arrow-down" as const,
+      onClick: handleExport,
+      title: t("Tüm ürünleri CSV olarak indir"),
+    },
+  ];
+
   return (
     <div style={{ padding: 32 }}>
       <style>{`
@@ -2028,166 +2075,36 @@ export default function OrgCatalog() {
         .toolbar-btn:active { transform: scale(.97) !important; }
         @keyframes bulkBarIn { from { opacity: 0; transform: translateY(-8px) } to { opacity: 1; transform: none } }
         .bulk-bar { animation: bulkBarIn .18s cubic-bezier(.16,1,.3,1); }
+        ${CATEGORY_GROUP_STYLES}
       `}</style>
 
       <AdminPageHeader
         title={t("Ürün Kataloğu")}
         subtitle={t("Zincir genelinde geçerli master ürün listesi")}
         actions={
-          <button
-            onClick={openAdd}
-            style={{
-              padding: "10px 20px",
-              borderRadius: 10,
-              border: "none",
-              background:
-                "linear-gradient(135deg, var(--rezvix-primary), var(--rezvix-primary-strong))",
-              color: "#fff",
-              cursor: "pointer",
-              fontWeight: 700,
-              fontSize: 14,
-              boxShadow: "0 6px 16px rgba(123,44,44,.28)",
-              whiteSpace: "nowrap",
-            }}
-          >
-            + {t("Ürün Ekle")}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <BulkActionsMenu label={t("Toplu İşlemler")} items={bulkMenuItems} />
+            <button
+              onClick={openAdd}
+              style={{
+                padding: "10px 20px",
+                borderRadius: 10,
+                border: "none",
+                background:
+                  "linear-gradient(135deg, var(--rezvix-primary), var(--rezvix-primary-strong))",
+                color: "#fff",
+                cursor: "pointer",
+                fontWeight: 700,
+                fontSize: 14,
+                boxShadow: "0 6px 16px rgba(123,44,44,.28)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              + {t("Ürün Ekle")}
+            </button>
+          </div>
         }
       />
-
-      {/* ── Bulk Toolbar ─────────────────────────────────────────────────────── */}
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          marginBottom: 14,
-          flexWrap: "wrap",
-          alignItems: "center",
-          padding: "10px 16px",
-          borderRadius: 12,
-          background: "var(--rezvix-bg-soft)",
-          border: "1px solid var(--rezvix-border-subtle)",
-        }}
-      >
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: "0.07em",
-            textTransform: "uppercase",
-            color: "var(--rezvix-text-soft)",
-            marginRight: 4,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {t("Toplu İşlemler")}
-        </span>
-
-        {/* Divider */}
-        <div
-          style={{
-            width: 1,
-            height: 20,
-            background: "var(--rezvix-border-strong)",
-            margin: "0 4px",
-          }}
-        />
-
-        {/* CSV Export */}
-        <button
-          className="toolbar-btn"
-          onClick={handleExport}
-          disabled={exportLoading}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "7px 14px",
-            borderRadius: 8,
-            border: "1px solid var(--rezvix-border-strong)",
-            background: "var(--rezvix-bg-elevated)",
-            color: "var(--rezvix-text-main)",
-            cursor: exportLoading ? "wait" : "pointer",
-            fontSize: 13,
-            fontWeight: 600,
-            transition: "opacity .12s ease, transform .1s ease",
-            whiteSpace: "nowrap",
-          }}
-          title={t("Tüm ürünleri CSV olarak indir")}
-        >
-          <span style={{ fontSize: 14 }}>{exportLoading ? "⏳" : "⬇️"}</span>
-          {exportLoading ? t("İndiriliyor…") : t("CSV Dışa Aktar")}
-        </button>
-
-        {/* CSV Import */}
-        <button
-          className="toolbar-btn"
-          onClick={() => setWizardOpen(true)}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "7px 14px",
-            borderRadius: 8,
-            border: "1px solid var(--rezvix-border-strong)",
-            background: "var(--rezvix-bg-elevated)",
-            color: "var(--rezvix-text-main)",
-            cursor: "pointer",
-            fontSize: 13,
-            fontWeight: 600,
-            transition: "opacity .12s ease, transform .1s ease",
-            whiteSpace: "nowrap",
-          }}
-          title={t("CSV dosyasından ürün içe aktar (barkod upsert)")}
-        >
-          <span style={{ fontSize: 14 }}>⬆️</span>
-          {t("CSV İçe Aktar")}
-        </button>
-
-        {/* Excel Bulk Price Update */}
-        {orgId && (
-          <button
-            className="toolbar-btn"
-            onClick={() => setExcelWizardOpen(true)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "7px 14px",
-              borderRadius: 8,
-              border: "1px solid var(--rezvix-border-strong)",
-              background: "var(--rezvix-bg-elevated)",
-              color: "var(--rezvix-text-main)",
-              cursor: "pointer",
-              fontSize: 13,
-              fontWeight: 600,
-              transition: "opacity .12s ease, transform .1s ease",
-              whiteSpace: "nowrap",
-            }}
-            title={t("Excel ile toplu fiyat güncelle")}
-          >
-            <span style={{ fontSize: 14 }}>📊</span>
-            {t("Fiyat Güncelle (Excel)")}
-          </button>
-        )}
-
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
-
-        {/* Selection count */}
-        {selectedCount > 0 && (
-          <span
-            style={{
-              fontSize: 12.5,
-              color: "var(--rezvix-text-soft)",
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-            }}
-          >
-            <span style={{ color: "var(--rezvix-primary)", fontWeight: 700 }}>{selectedCount}</span> {t("seçildi")}
-          </span>
-        )}
-      </div>
 
       {/* ── Bulk Actions Bar (appears when rows selected) ─────────────────────── */}
       {selectedCount > 0 && (
@@ -2378,6 +2295,19 @@ export default function OrgCatalog() {
         </select>
       </div>
 
+      {/* Expand/collapse all — quiet text-link pair, top-right of the table */}
+      {groupedSections && groupedSections.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <ExpandCollapseAll
+            allCollapsed={expandedGroups.size === 0}
+            onExpandAll={expandAllGroups}
+            onCollapseAll={collapseAllGroups}
+            expandLabel={t("Tümünü aç")}
+            collapseLabel={t("Tümünü kapat")}
+          />
+        </div>
+      )}
+
       <DataTable<OrgProduct>
         columns={columns}
         rows={products}
@@ -2393,54 +2323,20 @@ export default function OrgCatalog() {
         renderBody={
           groupedSections
             ? () => {
-                const groupHeaderRow = (id: string, title: string, count: number, depth: 0 | 1) => {
-                  const collapsed = collapsedGroups.has(id);
-                  return (
-                    <tr
-                      key={`group-${id}`}
-                      onClick={() => toggleGroup(id)}
-                      style={{
-                        cursor: "pointer",
-                        background:
-                          depth === 0 ? "var(--rezvix-bg-soft)" : "var(--rezvix-bg-elevated)",
-                        borderBottom: "1px solid var(--rezvix-border-subtle)",
-                      }}
-                    >
-                      <td
-                        colSpan={columns.length}
-                        style={{
-                          padding: depth === 0 ? "10px 14px" : "8px 14px 8px 38px",
-                          fontWeight: 700,
-                          fontSize: depth === 0 ? 13 : 12.5,
-                          color: depth === 0 ? "var(--rezvix-text-main)" : "var(--rezvix-primary)",
-                        }}
-                      >
-                        <span style={{ marginRight: 8, display: "inline-block", width: 10 }}>
-                          {collapsed ? "▸" : "▼"}
-                        </span>
-                        {depth === 0 ? title.toUpperCase() : title}
-                        <span
-                          style={{
-                            marginLeft: 8,
-                            color: "var(--rezvix-text-soft)",
-                            fontWeight: 600,
-                            fontSize: 11.5,
-                          }}
-                        >
-                          ({count})
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                };
-
                 return groupedSections.map((section) => {
-                  const parentCollapsed = collapsedGroups.has(section.id);
+                  const parentCollapsed = isGroupCollapsed(section.id);
                   const totalCount =
                     section.items.length + section.children.reduce((s, c) => s + c.items.length, 0);
                   return (
                     <React.Fragment key={section.id}>
-                      {groupHeaderRow(section.id, section.title, totalCount, 0)}
+                      <CategoryGroupHeaderRow
+                        title={section.title}
+                        count={totalCount}
+                        collapsed={parentCollapsed}
+                        depth={0}
+                        onToggle={() => toggleGroup(section.id)}
+                        colSpan={columns.length}
+                      />
                       {!parentCollapsed &&
                         section.items.map((p) => (
                           <DataTableRow
@@ -2452,21 +2348,31 @@ export default function OrgCatalog() {
                           />
                         ))}
                       {!parentCollapsed &&
-                        section.children.map((child) => (
-                          <React.Fragment key={child.id}>
-                            {groupHeaderRow(child.id, child.title, child.items.length, 1)}
-                            {!collapsedGroups.has(child.id) &&
-                              child.items.map((p) => (
-                                <DataTableRow
-                                  key={p._id}
-                                  row={p}
-                                  columns={columns}
-                                  rowKey={(r) => r._id}
-                                  isLast={false}
-                                />
-                              ))}
-                          </React.Fragment>
-                        ))}
+                        section.children.map((child) => {
+                          const childCollapsed = isGroupCollapsed(child.id);
+                          return (
+                            <React.Fragment key={child.id}>
+                              <CategoryGroupHeaderRow
+                                title={child.title}
+                                count={child.items.length}
+                                collapsed={childCollapsed}
+                                depth={1}
+                                onToggle={() => toggleGroup(child.id)}
+                                colSpan={columns.length}
+                              />
+                              {!childCollapsed &&
+                                child.items.map((p) => (
+                                  <DataTableRow
+                                    key={p._id}
+                                    row={p}
+                                    columns={columns}
+                                    rowKey={(r) => r._id}
+                                    isLast={false}
+                                  />
+                                ))}
+                            </React.Fragment>
+                          );
+                        })}
                     </React.Fragment>
                   );
                 });
