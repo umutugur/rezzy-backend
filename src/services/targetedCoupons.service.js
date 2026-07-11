@@ -12,7 +12,11 @@ export async function completedOrderCount(userId, surface) {
     const TaxiRide = (await import("../models/TaxiRide.js")).default;
     return TaxiRide.countDocuments({ passenger: userId, status: "completed" });
   }
-  return 0; // restaurant wired in Phase 5
+  if (surface === "restaurant") {
+    const DeliveryOrder = (await import("../models/DeliveryOrder.js")).default;
+    return DeliveryOrder.countDocuments({ userId, status: { $ne: "cancelled" } });
+  }
+  return 0;
 }
 
 /** Grant a single auto coupon (idempotent) + notify. Returns true if newly granted. */

@@ -30,6 +30,14 @@ cron.schedule("0 10 * * *", async () => {
           { $match: { last: { $lt: cutoff } } },
           { $limit: 5000 },
         ]);
+      } else if (c.surface === "restaurant") {
+        const DeliveryOrder = (await import("../models/DeliveryOrder.js")).default;
+        candidates = await DeliveryOrder.aggregate([
+          { $match: { status: { $ne: "cancelled" } } },
+          { $group: { _id: "$userId", last: { $max: "$createdAt" } } },
+          { $match: { last: { $lt: cutoff } } },
+          { $limit: 5000 },
+        ]);
       }
       let granted = 0;
       for (const u of candidates) { if (u._id && (await grantCoupon(u._id, c))) granted++; }
