@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "../../i18n";
 import { AdminPageHeader } from "../../desktop/components/admin/AdminPageHeader";
 import { FormField } from "../../desktop/components/admin/FormField";
+import { EntityPicker } from "../../desktop/components/admin/EntityPicker";
+import { pickOrganizations } from "../../api/adminPickers";
 import {
   Campaign,
   CampaignInput,
@@ -1010,20 +1012,20 @@ export default function CampaignsPage() {
 
             {/* scope=chain */}
             {draft.conditions.scope === "chain" && (
-              <FormField label={t("Organizasyon ID")}>
-                <input
-                  className={inputCls}
-                  placeholder="organizationId"
-                  value={draft.conditions.organizationId ?? ""}
-                  onChange={(e) =>
+              <FormField label={t("Zincir (Organizasyon)")}>
+                <EntityPicker
+                  fetcher={pickOrganizations}
+                  value={draft.conditions.organizationId ?? null}
+                  onChange={(id: string | null) =>
                     setDraft((d) => ({
                       ...d,
                       conditions: {
                         ...d.conditions,
-                        organizationId: e.target.value.trim() || null,
+                        organizationId: id || null,
                       },
                     }))
                   }
+                  placeholder={t("Zincir ara…")}
                 />
               </FormField>
             )}
