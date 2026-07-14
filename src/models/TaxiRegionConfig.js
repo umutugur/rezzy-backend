@@ -34,6 +34,11 @@ const TaxiRegionConfigSchema = new mongoose.Schema(
       enabled: { type: Boolean, default: true },
       surcharge: { type: Number, default: 0, min: 0 },
     },
+    // Planlı Taksi — sabit ek ücret, komisyon matrahına girmez, tamamı sürücü kazancına yazılır.
+    scheduledRide: {
+      enabled: { type: Boolean, default: true },
+      fee: { type: Number, default: 0, min: 0 },
+    },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
