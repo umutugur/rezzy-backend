@@ -82,6 +82,15 @@ export async function getPetAddon(region) {
   return { enabled: !!cfg?.petAddon?.enabled, surcharge: Number(cfg?.petAddon?.surcharge) || 0 };
 }
 
+/** Planlı Taksi ücret konfigürasyonu (spec: sabit ek ücret, komisyon matrahına girmez). */
+export async function getScheduledRideConfig(region) {
+  const cfg = await getRegionConfig(region);
+  return {
+    enabled: cfg?.scheduledRide?.enabled !== false,
+    fee: Number(cfg?.scheduledRide?.fee) || 0,
+  };
+}
+
 /** Dispatch radius in meters for region (fallback 5000). */
 export async function getDispatchRadiusM(region) {
   const cfg = await getRegionConfig(region);

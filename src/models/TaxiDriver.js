@@ -61,6 +61,9 @@ const TaxiDriverSchema = new mongoose.Schema(
 
     // Son görülme zamanı (connectivity freshness)
     lastSeenAt: { type: Date, default: null, index: true },
+
+    // Planlı Taksi — 60dk içinde geç bırakılan üstlenme sayısı (admin görünürlüğü; otomatik ceza yok).
+    lateReleaseCount: { type: Number, default: 0 },
   },
   {
     timestamps: true,
