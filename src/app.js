@@ -45,6 +45,7 @@ import promotionsRoutes from "./routes/promotions.routes.js";
 // Taksi modülü
 import taxiRoutes from "./routes/taxi.routes.js";
 import taxiDriverRoutes from "./routes/taxiDriver.routes.js";
+import scheduledRideRoutes from "./routes/scheduledRide.routes.js";
 import reviewRoutes from "./routes/review.routes.js";
 import vehicleCatalogRoutes from "./routes/vehicleCatalog.routes.js";
 
@@ -145,6 +146,7 @@ app.use("/api", promotionsRoutes);
 // Taksi modülü
 app.use("/api", taxiRoutes);
 app.use("/api", taxiDriverRoutes);
+app.use("/api", scheduledRideRoutes);
 
 // Reviews modülü
 app.use("/api", reviewRoutes);
