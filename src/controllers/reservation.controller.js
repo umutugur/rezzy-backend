@@ -8,6 +8,11 @@ import { generateQRDataURL, verifyQR } from "../utils/qr.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import { notifyUser, notifyRestaurantOwner } from "../services/notification.service.js";
 import { addIncident, computeUnderAttendWeight } from "../services/userRisk.service.js";
+import {
+  createScheduledRideFromPayload,
+  activateScheduledRideForReservation,
+  cancelScheduledRideForReservation,
+} from "./scheduledRide.controller.js";
 import joi from "joi";
 import Stripe from "stripe";
 import { computeAvgSpendBaseForRestaurant } from "./menu.controller.js"; 
@@ -322,6 +327,20 @@ export const createReservation = async (req, res, next) => {
       paidCurrency: null,
       paidAmount: 0,
     });
+
+    // Planlı Taksi: client "Taksi de ister misiniz?" kartını doldurduysa `scheduledRide`
+    // payload'ı gelir. Quote sunucuda YENİDEN hesaplanır; hata rezervasyonu bloklamaz.
+    if (req.body?.scheduledRide) {
+      try {
+        await createScheduledRideFromPayload({
+          reservation: r,
+          userId: req.user.id,
+          payload: req.body.scheduledRide,
+        });
+      } catch (e) {
+        console.warn("[createReservation] scheduledRide oluşturma warn:", e?.message || e);
+      }
+    }
 
     res.json({
       reservationId: r._id.toString(),
@@ -796,6 +815,13 @@ export const approveReservation = async (req, res, next) => {
       console.warn("[approveReservation] notifyUser warn:", e?.message || e);
     }
 
+    // Planlı Taksi: bağlı plan varsa aktifleştir (pending_reservation → scheduled).
+    try {
+      await activateScheduledRideForReservation(r._id);
+    } catch (e) {
+      console.warn("[approveReservation] activateScheduledRideForReservation warn:", e?.message || e);
+    }
+
     res.json({ ok: true, qrDataUrl });
   } catch (e) {
     next(e);
@@ -820,6 +846,13 @@ export const rejectReservation = async (req, res, next) => {
       key: `cust:rejected:${r._id}`,
       type: "reservation_rejected",
     });
+
+    // Planlı Taksi: bağlı plan varsa iptal et.
+    try {
+      await cancelScheduledRideForReservation(r._id);
+    } catch (e) {
+      console.warn("[rejectReservation] cancelScheduledRideForReservation warn:", e?.message || e);
+    }
 
     res.json({ ok: true });
   } catch (e) {
@@ -864,6 +897,13 @@ export const cancelReservation = async (req, res, next) => {
       });
     } catch (e) {
       console.warn("[cancelReservation] notifyRestaurantOwner warn:", e?.message || e);
+    }
+
+    // Planlı Taksi: bağlı plan varsa iptal et.
+    try {
+      await cancelScheduledRideForReservation(r._id);
+    } catch (e) {
+      console.warn("[cancelReservation] cancelScheduledRideForReservation warn:", e?.message || e);
     }
 
     res.json({ ok: true, status: r.status });

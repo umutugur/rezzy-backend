@@ -7,6 +7,10 @@ import { generateQRDataURL, signQR } from "../utils/qr.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinary.js";
 import Restaurant, { BUSINESS_TYPES } from "../models/Restaurant.js";
 import { normalizeLang } from "../utils/i18n.js";
+import {
+  activateScheduledRideForReservation,
+  cancelScheduledRideForReservation,
+} from "./scheduledRide.controller.js";
 
 // --- AuthZ helper (multi-organization aware) ---
 function canManageRestaurant(user, restaurantId) {
@@ -967,6 +971,17 @@ export const updateReservationStatus = async (req, res, next) => {
     }
 
     await r.save();
+
+    // Planlı Taksi: panel "confirmed" ↔ "cancelled" dallarında bağlı planı senkronla.
+    try {
+      if (rawStatus === "confirmed") {
+        await activateScheduledRideForReservation(r._id);
+      } else if (rawStatus === "cancelled") {
+        await cancelScheduledRideForReservation(r._id);
+      }
+    } catch (e) {
+      console.warn("[updateReservationStatus] scheduledRide sync warn:", e?.message || e);
+    }
 
     return res.json({
       _id: r._id.toString(),
