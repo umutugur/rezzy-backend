@@ -503,12 +503,15 @@ export async function releaseScheduledRide(req, res, next) {
 // ─── POST /api/cron/taxi-sweep ──────────────────────────────────────────────
 export async function cronTaxiSweep(req, res, next) {
   try {
-    const secret = process.env.CRON_SECRET;
-    if (!secret) return res.status(503).json({ message: "CRON_SECRET yapılandırılmamış" });
+    // Repo'nun yerleşik cron secret'ı CRON_JOB_SECRET (bkz. src/routes/jobs.js); CRON_SECRET de kabul edilir.
+    const secret = process.env.CRON_JOB_SECRET || process.env.CRON_SECRET;
+    if (!secret) return res.status(503).json({ message: "CRON_JOB_SECRET yapılandırılmamış" });
 
     const authHeader = req.headers.authorization || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-    if (!token || token !== secret) return res.status(401).json({ message: "Unauthorized" });
+    // jobs.js deseniyle uyum için ?k= query parametresi de kabul edilir.
+    const provided = token || req.query?.k || null;
+    if (!provided || provided !== secret) return res.status(401).json({ message: "Unauthorized" });
 
     const result = await runScheduledRideSweep(new Date());
     return res.json({ ok: true, ...result });
