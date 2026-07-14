@@ -30,6 +30,7 @@ export type TaxiRegionConfig = {
   vehicleTypes: VehicleType[];
   nightTariff: { enabled: boolean; start: string; end: string };
   petAddon: { enabled: boolean; surcharge: number };
+  scheduledRide: { enabled: boolean; fee: number };
   timezone: string;
   isActive: boolean;
 };

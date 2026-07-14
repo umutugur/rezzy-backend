@@ -46,6 +46,7 @@ type FormState = {
   vehicleTypes: VehicleType[];
   nightTariff: { enabled: boolean; start: string; end: string };
   petAddon: { enabled: boolean; surcharge: number };
+  scheduledRide: { enabled: boolean; fee: number };
   timezone: string;
 };
 
@@ -56,6 +57,7 @@ const DEFAULT_FORM: FormState = {
   vehicleTypes: [],
   nightTariff: { enabled: false, start: "22:00", end: "06:00" },
   petAddon: { enabled: true, surcharge: 0 },
+  scheduledRide: { enabled: true, fee: 0 },
   timezone: "Europe/Istanbul",
 };
 
@@ -327,6 +329,7 @@ export default function AdminTaxiConfigPage() {
         vehicleTypes: Array.isArray(cfg.vehicleTypes) ? cfg.vehicleTypes : [],
         nightTariff: cfg.nightTariff ?? { enabled: false, start: "22:00", end: "06:00" },
         petAddon: cfg.petAddon ?? { enabled: true, surcharge: 0 },
+        scheduledRide: cfg.scheduledRide ?? { enabled: true, fee: 0 },
         timezone: cfg.timezone ?? "Europe/Istanbul",
       });
     } else {
@@ -350,6 +353,7 @@ export default function AdminTaxiConfigPage() {
         vehicleTypes,
         nightTariff: form.nightTariff,
         petAddon: form.petAddon,
+        scheduledRide: form.scheduledRide,
         timezone: form.timezone,
       });
     },
@@ -599,6 +603,46 @@ export default function AdminTaxiConfigPage() {
                 />
               </div>
             </div>
+          </div>
+
+          {/* ── Scheduled ride ── */}
+          <div>
+            <h3 style={sectionHeadingStyle}>{t("Planlı Yolculuk")}</h3>
+            <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", color: "var(--rezvix-text-main)" }}>
+                <input
+                  type="checkbox"
+                  checked={form.scheduledRide.enabled}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      scheduledRide: { ...prev.scheduledRide, enabled: e.target.checked },
+                    }))
+                  }
+                />
+                {t("Aktif")}
+              </label>
+              <div>
+                <label style={labelStyle}>{t("Ücret")}</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  style={{ ...narrowInputStyle, opacity: form.scheduledRide.enabled ? 1 : 0.4 }}
+                  disabled={!form.scheduledRide.enabled}
+                  value={form.scheduledRide.fee}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      scheduledRide: { ...prev.scheduledRide, fee: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <p style={{ fontSize: 12, color: "var(--rezvix-text-soft)", margin: "8px 0 0" }}>
+              {t("Planlı yolculuklara eklenen sabit ücret — tamamı sürücüye gider.")}
+            </p>
           </div>
 
           {/* ── Vehicle types repeater ── */}
