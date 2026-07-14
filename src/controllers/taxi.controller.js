@@ -122,101 +122,152 @@ export async function getVehicleTypesHandler(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// ─── POST /api/taxi/rides ─────────────────────────────────────────────────────
-export async function createRide(req, res, next) {
-  try {
-    const passengerId = req.user.id;
-    const { pickup, dropoff, vehicleType = "ride", paymentMethod = "cash" } = req.body;
+// ─── createRideCore ───────────────────────────────────────────────────────────
+// req/res'siz çekirdek yolculuk oluşturma mantığı. `createRide` (POST /api/taxi/rides)
+// bunu çağırır; Planlı Taksi süpürme motoru (P2, scheduledRideSweep.js) da aynı
+// çekirdeği kullanacak (convert/convert-to-dispatch). Beklenen/iş-kuralı durumları
+// (validasyon, aktif yolculuk çakışması, Stripe konfig hatası) throw ETMEZ —
+// `{ ok:false, status, body }` döner ki çağıran orijinal response şeklini birebir
+// koruyabilsin. Beklenmeyen hatalar (DB vb.) normal şekilde throw edilir.
+//
+// payload: { user, pickup, dropoff, vehicleType, acceptsPets, paymentMethod, region,
+//            couponCampaignId, scheduledRideId, scheduledFee }
+// opts:    { assignDriverId } — verilirse yakın sürücü dispatch/push atlanır, yolculuk
+//            doğrudan bu sürücüye "matched" olarak atanır (mevcut respondToRide ile aynı desen).
+export async function createRideCore(payload, opts = {}) {
+  const {
+    user: passengerId,
+    pickup,
+    dropoff,
+    vehicleType = "ride",
+    acceptsPets = false,
+    paymentMethod = "cash",
+    region: regionOverride = null,
+    couponCampaignId = null,
+    scheduledRideId = null,
+    scheduledFee = 0,
+  } = payload;
+  const { assignDriverId = null } = opts;
 
-    if (!pickup?.address || !dropoff?.address) {
-      return res.status(400).json({ message: "pickup.address ve dropoff.address gerekli" });
-    }
+  if (!pickup?.address || !dropoff?.address) {
+    return { ok: false, status: 400, body: { message: "pickup.address ve dropoff.address gerekli" } };
+  }
 
-    // Mevcut aktif yolculuk kontrolü
-    const existing = await TaxiRide.findOne({
-      passenger: passengerId,
-      status: { $in: ["searching", "matched", "inProgress"] },
-    });
-    if (existing) {
-      return res.status(409).json({ message: "Zaten aktif bir yolculuğunuz var", rideId: existing._id });
-    }
-
-    const origin = {
-      lat: pickup.coordinates?.[1] ?? 0,
-      lng: pickup.coordinates?.[0] ?? 0,
+  // Mevcut aktif yolculuk kontrolü
+  const existing = await TaxiRide.findOne({
+    passenger: passengerId,
+    status: { $in: ["searching", "matched", "inProgress"] },
+  });
+  if (existing) {
+    return {
+      ok: false,
+      status: 409,
+      body: { message: "Zaten aktif bir yolculuğunuz var", rideId: existing._id },
     };
-    const destination = {
-      lat: dropoff.coordinates?.[1] ?? 0,
-      lng: dropoff.coordinates?.[0] ?? 0,
-    };
+  }
 
-    const { distanceKm, durationMin } = await getRouteInfo(origin, destination);
+  const origin = {
+    lat: pickup.coordinates?.[1] ?? 0,
+    lng: pickup.coordinates?.[0] ?? 0,
+  };
+  const destination = {
+    lat: dropoff.coordinates?.[1] ?? 0,
+    lng: dropoff.coordinates?.[0] ?? 0,
+  };
 
-    // Region-aware fare (falls back to hardcoded tariffs when no DB config exists)
-    const passengerUser = await User.findById(passengerId).select("region").lean();
-    const region = normalizeRegion(req.body?.region) ?? passengerUser?.region ?? null;
-    const petRequested = req.body?.petRequested === true;
-    const { fare, isNight } = await estimateFareForRegion(region, vehicleType, distanceKm, { petRequested });
+  const { distanceKm, durationMin } = await getRouteInfo(origin, destination);
 
-    const safePaymentMethod = ["cash", "card", "online"].includes(paymentMethod) ? paymentMethod : "cash";
+  // Region-aware fare (falls back to hardcoded tariffs when no DB config exists)
+  const passengerUser = await User.findById(passengerId).select("region").lean();
+  const region = normalizeRegion(regionOverride) ?? passengerUser?.region ?? null;
+  const petRequested = acceptsPets === true;
+  const { fare, isNight } = await estimateFareForRegion(region, vehicleType, distanceKm, { petRequested });
 
-    let discount = 0, platformContribution = 0, businessContribution = 0, couponCampaign = null;
-    const couponCampaignId = req.body?.couponCampaignId;
-    if (couponCampaignId) {
-      const campaign = await Campaign.findById(couponCampaignId);
-      const held = campaign
-        ? await UserCoupon.findOne({ user: passengerId, campaign: campaign._id, status: "active" })
-        : null;
-      if (campaign && held) {
-        const r = await evaluateForOrder({
-          campaign,
-          user: passengerId,
-          base: fare,
-          deliveryFee: 0,
-          surface: "taxi",
-          region,
-          paymentMethod: safePaymentMethod,
-          storeId: null,
-          storeCategory: vehicleType,
-          organizationId: null,
-        });
-        if (r.eligible) {
-          discount = r.discount;
-          platformContribution = r.platformContribution;
-          businessContribution = r.businessContribution;
-          couponCampaign = campaign._id;
-        }
+  const safePaymentMethod = ["cash", "card", "online"].includes(paymentMethod) ? paymentMethod : "cash";
+  const safeScheduledFee = Math.max(0, Number(scheduledFee) || 0);
+
+  let discount = 0, platformContribution = 0, businessContribution = 0, couponCampaign = null;
+  if (couponCampaignId) {
+    const campaign = await Campaign.findById(couponCampaignId);
+    const held = campaign
+      ? await UserCoupon.findOne({ user: passengerId, campaign: campaign._id, status: "active" })
+      : null;
+    if (campaign && held) {
+      const r = await evaluateForOrder({
+        campaign,
+        user: passengerId,
+        base: fare,
+        deliveryFee: 0,
+        surface: "taxi",
+        region,
+        paymentMethod: safePaymentMethod,
+        storeId: null,
+        storeCategory: vehicleType,
+        organizationId: null,
+      });
+      if (r.eligible) {
+        discount = r.discount;
+        platformContribution = r.platformContribution;
+        businessContribution = r.businessContribution;
+        couponCampaign = campaign._id;
       }
     }
-    const customerFare = +(fare - discount).toFixed(2);
+  }
+  // customerFare: kupon indirimi sonrası, scheduledFee HARİÇ (komisyon/kupon matrahı = fare/grossFare, değişmez).
+  const customerFare = +(fare - discount).toFixed(2);
+  // Müşteriye yansıyan toplam tutar: scheduledFee üstüne eklenir (pet eklentisinin `fare`'e
+  // eklendiği desenle tutarlı — bkz. taxiPricing.service.js estimateFareForRegion).
+  const totalFare = +(customerFare + safeScheduledFee).toFixed(2);
 
-    const ride = await TaxiRide.create({
-      passenger: passengerId,
-      pickup: {
-        address: pickup.address,
-        coordinates: pickup.coordinates ?? [0, 0],
-      },
-      dropoff: {
-        address: dropoff.address,
-        coordinates: dropoff.coordinates ?? [0, 0],
-      },
-      vehicleType,
-      petRequested,
-      isNight,
-      distanceKm,
-      durationMin,
-      fare: customerFare,
-      grossFare: fare,
-      discount,
-      platformContribution,
-      businessContribution,
-      couponCampaign,
-      driverEarning: fare,
-      region,
-      paymentMethod: safePaymentMethod,
-      status: "searching",
-    });
+  const ride = await TaxiRide.create({
+    passenger: passengerId,
+    pickup: {
+      address: pickup.address,
+      coordinates: pickup.coordinates ?? [0, 0],
+    },
+    dropoff: {
+      address: dropoff.address,
+      coordinates: dropoff.coordinates ?? [0, 0],
+    },
+    vehicleType,
+    petRequested,
+    isNight,
+    distanceKm,
+    durationMin,
+    fare: totalFare,
+    grossFare: fare,
+    discount,
+    platformContribution,
+    businessContribution,
+    couponCampaign,
+    // scheduledFee komisyon matrahına girmez (grossFare/discount hesabına dahil edilmedi);
+    // tamamı sürücü kazancına yazılır (pet eklentisinin fare'e girme deseniyle tutarlı additive yaklaşım).
+    driverEarning: +(fare + safeScheduledFee).toFixed(2),
+    scheduledRideId,
+    scheduledFee: safeScheduledFee,
+    region,
+    paymentMethod: safePaymentMethod,
+    status: assignDriverId ? "matched" : "searching",
+  });
 
+  let nearbyDriverIds = [];
+  let assignedDriver = null;
+
+  if (assignDriverId) {
+    // Planlı Taksi convert: doğrudan atama, dispatch broadcast'i atlanır.
+    assignedDriver = await TaxiDriver.findById(assignDriverId);
+    if (assignedDriver) {
+      ride.driver = assignedDriver._id;
+      ride.matchedAt = new Date();
+      await ride.save();
+
+      assignedDriver.isAvailable = false;
+      assignedDriver.activeRide = ride._id;
+      await assignedDriver.save();
+
+      if (_io) await emitRideStatusChange(_io, ride);
+    }
+  } else {
     // Pickup'a yakın online ve müsait sürücüleri bul
     const dispatchRadiusM = await getDispatchRadiusM(region);
 
@@ -240,7 +291,7 @@ export async function createRide(req, res, next) {
       .populate("user", "pushTokens notificationPrefs")
       .limit(10);
 
-    const nearbyDriverIds = nearbyDrivers.map((d) => d._id.toString());
+    nearbyDriverIds = nearbyDrivers.map((d) => d._id.toString());
 
     // NOTE: The coupon redemption (budget.spent + UserCoupon consumption) is NOT
     // recorded here. The discount is computed and stored on the ride above, but the
@@ -274,48 +325,75 @@ export async function createRide(req, res, next) {
         },
       }).catch((err) => console.error("[createRide] push error:", err.message));
     }
+  }
 
-    // ─── Online ödeme: Stripe PaymentIntent (yolculuk başlamadan önce tahsil) ─
-    if (safePaymentMethod === "online") {
-      if (!stripe) {
-        await TaxiRide.findByIdAndDelete(ride._id);
-        return res.status(500).json({ message: "Stripe konfigüre değil. Online ödeme yapılamıyor." });
-      }
+  // ─── Online ödeme: Stripe PaymentIntent (yolculuk başlamadan önce tahsil) ─
+  if (safePaymentMethod === "online") {
+    if (!stripe) {
+      await TaxiRide.findByIdAndDelete(ride._id);
+      return { ok: false, status: 500, body: { message: "Stripe konfigüre değil. Online ödeme yapılamıyor." } };
+    }
 
-      try {
-        const pi = await stripe.paymentIntents.create({
-          amount: Math.round(customerFare * 100),
-          currency: "try",
-          automatic_payment_methods: { enabled: true },
-          metadata: {
-            kind: "taxi_ride",
-            rideId: String(ride._id),
-            passengerId: String(passengerId),
-            vehicleType,
-          },
-        });
+    try {
+      const pi = await stripe.paymentIntents.create({
+        amount: Math.round(totalFare * 100),
+        currency: "try",
+        automatic_payment_methods: { enabled: true },
+        metadata: {
+          kind: "taxi_ride",
+          rideId: String(ride._id),
+          passengerId: String(passengerId),
+          vehicleType,
+        },
+      });
 
-        ride.stripePaymentIntentId = pi.id;
-        await ride.save();
+      ride.stripePaymentIntentId = pi.id;
+      await ride.save();
 
-        return res.status(201).json({
+      return {
+        ok: true,
+        body: {
           ride,
           nearbyDriverCount: nearbyDriverIds.length,
           payment: {
             paymentIntentId: pi.id,
             clientSecret: pi.client_secret,
-            amount: customerFare,
+            amount: totalFare,
             currency: "TRY",
           },
-        });
-      } catch (stripeErr) {
-        console.error("[taxi.createRide] Stripe error", stripeErr);
-        await TaxiRide.findByIdAndDelete(ride._id).catch(() => {});
-        return res.status(500).json({ message: "Ödeme sistemi başlatılamadı. Lütfen tekrar deneyin." });
-      }
+        },
+      };
+    } catch (stripeErr) {
+      console.error("[taxi.createRide] Stripe error", stripeErr);
+      await TaxiRide.findByIdAndDelete(ride._id).catch(() => {});
+      return { ok: false, status: 500, body: { message: "Ödeme sistemi başlatılamadı. Lütfen tekrar deneyin." } };
     }
+  }
 
-    return res.status(201).json({ ride, nearbyDriverCount: nearbyDriverIds.length, payment: null });
+  return { ok: true, body: { ride, nearbyDriverCount: nearbyDriverIds.length, payment: null } };
+}
+
+// ─── POST /api/taxi/rides ─────────────────────────────────────────────────────
+export async function createRide(req, res, next) {
+  try {
+    const passengerId = req.user.id;
+    const { pickup, dropoff, vehicleType = "ride", paymentMethod = "cash" } = req.body;
+
+    const result = await createRideCore({
+      user: passengerId,
+      pickup,
+      dropoff,
+      vehicleType,
+      acceptsPets: req.body?.petRequested === true,
+      paymentMethod,
+      region: req.body?.region,
+      couponCampaignId: req.body?.couponCampaignId,
+    });
+
+    if (!result.ok) {
+      return res.status(result.status).json(result.body);
+    }
+    return res.status(201).json(result.body);
   } catch (err) {
     next(err);
   }

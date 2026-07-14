@@ -47,6 +47,12 @@ const TaxiRideSchema = new mongoose.Schema(
     driverEarning: { type: Number, default: 0 },
     commission: { type: Number, default: 0, min: 0 },
 
+    // Planlı Taksi bağlantısı — dönüştürülmüş yolculuklarda dolu.
+    scheduledRideId: { type: mongoose.Schema.Types.ObjectId, ref: "ScheduledRide", default: null },
+    // Bölgeden snapshot alınan sabit ek ücret; toplam ücrete eklenir, komisyon/kupon
+    // matrahına (grossFare/discount hesaplarına) GİRMEZ, tamamı sürücü kazancına yazılır.
+    scheduledFee: { type: Number, default: 0, min: 0 },
+
     // Durum
     status: {
       type: String,
