@@ -207,7 +207,7 @@ export async function cancelScheduledRideForReservation(reservationId) {
 // ─── POST /api/taxi/scheduled/quote ─────────────────────────────────────────
 export async function quoteScheduledRide(req, res, next) {
   try {
-    const { pickup, dropoff, vehicleType = "ride", pickupAt, reservationAt, acceptsPets } = req.body || {};
+    const { pickup, dropoff, vehicleType = "ride", pickupAt, reservationAt, acceptsPets, restaurantId } = req.body || {};
 
     if (!pickup?.address || typeof pickup?.lat !== "number" || typeof pickup?.lng !== "number") {
       return res.status(400).json({ message: "pickup.lat/lng/address gerekli" });
@@ -230,8 +230,16 @@ export async function quoteScheduledRide(req, res, next) {
 
     const effectivePickupAt = pickupAt ? new Date(pickupAt) : suggestedPickupAt ?? new Date();
 
+    // Bölge önceliği ORLUŞTURMAYLA AYNI olmalı: restoran bölgesi > body > kullanıcı bölgesi.
+    // (Aksi hâlde quote kullanıcının bölge tarifesiyle, kayıt restoranın tarifesiyle hesaplanıp tutmaz.)
+    let restaurantRegion = null;
+    if (restaurantId) {
+      const rest = await Restaurant.findById(restaurantId).select("region").lean();
+      restaurantRegion = normalizeRegion(rest?.region);
+    }
     const user = await User.findById(req.user.id).select("region").lean();
-    const region = normalizeRegion(req.body?.region) ?? normalizeRegion(user?.region) ?? null;
+    const region =
+      restaurantRegion ?? normalizeRegion(req.body?.region) ?? normalizeRegion(user?.region) ?? null;
 
     const { fare: estimatedFare } = await estimateFareForRegion(region, vehicleType, distanceKm, {
       when: effectivePickupAt,
