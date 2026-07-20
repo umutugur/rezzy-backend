@@ -155,6 +155,206 @@ function computeDeposit(restaurant, priceBase) {
 
 // controllers/reservation.controller.js
 
+/**
+ * Req/res'siz rezervasyon oluşturma çekirdeği.
+ * `createReservation` (HTTP endpoint) VE asistan (assistant.controller.js)
+ * bu fonksiyonu çağırır — iş mantığı (commissionBase/totalPrice/kapora
+ * kuralları, scheduledRide hook'u) TEK yerde yaşar (bkz. spec
+ * 2026-07-16-full-assistant-design.md, plan A2).
+ *
+ * @param {object} payload - { restaurantId, dateTimeISO, partySize, selections?, scheduledRide? }
+ * @param {object} opts - { userId }
+ * @returns {Promise<{ok:boolean, status:number, body:object, reservation?:object}>}
+ *   ok=false ise body = { message, detail? } (mevcut hata mesaj sözleşmesiyle birebir).
+ *   ok=true ise body = { reservationId, partySize, total, deposit, status, selectionMode }
+ *   (mevcut endpoint yanıt şekliyle birebir) ve reservation = oluşturulan Mongoose dokümanı.
+ */
+export const createReservationCore = async (payload, { userId } = {}) => {
+  const {
+    restaurantId,
+    dateTimeISO,
+    partySize,
+    selections = [],
+  } = payload || {};
+
+  const restaurant = await Restaurant.findById(restaurantId).lean();
+  if (!restaurant) {
+    return { ok: false, status: 404, body: { message: "Restaurant not found" } };
+  }
+
+  // ⬇️ ZAMAN KONTROLÜ
+  const dt = new Date(dateTimeISO);
+  if (Number.isNaN(dt.getTime())) {
+    return { ok: false, status: 400, body: { message: "Invalid dateTimeISO" } };
+  }
+
+  const minLeadMin =
+    Number(
+      restaurant?.settings?.minAdvanceMinutes ??
+        restaurant?.minAdvanceMinutes ??
+        0
+    ) || 0;
+
+  const now = new Date();
+  const earliestAllowed = new Date(now.getTime() + minLeadMin * 60 * 1000);
+
+  if (dt.getTime() <= earliestAllowed.getTime()) {
+    const baseMsg =
+      minLeadMin > 0
+        ? `Rezervasyon en erken ${minLeadMin} dakika sonrasına alınabilir`
+        : "Geçmiş saate rezervasyon yapılamaz";
+    return { ok: false, status: 400, body: { message: baseMsg } };
+  }
+  // ⬆️ ZAMAN KONTROLÜ BİTİŞ
+
+  let withPrices = [];
+  let totalPrice = 0;
+  let commissionBase = 0;
+  let selectionMode = "count";
+
+  // ✅ FIX MENÜ VARSA: eski hesap
+  if (Array.isArray(selections) && selections.length > 0) {
+    const ids = selections.map((s) => s.menuId).filter(Boolean).map(String);
+
+    // ✅ 1) Öncelik: Restaurant dokümanındaki fix menüler (embedded)
+    const restMenus = Array.isArray(restaurant?.menus) ? restaurant.menus : [];
+    const priceMap = new Map();
+
+    if (restMenus.length > 0) {
+      for (const m of restMenus) {
+        const id = String(m?._id || "");
+        if (!id) continue;
+        // isActive default true
+        const isActive = m?.isActive !== false;
+        if (!isActive) continue;
+        priceMap.set(id, Number(m?.pricePerPerson || 0));
+      }
+    } else {
+      // ✅ 2) Fallback: Legacy Menu collection (eğer hâlâ kullanılıyorsa)
+      const menus = await Menu.find({ _id: { $in: ids }, isActive: true }).lean();
+      for (const m of menus) {
+        priceMap.set(String(m._id), Number(m.pricePerPerson || 0));
+      }
+    }
+
+    const missing = ids.filter((id) => !priceMap.has(id));
+    if (missing.length) {
+      return {
+        ok: false,
+        status: 400,
+        body: { message: "Some menus are inactive or not found", detail: missing },
+      };
+    }
+
+    withPrices = selections.map((s) => ({
+      person: Number(s.person) || 0,
+      menuId: s.menuId,
+      price: priceMap.get(String(s.menuId)) ?? 0,
+    }));
+
+    const strict = computeTotalsStrict(withPrices);
+    selectionMode = strict.mode;
+    totalPrice = strict.totalPrice;
+    commissionBase = strict.totalPrice; // fix menü varsa ciro tabanı = menü toplamı
+
+    if (strict.partySize <= 0) {
+      return {
+        ok: false,
+        status: 400,
+        body: { message: "partySize must be at least 1 based on selections" },
+      };
+    }
+  }
+
+  // ✅ FIX: partySize body’den geliyor (fix menüsüz akış için)
+  const ps = Number(partySize) || 0;
+  if (ps <= 0) {
+    return { ok: false, status: 400, body: { message: "partySize must be at least 1" } };
+  }
+
+  // ✅ FIX MENÜ YOKSA: totalPrice müşteriye gösterilen gerçek tutar olarak 0
+  // kalır (hayalet tutar yok); avgSpendBase*kişi yalnızca dahili komisyon
+  // tabanı (commissionBase) olarak saklanır.
+  if (!Array.isArray(selections) || selections.length === 0) {
+    const avgBase = await computeAvgSpendBaseForRestaurant(restaurantId);
+    commissionBase = Math.round(avgBase) * ps;
+    totalPrice = 0;
+    selectionMode = "avg_base"; // debug için net isim
+  }
+
+  // Kapora, müşteriye gösterilen totalPrice değil, dahili commissionBase
+  // üzerinden hesaplanır (bkz. computeDeposit adaptörü yukarıda).
+  const depositAmount = computeDeposit(restaurant, commissionBase);
+
+  // 👉 Kullanıcıdan displayName üret
+  const userDoc = await User.findById(userId)
+    .select("name fullName displayName email phone")
+    .lean();
+
+  const displayName =
+    [
+      userDoc?.name,
+      userDoc?.fullName,
+      userDoc?.displayName,
+      userDoc?.email,
+      userDoc?.phone,
+    ]
+      .filter(Boolean)
+      .map((x) => String(x).trim())
+      .find((x) => x.length > 0) || "-";
+
+  const r = await Reservation.create({
+    restaurantId,
+    userId,
+    dateTimeUTC: dt,
+    partySize: ps,
+    selections: withPrices.length ? withPrices : undefined,
+    totalPrice,
+    commissionBase,
+    depositAmount,
+    status: "pending",
+
+    // 👇 Panel için isim
+    displayName,
+
+    // ✅ Stripe alanları başlangıç değeri
+    paymentProvider: null,
+    paymentIntentId: null,
+    depositPaid: false,
+    depositStatus: "pending",
+    paidCurrency: null,
+    paidAmount: 0,
+  });
+
+  // Planlı Taksi: client "Taksi de ister misiniz?" kartını doldurduysa `scheduledRide`
+  // payload'ı gelir. Quote sunucuda YENİDEN hesaplanır; hata rezervasyonu bloklamaz.
+  if (payload?.scheduledRide) {
+    try {
+      await createScheduledRideFromPayload({
+        reservation: r,
+        userId,
+        payload: payload.scheduledRide,
+      });
+    } catch (e) {
+      console.warn("[createReservationCore] scheduledRide oluşturma warn:", e?.message || e);
+    }
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    body: {
+      reservationId: r._id.toString(),
+      partySize: r.partySize,
+      total: r.totalPrice,
+      deposit: r.depositAmount,
+      status: r.status,
+      selectionMode,
+    },
+    reservation: r,
+  };
+};
+
 /** POST /api/reservations */
 export const createReservation = async (req, res, next) => {
   try {
@@ -164,179 +364,13 @@ export const createReservation = async (req, res, next) => {
       });
     }
 
-    const {
-      restaurantId,
-      dateTimeISO,
-      partySize,
-      selections = [],
-    } = req.body;
-
-    const restaurant = await Restaurant.findById(restaurantId).lean();
-    if (!restaurant) throw { status: 404, message: "Restaurant not found" };
-
-    // ⬇️ ZAMAN KONTROLÜ
-    const dt = new Date(dateTimeISO);
-    if (Number.isNaN(dt.getTime())) {
-      throw { status: 400, message: "Invalid dateTimeISO" };
+    const result = await createReservationCore(req.body, { userId: req.user.id });
+    if (!result.ok) {
+      const { status, body } = result;
+      throw { status, message: body.message, detail: body.detail };
     }
 
-    const minLeadMin =
-      Number(
-        restaurant?.settings?.minAdvanceMinutes ??
-          restaurant?.minAdvanceMinutes ??
-          0
-      ) || 0;
-
-    const now = new Date();
-    const earliestAllowed = new Date(now.getTime() + minLeadMin * 60 * 1000);
-
-    if (dt.getTime() <= earliestAllowed.getTime()) {
-      const baseMsg =
-        minLeadMin > 0
-          ? `Rezervasyon en erken ${minLeadMin} dakika sonrasına alınabilir`
-          : "Geçmiş saate rezervasyon yapılamaz";
-      throw { status: 400, message: baseMsg };
-    }
-    // ⬆️ ZAMAN KONTROLÜ BİTİŞ
-
-    let withPrices = [];
-    let totalPrice = 0;
-    let commissionBase = 0;
-    let selectionMode = "count";
-
-    // ✅ FIX MENÜ VARSA: eski hesap
-    if (Array.isArray(selections) && selections.length > 0) {
-      const ids = selections.map((s) => s.menuId).filter(Boolean).map(String);
-
-      // ✅ 1) Öncelik: Restaurant dokümanındaki fix menüler (embedded)
-      const restMenus = Array.isArray(restaurant?.menus) ? restaurant.menus : [];
-      const priceMap = new Map();
-
-      if (restMenus.length > 0) {
-        for (const m of restMenus) {
-          const id = String(m?._id || "");
-          if (!id) continue;
-          // isActive default true
-          const isActive = m?.isActive !== false;
-          if (!isActive) continue;
-          priceMap.set(id, Number(m?.pricePerPerson || 0));
-        }
-      } else {
-        // ✅ 2) Fallback: Legacy Menu collection (eğer hâlâ kullanılıyorsa)
-        const menus = await Menu.find({ _id: { $in: ids }, isActive: true }).lean();
-        for (const m of menus) {
-          priceMap.set(String(m._id), Number(m.pricePerPerson || 0));
-        }
-      }
-
-      const missing = ids.filter((id) => !priceMap.has(id));
-      if (missing.length) {
-        throw {
-          status: 400,
-          message: "Some menus are inactive or not found",
-          detail: missing,
-        };
-      }
-
-      withPrices = selections.map((s) => ({
-        person: Number(s.person) || 0,
-        menuId: s.menuId,
-        price: priceMap.get(String(s.menuId)) ?? 0,
-      }));
-
-      const strict = computeTotalsStrict(withPrices);
-      selectionMode = strict.mode;
-      totalPrice = strict.totalPrice;
-      commissionBase = strict.totalPrice; // fix menü varsa ciro tabanı = menü toplamı
-
-      if (strict.partySize <= 0) {
-        throw {
-          status: 400,
-          message: "partySize must be at least 1 based on selections",
-        };
-      }
-    }
-
-    // ✅ FIX: partySize body’den geliyor (fix menüsüz akış için)
-    const ps = Number(partySize) || 0;
-    if (ps <= 0) throw { status: 400, message: "partySize must be at least 1" };
-
-    // ✅ FIX MENÜ YOKSA: totalPrice müşteriye gösterilen gerçek tutar olarak 0
-    // kalır (hayalet tutar yok); avgSpendBase*kişi yalnızca dahili komisyon
-    // tabanı (commissionBase) olarak saklanır.
-    if (!Array.isArray(selections) || selections.length === 0) {
-      const avgBase = await computeAvgSpendBaseForRestaurant(restaurantId);
-      commissionBase = Math.round(avgBase) * ps;
-      totalPrice = 0;
-      selectionMode = "avg_base"; // debug için net isim
-    }
-
-    // Kapora, müşteriye gösterilen totalPrice değil, dahili commissionBase
-    // üzerinden hesaplanır (bkz. computeDeposit adaptörü yukarıda).
-    const depositAmount = computeDeposit(restaurant, commissionBase);
-
-    // 👉 Kullanıcıdan displayName üret
-    const userDoc = await User.findById(req.user.id)
-      .select("name fullName displayName email phone")
-      .lean();
-
-    const displayName =
-      [
-        userDoc?.name,
-        userDoc?.fullName,
-        userDoc?.displayName,
-        userDoc?.email,
-        userDoc?.phone,
-      ]
-        .filter(Boolean)
-        .map((x) => String(x).trim())
-        .find((x) => x.length > 0) || "-";
-
-    const r = await Reservation.create({
-      restaurantId,
-      userId: req.user.id,
-      dateTimeUTC: dt,
-      partySize: ps,
-      selections: withPrices.length ? withPrices : undefined,
-      totalPrice,
-      commissionBase,
-      depositAmount,
-      status: "pending",
-
-      // 👇 Panel için isim
-      displayName,
-
-      // ✅ Stripe alanları başlangıç değeri
-      paymentProvider: null,
-      paymentIntentId: null,
-      depositPaid: false,
-      depositStatus: "pending",
-      paidCurrency: null,
-      paidAmount: 0,
-    });
-
-    // Planlı Taksi: client "Taksi de ister misiniz?" kartını doldurduysa `scheduledRide`
-    // payload'ı gelir. Quote sunucuda YENİDEN hesaplanır; hata rezervasyonu bloklamaz.
-    if (req.body?.scheduledRide) {
-      try {
-        await createScheduledRideFromPayload({
-          reservation: r,
-          userId: req.user.id,
-          payload: req.body.scheduledRide,
-        });
-      } catch (e) {
-        console.warn("[createReservation] scheduledRide oluşturma warn:", e?.message || e);
-      }
-    }
-
-    res.json({
-      reservationId: r._id.toString(),
-      partySize: r.partySize,
-      total: r.totalPrice,
-      deposit: r.depositAmount,
-      status: r.status,
-      selectionMode,
-    });
+    res.json(result.body);
   } catch (e) {
     next(e);
   }
