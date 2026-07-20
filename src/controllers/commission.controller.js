@@ -9,6 +9,7 @@ import MarketOrder from "../models/MarketOrder.js";
 import MarketStore from "../models/MarketStore.js";
 import TaxiRide from "../models/TaxiRide.js";
 import { getCommissionRate } from "../services/taxiPricing.service.js";
+import { revenueBaseOf } from "../services/reservationPricing.helpers.js";
 
 /** Ay stringini (YYYY-MM) Date aralığına çevirir */
 function monthRange(monthStr) {
@@ -163,11 +164,15 @@ export const commissionsPreview = async (req, res, next) => {
       { $match: match },
 
       // arrived toplam cirosu
+      // ✅ Mongo aggregation eşdeğeri: revenueBaseOf(r) = r.commissionBase ?? r.totalPrice ?? 0
+      // (commissionBase 0 olsa da geçerlidir, $ifNull yalnızca null/eksik alanlarda düşer)
       {
         $group: {
           _id: "$restaurantId",
           arrivedCount: { $sum: 1 },
-          revenueArrived: { $sum: { $ifNull: ["$totalPrice", 0] } },
+          revenueArrived: {
+            $sum: { $ifNull: ["$commissionBase", { $ifNull: ["$totalPrice", 0] }] },
+          },
         },
       },
 
@@ -294,7 +299,7 @@ export const commissionsExport = async (req, res, next) => {
       const bucket = byRest.get(restId);
       bucket.rows.push(r);
       bucket.arrivedCount += 1;
-      bucket.revenueArrived += Number(r.totalPrice || 0); // ✅ sadece arrived ciro
+      bucket.revenueArrived += revenueBaseOf(r); // ✅ sadece arrived ciro (commissionBase ?? totalPrice)
     }
 
     // Owner bilgileri
@@ -380,9 +385,8 @@ export const commissionsExport = async (req, res, next) => {
 
     for (const v of byRest.values()) {
       for (const r of v.rows) {
-        const commission = Math.round(
-          Number(r.totalPrice || 0) * v.commissionRate
-        );
+        const revenueBase = revenueBaseOf(r);
+        const commission = Math.round(revenueBase * v.commissionRate);
         wsDet.addRow({
           restaurantName: v.restaurantName,
           rid: String(r._id),
@@ -391,7 +395,7 @@ export const commissionsExport = async (req, res, next) => {
             .replace("T", " ")
             .slice(0, 16),
           party: r.partySize,
-          price: Number(r.totalPrice || 0), // ✅ arrived ciro
+          price: revenueBase, // ✅ arrived ciro (commissionBase ?? totalPrice)
           rate: v.commissionRate,
           comm: commission,
           customer: r.userId?.name || "",
