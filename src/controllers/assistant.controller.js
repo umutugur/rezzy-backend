@@ -10,6 +10,8 @@ import { dayjs } from "../utils/dates.js";
 import { notifyRestaurantOwner, notifyUser } from "../services/notification.service.js";
 import { addIncident } from "../services/userRisk.service.js";
 import { computeAvgSpendBaseForRestaurant } from "./menu.controller.js";
+import { createReservationCore } from "./reservation.controller.js";
+import { computeDepositPure } from "../services/reservationPricing.helpers.js";
 import {
   getAssistantThread,
   appendThreadMessage,
@@ -1264,24 +1266,14 @@ function matchDeliveryFromMessage(message, list, pendingOptions) {
   return null;
 }
 
-function computeDeposit(restaurant, totalPrice) {
-  const flat = Number(
-    restaurant?.depositAmount ??
-      restaurant?.settings?.depositAmount ??
-      0
-  ) || 0;
-  if (flat > 0) return flat;
-
+// ✅ computeDeposit: reservation.controller.js'deki adaptörle BİREBİR aynı ince
+// sarmalayıcı — gerçek kapora hesabı saf reservationPricing.helpers#computeDepositPure'da
+// yaşar (kopya iş mantığı yok, sadece restoran alanlarından cfg çıkarımı).
+function computeDeposit(restaurant, priceBase) {
   const cfg = {
-    type:
-      restaurant?.depositType ||
-      restaurant?.settings?.depositType ||
-      (restaurant?.depositRate ??
-      restaurant?.depositPercent ??
-      restaurant?.settings?.depositRate ??
-      restaurant?.settings?.depositPercent
-        ? "percent"
-        : "none"),
+    flat: Number(
+      restaurant?.depositAmount ?? restaurant?.settings?.depositAmount ?? 0
+    ) || 0,
     ratePercent:
       Number(
         restaurant?.depositRate ??
@@ -1291,27 +1283,10 @@ function computeDeposit(restaurant, totalPrice) {
           0
       ) || 0,
     minAmount:
-      Number(
-        restaurant?.depositMin ??
-          restaurant?.settings?.depositMin ??
-          0
-      ) || 0,
+      Number(restaurant?.minDeposit ?? restaurant?.settings?.minDeposit ?? 0) || 0,
   };
 
-  let depositAmount = 0;
-
-  if (cfg.type === "percent" && cfg.ratePercent > 0) {
-    depositAmount = Math.round((totalPrice * cfg.ratePercent) / 100);
-  }
-
-  // NOT: eski sessiz %20 fallback kaldırıldı — kapora yalnızca işletme yapılandırmasından doğar
-  // (bkz. reservationPricing.helpers.computeDepositPure ile aynı kural; 2026-07-16 spec).
-
-  if (cfg.minAmount > 0 && depositAmount > 0) depositAmount = Math.max(depositAmount, cfg.minAmount);
-  if (!Number.isFinite(depositAmount) || depositAmount < 0) depositAmount = 0;
-  if (depositAmount > totalPrice && totalPrice > 0) depositAmount = totalPrice;
-
-  return depositAmount;
+  return computeDepositPure(cfg, priceBase);
 }
 
 async function cancelReservationForUser(userId, rid) {
@@ -1392,20 +1367,26 @@ async function updateReservationForUser({ userId, rid, dateObj, timeStr, partySi
 
   let nextParty = r.partySize;
   let totalPrice = r.totalPrice;
+  let commissionBase = r.commissionBase;
   let depositAmount = r.depositAmount;
 
   if (partySize && Number(partySize) > 0) {
     nextParty = Number(partySize);
     if (!hasSelections) {
+      // Menüsüz rezervasyonlarda müşteriye gösterilen totalPrice 0 kalır;
+      // kapora dahili commissionBase (avgBase*kişi) üzerinden hesaplanır —
+      // createReservationCore ile birebir aynı kural (reservation.controller.js).
       const avgBase = await computeAvgSpendBaseForRestaurant(r.restaurantId?._id || r.restaurantId);
-      totalPrice = Math.round(avgBase) * nextParty;
-      depositAmount = computeDeposit(restaurant, totalPrice);
+      commissionBase = Math.round(avgBase) * nextParty;
+      totalPrice = 0;
+      depositAmount = computeDeposit(restaurant, commissionBase);
     }
   }
 
   r.dateTimeUTC = nextDate;
   r.partySize = nextParty;
   r.totalPrice = totalPrice;
+  r.commissionBase = commissionBase;
   r.depositAmount = depositAmount;
   await r.save();
 
@@ -1430,52 +1411,32 @@ async function updateReservationForUser({ userId, rid, dateObj, timeStr, partySi
   return r;
 }
 
+// ✅ createReservationForUser: asistanın eski KOPYA rezervasyon oluşturma
+// mantığı (fiyat/kapora hesabı dahil) SİLİNDİ — artık reservation.controller.js'deki
+// paylaşılan `createReservationCore` çağrılır (2026-07-16-full-assistant-design.md A2).
+// Mevcut 3 çağrı sitesi imzayı/hata sözleşmesini (throw {status, code}) korumak için
+// bu ince sarmalayıcıyı kullanmaya devam eder.
 async function createReservationForUser({ userId, restaurantId, dateObj, timeStr, partySize }) {
-  const restaurant = await Restaurant.findById(restaurantId).lean();
-  if (!restaurant) throw { status: 404, code: "restaurant_not_found" };
-
   const dateTime = combineDateAndTime(dateObj, timeStr);
   if (!dateTime) throw { status: 400, code: "invalid_datetime" };
 
-  const dt = new Date(dateTime);
-  if (Number.isNaN(dt.getTime())) throw { status: 400, code: "invalid_datetime" };
+  const result = await createReservationCore(
+    { restaurantId, dateTimeISO: dateTime, partySize: Number(partySize) || 0 },
+    { userId }
+  );
 
-  const minLeadMin =
-    Number(
-      restaurant?.settings?.minAdvanceMinutes ??
-        restaurant?.minAdvanceMinutes ??
-        0
-    ) || 0;
-  const now = new Date();
-  const earliestAllowed = new Date(now.getTime() + minLeadMin * 60 * 1000);
-  if (dt.getTime() <= earliestAllowed.getTime()) {
-    throw { status: 400, code: "too_soon" };
+  if (!result.ok) {
+    const status = result.status;
+    const msg = String(result.body?.message || "");
+    let code = "create_failed";
+    if (status === 404) code = "restaurant_not_found";
+    else if (/partySize/i.test(msg)) code = "invalid_party";
+    else if (/dateTimeISO/i.test(msg)) code = "invalid_datetime";
+    else if (/en erken|Geçmiş saate/i.test(msg)) code = "too_soon";
+    throw { status, code, message: msg };
   }
 
-  const ps = Number(partySize) || 0;
-  if (ps <= 0) throw { status: 400, code: "invalid_party" };
-
-  const avgBase = await computeAvgSpendBaseForRestaurant(restaurantId);
-  const totalPrice = Math.round(avgBase) * ps;
-  const depositAmount = computeDeposit(restaurant, totalPrice);
-
-  const r = await Reservation.create({
-    restaurantId,
-    userId,
-    dateTimeUTC: dt,
-    partySize: ps,
-    totalPrice,
-    depositAmount,
-    status: "pending",
-    paymentProvider: null,
-    paymentIntentId: null,
-    depositPaid: false,
-    depositStatus: "pending",
-    paidCurrency: null,
-    paidAmount: 0,
-  });
-
-  return r;
+  return result.reservation;
 }
 /**
  * Ana controller
