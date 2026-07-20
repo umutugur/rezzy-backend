@@ -1,5 +1,6 @@
 // src/ai/llmClient.js
 import axios from "axios";
+import { toGeminiDeclarations } from "./assistant.tools.js";
 
 const FALLBACK_LANG = "tr";
 
@@ -270,4 +271,125 @@ export async function generateAssistantReply({ message, lang, intent, history })
 
   // Her ihtimale karşı hiçbir şey dönmediyse:
   return null;
+}
+
+/**
+ * Gemini function-calling multi-turn loop for the full assistant.
+ *
+ * - Read tools (mode:"read") are executed immediately via `executeRead` and
+ *   their result is fed back to the model as a functionResponse; the loop
+ *   continues.
+ * - Write/handoff tools (mode:"write"|"handoff") interrupt the loop: nothing
+ *   is executed, the caller gets back `{draftRequest:{name,args}}` so it can
+ *   build a draft/confirmation card (or a handoff deep-link) server-side.
+ * - No functionCall in the model response -> final `{text}`.
+ * - More than MAX_TURNS model calls without a final answer -> `{text, truncated:true}`.
+ * - Any network/parse/HTTP error -> `{fallback:true, error}` (never throws).
+ *
+ * @param {object} params
+ * @param {Array<{role:string, text?:string, parts?:object[]}>} params.messages - conversation history, oldest first.
+ * @param {Array<{name:string, description:string, parameters:object, mode:"read"|"write"|"handoff"}>} params.tools
+ * @param {string} [params.systemPrompt]
+ * @param {string} [params.language]
+ * @param {(name:string, args:object) => Promise<any>} params.executeRead
+ * @param {typeof fetch} [params.fetchImpl] - injectable for tests; defaults to global fetch.
+ */
+export async function generateWithTools({
+  messages,
+  tools,
+  systemPrompt,
+  language,
+  executeRead,
+  fetchImpl,
+}) {
+  const doFetch = fetchImpl || globalThis.fetch;
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    return { fallback: true, error: "missing_api_key" };
+  }
+  if (typeof doFetch !== "function") {
+    return { fallback: true, error: "no_fetch_impl" };
+  }
+
+  const url = `${GEMINI_BASE_URL}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  const toolList = Array.isArray(tools) ? tools : [];
+  const functionDeclarations = toGeminiDeclarations(toolList);
+  const modeByName = new Map(toolList.map((t) => [t.name, t.mode]));
+
+  const contents = (Array.isArray(messages) ? messages : []).map((m) => ({
+    role: m.role === "model" ? "model" : m.role === "function" ? "function" : "user",
+    parts: Array.isArray(m.parts) ? m.parts : [{ text: String(m.text ?? "") }],
+  }));
+
+  const MAX_TURNS = 6;
+  let lastText = "";
+
+  for (let turn = 0; turn < MAX_TURNS; turn++) {
+    const body = {
+      contents,
+      ...(systemPrompt ? { systemInstruction: { parts: [{ text: systemPrompt }] } } : {}),
+      ...(functionDeclarations.length ? { tools: [{ functionDeclarations }] } : {}),
+    };
+
+    let resp;
+    try {
+      resp = await doFetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      return { fallback: true, error: `network_error: ${err?.message || err}` };
+    }
+
+    if (!resp || !resp.ok) {
+      return { fallback: true, error: `http_${resp ? resp.status : "no_response"}` };
+    }
+
+    let data;
+    try {
+      data = await resp.json();
+    } catch (err) {
+      return { fallback: true, error: `parse_error: ${err?.message || err}` };
+    }
+
+    const parts = data?.candidates?.[0]?.content?.parts;
+    if (!Array.isArray(parts) || parts.length === 0) {
+      return { fallback: true, error: "empty_response" };
+    }
+
+    const textPart = parts.find((p) => p && typeof p.text === "string");
+    if (textPart) lastText = textPart.text;
+
+    const functionCallPart = parts.find((p) => p && p.functionCall);
+    if (!functionCallPart) {
+      return { text: lastText };
+    }
+
+    const { name, args } = functionCallPart.functionCall || {};
+    const mode = modeByName.get(name);
+
+    if (mode === "write" || mode === "handoff") {
+      return {
+        draftRequest: { name, args: args || {} },
+        ...(lastText ? { partialText: lastText } : {}),
+      };
+    }
+
+    let toolResult;
+    try {
+      toolResult = await executeRead(name, args || {});
+    } catch (err) {
+      toolResult = { error: String(err?.message || err) };
+    }
+
+    contents.push({ role: "model", parts: [{ functionCall: { name, args: args || {} } }] });
+    contents.push({
+      role: "function",
+      parts: [{ functionResponse: { name, response: toolResult } }],
+    });
+  }
+
+  return { text: lastText, truncated: true };
 }
