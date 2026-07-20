@@ -19,6 +19,9 @@ const ReservationSchema = new mongoose.Schema(
     selections: { type: [SelectionSchema], default: [] },    
     totalPrice:    { type: Number, min: 0, default: 0 },
     depositAmount: { type: Number, min: 0, default: 0 },
+    // Dahili komisyon tabanı (menü toplamı veya avgSpendBase×kişi).
+    // Müşteri yanıtlarına SIZDIRILMAZ — yalnızca panel/komisyon hesaplarında kullanılır.
+    commissionBase: { type: Number, min: 0, default: 0 },
 
     // Dekont
     receiptUrl:        { type: String },

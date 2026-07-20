@@ -15,7 +15,8 @@ import {
 } from "./scheduledRide.controller.js";
 import joi from "joi";
 import Stripe from "stripe";
-import { computeAvgSpendBaseForRestaurant } from "./menu.controller.js"; 
+import { computeAvgSpendBaseForRestaurant } from "./menu.controller.js";
+import { computeDepositPure } from "../services/reservationPricing.helpers.js";
 
 // ✅ Stripe client (env varsa aktif)
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
@@ -126,27 +127,17 @@ function computeTotalsStrict(selections = []) {
   return { mode, partySize, totalPrice };
 }
 
-function computeDeposit(restaurant, totalPrice) {
-  // ✅ 1) Restoran flat kapora girdiyse, direkt onu kullan
-  const flat = Number(
-    restaurant?.depositAmount ??
-      restaurant?.settings?.depositAmount ??
-      0
-  ) || 0;
-
-  if (flat > 0) return flat;
-
-  // ✅ 2) Yoksa yüzde / min depozito gibi eski mantık çalışsın
+// ✅ computeDeposit artık saf reservationPricing.helpers#computeDepositPure'a
+// bağlanan ince bir adaptör: restoran alanlarından cfg çıkarır, sessiz %20
+// fallback'i YOK (bkz. computeDepositPure). `priceBase` parametresi olarak
+// müşteriye gösterilen totalPrice DEĞİL, dahili commissionBase kullanılmalı —
+// menüsüz (avg_base) rezervasyonlarda totalPrice artık 0 olduğu için yüzdelik
+// kaporası olan işletmelerin davranışı bu şekilde korunur.
+function computeDeposit(restaurant, priceBase) {
   const cfg = {
-    type:
-      restaurant?.depositType ||
-      restaurant?.settings?.depositType ||
-      (restaurant?.depositRate ??
-      restaurant?.depositPercent ??
-      restaurant?.settings?.depositRate ??
-      restaurant?.settings?.depositPercent) != null
-        ? "percent"
-        : "percent",
+    flat: Number(
+      restaurant?.depositAmount ?? restaurant?.settings?.depositAmount ?? 0
+    ) || 0,
     ratePercent:
       Number(
         restaurant?.depositRate ??
@@ -159,19 +150,7 @@ function computeDeposit(restaurant, totalPrice) {
       Number(restaurant?.minDeposit ?? restaurant?.settings?.minDeposit ?? 0) || 0,
   };
 
-  let depositAmount = Math.round(
-    totalPrice * (Math.max(0, cfg.ratePercent) / 100)
-  );
-
-  if (depositAmount === 0 && cfg.ratePercent === 0) {
-    depositAmount = Math.round(totalPrice * 0.2);
-  }
-
-  if (cfg.minAmount > 0) depositAmount = Math.max(depositAmount, cfg.minAmount);
-  if (!Number.isFinite(depositAmount) || depositAmount < 0) depositAmount = 0;
-  if (depositAmount > totalPrice && totalPrice > 0) depositAmount = totalPrice;
-
-  return depositAmount;
+  return computeDepositPure(cfg, priceBase);
 }
 
 // controllers/reservation.controller.js
@@ -222,6 +201,7 @@ export const createReservation = async (req, res, next) => {
 
     let withPrices = [];
     let totalPrice = 0;
+    let commissionBase = 0;
     let selectionMode = "count";
 
     // ✅ FIX MENÜ VARSA: eski hesap
@@ -267,6 +247,7 @@ export const createReservation = async (req, res, next) => {
       const strict = computeTotalsStrict(withPrices);
       selectionMode = strict.mode;
       totalPrice = strict.totalPrice;
+      commissionBase = strict.totalPrice; // fix menü varsa ciro tabanı = menü toplamı
 
       if (strict.partySize <= 0) {
         throw {
@@ -280,14 +261,19 @@ export const createReservation = async (req, res, next) => {
     const ps = Number(partySize) || 0;
     if (ps <= 0) throw { status: 400, message: "partySize must be at least 1" };
 
-    // ✅ FIX MENÜ YOKSA: avgSpendBase * kişi
+    // ✅ FIX MENÜ YOKSA: totalPrice müşteriye gösterilen gerçek tutar olarak 0
+    // kalır (hayalet tutar yok); avgSpendBase*kişi yalnızca dahili komisyon
+    // tabanı (commissionBase) olarak saklanır.
     if (!Array.isArray(selections) || selections.length === 0) {
       const avgBase = await computeAvgSpendBaseForRestaurant(restaurantId);
-      totalPrice = Math.round(avgBase) * ps;
+      commissionBase = Math.round(avgBase) * ps;
+      totalPrice = 0;
       selectionMode = "avg_base"; // debug için net isim
     }
 
-    const depositAmount = computeDeposit(restaurant, totalPrice);
+    // Kapora, müşteriye gösterilen totalPrice değil, dahili commissionBase
+    // üzerinden hesaplanır (bkz. computeDeposit adaptörü yukarıda).
+    const depositAmount = computeDeposit(restaurant, commissionBase);
 
     // 👉 Kullanıcıdan displayName üret
     const userDoc = await User.findById(req.user.id)
@@ -313,6 +299,7 @@ export const createReservation = async (req, res, next) => {
       partySize: ps,
       selections: withPrices.length ? withPrices : undefined,
       totalPrice,
+      commissionBase,
       depositAmount,
       status: "pending",
 
@@ -666,27 +653,33 @@ export const getReservation = async (req, res, next) => {
     let mode = "count";
     let partySize = rDoc.partySize || 0;
     let totalPrice = rDoc.totalPrice || 0;
+    let commissionBase = rDoc.commissionBase;
 
     if (Array.isArray(rDoc.selections) && rDoc.selections.length > 0) {
       const strict = computeTotalsStrict(rDoc.selections);
       mode = strict.mode;
       partySize = strict.partySize;
       totalPrice = strict.totalPrice;
+      commissionBase = strict.totalPrice; // fix menü: ciro tabanı = menü toplamı
     } else {
       mode = "avg_base";
-      // stored total 0 ise tekrar avg_base hesapla
-      if (!totalPrice || totalPrice <= 0) {
+      // totalPrice artık müşteriye gösterilen GERÇEK tutar (menüsüzde 0) —
+      // burada bir daha TÜRETİLMEZ. Yalnızca commissionBase (dahili ciro tabanı)
+      // eksikse (eski kayıt: null/undefined) avg_base'den hesaplanır.
+      if (commissionBase == null) {
         const avgBase = await computeAvgSpendBaseForRestaurant(
           rDoc.restaurantId?._id || rDoc.restaurantId
         );
-        totalPrice = Math.round(avgBase) * partySize;
+        commissionBase = Math.round(avgBase) * partySize;
       }
     }
 
     const restId = rDoc?.restaurantId?._id || rDoc?.restaurantId;
     const restaurant = await Restaurant.findById(restId).lean();
 
-    const depositAmount = computeDeposit(restaurant, totalPrice);
+    // Kapora, dahili commissionBase üzerinden hesaplanır (totalPrice değil) —
+    // böylece menüsüz kaporalı işletmelerin davranışı korunur.
+    const depositAmount = computeDeposit(restaurant, commissionBase);
 
     const patch = {};
     let need = false;
@@ -696,6 +689,9 @@ export const getReservation = async (req, res, next) => {
     }
     if (totalPrice !== rDoc.totalPrice) {
       patch.totalPrice = totalPrice; need = true;
+    }
+    if (commissionBase !== rDoc.commissionBase) {
+      patch.commissionBase = commissionBase; need = true;
     }
     if (depositAmount !== rDoc.depositAmount) {
       patch.depositAmount = depositAmount; need = true;
