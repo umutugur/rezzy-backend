@@ -1304,11 +1304,10 @@ function computeDeposit(restaurant, totalPrice) {
     depositAmount = Math.round((totalPrice * cfg.ratePercent) / 100);
   }
 
-  if (depositAmount === 0 && cfg.ratePercent === 0) {
-    depositAmount = Math.round(totalPrice * 0.2);
-  }
+  // NOT: eski sessiz %20 fallback kaldırıldı — kapora yalnızca işletme yapılandırmasından doğar
+  // (bkz. reservationPricing.helpers.computeDepositPure ile aynı kural; 2026-07-16 spec).
 
-  if (cfg.minAmount > 0) depositAmount = Math.max(depositAmount, cfg.minAmount);
+  if (cfg.minAmount > 0 && depositAmount > 0) depositAmount = Math.max(depositAmount, cfg.minAmount);
   if (!Number.isFinite(depositAmount) || depositAmount < 0) depositAmount = 0;
   if (depositAmount > totalPrice && totalPrice > 0) depositAmount = totalPrice;
 
