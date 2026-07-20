@@ -204,50 +204,79 @@ export async function cancelScheduledRideForReservation(reservationId) {
 /* ---------------------------- MÜŞTERİ API ---------------------------- */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Bölge-öncelikli planlı taksi quote çekirdeği (req/res'siz).
+ * Bölge önceliği OLUŞTURMAYLA AYNI olmalı: restoran bölgesi > body.region > kullanıcı bölgesi
+ * (aksi hâlde quote kullanıcının bölge tarifesiyle, kayıt restoranın tarifesiyle hesaplanıp tutmaz).
+ * `quoteScheduledRide` (HTTP) VE asistanın `taxi_quote` read aracı bunu kullanır.
+ *
+ * @param {object} args - { pickup, dropoff, vehicleType?, pickupAt?, reservationAt?, acceptsPets?, restaurantId?, region? }
+ * @param {{userId?: string}} opts
+ * @returns {Promise<{ok:boolean, status:number, body:object}>}
+ */
+export async function quoteScheduledRideCore(args, { userId } = {}) {
+  const {
+    pickup,
+    dropoff,
+    vehicleType = "ride",
+    pickupAt,
+    reservationAt,
+    acceptsPets,
+    restaurantId,
+    region: regionRaw,
+  } = args || {};
+
+  if (!pickup?.address || typeof pickup?.lat !== "number" || typeof pickup?.lng !== "number") {
+    return { ok: false, status: 400, body: { message: "pickup.lat/lng/address gerekli" } };
+  }
+  if (!dropoff?.address || typeof dropoff?.lat !== "number" || typeof dropoff?.lng !== "number") {
+    return { ok: false, status: 400, body: { message: "dropoff.lat/lng/address gerekli" } };
+  }
+
+  const { distanceKm, durationMin } = await getRouteInfo(
+    { lat: pickup.lat, lng: pickup.lng },
+    { lat: dropoff.lat, lng: dropoff.lng }
+  );
+  const routeDurationSec = Math.round((durationMin || 0) * 60);
+
+  const reservationAtDate = reservationAt ? new Date(reservationAt) : null;
+  const suggestedPickupAt =
+    reservationAtDate && !Number.isNaN(reservationAtDate.getTime())
+      ? suggestPickupAt(reservationAtDate, routeDurationSec)
+      : null;
+
+  const effectivePickupAt = pickupAt ? new Date(pickupAt) : suggestedPickupAt ?? new Date();
+
+  let restaurantRegion = null;
+  if (restaurantId) {
+    const rest = await Restaurant.findById(restaurantId).select("region").lean();
+    restaurantRegion = normalizeRegion(rest?.region);
+  }
+  const user = userId ? await User.findById(userId).select("region").lean() : null;
+  const region = restaurantRegion ?? normalizeRegion(regionRaw) ?? normalizeRegion(user?.region) ?? null;
+
+  const { fare: estimatedFare } = await estimateFareForRegion(region, vehicleType, distanceKm, {
+    when: effectivePickupAt,
+    petRequested: acceptsPets === true,
+  });
+  const { fee: scheduledFee } = await getScheduledRideConfig(region);
+
+  return {
+    ok: true,
+    status: 200,
+    body: { estimatedFare, scheduledFee, suggestedPickupAt, routeDurationSec, distanceKm },
+  };
+}
+
 // ─── POST /api/taxi/scheduled/quote ─────────────────────────────────────────
 export async function quoteScheduledRide(req, res, next) {
   try {
-    const { pickup, dropoff, vehicleType = "ride", pickupAt, reservationAt, acceptsPets, restaurantId } = req.body || {};
-
-    if (!pickup?.address || typeof pickup?.lat !== "number" || typeof pickup?.lng !== "number") {
-      return res.status(400).json({ message: "pickup.lat/lng/address gerekli" });
-    }
-    if (!dropoff?.address || typeof dropoff?.lat !== "number" || typeof dropoff?.lng !== "number") {
-      return res.status(400).json({ message: "dropoff.lat/lng/address gerekli" });
-    }
-
-    const { distanceKm, durationMin } = await getRouteInfo(
-      { lat: pickup.lat, lng: pickup.lng },
-      { lat: dropoff.lat, lng: dropoff.lng }
+    const result = await quoteScheduledRideCore(
+      { ...(req.body || {}) },
+      { userId: req.user.id }
     );
-    const routeDurationSec = Math.round((durationMin || 0) * 60);
-
-    const reservationAtDate = reservationAt ? new Date(reservationAt) : null;
-    const suggestedPickupAt =
-      reservationAtDate && !Number.isNaN(reservationAtDate.getTime())
-        ? suggestPickupAt(reservationAtDate, routeDurationSec)
-        : null;
-
-    const effectivePickupAt = pickupAt ? new Date(pickupAt) : suggestedPickupAt ?? new Date();
-
-    // Bölge önceliği ORLUŞTURMAYLA AYNI olmalı: restoran bölgesi > body > kullanıcı bölgesi.
-    // (Aksi hâlde quote kullanıcının bölge tarifesiyle, kayıt restoranın tarifesiyle hesaplanıp tutmaz.)
-    let restaurantRegion = null;
-    if (restaurantId) {
-      const rest = await Restaurant.findById(restaurantId).select("region").lean();
-      restaurantRegion = normalizeRegion(rest?.region);
-    }
-    const user = await User.findById(req.user.id).select("region").lean();
-    const region =
-      restaurantRegion ?? normalizeRegion(req.body?.region) ?? normalizeRegion(user?.region) ?? null;
-
-    const { fare: estimatedFare } = await estimateFareForRegion(region, vehicleType, distanceKm, {
-      when: effectivePickupAt,
-      petRequested: acceptsPets === true,
-    });
-    const { fee: scheduledFee } = await getScheduledRideConfig(region);
-
-    return res.json({ estimatedFare, scheduledFee, suggestedPickupAt, routeDurationSec, distanceKm });
+    if (!result.ok) return res.status(result.status).json(result.body);
+    return res.json(result.body);
   } catch (err) {
     next(err);
   }
