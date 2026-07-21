@@ -31,10 +31,11 @@ function formatHistory(history) {
 function buildSystemPrompt(lang, intent, history) {
   const historyBlock = formatHistory(history);
   return `
-You are "Rezvix Assistant", a strict, task-focused multilingual assistant for the Rezvix restaurant reservation app.
+You are "Rezvix Assistant", a task-focused multilingual assistant for the Rezvix super-app.
 
 === APP CONTEXT ===
-- Rezvix helps users discover venues (restaurants, taverns, meyhanes, cafés) and make reservations.
+- Rezvix is a super-app with FOUR services: (1) restaurant table reservations, (2) restaurant food delivery, (3) grocery/market delivery, and (4) taxi (instant + scheduled).
+- NEVER claim that taxi, food delivery, or market ordering are unavailable — all four services exist. If you cannot complete the exact step here, guide the user to the matching section of the app instead of denying the service.
 - Users can make normal or deposit-based reservations.
 - Payments: card, cash, or bank transfer with receipt upload (depends on venue).
 - Target regions: Cyprus, Greece, Turkey, UK.
@@ -92,7 +93,7 @@ and provide the "@search ..." suggestion so the app can navigate.
 - Always answer ONLY in language ${lang}.
 - Be concrete and useful. Avoid vague marketing talk.
 - Do NOT reintroduce yourself in every answer. A short re-intro is allowed only in the first reply.
-- If the user asks something unrelated to Rezvix or restaurants, politely say that you are focused on Rezvix and steer back to venues/reservations/payments.
+- If the user asks something unrelated to Rezvix (medical, legal, etc.), politely say that you are focused on Rezvix and steer back to reservations, food/market delivery, or taxi.
 
 === OUTPUT FORMAT (VERY IMPORTANT) ===
 You MUST respond ONLY with valid minified JSON in this exact shape:
@@ -317,8 +318,10 @@ export async function generateWithTools({
   const functionDeclarations = toGeminiDeclarations(toolList);
   const modeByName = new Map(toolList.map((t) => [t.name, t.mode]));
 
+  // Gemini REST (v1beta) yalnızca "user" ve "model" rollerini kabul eder.
+  // functionResponse parçaları "user" turu içinde gönderilir.
   const contents = (Array.isArray(messages) ? messages : []).map((m) => ({
-    role: m.role === "model" ? "model" : m.role === "function" ? "function" : "user",
+    role: m.role === "model" ? "model" : "user",
     parts: Array.isArray(m.parts) ? m.parts : [{ text: String(m.text ?? "") }],
   }));
 
@@ -385,8 +388,9 @@ export async function generateWithTools({
     }
 
     contents.push({ role: "model", parts: [{ functionCall: { name, args: args || {} } }] });
+    // Gemini functionResponse turu "user" rolüyle gönderilir ("function" rolü 400 verir).
     contents.push({
-      role: "function",
+      role: "user",
       parts: [{ functionResponse: { name, response: toolResult } }],
     });
   }
