@@ -347,6 +347,9 @@ export async function generateWithTools({
     }
 
     if (!resp || !resp.ok) {
+      let detail = "";
+      try { detail = (await resp.text())?.slice(0, 800); } catch {}
+      console.warn(`[assistant][tools] gemini http_${resp ? resp.status : "no_response"} turn=${turn}`, detail);
       return { fallback: true, error: `http_${resp ? resp.status : "no_response"}` };
     }
 
@@ -359,7 +362,9 @@ export async function generateWithTools({
 
     const parts = data?.candidates?.[0]?.content?.parts;
     if (!Array.isArray(parts) || parts.length === 0) {
-      return { fallback: true, error: "empty_response" };
+      const finish = data?.candidates?.[0]?.finishReason || data?.promptFeedback?.blockReason || "none";
+      console.warn(`[assistant][tools] empty_response turn=${turn} finishReason=${finish}`);
+      return { fallback: true, error: `empty_response:${finish}` };
     }
 
     const textPart = parts.find((p) => p && typeof p.text === "string");
