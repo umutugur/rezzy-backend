@@ -12,6 +12,7 @@ import { addIncident } from "../services/userRisk.service.js";
 import { computeAvgSpendBaseForRestaurant } from "./menu.controller.js";
 import { createReservationCore } from "./reservation.controller.js";
 import { computeDepositPure } from "../services/reservationPricing.helpers.js";
+import { verifyDraft } from "../services/assistantDraft.helpers.js";
 import {
   getAssistantThread,
   appendThreadMessage,
@@ -454,6 +455,36 @@ function isPendingExpired(pending) {
 }
 
 const ACTION_TEXT = {
+  assistantDraftGone: {
+    tr: "Bu onay artık geçerli değil.",
+    en: "This confirmation is no longer valid.",
+    ru: "Это подтверждение больше не действительно.",
+    el: "Αυτή η επιβεβαίωση δεν ισχύει πλέον.",
+  },
+  assistantDraftExpired: {
+    tr: "Onayın süresi doldu. Tekrar ister misin?",
+    en: "The confirmation expired. Want to try again?",
+    ru: "Срок подтверждения истёк. Попробовать снова?",
+    el: "Η επιβεβαίωση έληξε. Θέλεις να ξαναπροσπαθήσεις;",
+  },
+  assistantDraftInvalid: {
+    tr: "Onay doğrulanamadı.",
+    en: "The confirmation could not be verified.",
+    ru: "Не удалось проверить подтверждение.",
+    el: "Δεν ήταν δυνατή η επαλήθευση της επιβεβαίωσης.",
+  },
+  assistantDraftDismissed: {
+    tr: "Tamam, iptal ettim.",
+    en: "Okay, cancelled.",
+    ru: "Хорошо, отменил.",
+    el: "Εντάξει, ακυρώθηκε.",
+  },
+  assistantActionFailed: {
+    tr: "İşlem tamamlanamadı.",
+    en: "The action could not be completed.",
+    ru: "Не удалось выполнить действие.",
+    el: "Η ενέργεια δεν ολοκληρώθηκε.",
+  },
   loginRequired: {
     tr: "Bu işlemi yapabilmem için giriş yapmış olman gerekiyor.",
     en: "You need to be logged in to do this.",
@@ -1289,7 +1320,7 @@ function computeDeposit(restaurant, priceBase) {
   return computeDepositPure(cfg, priceBase);
 }
 
-async function cancelReservationForUser(userId, rid) {
+export async function cancelReservationForUser(userId, rid) {
   const r = await Reservation.findById(rid).populate("restaurantId");
   if (!r) throw { status: 404, code: "not_found" };
   if (String(r.userId) !== String(userId)) throw { status: 403, code: "forbidden" };
@@ -1323,7 +1354,7 @@ async function cancelReservationForUser(userId, rid) {
   return { status: "ok" };
 }
 
-async function updateReservationForUser({ userId, rid, dateObj, timeStr, partySize }) {
+export async function updateReservationForUser({ userId, rid, dateObj, timeStr, partySize }) {
   const r = await Reservation.findById(rid).populate("restaurantId");
   if (!r) throw { status: 404, code: "not_found" };
   if (String(r.userId) !== String(userId)) throw { status: 403, code: "forbidden" };
@@ -1485,6 +1516,7 @@ export async function handleAssistantMessage(req, res) {
     const finalize = async ({
       reply,
       suggestions = [],
+      messages,
       intent,
       confidence,
       matchedExample,
@@ -1508,10 +1540,34 @@ export async function handleAssistantMessage(req, res) {
         matchedExample,
         reply,
         suggestions,
+        messages: Array.isArray(messages) && messages.length ? messages : undefined,
         provider: provider || null,
         usedLlm: !!usedLlm,
       });
     };
+
+    // ── LLM araç-çağrısı turu (GEMINI_API_KEY varsa) — yazma = draft/onay kartı ──
+    try {
+      const { runToolTurn } = await import("../services/assistantOrchestrator.js");
+      const region = req.user?.region || req.headers["x-region"] || null;
+      const turn = await runToolTurn({ message, lang, userId, region, history });
+      if (turn && turn.kind !== "fallback") {
+        const messages = [];
+        if (turn.text) messages.push({ type: "text", text: turn.text });
+        if (turn.kind === "handoff") messages.push({ type: "handoff", ...turn.handoff });
+        else if (turn.kind === "confirm") {
+          messages.push({ type: "confirm", ...turn.card });
+          if (thread) thread.pending = turn.draft;
+        }
+        const replyText =
+          turn.text ||
+          (turn.kind === "confirm" ? "Onaylıyor musun?" : turn.kind === "handoff" ? (turn.handoff.label || "") : "");
+        if (!messages.length) messages.push({ type: "text", text: replyText || "…" });
+        return finalize({ reply: replyText || "", messages, intent: "assistant_tool", usedLlm: true, provider: "gemini" });
+      }
+    } catch (e) {
+      console.warn("[assistant] tool turn skipped:", e?.message);
+    }
 
     const command = parseCommand(message);
 
@@ -2255,5 +2311,69 @@ export async function handleAssistantMessage(req, res) {
       ok: false,
       message: "assistant_error",
     });
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * POST /api/assistant/execute — onaylanan draft'ı çalıştırır (tek yazma kapısı).
+ * Body: { sessionId?, draftId }. Parametreler thread.pending'den alınır; istemci
+ * yalnızca draftId gönderir. verifyDraft ile TTL + bütünlük doğrulanır.
+ * ══════════════════════════════════════════════════════════════════════════ */
+export async function executeAssistantDraft(req, res) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ ok: false, message: "login_required" });
+    const { sessionId, draftId } = req.body || {};
+    const lang = resolveLang(req.user?.preferredLanguage || req.headers["accept-language"]);
+    const thread = await getAssistantThread({
+      userId,
+      sessionId: sessionId || req.headers["x-assistant-session"],
+      language: lang,
+    });
+    const pending = thread?.pending;
+    if (!pending || String(pending.draftId) !== String(draftId)) {
+      return res.json({ ok: true, messages: [{ type: "text", text: t(lang, "assistantDraftGone") }] });
+    }
+    const check = verifyDraft(pending, { kind: pending.kind, params: pending.params, serverTotals: pending.serverTotals });
+    if (check.error) {
+      thread.pending = null;
+      await thread.save();
+      const key = check.error === "expired" ? "assistantDraftExpired" : "assistantDraftInvalid";
+      return res.json({ ok: true, messages: [{ type: "text", text: t(lang, key) }] });
+    }
+    const { executeDraftFor } = await import("../services/assistantWriteTools.js");
+    const result = await executeDraftFor(pending.kind, pending.params, { userId });
+    thread.pending = null;
+    const text = result.message || (result.ok ? "✅" : t(lang, "assistantActionFailed"));
+    const messages = [{ type: "text", text }];
+    if (result.handoff) messages.push({ type: "handoff", ...result.handoff });
+    appendThreadMessage(thread, "assistant", text);
+    await thread.save();
+    return res.json({ ok: true, messages });
+  } catch (err) {
+    console.error("[assistant] execute error:", err);
+    return res.status(500).json({ ok: false, message: "assistant_error" });
+  }
+}
+
+/* POST /api/assistant/dismiss — bekleyen draft'ı vazgeç. Body: { sessionId?, draftId } */
+export async function dismissAssistantDraft(req, res) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ ok: false, message: "login_required" });
+    const { sessionId, draftId } = req.body || {};
+    const lang = resolveLang(req.user?.preferredLanguage || req.headers["accept-language"]);
+    const thread = await getAssistantThread({
+      userId,
+      sessionId: sessionId || req.headers["x-assistant-session"],
+      language: lang,
+    });
+    if (thread?.pending && String(thread.pending.draftId) === String(draftId)) {
+      thread.pending = null;
+      await thread.save();
+    }
+    return res.json({ ok: true, messages: [{ type: "text", text: t(lang, "assistantDraftDismissed") }] });
+  } catch (err) {
+    return res.json({ ok: true });
   }
 }
