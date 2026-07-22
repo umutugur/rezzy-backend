@@ -139,7 +139,16 @@ export const ASSISTANT_READ_TOOLS = {
     const items = Array.isArray(body?.items) ? body.items : Array.isArray(body) ? body : [];
     const needle = String(q || "").trim().toLowerCase();
     const filtered = needle ? items.filter((s) => String(s?.name || "").toLowerCase().includes(needle)) : items;
-    return { items: filtered };
+    // Compact, unambiguous shape: the model must pass `storeId` (never the name)
+    // to draft_market_order / search_products.
+    return {
+      items: filtered.map((s) => ({
+        storeId: String(s?._id ?? s?.id ?? ""),
+        name: s?.name,
+        category: s?.category,
+        pickupEnabled: s?.pickupEnabled !== false,
+      })),
+    };
   }),
 
   search_products: safe("search_products", async (args, { userId, region }) => {

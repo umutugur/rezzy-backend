@@ -27,6 +27,7 @@ import {
   updateReservationForUser,
 } from "../controllers/assistant.controller.js";
 import { createOrder, cancelOrder } from "../controllers/market.controller.js";
+import { listMyAddresses } from "../controllers/addressController.js";
 import { createDeliveryOrderCOD } from "../controllers/deliveryOrders.controller.js";
 import { createRideCore, cancelRide } from "../controllers/taxi.controller.js";
 import {
@@ -122,6 +123,32 @@ export const BUILD_DRAFT = {
     const store = await MarketStore.findById(storeId).select("name organization").lean();
     if (!store) return { error: "Mağaza bulunamadı" };
 
+    // Teslimat adresini SUNUCUDA çöz: model geçerli bir adres id'si veremez.
+    // Verilmemişse kullanıcının varsayılan/ilk kayıtlı adresini kullan; hiç
+    // adres yoksa sepeti açıp adres eklemesi için handoff'a düş.
+    let resolvedAddressId = oid(addressId) ? String(addressId) : null;
+    let addressLabel = "";
+    {
+      const { body: addrBody } = await invoke(listMyAddresses, baseReq({ userId })).catch(() => ({ body: null }));
+      const addrs = Array.isArray(addrBody?.items) ? addrBody.items : Array.isArray(addrBody) ? addrBody : [];
+      if (!resolvedAddressId) {
+        const def = addrs.find((a) => a?.isDefault) || addrs[0];
+        if (def?._id) { resolvedAddressId = String(def._id); addressLabel = def.title || def.label || def.fullAddress || ""; }
+      } else {
+        const match = addrs.find((a) => String(a?._id) === resolvedAddressId);
+        addressLabel = match?.title || match?.label || match?.fullAddress || "";
+      }
+    }
+    if (!resolvedAddressId) {
+      return {
+        handoff: {
+          screen: "MarketCart",
+          params: { storeId: String(storeId), items, couponCampaignId: couponCampaignId || null },
+          label: "Adres ekleyip siparişi tamamla",
+        },
+      };
+    }
+
     // Fiyatları SUNUCUDA çöz (org kataloğu + şube override dahil)
     const catalog = await resolveStoreCatalog(store).catch(() => []);
     const byId = new Map(catalog.map((p) => [String(p._id ?? p.orgProductId ?? p.productId), p]));
@@ -149,13 +176,14 @@ export const BUILD_DRAFT = {
     }
 
     const pm = ["cash", "card_on_delivery"].includes(paymentMethod) ? paymentMethod : "cash";
+    if (addressLabel) lines.push({ label: "Teslimat", value: addressLabel });
     lines.push({ label: "Ödeme", value: pm === "cash" ? "Kapıda nakit" : "Kapıda kart" });
     return {
       kind: "market_order_create",
       params: {
         storeId: String(storeId),
         items: items.map((it) => ({ productId: String(it.productId ?? it.id), qty: Math.max(1, parseInt(it.qty, 10) || 1) })),
-        deliveryAddressId: addressId ? String(addressId) : null,
+        deliveryAddressId: resolvedAddressId,
         paymentMethod: pm,
         couponCampaignId: couponCampaignId || null,
         outOfStockPreference: outOfStockPreference || undefined,

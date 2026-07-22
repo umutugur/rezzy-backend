@@ -88,7 +88,8 @@ export const ASSISTANT_TOOLS = [
   },
   {
     name: "search_market_stores",
-    description: "Search nearby market/grocery stores by query and location.",
+    description:
+      "Search nearby market/grocery stores. Returns items with `storeId` and `name` — always pass that exact `storeId` (never the store name) to search_products and draft_market_order.",
     mode: "read",
     parameters: {
       type: OBJECT,
@@ -285,24 +286,24 @@ export const ASSISTANT_TOOLS = [
     parameters: {
       type: OBJECT,
       properties: {
-        storeId: { type: STRING },
+        storeId: { type: STRING, description: "The store id from search_market_stores items[].storeId (NEVER the store name)." },
         items: {
           type: ARRAY,
           items: {
             type: OBJECT,
             properties: {
-              productId: { type: STRING },
+              productId: { type: STRING, description: "The product id from search_products (NEVER the product name)." },
               qty: { type: NUMBER },
             },
             required: ["productId", "qty"],
           },
         },
-        addressId: { type: STRING },
+        addressId: { type: STRING, description: "Optional. Delivery address id from list_my_addresses; if omitted the user's default saved address is used automatically." },
         paymentMethod: { type: STRING, description: "'cash' or 'card_on_delivery'." },
         couponCampaignId: { type: STRING },
         outOfStockPreference: { type: STRING, description: "'skip', 'substitute', or 'cancel'." },
       },
-      required: ["storeId", "items", "addressId", "paymentMethod"],
+      required: ["storeId", "items", "paymentMethod"],
     },
   },
   {
