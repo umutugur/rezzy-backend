@@ -352,7 +352,7 @@ export const BUILD_DRAFT = {
 export const EXECUTE_DRAFT = {
   async reservation_create(params, { userId }) {
     const result = await createReservationCore(
-      { restaurantId: params.restaurantId, dateTime: params.dateTimeISO, partySize: params.partySize, selections: params.selections },
+      { restaurantId: params.restaurantId, dateTimeISO: params.dateTimeISO, partySize: params.partySize, selections: params.selections },
       { userId }
     );
     if (!result.ok) return { ok: false, message: errMsg(result.body, "Rezervasyon oluşturulamadı") };
