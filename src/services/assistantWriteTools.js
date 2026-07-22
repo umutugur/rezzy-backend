@@ -160,6 +160,10 @@ export const BUILD_DRAFT = {
     const byId = new Map(catalog.map((p) => [String(p._id ?? p.orgProductId ?? p.productId), p]));
     let subtotal = 0;
     const lines = [];
+    // createOrder ürünleri kaynağına göre çözer: org satırları
+    // { source:"org", orgProductId }, yerel satırlar { productId } ister.
+    // Kataloğun her ürünü hangi tür olduğunu `source` ile taşır.
+    const orderItems = [];
     for (const it of items) {
       const pid = String(it.productId ?? it.id ?? "");
       const qty = Math.max(1, parseInt(it.qty, 10) || 1);
@@ -168,6 +172,11 @@ export const BUILD_DRAFT = {
       const price = Number(prod.discountPrice ?? prod.price ?? prod.defaultPrice ?? 0);
       subtotal += price * qty;
       lines.push({ label: `${qty}× ${prod.title || prod.name}`, value: money(price * qty) });
+      if (prod.source === "org") {
+        orderItems.push({ source: "org", orgProductId: String(prod.orgProductId ?? prod._id), qty });
+      } else {
+        orderItems.push({ productId: String(prod._id ?? prod.productId ?? pid), qty });
+      }
     }
 
     if (paymentMethod === "online") {
@@ -190,7 +199,7 @@ export const BUILD_DRAFT = {
       params: {
         storeId: String(storeId),
         type: isPickup ? "pickup" : "delivery",
-        items: items.map((it) => ({ productId: String(it.productId ?? it.id), qty: Math.max(1, parseInt(it.qty, 10) || 1) })),
+        items: orderItems,
         deliveryAddressId: resolvedAddressId,
         paymentMethod: pm,
         couponCampaignId: couponCampaignId || null,
