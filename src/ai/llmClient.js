@@ -325,10 +325,18 @@ export async function generateWithTools({
     parts: Array.isArray(m.parts) ? m.parts : [{ text: String(m.text ?? "") }],
   }));
 
-  const MAX_TURNS = 6;
+  // Multi-item orders need several read round-trips; give enough headroom but
+  // cap total wall-clock so a slow/looping model can never hang the request.
+  const MAX_TURNS = 10;
+  const DEADLINE = Date.now() + 45000; // total budget across all turns (ms)
+  const PER_CALL_TIMEOUT = 18000; // single Gemini call timeout (ms)
   let lastText = "";
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
+    if (Date.now() > DEADLINE) {
+      console.warn(`[assistant][tools] deadline exceeded turn=${turn}`);
+      return lastText ? { text: lastText, truncated: true } : { fallback: true, error: "deadline" };
+    }
     const body = {
       contents,
       ...(systemPrompt ? { systemInstruction: { parts: [{ text: systemPrompt }] } } : {}),
@@ -336,14 +344,19 @@ export async function generateWithTools({
     };
 
     let resp;
+    const ac = new AbortController();
+    const to = setTimeout(() => ac.abort(), PER_CALL_TIMEOUT);
     try {
       resp = await doFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal: ac.signal,
       });
     } catch (err) {
-      return { fallback: true, error: `network_error: ${err?.message || err}` };
+      return { fallback: true, error: `network_error: ${err?.name === "AbortError" ? "timeout" : err?.message || err}` };
+    } finally {
+      clearTimeout(to);
     }
 
     if (!resp || !resp.ok) {
