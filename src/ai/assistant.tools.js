@@ -238,6 +238,7 @@ export const ASSISTANT_TOOLS = [
         restaurantId: { type: STRING, description: "The restaurant id from search_restaurants items[].restaurantId (NEVER the restaurant name)." },
         dateTimeISO: { type: STRING, description: "ISO 8601 date-time for the reservation." },
         partySize: { type: NUMBER },
+        withTaxi: { type: BOOLEAN, description: "true if the user also wants a scheduled taxi to the venue for this reservation (ask them if unstated). When true, the app opens the reservation summary screen to add the taxi." },
         menuSelections: {
           type: ARRAY,
           description: "Optional pre-selected menu items.",

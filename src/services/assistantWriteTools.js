@@ -68,13 +68,51 @@ function errMsg(e, fb) {
 export const BUILD_DRAFT = {
   // ── Reservation ──────────────────────────────────────────────────────────
   async draft_reservation(args, { userId }) {
-    const { restaurantId, dateTimeISO, partySize, menuSelections } = args || {};
+    const { restaurantId, dateTimeISO, partySize, menuSelections, withTaxi } = args || {};
     if (!oid(restaurantId)) return { error: "restaurantId geçersiz" };
     if (!dateTimeISO || Number.isNaN(new Date(dateTimeISO).getTime())) return { error: "dateTimeISO geçersiz" };
     const ps = Math.max(1, parseInt(partySize, 10) || 1);
-    const rest = await Restaurant.findById(restaurantId).select("name").lean();
+
+    // Taksi istenmişse restoranı/kaporayı sorgulamaya gerek yok — planlı taksi
+    // yalnızca Step3'te (oluşturmadan önce) eklenebildiği için doğrudan devret.
+    if (withTaxi === true) {
+      return {
+        handoff: {
+          screen: "ReservationSummary",
+          params: { restaurantId: String(restaurantId), dateTimeISO, partySize: ps, reason: "taxi" },
+          label: "Rezervasyonu tamamla",
+        },
+      };
+    }
+
+    const rest = await Restaurant.findById(restaurantId)
+      .select("name depositAmount depositRate depositPercent minDeposit settings")
+      .lean();
     if (!rest) return { error: "Restoran bulunamadı" };
 
+    // Step3'teki hasDeposit ile aynı alan öncelikleri (yüzdelik veya sabit kapora).
+    const hasDeposit =
+      Number(rest.depositAmount ?? rest.settings?.depositAmount ?? 0) > 0 ||
+      Number(
+        rest.depositRate ??
+          rest.depositPercent ??
+          rest.settings?.depositRate ??
+          rest.settings?.depositPercent ??
+          0
+      ) > 0;
+
+    // Kapora varsa: ödeme (dekont/online) Step3'te alınır → devret.
+    if (hasDeposit) {
+      return {
+        handoff: {
+          screen: "ReservationSummary",
+          params: { restaurantId: String(restaurantId), dateTimeISO, partySize: ps, reason: "deposit" },
+          label: "Kaporayı öde ve tamamla",
+        },
+      };
+    }
+
+    // Kaporasız + taksisiz: sohbette hızlı onay kartı (eski davranış).
     const lines = [
       { label: "Restoran", value: rest.name },
       { label: "Tarih", value: new Date(dateTimeISO).toLocaleString("tr-TR") },

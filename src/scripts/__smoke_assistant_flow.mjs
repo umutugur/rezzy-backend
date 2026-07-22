@@ -83,6 +83,23 @@ process.env.GEMINI_API_KEY = "test-key"; // orchestrator gate
   assert.strictEqual(r.handoff.screen, "ReservationStep1");
 }
 
+// 6b) Reservation with withTaxi → handoff to ReservationSummary (DB-free)
+{
+  const r = await runToolTurn({
+    message: "massmaviye bu akşam 4 kişi, taksi de ekle", lang: "tr", userId: "u1", history: [],
+    fetchImpl: async () => geminiFunctionCall("draft_reservation", {
+      restaurantId: "6a35b44d85b09f8304557b03",
+      dateTimeISO: new Date(Date.now() + 6 * 3600e3).toISOString(),
+      partySize: 4,
+      withTaxi: true,
+    }),
+  });
+  assert.strictEqual(r.kind, "handoff", "withTaxi rezervasyon → handoff");
+  assert.strictEqual(r.handoff.screen, "ReservationSummary");
+  assert.strictEqual(r.handoff.params.reason, "taxi");
+  assert.strictEqual(r.handoff.params.partySize, 4);
+}
+
 // 7) Draft tamper/expiry (execute-side security)
 {
   const d = createDraft({ kind: "taxi_cancel", params: { rideId: "abc" }, serverTotals: {} });
