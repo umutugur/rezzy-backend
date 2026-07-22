@@ -117,18 +117,24 @@ export const BUILD_DRAFT = {
 
   // ── Market ───────────────────────────────────────────────────────────────
   async draft_market_order(args, { userId }) {
-    const { storeId, items, addressId, paymentMethod = "cash", couponCampaignId, outOfStockPreference } = args || {};
+    const { storeId, items, addressId, paymentMethod = "cash", couponCampaignId, outOfStockPreference, fulfillment } = args || {};
     if (!oid(storeId)) return { error: "storeId geçersiz" };
     if (!Array.isArray(items) || !items.length) return { error: "Sepet boş" };
-    const store = await MarketStore.findById(storeId).select("name organization").lean();
+    const store = await MarketStore.findById(storeId).select("name organization pickupEnabled").lean();
     if (!store) return { error: "Mağaza bulunamadı" };
 
-    // Teslimat adresini SUNUCUDA çöz: model geçerli bir adres id'si veremez.
-    // Verilmemişse kullanıcının varsayılan/ilk kayıtlı adresini kullan; hiç
-    // adres yoksa sepeti açıp adres eklemesi için handoff'a düş.
-    let resolvedAddressId = oid(addressId) ? String(addressId) : null;
+    const isPickup = String(fulfillment || "").toLowerCase() === "pickup";
+    if (isPickup && store.pickupEnabled === false) {
+      return { error: "Bu market gel-al hizmeti vermiyor" };
+    }
+
+    // Teslimat adresi yalnızca delivery için gerekir. Model geçerli bir adres
+    // id'si veremez → sunucuda çöz: verilmemişse varsayılan/ilk kayıtlı adresi
+    // kullan; hiç adres yoksa sepeti açıp adres eklemesi için handoff'a düş.
+    let resolvedAddressId = null;
     let addressLabel = "";
-    {
+    if (!isPickup) {
+      resolvedAddressId = oid(addressId) ? String(addressId) : null;
       const { body: addrBody } = await invoke(listMyAddresses, baseReq({ userId })).catch(() => ({ body: null }));
       const addrs = Array.isArray(addrBody?.items) ? addrBody.items : Array.isArray(addrBody) ? addrBody : [];
       if (!resolvedAddressId) {
@@ -138,15 +144,15 @@ export const BUILD_DRAFT = {
         const match = addrs.find((a) => String(a?._id) === resolvedAddressId);
         addressLabel = match?.title || match?.label || match?.fullAddress || "";
       }
-    }
-    if (!resolvedAddressId) {
-      return {
-        handoff: {
-          screen: "MarketCart",
-          params: { storeId: String(storeId), items, couponCampaignId: couponCampaignId || null },
-          label: "Adres ekleyip siparişi tamamla",
-        },
-      };
+      if (!resolvedAddressId) {
+        return {
+          handoff: {
+            screen: "MarketCart",
+            params: { storeId: String(storeId), items, couponCampaignId: couponCampaignId || null },
+            label: "Adres ekleyip siparişi tamamla",
+          },
+        };
+      }
     }
 
     // Fiyatları SUNUCUDA çöz (org kataloğu + şube override dahil)
@@ -176,12 +182,14 @@ export const BUILD_DRAFT = {
     }
 
     const pm = ["cash", "card_on_delivery"].includes(paymentMethod) ? paymentMethod : "cash";
-    if (addressLabel) lines.push({ label: "Teslimat", value: addressLabel });
+    if (isPickup) lines.push({ label: "Teslim", value: `Gel-al · ${store.name}` });
+    else if (addressLabel) lines.push({ label: "Teslimat", value: addressLabel });
     lines.push({ label: "Ödeme", value: pm === "cash" ? "Kapıda nakit" : "Kapıda kart" });
     return {
       kind: "market_order_create",
       params: {
         storeId: String(storeId),
+        type: isPickup ? "pickup" : "delivery",
         items: items.map((it) => ({ productId: String(it.productId ?? it.id), qty: Math.max(1, parseInt(it.qty, 10) || 1) })),
         deliveryAddressId: resolvedAddressId,
         paymentMethod: pm,
