@@ -392,7 +392,14 @@ export async function generateWithTools({
       toolResult = { error: String(err?.message || err) };
     }
 
-    contents.push({ role: "model", parts: [{ functionCall: { name, args: args || {} } }] });
+    // Gemini 3 (thinking) modelleri her functionCall parçasında bir
+    // `thoughtSignature` döndürür ve takip turunda AYNI imzayı geri bekler;
+    // düşersek "Function call is missing a thought_signature" (400) verir.
+    const modelEcho = { functionCall: { name, args: args || {} } };
+    if (functionCallPart.thoughtSignature) {
+      modelEcho.thoughtSignature = functionCallPart.thoughtSignature;
+    }
+    contents.push({ role: "model", parts: [modelEcho] });
     // Gemini functionResponse turu "user" rolüyle gönderilir ("function" rolü 400 verir).
     contents.push({
       role: "user",
