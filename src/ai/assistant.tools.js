@@ -40,7 +40,7 @@ export const ASSISTANT_TOOLS = [
   {
     name: "search_restaurants",
     description:
-      "Search restaurants/venues by free text query and optional filters (city, date, time, party size, budget, style).",
+      "Search restaurants/venues by free text query and optional filters (city, date, time, party size, budget, style). Returns items with `restaurantId` and `name` — always pass that exact `restaurantId` (never the restaurant name) to draft_reservation and get_restaurant.",
     mode: "read",
     parameters: {
       type: OBJECT,
@@ -235,7 +235,7 @@ export const ASSISTANT_TOOLS = [
     parameters: {
       type: OBJECT,
       properties: {
-        restaurantId: { type: STRING },
+        restaurantId: { type: STRING, description: "The restaurant id from search_restaurants items[].restaurantId (NEVER the restaurant name)." },
         dateTimeISO: { type: STRING, description: "ISO 8601 date-time for the reservation." },
         partySize: { type: NUMBER },
         menuSelections: {

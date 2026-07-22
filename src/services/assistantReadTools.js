@@ -111,7 +111,18 @@ export const ASSISTANT_READ_TOOLS = {
       },
     });
     const { body } = await invoke(listRestaurants, req);
-    return { items: Array.isArray(body) ? body : [] };
+    const rows = Array.isArray(body) ? body : [];
+    // Compact, unambiguous shape: the model must pass `restaurantId` (never the
+    // name) to draft_reservation / get_restaurant.
+    return {
+      items: rows.map((r) => ({
+        restaurantId: String(r?._id ?? r?.id ?? ""),
+        name: r?.name,
+        city: r?.city,
+        priceRange: r?.priceRange,
+        rating: r?.rating,
+      })),
+    };
   }),
 
   get_restaurant: safe("get_restaurant", async (args, { userId, region }) => {
